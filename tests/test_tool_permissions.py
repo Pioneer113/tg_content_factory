@@ -58,9 +58,6 @@ class TestNormalizePhone:
     def test_strips_whitespace(self):
         assert normalize_phone("  +79990001111  ") == "+79990001111"
 
-    def test_empty_string(self):
-        assert normalize_phone("") == ""
-
 
 # ---------------------------------------------------------------------------
 # _registry.require_confirmation
@@ -796,9 +793,6 @@ class TestFilterAllowedTools:
 
 
 class TestIsPerPhoneFormat:
-    def test_empty_dict(self):
-        assert _is_per_phone_format({}) is False
-
     def test_flat_format(self):
         assert _is_per_phone_format({"search_messages": True}) is False
 

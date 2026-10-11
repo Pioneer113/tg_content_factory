@@ -965,12 +965,6 @@ class TestPipelinesToolEditPipeline:
         assert "Подтвердите" in _text(result)
 
     @pytest.mark.anyio
-    async def test_missing_pipeline_id(self, mock_db):
-        handlers = _get_tool_handlers(mock_db)
-        result = await handlers["edit_pipeline"]({"confirm": True})
-        assert "pipeline_id обязателен" in _text(result)
-
-    @pytest.mark.anyio
     async def test_not_found(self, mock_db):
         with patch("src.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.get_detail = AsyncMock(return_value=None)

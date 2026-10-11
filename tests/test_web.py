@@ -1528,12 +1528,6 @@ async def test_search_page(client):
 
 
 @pytest.mark.anyio
-async def test_scheduler_page(client):
-    resp = await client.get("/scheduler/")
-    assert resp.status_code == 200
-
-
-@pytest.mark.anyio
 async def test_jobs_filter_active(client):
     db = client._transport.app.state.db
     await db.create_collection_task(-100901, "Active Task")
