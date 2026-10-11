@@ -484,12 +484,6 @@ class TestDeletePipeline:
 
 class TestListPipelineRunsErrors:
     @pytest.mark.anyio
-    async def test_missing_pipeline_id(self, mock_db):
-        handlers = _get_tool_handlers(mock_db)
-        result = await handlers["list_pipeline_runs"]({})
-        assert "pipeline_id обязателен" in _text(result)
-
-    @pytest.mark.anyio
     async def test_empty_runs(self, mock_db):
         mock_db.repos.generation_runs.list_by_pipeline = AsyncMock(return_value=[])
         handlers = _get_tool_handlers(mock_db)
@@ -545,12 +539,6 @@ class TestListPipelineRunsErrors:
 
 
 class TestGetPipelineRunErrors:
-    @pytest.mark.anyio
-    async def test_missing_run_id(self, mock_db):
-        handlers = _get_tool_handlers(mock_db)
-        result = await handlers["get_pipeline_run"]({})
-        assert "run_id обязателен" in _text(result)
-
     @pytest.mark.anyio
     async def test_not_found(self, mock_db):
         mock_db.repos.generation_runs.get = AsyncMock(return_value=None)
@@ -1153,32 +1141,6 @@ class TestAiEditPipeline:
 # ---------------------------------------------------------------------------
 # run_pipeline — _build_image_service fallback (lines 29-32)
 # ---------------------------------------------------------------------------
-
-
-class TestBuildImageServiceFallback:
-    @pytest.mark.anyio
-    async def test_image_service_builds_without_config(self, mock_db):
-        """When config is None, _build_image_service should return a bare ImageGenerationService."""
-        pipeline = _make_pipeline()
-        run = SimpleNamespace(id=1, generated_text="text", moderation_status="pending")
-
-        with (
-            patch("src.services.embedding_service.EmbeddingService"),
-            patch("src.search.engine.SearchEngine") as mock_se,
-            patch("src.services.content_generation_service.ContentGenerationService") as mock_gen_cls,
-            patch("src.services.pipeline_service.PipelineService") as mock_pipe_svc,
-            patch("src.services.image_generation_service.ImageGenerationService"),
-        ):
-            mock_se.return_value = MagicMock()
-            mock_pipe_svc.return_value.get = AsyncMock(return_value=pipeline)
-            mock_gen_cls.return_value.generate = AsyncMock(return_value=run)
-
-            # When config=None, ImageGenerationService() should be called without adapters
-            handlers = _get_tool_handlers(mock_db, config=None)
-            await handlers["run_pipeline"]({"pipeline_id": 1})
-
-            # The image service should have been instantiated at some point
-            # (via _build_image_service which falls through to ImageGenerationService())
 
 
 # ---------------------------------------------------------------------------

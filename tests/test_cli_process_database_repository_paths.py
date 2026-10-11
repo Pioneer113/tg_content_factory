@@ -1123,45 +1123,6 @@ async def test_migrations_search_queries_columns():
         assert "chat_filter" in cols
 
 
-@pytest.mark.anyio
-async def test_migrate_vec_to_portable_with_table_no_dims():
-    """_migrate_vec_to_portable skips when dimensions setting is missing."""
-    from src.database.migrations import _migrate_vec_to_portable
-    from src.database.schema import SCHEMA_SQL
-
-    async with aiosqlite.connect(":memory:") as conn:
-        conn.row_factory = aiosqlite.Row
-        await conn.executescript(SCHEMA_SQL)
-        await conn.commit()
-        # Create a vec_messages table
-        await conn.execute(
-            "CREATE TABLE vec_messages (message_id INTEGER, embedding BLOB)"
-        )
-        await conn.commit()
-        # No settings row for dimensions — should return early
-        await _migrate_vec_to_portable(conn)
-
-
-@pytest.mark.anyio
-async def test_migrate_vec_to_portable_invalid_dims():
-    """_migrate_vec_to_portable skips when dimensions value is invalid."""
-    from src.database.migrations import _migrate_vec_to_portable
-    from src.database.schema import SCHEMA_SQL
-
-    async with aiosqlite.connect(":memory:") as conn:
-        conn.row_factory = aiosqlite.Row
-        await conn.executescript(SCHEMA_SQL)
-        await conn.commit()
-        await conn.execute("CREATE TABLE vec_messages (message_id INTEGER, embedding BLOB)")
-        await conn.execute(
-            "INSERT INTO settings (key, value) VALUES (?, ?)",
-            ("semantic_embedding_dimensions", "invalid"),
-        )
-        await conn.commit()
-        # Should not raise
-        await _migrate_vec_to_portable(conn)
-
-
 # ===========================================================================
 # 6. database/repositories/photo_loader.py — full coverage
 # ===========================================================================

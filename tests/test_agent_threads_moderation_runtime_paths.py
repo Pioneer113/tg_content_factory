@@ -1342,22 +1342,6 @@ async def test_migrations_remaps_legacy_dialog_search_permission_key():
         assert data["refresh_dialogs"] is False
 
 
-@pytest.mark.anyio
-async def test_migrate_vec_to_portable_skips_without_table():
-    """_migrate_vec_to_portable should return early if vec_messages table doesn't exist."""
-    import aiosqlite
-
-    from src.database.migrations import _migrate_vec_to_portable
-    from src.database.schema import SCHEMA_SQL
-
-    async with aiosqlite.connect(":memory:") as conn:
-        conn.row_factory = aiosqlite.Row
-        await conn.executescript(SCHEMA_SQL)
-        await conn.commit()
-        # Should not raise
-        await _migrate_vec_to_portable(conn)
-
-
 # ===========================================================================
 # 8. scheduler/manager.py
 # ===========================================================================

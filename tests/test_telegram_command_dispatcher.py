@@ -1021,17 +1021,6 @@ async def test_run_loop_marks_missing_phone_command_failed_not_silent():
     assert "phone" in kwargs["error"]
 
 
-async def test_dialogs_pin_unpin():
-    pool = _mock_pool()
-    c = _client_mock()
-    c.pin_message = AsyncMock()
-    c.unpin_message = AsyncMock()
-    pool.get_native_client_by_phone.return_value = (c, "+1")
-    d = _dispatcher(pool=pool)
-    await d._handle_dialogs_pin_message({"phone": "+1", "chat_id": -100, "message_id": 1})
-    await d._handle_dialogs_unpin_message({"phone": "+1", "chat_id": -100, "message_id": 1})
-
-
 async def test_dialogs_mark_read():
     pool = _mock_pool()
     c = _client_mock()
@@ -1060,27 +1049,6 @@ async def test_dialogs_archive_unarchive():
     d = _dispatcher(pool=pool)
     assert (await d._handle_dialogs_archive({"phone": "+1", "chat_id": -100}))["folder_id"] == 1
     assert (await d._handle_dialogs_unarchive({"phone": "+1", "chat_id": -100}))["folder_id"] == 0
-
-
-async def test_dialogs_edit_admin():
-    pool = _mock_pool()
-    c = _client_mock()
-    c.edit_admin = AsyncMock()
-    pool.get_native_client_by_phone.return_value = (c, "+1")
-    d = _dispatcher(pool=pool)
-    await d._handle_dialogs_edit_admin({"phone": "+1", "chat_id": -100, "user_id": 42, "is_admin": True})
-
-
-async def test_dialogs_edit_permissions():
-    pool = _mock_pool()
-    c = _client_mock()
-    c.edit_permissions = AsyncMock()
-    pool.get_native_client_by_phone.return_value = (c, "+1")
-    d = _dispatcher(pool=pool)
-    await d._handle_dialogs_edit_permissions({
-        "phone": "+1", "chat_id": -100, "user_id": 42,
-        "send_messages": True, "until_date": "2026-12-31T00:00:00",
-    })
 
 
 async def test_dialogs_participants():

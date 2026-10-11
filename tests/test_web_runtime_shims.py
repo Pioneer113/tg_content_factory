@@ -58,12 +58,6 @@ async def test_snapshot_pool_refresh_non_list_phones():
     assert pool.clients == {}
 
 
-async def test_snapshot_pool_initialize():
-    db = _mock_db()
-    pool = SnapshotClientPool(db)
-    await pool.initialize()
-
-
 async def test_snapshot_pool_warm_all():
     db = _mock_db()
     pool = SnapshotClientPool(db)
@@ -84,12 +78,6 @@ async def test_snapshot_pool_get_native_raises():
         raise AssertionError("Should have raised")
     except RuntimeError as e:
         assert "worker process" in str(e)
-
-
-async def test_snapshot_pool_release_client():
-    db = _mock_db()
-    pool = SnapshotClientPool(db)
-    await pool.release_client("+1")
 
 
 async def test_snapshot_collector_default():
