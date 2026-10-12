@@ -527,11 +527,63 @@ async def test_deactivate_non_primary_keeps_primary(accounts_repo):
 # migrate_sessions tests
 
 
-async def test_migrate_sessions_no_cipher(accounts_repo):
-    """Test migrate_sessions returns 0 when no cipher is configured."""
-    await accounts_repo.add_account(make_account("+1234567890", session="plaintext"))
-    count = await accounts_repo.migrate_sessions()
+async def test_migrate_sessions_no_cipher(db):
+    """Test migrate_sessions returns 0 when no cipher is configured.
+
+    Uses its own repo WITHOUT a cipher — the shared accounts_repo fixture
+    always injects one, which made the old version of this test pass for the
+    wrong reason (add_account encrypts at rest, so migrate had nothing to do).
+    """
+    repo = AccountsRepository(db.db)
+    await db.db.execute(
+        "INSERT INTO accounts (phone, session_string, is_primary, is_active) VALUES (?, ?, 0, 1)",
+        ("+1234567890", "plaintext"),
+    )
+    await db.db.commit()
+
+    count = await repo.migrate_sessions()
     assert count == 0
+    # Pinned: without a cipher nothing is rewritten to enc:v2.
+    cur = await db.db.execute(
+        "SELECT session_string FROM accounts WHERE phone = ?", ("+1234567890",)
+    )
+    assert (await cur.fetchone())["session_string"] == "plaintext"
+
+
+async def test_migrate_sessions_unsupported_version_does_not_stop_migration(repo_with_cipher, cipher):
+    """A legacy enc:v1 row is skipped (continue) — later accounts still migrate."""
+    await repo_with_cipher._db.execute(
+        "INSERT INTO accounts (phone, session_string, is_primary, is_active) VALUES (?, ?, 0, 1)",
+        ("+15550000001", "enc:v1:legacy-unreadable"),
+    )
+    await repo_with_cipher._db.execute(
+        "INSERT INTO accounts (phone, session_string, is_primary, is_active) VALUES (?, ?, 0, 1)",
+        ("+15550000002", "plaintext_session"),
+    )
+    await repo_with_cipher._db.commit()
+
+    count = await repo_with_cipher.migrate_sessions()
+    assert count == 1
+
+    cur = await repo_with_cipher._db.execute(
+        "SELECT session_string FROM accounts WHERE phone = ?", ("+15550000002",)
+    )
+    assert cipher.is_encrypted((await cur.fetchone())["session_string"])
+
+
+async def test_migrate_sessions_counts_every_migrated_row(repo_with_cipher):
+    """The counter accumulates one per migrated session, not just the last."""
+    await repo_with_cipher._db.execute(
+        "INSERT INTO accounts (phone, session_string, is_primary, is_active) VALUES (?, ?, 0, 1)",
+        ("+15550000003", "plaintext_a"),
+    )
+    await repo_with_cipher._db.execute(
+        "INSERT INTO accounts (phone, session_string, is_primary, is_active) VALUES (?, ?, 0, 1)",
+        ("+15550000004", "plaintext_b"),
+    )
+    await repo_with_cipher._db.commit()
+
+    assert await repo_with_cipher.migrate_sessions() == 2
 
 
 async def test_migrate_sessions_plaintext_to_encrypted(repo_with_cipher, cipher):
