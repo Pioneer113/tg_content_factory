@@ -7,7 +7,11 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from src.database.repositories.channels import ChannelsRepository
-from src.database.repositories.messages import MessagesRepository, _normalize_date_to
+from src.database.repositories.messages import (
+    MessagesRepository,
+    _normalize_date_to,
+    _normalize_username,
+)
 from src.models import Message, SearchParams, SearchQuery
 from src.security.session_cipher import SessionCipher
 
@@ -932,3 +936,62 @@ async def test_search_messages_does_not_execute_count(messages_repo, monkeypatch
 
     counts = [sql for sql in executed if "count(" in sql.lower()]
     assert not counts, f"COUNT query still executed: {counts}"
+
+
+# insert_messages_batch assertion killers (mutmut survivor triage, 12.10.26):
+# each test pins a behavior a surviving mutation silently broke.
+
+
+async def test_insert_messages_batch_persists_forward_from_channel_id(messages_repo, db):
+    """Батч-вставка сохраняет forward_from_channel_id — данные cross-channel citations."""
+    msg = make_message(1, 100, forward_from_channel_id=-1001234)
+    await messages_repo.insert_messages_batch([msg])
+    cur = await db.execute(
+        "SELECT forward_from_channel_id FROM messages WHERE channel_id = 1 AND message_id = 100"
+    )
+    row = await cur.fetchone()
+    assert row is not None
+    assert row["forward_from_channel_id"] == -1001234
+
+
+async def test_insert_messages_batch_reactions_survive_neighbor_without_reactions(messages_repo, db):
+    """Реакции позднего сообщения не теряются, если раньше в партии есть сообщение без реакций."""
+    plain = make_message(1, 200, text="no reactions here")
+    with_reactions = make_message(1, 201, reactions_json='[{"emoji": "🔥", "count": 3}]')
+    await messages_repo.insert_messages_batch([plain, with_reactions])
+    cur = await db.execute(
+        "SELECT emoji, count FROM message_reactions WHERE channel_id = 1 AND message_id = 201"
+    )
+    rows = await cur.fetchall()
+    assert [(r["emoji"], r["count"]) for r in rows] == [("🔥", 3)]
+
+
+async def test_insert_messages_batch_generic_failure_returns_zero(messages_repo, monkeypatch):
+    """Сбой вставки (не DatabaseBusyError) возвращает 0 — вызывающий не видит ложный успех."""
+
+    async def boom(sql, data):
+        raise ValueError("disk on fire")
+
+    monkeypatch.setattr(messages_repo._database, "executemany_write", boom)
+    result = await messages_repo.insert_messages_batch([make_message(1, 300)])
+    assert result == 0
+
+
+async def test_insert_messages_batch_negative_rowcount_falls_back_to_batch_len(messages_repo, monkeypatch):
+    """rowcount < 0 от драйвера заменяется на len(messages), а не возвращается как -1."""
+
+    from types import SimpleNamespace
+
+    async def fake_executemany_write(sql, data):
+        return SimpleNamespace(rowcount=-1)
+
+    monkeypatch.setattr(messages_repo._database, "executemany_write", fake_executemany_write)
+    result = await messages_repo.insert_messages_batch(
+        [make_message(1, 400), make_message(1, 401)]
+    )
+    assert result == 2
+
+
+def test_normalize_username_preserves_leading_x():
+    """lstrip('@') снимает только '@': ведущие буквы имени не трогаются."""
+    assert _normalize_username("@Xavier") == "Xavier"
