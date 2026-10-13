@@ -71,6 +71,77 @@ def test_content_generation_template_exists():
 
 
 # ------------------------------------------------------------------
+# Catalog structural invariants (mutation slice #4 killer tests)
+# ------------------------------------------------------------------
+
+
+def test_all_template_graphs_have_edges():
+    """Every template actually CONNECTS its nodes: the edges list may not
+    silently disappear (#mutation slice 4 — removal of whole edges=[...]
+    literals survived because the existing edge checks are vacuous on []).
+    A template without edges would run its nodes with no data flow."""
+    for t in get_builtin_templates():
+        graph = t.template_json
+        assert graph.edges, f"Template {t.name} has no edges"
+
+
+# Per-node-type config key whitelist observed across the catalog. A key outside
+# the whitelist means a renamed/mistyped config literal that no handler reads.
+_ALLOWED_CONFIG_KEYS: dict[str, set[str]] = {
+    "source": {"channel_ids"},
+    "retrieve_context": {"limit", "method"},
+    "llm_generate": {"prompt_template", "max_tokens", "temperature"},
+    "llm_refine": {"prompt", "max_tokens"},
+    "image_generate": {"model"},
+    "publish": {"targets", "mode", "reply"},
+    "filter": {"type", "keywords", "match_links", "service_types"},
+    "notify": {"message_template"},
+    "search_query_trigger": {"query"},
+    "delay": {"min_seconds", "max_seconds"},
+    "react": {"emoji", "random_emojis"},
+    "forward": {"targets"},
+    "fetch_messages": {"limit"},
+    "condition": {"field", "operator", "value"},
+    "agent_loop": {"system_prompt", "max_tokens", "temperature"},
+    "delete_message": set(),
+    "edit_message": set(),
+}
+
+
+def test_all_node_configs_use_known_keys():
+    """Node config keys must be known handler keys for the node's type
+    (#mutation slice 4 — renamed config literals like XXchannel_idsXX survived
+    because nothing validated the catalog's config vocabulary)."""
+    for t in get_builtin_templates():
+        for node in t.template_json.nodes:
+            allowed = _ALLOWED_CONFIG_KEYS[node.type.value]
+            unknown = set(node.config) - allowed
+            assert not unknown, (
+                f"Template {t.name}: node {node.id} ({node.type.value}) "
+                f"has unknown config keys {sorted(unknown)}"
+            )
+
+
+def test_publish_nodes_have_valid_mode_and_image_nodes_have_provider_prefix():
+    """Value-level catalog invariants (#mutation slice 4): PUBLISH mode is one
+    of the two publish strategies, IMAGE model keeps the provider:model_id
+    convention the ImageGenerationService router depends on."""
+    for t in get_builtin_templates():
+        for node in t.template_json.nodes:
+            if node.type == PipelineNodeType.PUBLISH:
+                assert node.config.get("mode") in {"moderated", "auto"}, (
+                    f"Template {t.name}: publish node {node.id} has "
+                    f"mode {node.config.get('mode')!r}"
+                )
+            if node.type == PipelineNodeType.IMAGE_GENERATE:
+                model = node.config.get("model", "")
+                assert ":" in model, (
+                    f"Template {t.name}: image node {node.id} model {model!r} "
+                    "lacks the provider:model_id prefix"
+                )
+
+
+# ------------------------------------------------------------------
 # LLM template structure tests
 # ------------------------------------------------------------------
 
