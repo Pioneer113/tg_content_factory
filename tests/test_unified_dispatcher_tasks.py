@@ -12,6 +12,7 @@ from src.models import (
     CollectionTaskType,
     ContentGenerateTaskPayload,
     ContentPublishTaskPayload,
+    ExportTaskPayload,
     PipelineRunTaskPayload,
     SqStatsTaskPayload,
     StatsAllTaskPayload,
@@ -755,3 +756,21 @@ class TestPipelineRunHappyPathSemantics:
             "Dispatcher must derive messages_collected from run.result_count, "
             "NOT from len(generated_text) or similar heuristics."
         )
+
+
+@pytest.mark.anyio
+async def test_dispatch_export_reaches_export_handler():
+    """EXPORT from the handler map must reach ExportTaskHandler.
+
+    The dispatcher->handler wiring had zero coverage (mutmut slice #3: both
+    _handle_export mutants uncovered). The handler with a default context has
+    no db, so a valid dispatch ends in the handler's guarded FAILED path —
+    proving the task crossed the whole wiring.
+    """
+    d = _dispatcher()
+    t = _task(CollectionTaskType.EXPORT, task_id=7, payload=ExportTaskPayload(channel_id=42))
+    await d._dispatch(t)
+    call = d._tasks.update_collection_task.call_args
+    assert call[0][0] == 7
+    assert call[0][1] == CollectionTaskStatus.FAILED
+    assert "Export environment not configured" in call[1]["error"]
