@@ -518,3 +518,162 @@ async def test_resolve_channel_entity_numeric_no_rediscovery_is_quarantined(coll
     assert outcome.action == "stop"
     mock_db.set_channel_active.assert_not_awaited()
     mock_db.repos.channels.set_channel_review.assert_awaited_once_with(5, "resolve_account_unavailable")
+
+
+# ------------------------------------------------------------------
+# Mutation slice #5 killer tests: behaviors that survived mutmut
+# ------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_pre_filter_min_subs_boundaries(collector, mock_db):
+    """min_subs filtering: exact subscriber_count must PASS (strict <), a zero
+    filter (min_subs<=1 boundary) still filters a 0-subscriber channel
+    (#mutation slice 5)."""
+    from src.models import Channel, ChannelStats
+
+    channel = Channel(channel_id=123, title="Ch", channel_type="channel")
+    collector._maybe_auto_delete = AsyncMock()
+
+    # subs == min_subs → strict '<' means KEEP; no filter decision recorded.
+    mock_db.get_channel_stats.return_value = [ChannelStats(channel_id=123, subscriber_count=100)]
+    mock_db.execute.return_value.fetchone.return_value = [100]  # ratio 1.0, threshold 1.0 → keep
+    assert await collector._apply_pre_collection_filters(
+        channel, 123, MagicMock(), MagicMock(),
+        is_first_run=False, force=False, min_subs=100, cancel_event=None, phone="+1",
+    ) is True
+    mock_db.set_channels_filtered_bulk.assert_not_called()
+
+    # min_subs=1 with 0 subscribers → filtered (kills the min_subs>1 drift).
+    mock_db.get_channel_stats.return_value = [ChannelStats(channel_id=123, subscriber_count=0)]
+    assert await collector._apply_pre_collection_filters(
+        channel, 123, MagicMock(), MagicMock(),
+        is_first_run=False, force=False, min_subs=1, cancel_event=None, phone="+1",
+    ) is False
+    mock_db.set_channels_filtered_bulk.assert_called_once_with([(123, "low_subscriber_manual")])
+    collector._maybe_auto_delete.assert_awaited_once_with(123)
+
+
+@pytest.mark.anyio
+async def test_pre_filter_ratio_boundary(collector, mock_db):
+    """ratio == threshold must KEEP (strict '<'), for both broadcast and chat
+    thresholds (#mutation slice 5)."""
+    from src.models import Channel, ChannelStats
+
+    # broadcast: threshold 1.0, ratio 10/10 == 1.0 → keep
+    mock_db.get_channel_stats.return_value = [ChannelStats(channel_id=123, subscriber_count=10)]
+    broadcast = Channel(channel_id=123, title="Ch", channel_type="channel")
+    mock_db.execute.return_value.fetchone.return_value = [10]
+    assert await collector._apply_pre_collection_filters(
+        broadcast, 123, MagicMock(), MagicMock(),
+        is_first_run=False, force=False, min_subs=0, cancel_event=None, phone="+1",
+    ) is True
+
+    # chat: threshold 0.02, ratio 2/100 == 0.02 → keep
+    mock_db.get_channel_stats.return_value = [ChannelStats(channel_id=123, subscriber_count=2)]
+    chat = Channel(channel_id=123, title="Ch", channel_type="supergroup")
+    mock_db.execute.return_value.fetchone.return_value = [100]
+    assert await collector._apply_pre_collection_filters(
+        chat, 123, MagicMock(), MagicMock(),
+        is_first_run=False, force=False, min_subs=0, cancel_event=None, phone="+1",
+    ) is True
+    mock_db.set_channels_filtered_bulk.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_pre_filter_cross_dupe_sample_and_ratio_boundaries(collector, mock_db):
+    """Cross-dupe precheck runs at exactly MIN_SAMPLE unique prefixes and filters
+    at exactly RATIO; a low match ratio keeps the channel (#mutation slice 5)."""
+    from src.models import Channel
+
+    channel = Channel(channel_id=123, title="Ch")
+    collector._maybe_auto_delete = AsyncMock()
+    mock_db.get_channel_stats.return_value = []  # no stats → ratio stage inert
+    repo_counter = mock_db.filter_repo.count_matching_prefixes_in_other_channels
+
+    # Exactly MIN_SAMPLE=5 unique prefixes → the dupe check RUNS (>= not >).
+    collector._precheck_sample = AsyncMock(return_value=["p1", "p2", "p3", "p4", "p5"])
+    repo_counter.return_value = 0  # 0/5 < 0.8 → keep
+    assert await collector._apply_pre_collection_filters(
+        channel, 123, MagicMock(), MagicMock(),
+        is_first_run=True, force=False, min_subs=0, cancel_event=None, phone="+1",
+    ) is True
+    repo_counter.assert_awaited_once_with(123, ["p1", "p2", "p3", "p4", "p5"])
+
+    # Exactly RATIO=0.8: 8/10 matches → filtered as cross_channel_spam.
+    collector._precheck_sample = AsyncMock(return_value=[f"q{i}" for i in range(10)])
+    repo_counter.return_value = 8
+    assert await collector._apply_pre_collection_filters(
+        channel, 123, MagicMock(), MagicMock(),
+        is_first_run=True, force=False, min_subs=0, cancel_event=None, phone="+1",
+    ) is False
+    mock_db.set_channels_filtered_bulk.assert_called_once_with([(123, "cross_channel_spam")])
+
+    # 1/10 matches must NOT trip the filter (kills the '/'->'*' drift).
+    mock_db.set_channels_filtered_bulk.reset_mock()
+    repo_counter.return_value = 1
+    assert await collector._apply_pre_collection_filters(
+        channel, 123, MagicMock(), MagicMock(),
+        is_first_run=True, force=False, min_subs=0, cancel_event=None, phone="+1",
+    ) is True
+    mock_db.set_channels_filtered_bulk.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_pre_filter_suppression_stops_only_when_channel_is_filtered(collector, mock_db):
+    """A suppressed filter decision defers to _stop_if_channel_filtered: channel
+    not in filtered state → collection proceeds (#mutation slice 5)."""
+    from src.models import Channel, ChannelStats
+
+    channel = Channel(channel_id=123, title="Ch", channel_type="channel")
+    collector._maybe_auto_delete = AsyncMock()
+    mock_db.get_channel_stats.return_value = [ChannelStats(channel_id=123, subscriber_count=50)]
+    mock_db.execute.return_value.fetchone.return_value = [10]  # ratio 5.0 → keep
+    decision = MagicMock(applied=False, suppressed=True)
+    mock_db.set_channels_filtered_bulk.return_value = decision
+
+    # Not filtered in DB → keep collecting.
+    collector._stop_if_channel_filtered = AsyncMock(return_value=False)
+    assert await collector._apply_pre_collection_filters(
+        channel, 123, MagicMock(), MagicMock(),
+        is_first_run=False, force=False, min_subs=100, cancel_event=None, phone="+1",
+    ) is True
+    collector._stop_if_channel_filtered.assert_awaited_once_with(123)
+
+    # Channel IS filtered → stop.
+    collector._stop_if_channel_filtered = AsyncMock(return_value=True)
+    assert await collector._apply_pre_collection_filters(
+        channel, 123, MagicMock(), MagicMock(),
+        is_first_run=False, force=False, min_subs=100, cancel_event=None, phone="+1",
+    ) is False
+
+
+@pytest.mark.anyio
+async def test_collect_all_channels_gates_stats_and_counter(collector, mock_db):
+    """collect_all_channels queries active+unfiltered only, forwards the loaded
+    min_subs, sums the stats, and rebalances the concurrency counter to 0
+    (#mutation slice 5)."""
+    from src.models import Channel
+
+    channels = [Channel(channel_id=123, title="A"), Channel(channel_id=456, title="B")]
+    mock_db.get_channels = AsyncMock(return_value=channels)
+    mock_db.get_setting = AsyncMock(return_value="30")
+
+    seen = []
+    counts = []
+
+    async def fake_collect(channel, min_subs=0):
+        seen.append((channel.channel_id, min_subs))
+        counts.append(collector._active_collection_count)
+        return 2
+
+    collector._collect_channel = fake_collect
+
+    with patch("asyncio.sleep", AsyncMock()):
+        stats = await collector.collect_all_channels()
+
+    mock_db.get_channels.assert_awaited_once_with(active_only=True, include_filtered=False)
+    assert seen == [(123, 30), (456, 30)]
+    assert counts == [1, 1]  # incremented for the duration of the run
+    assert stats == {"channels": 2, "messages": 4, "errors": 0}
+    assert collector._active_collection_count == 0  # and rebalanced afterwards
