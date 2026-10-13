@@ -677,3 +677,123 @@ async def test_collect_all_channels_gates_stats_and_counter(collector, mock_db):
     assert counts == [1, 1]  # incremented for the duration of the run
     assert stats == {"channels": 2, "messages": 4, "errors": 0}
     assert collector._active_collection_count == 0  # and rebalanced afterwards
+
+
+# ------------------------------------------------------------------
+# Mutation slice #5 killer tests: post-collection flood contract
+# ------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_post_collection_flood_transient_resolve_sleeps_and_continues(collector):
+    """A transient (<60s) resolve flood sleeps it off and retries the same
+    channel without touching backoff (#mutation slice 5)."""
+    from src.telegram.collector_mixins.collection import RESOLVE_USERNAME_OPERATION
+
+    channel = Channel(channel_id=123, title="Ch")
+    with patch(
+        "src.telegram.collector_mixins.collection.sleep_for_flood_wait_seconds", AsyncMock()
+    ) as slept:
+        kind, total, ch = await collector._handle_post_collection_flood(
+            channel, "+1", 10, RESOLVE_USERNAME_OPERATION, set(), 5, 2
+        )
+    assert (kind, total) == ("continue", 5)
+    assert ch is channel
+    slept.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_post_collection_flood_short_resolve_returns_without_backoff(collector, mock_pool):
+    """At exactly the 300s threshold the resolve flood skips just this channel —
+    no backoff is recorded and the run returns (#mutation slice 5)."""
+    from src.telegram.collector_mixins.collection import RESOLVE_USERNAME_OPERATION
+
+    mock_pool.get_resolve_username_backoff_until = MagicMock(return_value=None)
+    mock_pool.set_resolve_username_backoff = MagicMock()
+
+    kind, total, _ch = await collector._handle_post_collection_flood(
+        Channel(channel_id=123, title="Ch"), "+1", 300, RESOLVE_USERNAME_OPERATION, set(), 5, 2
+    )
+    assert (kind, total) == ("return", 5)
+    mock_pool.set_resolve_username_backoff.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_post_collection_flood_long_resolve_sets_backoff_then_rotates(collector, mock_pool):
+    """A >300s resolve flood records the defensive backoff (persisting it) and
+    rotates the channel to another account, advancing the total
+    (#mutation slice 5)."""
+    from datetime import timedelta
+
+    from src.telegram.collector_mixins.collection import RESOLVE_USERNAME_OPERATION
+
+    deadline = datetime.now(timezone.utc) + timedelta(seconds=400)
+    mock_pool.get_resolve_username_backoff_until = MagicMock(return_value=None)
+    mock_pool.set_resolve_username_backoff = MagicMock(return_value=deadline)
+    mock_pool.persist_resolve_username_backoff = AsyncMock()
+    collector._can_rotate_resolve = AsyncMock(return_value=True)
+
+    kind, total, _ch = await collector._handle_post_collection_flood(
+        Channel(channel_id=123, title="Ch"), "+1", 301, RESOLVE_USERNAME_OPERATION, set(), 5, 2
+    )
+    assert (kind, total) == ("continue", 7)  # total + collected_count
+    mock_pool.set_resolve_username_backoff.assert_called_once_with(301, phone="+1")
+    mock_pool.persist_resolve_username_backoff.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_post_collection_flood_no_rotation_raises_deferred_with_future_deadline(
+    collector, mock_pool
+):
+    """When no account can take the channel, the handler raises the deferred
+    error with a FUTURE deadline — a `now - timedelta` drift would raise an
+    already-expired backoff and hot-loop the channel (#mutation slice 5)."""
+    from datetime import timedelta
+
+    from telethon_floodgate import UsernameResolveFloodWaitDeferredError
+
+    from src.telegram.collector_mixins.collection import RESOLVE_USERNAME_OPERATION
+
+    deadline = datetime.now(timezone.utc) + timedelta(seconds=400)
+    mock_pool.get_resolve_username_backoff_until = MagicMock(return_value=None)
+    mock_pool.set_resolve_username_backoff = MagicMock(return_value=deadline)
+    mock_pool.persist_resolve_username_backoff = AsyncMock()
+    collector._can_rotate_resolve = AsyncMock(return_value=False)
+    collector._next_resolve_capable_at = AsyncMock(return_value=None)
+    collector._notifier = AsyncMock()
+
+    with pytest.raises(UsernameResolveFloodWaitDeferredError) as excinfo:
+        await collector._handle_post_collection_flood(
+            Channel(channel_id=123, title="Ch"), "+1", 301, RESOLVE_USERNAME_OPERATION, set(), 5, 2
+        )
+    assert excinfo.value.next_available_at is deadline
+    assert excinfo.value.wait_seconds > 300
+    collector._notifier.notify.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_post_collection_flood_plain_flood_notifies_above_max_and_rereads(
+    collector, mock_db
+):
+    """A plain collection flood at exactly max_flood_wait_sec notifies NOTHING
+    (strict >), re-reads the channel by pk and continues with the advanced
+    total; with no pk the run returns (#mutation slice 5)."""
+    max_wait = collector._config.max_flood_wait_sec
+    collector._notifier = AsyncMock()
+    channel = Channel(id=7, channel_id=123, title="Ch")
+    updated = Channel(id=7, channel_id=123, title="Ch", last_collected_id=99)
+    mock_db.get_channel_by_pk = AsyncMock(return_value=updated)
+
+    kind, total, ch = await collector._handle_post_collection_flood(
+        channel, "+1", max_wait, None, set(), 5, 2
+    )
+    collector._notifier.notify.assert_not_awaited()
+    assert (kind, total) == ("continue", 7)
+    mock_db.get_channel_by_pk.assert_awaited_once_with(7)
+    assert ch is updated
+
+    # No pk → nothing to re-read → stop the run.
+    kind, total, ch = await collector._handle_post_collection_flood(
+        Channel(channel_id=123, title="Ch"), "+1", max_wait + 1, None, set(), 5, 2
+    )
+    assert (kind, total) == ("return", 5)
