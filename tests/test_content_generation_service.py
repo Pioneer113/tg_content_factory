@@ -563,3 +563,185 @@ async def test_run_graph_copies_node_errors_from_executor(monkeypatch):
 
     out = await svc._run_graph(pipeline, None, 100, 0.0)
     assert out["node_errors"] == executor_result["node_errors"]
+
+
+async def test_run_graph_reuses_orphan_image_for_retry_run(monkeypatch):
+    """Graph path double-billing guard (#1117, #mutation slice 4): a non-dry run
+    with run_id + pipeline.id must look up the orphaned paid image and hand it
+    to the executor via services["reusable_image"]."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from src.models import ContentPipeline, PipelineGraph, PipelineNode, PipelineNodeType
+    from src.services.content_generation_service import ContentGenerationService
+
+    pipeline = ContentPipeline(
+        id=1,
+        name="X",
+        prompt_template="",
+        pipeline_json=PipelineGraph(
+            nodes=[PipelineNode(id="react", type=PipelineNodeType.REACT, name="react", config={})],
+            edges=[],
+        ),
+    )
+
+    captured = {}
+
+    class _CaptureExecutor:
+        async def execute(self, p, g, services):
+            captured.update(services)
+            return {"generated_text": "ok"}
+
+    monkeypatch.setattr(
+        "src.services.pipeline_executor.PipelineExecutor",
+        _CaptureExecutor,
+    )
+
+    async def _fake_scope(pipeline, list_sources):
+        s = MagicMock()
+        s.query = ""
+        s.channel_id = None
+        return s
+
+    monkeypatch.setattr("src.services.pipeline_service.resolve_retrieval_scope", _fake_scope)
+
+    db = MagicMock()
+    db.repos = MagicMock()
+    db.repos.content_pipelines = MagicMock()
+    db.repos.content_pipelines.list_sources = AsyncMock(return_value=[])
+    db.repos.generation_runs.find_orphan_image = AsyncMock(
+        return_value=(7, "https://img.example/orphan.png")
+    )
+    db.get_setting = AsyncMock(return_value="")
+
+    svc = ContentGenerationService(db, MagicMock(), config=MagicMock())
+
+    async def _noop_provider(model):
+        return None
+
+    svc._get_provider_callable = _noop_provider  # type: ignore[attr-defined]
+
+    await svc._run_graph(pipeline, None, 100, 0.0, run_id=9)
+
+    db.repos.generation_runs.find_orphan_image.assert_awaited_once_with(
+        1, exclude_run_id=9
+    )
+    assert captured["reusable_image"] == (7, "https://img.example/orphan.png")
+
+
+async def test_run_graph_skips_orphan_lookup_for_dry_run(monkeypatch):
+    """Dry runs never generate an image, so the orphan lookup must not run."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from src.models import ContentPipeline, PipelineGraph, PipelineNode, PipelineNodeType
+    from src.services.content_generation_service import ContentGenerationService
+
+    pipeline = ContentPipeline(
+        id=1,
+        name="X",
+        prompt_template="",
+        pipeline_json=PipelineGraph(
+            nodes=[PipelineNode(id="react", type=PipelineNodeType.REACT, name="react", config={})],
+            edges=[],
+        ),
+    )
+
+    class _NoopExecutor:
+        async def execute(self, p, g, services):
+            return {}
+
+    monkeypatch.setattr(
+        "src.services.pipeline_executor.PipelineExecutor",
+        _NoopExecutor,
+    )
+
+    async def _fake_scope(pipeline, list_sources):
+        s = MagicMock()
+        s.query = ""
+        s.channel_id = None
+        return s
+
+    monkeypatch.setattr("src.services.pipeline_service.resolve_retrieval_scope", _fake_scope)
+
+    db = MagicMock()
+    db.repos = MagicMock()
+    db.repos.content_pipelines = MagicMock()
+    db.repos.content_pipelines.list_sources = AsyncMock(return_value=[])
+    db.repos.generation_runs.find_orphan_image = AsyncMock(return_value=None)
+    db.get_setting = AsyncMock(return_value="")
+
+    svc = ContentGenerationService(db, MagicMock(), config=MagicMock())
+
+    async def _noop_provider(model):
+        return None
+
+    svc._get_provider_callable = _noop_provider  # type: ignore[attr-defined]
+
+    out = await svc._run_graph(pipeline, None, 100, 0.0, run_id=9, dry_run=True)
+
+    db.repos.generation_runs.find_orphan_image.assert_not_awaited()
+    assert out["generated_text"] == ""
+
+
+async def test_run_graph_result_contract_defaults(monkeypatch):
+    """An executor result of {} must produce the documented default contract
+    (#mutation slice 4): empty text, no image, result_kind 'generated_items',
+    result_count 0, empty citations/action_counts/node_errors, no publish."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from src.models import ContentPipeline, PipelineGraph, PipelineNode, PipelineNodeType
+    from src.services.content_generation_service import ContentGenerationService
+
+    pipeline = ContentPipeline(
+        id=1,
+        name="X",
+        prompt_template="",
+        pipeline_json=PipelineGraph(
+            nodes=[PipelineNode(id="react", type=PipelineNodeType.REACT, name="react", config={})],
+            edges=[],
+        ),
+    )
+
+    class _EmptyExecutor:
+        async def execute(self, p, g, services):
+            return {}
+
+    monkeypatch.setattr(
+        "src.services.pipeline_executor.PipelineExecutor",
+        _EmptyExecutor,
+    )
+
+    async def _fake_scope(pipeline, list_sources):
+        s = MagicMock()
+        s.query = ""
+        s.channel_id = None
+        return s
+
+    monkeypatch.setattr("src.services.pipeline_service.resolve_retrieval_scope", _fake_scope)
+
+    db = MagicMock()
+    db.repos = MagicMock()
+    db.repos.content_pipelines = MagicMock()
+    db.repos.content_pipelines.list_sources = AsyncMock(return_value=[])
+    db.get_setting = AsyncMock(return_value="")
+
+    svc = ContentGenerationService(db, MagicMock(), config=MagicMock())
+
+    async def _noop_provider(model):
+        return None
+
+    svc._get_provider_callable = _noop_provider  # type: ignore[attr-defined]
+
+    out = await svc._run_graph(pipeline, None, 100, 0.0)
+
+    assert out == {
+        "generated_text": "",
+        "image_url": None,
+        "citations": [],
+        "publish_mode": None,
+        "publish_reply": False,
+        "reply_to_message_id": None,
+        "action_counts": {},
+        "result_kind": "generated_items",
+        "result_count": 0,
+        "node_errors": [],
+    }
