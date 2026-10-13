@@ -319,6 +319,8 @@ async def test_acquire_from_lease_teardown_race_releases_and_disconnects(caplog)
     assert "client pool is disconnecting" in caplog.text
     pool._lease_pool.release.assert_awaited_once_with("+1")
     raw.disconnect.assert_called_once()
+    # The lease was never registered: it died under the lock, before the append.
+    assert pool._active_leases["+1"] == []
 
 
 @pytest.mark.anyio

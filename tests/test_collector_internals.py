@@ -252,9 +252,6 @@ async def test_release_collection_client_retire_disconnect_fallback():
     async def _disc():
         return None
 
-    async def _disc():
-        return None
-
     raw.disconnect = MagicMock(side_effect=_disc)
     session = MagicMock()
     session.raw_client = raw
