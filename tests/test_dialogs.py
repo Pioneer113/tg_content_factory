@@ -592,6 +592,195 @@ async def test_delete_dialogs_transient_flood_retries():
     pool.report_flood.assert_awaited_once_with("+1234567890", 5)
 
 
+# ------------------------------------------------------------------
+# Mutation slice #5 killer tests: behaviors that survived mutmut
+# ------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_delete_dialogs_no_client_marks_every_dialog_failed():
+    """Without an available client delete_dialogs must report EVERY dialog as
+    failed — a mutant flipping the comprehension to True would make the caller
+    believe irreversible deletions succeeded (#mutation slice 5)."""
+    from src.telegram.client_pool import ClientPool
+
+    pool = MagicMock(spec=ClientPool)
+    pool.get_client_by_phone = AsyncMock(return_value=None)
+    pool.release_client = AsyncMock()
+
+    result = await ClientPool.delete_dialogs(pool, "+1234567890", [(999, "dm"), (-100111, "channel")])
+
+    assert result == {999: False, -100111: False}
+    pool.get_client_by_phone.assert_awaited_once_with("+1234567890")
+    pool.release_client.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_delete_dialogs_blocking_flood_defers_only_that_dialog():
+    """A blocking FloodWait (>60s) defers THIS dialog (False) but must not stop
+    the loop: the remaining dialogs are still deleted (#mutation slice 5 — the
+    flood-path outcome flip to True survived)."""
+    from telethon.errors import FloodWaitError
+
+    from src.telegram.client_pool import ClientPool
+
+    pool = MagicMock(spec=ClientPool)
+    mock_client = MagicMock()
+    mock_client.delete_dialog = AsyncMock()
+
+    async def _resolve(session, phone, peer, *, operation, use_input_entity):
+        if operation.endswith(":-100111"):
+            err = FloodWaitError(request=None)
+            err.seconds = 3600  # blocking (>60s)
+            raise err
+        return MagicMock()
+
+    pool.resolve_entity_with_warm = _resolve
+    pool.get_client_by_phone = AsyncMock(return_value=(mock_client, "+1234567890"))
+    pool.release_client = AsyncMock()
+    pool.report_flood = AsyncMock()
+    pool._db = MagicMock()
+    pool._db.repos.dialog_cache.clear_dialogs = AsyncMock()
+    pool.invalidate_dialogs_cache = MagicMock()
+
+    dialogs = [(-100111, "channel"), (999, "dm")]
+    with patch("src.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
+        result = await ClientPool.delete_dialogs(pool, "+1234567890", dialogs)
+
+    assert result == {-100111: False, 999: True}
+    pool.report_flood.assert_awaited_once_with("+1234567890", 3600)
+    assert mock_client.delete_dialog.await_count == 1  # dm still processed
+
+
+@pytest.mark.anyio
+async def test_delete_dialogs_generic_failure_marks_failed_and_releases_client():
+    """Any non-flood failure marks that dialog False (never True) and the client
+    is released in finally with the SAME phone (#mutation slice 5)."""
+    from telethon.tl.functions.channels import DeleteChannelRequest
+
+    from src.telegram.client_pool import ClientPool
+
+    pool = MagicMock(spec=ClientPool)
+    invoked_requests = []
+
+    async def _invoke(request):
+        invoked_requests.append(request)
+
+    mock_client = MagicMock(side_effect=_invoke)
+
+    async def _delete_dialog(entity):
+        raise RuntimeError("boom")
+
+    mock_client.delete_dialog = _delete_dialog
+
+    pool.resolve_entity_with_warm = AsyncMock(return_value=MagicMock())
+    pool.get_client_by_phone = AsyncMock(return_value=(mock_client, "+1234567890"))
+    pool.release_client = AsyncMock()
+    pool._db = MagicMock()
+    pool._db.repos.dialog_cache.clear_dialogs = AsyncMock()
+    pool.invalidate_dialogs_cache = MagicMock()
+
+    dialogs = [(999, "dm"), (-100111, "channel")]
+    with patch("src.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
+        result = await ClientPool.delete_dialogs(pool, "+1234567890", dialogs)
+
+    assert result == {999: False, -100111: True}
+    assert len([r for r in invoked_requests if isinstance(r, DeleteChannelRequest)]) == 1
+    pool.release_client.assert_awaited_once_with("+1234567890")
+
+
+@pytest.mark.anyio
+async def test_delete_dialogs_dm_resolves_peer_user_and_passes_resolved_entity():
+    """The dm/bot/saved path resolves PeerUser(dialog_id) and hands the RESOLVED
+    entity to delete_dialog — a mutant dropping the peer or the entity would
+    delete the wrong target (#mutation slice 5)."""
+    from telethon.tl.types import PeerUser
+
+    from src.telegram.client_pool import ClientPool
+
+    pool = MagicMock(spec=ClientPool)
+    mock_client = MagicMock()
+    entity_sentinel = object()
+    received_peers = []
+    received_kwargs = []
+    removed_entities = []
+
+    async def _resolve(session, phone, peer, *, operation, use_input_entity):
+        received_peers.append(peer)
+        received_kwargs.append({"operation": operation, "use_input_entity": use_input_entity})
+        return entity_sentinel
+
+    async def _delete_dialog(entity):
+        removed_entities.append(entity)
+
+    mock_client.delete_dialog = _delete_dialog
+
+    pool.resolve_entity_with_warm = _resolve
+    pool.get_client_by_phone = AsyncMock(return_value=(mock_client, "+1234567890"))
+    pool.release_client = AsyncMock()
+    pool._db = MagicMock()
+    pool._db.repos.dialog_cache.clear_dialogs = AsyncMock()
+    pool.invalidate_dialogs_cache = MagicMock()
+
+    dialogs = [(999, "dm"), (777, "bot")]
+    with patch("src.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
+        result = await ClientPool.delete_dialogs(pool, "+1234567890", dialogs)
+
+    assert result == {999: True, 777: True}
+    assert [isinstance(p, PeerUser) for p in received_peers] == [True, True]
+    assert [p.user_id for p in received_peers] == [999, 777]
+    assert received_kwargs[0] == {"operation": "delete_dialogs:999", "use_input_entity": True}
+    assert received_kwargs[1] == {"operation": "delete_dialogs:777", "use_input_entity": True}
+    assert removed_entities == [entity_sentinel, entity_sentinel]
+
+
+@pytest.mark.anyio
+async def test_get_dialogs_for_phone_cache_mode_follows_include_dm_and_mode():
+    """cache_mode is "full" when include_dm is set OR mode=="full", else
+    "channels_only" — the DB cache key depends on it (#mutation slice 5)."""
+    from src.telegram.client_pool import ClientPool
+
+    async def _run(include_dm, mode, expected_mode):
+        pool = MagicMock(spec=ClientPool)
+        pool._dialogs_cache = {}
+        pool._dialogs_cache_ttl_sec = 60.0
+        pool._dialogs_db_cache_ttl_sec = 3600.0
+        pool._get_cached_dialogs = MagicMock(return_value=None)
+        db_rows = [{"channel_id": 1, "title": "x"}]
+        recorder = AsyncMock(return_value=db_rows)
+        pool._get_db_cached_dialogs = recorder
+
+        result = await ClientPool.get_dialogs_for_phone(pool, "+1234567890", include_dm, mode)
+
+        assert result == db_rows
+        recorder.assert_awaited_once_with("+1234567890", expected_mode)
+
+    await _run(True, "channels_only", "full")
+    await _run(False, "full", "full")
+    await _run(False, "channels_only", "channels_only")
+
+
+@pytest.mark.anyio
+async def test_get_dialogs_for_phone_cache_miss_fetches_with_default_mode():
+    """On a full cache miss the background sweep is launched with the ORIGINAL
+    defaults (include_dm=False, mode="channels_only") — a default flip would
+    silently widen every caller's sweep to DMs (#mutation slice 5)."""
+    from src.telegram.client_pool import ClientPool
+    from src.telegram.pool_dialogs import DialogFetchResult
+
+    pool = MagicMock(spec=ClientPool)
+    pool._get_cached_dialogs = MagicMock(return_value=None)
+    pool._get_db_cached_dialogs = AsyncMock(return_value=None)  # miss + stale None
+    fetcher = AsyncMock(return_value=DialogFetchResult([]))
+    pool._fetch_dialogs_for_phone = fetcher
+    pool._dialog_refresh_tasks = {}
+
+    result = await ClientPool.get_dialogs_for_phone(pool, "+1234567890")
+
+    assert isinstance(result, DialogFetchResult)
+    fetcher.assert_awaited_once_with("+1234567890", False, "channels_only", "channels_only")
+
+
 @pytest.mark.anyio
 async def test_leave_dialogs_post(client):
     """POST /dialogs/leave enqueues a dialogs.leave command."""
@@ -1677,3 +1866,158 @@ async def test_completed_sweep_leaves_a_fresh_snapshot(db):
     assert age_sec < 3600, (
         f"a completed sweep left the snapshot looking stale: cached_at={cached_at}"
     )
+
+
+# ------------------------------------------------------------------
+# Mutation slice #5 killer tests: _resolve_channel_once contracts
+# ------------------------------------------------------------------
+
+
+def _resolve_pool():
+    from src.telegram.client_pool import ClientPool
+
+    pool = MagicMock(spec=ClientPool)
+    pool.release_client = AsyncMock()
+    pool.remember_channel_phone = AsyncMock()
+    pool.forget_channel_phone = AsyncMock()
+    pool._classify_entity = MagicMock(return_value=("channel", False))
+    return pool
+
+
+@pytest.mark.anyio
+async def test_resolve_channel_once_numeric_on_owner_confirms_gone():
+    """A numeric miss on the OWNING account is a trusted gone — not a review
+    sentinel and not a silent None (#mutation slice 5)."""
+    from src.telegram.client_pool import ClientPool
+
+    pool = _resolve_pool()
+    pool.get_client_by_phone = AsyncMock(return_value=(MagicMock(), "+1"))
+    pool.resolve_entity_with_warm = AsyncMock(side_effect=ValueError("Could not find the input entity"))
+
+    result = await ClientPool._resolve_channel_once(
+        pool, "1234567", signal_gone=True, gone_phone="+1"
+    )
+    assert result == {"gone": True}
+
+
+@pytest.mark.anyio
+async def test_resolve_channel_once_numeric_elsewhere_flags_review_not_gone():
+    """The same numeric miss on an ARBITRARY account is only a cache-miss: with
+    review_on_uncertain it surfaces the quarantine sentinel, and a username
+    miss stays None (#mutation slice 5)."""
+    from src.telegram.client_pool import ClientPool
+
+    pool = _resolve_pool()
+    pool.get_available_client = AsyncMock(return_value=(MagicMock(), "+2"))
+    pool.resolve_entity_with_warm = AsyncMock(side_effect=ValueError("Could not find the input entity"))
+
+    result = await ClientPool._resolve_channel_once(
+        pool, "1234567", signal_gone=True, review_on_uncertain=True
+    )
+    assert result == {"review": True, "reason": "numeric_unresolved"}
+
+    result = await ClientPool._resolve_channel_once(
+        pool, "somechannel", signal_gone=True, review_on_uncertain=True
+    )
+    assert result is None
+
+
+@pytest.mark.anyio
+async def test_resolve_channel_once_review_requires_signal_gone():
+    """Without signal_gone an uncertain numeric miss stays None even when
+    review_on_uncertain is requested — review is a gone-check affordance
+    (#mutation slice 5)."""
+    from src.telegram.client_pool import ClientPool
+
+    pool = _resolve_pool()
+    pool.get_available_client = AsyncMock(return_value=(MagicMock(), "+2"))
+    pool.resolve_entity_with_warm = AsyncMock(side_effect=ValueError("Could not find the input entity"))
+
+    result = await ClientPool._resolve_channel_once(pool, "1234567", review_on_uncertain=True)
+    assert result is None
+
+
+@pytest.mark.anyio
+async def test_resolve_channel_once_owner_unavailable_defers_to_review():
+    """When the owning account is unavailable we must NOT confirm gone — the
+    uncertain sentinel is returned instead (#mutation slice 5)."""
+    from src.telegram.client_pool import ClientPool
+
+    pool = _resolve_pool()
+    pool.get_client_by_phone = AsyncMock(return_value=None)
+    pool.get_available_client = AsyncMock()
+
+    result = await ClientPool._resolve_channel_once(
+        pool, "1234567", signal_gone=True, gone_phone="+1", review_on_uncertain=True
+    )
+    assert result == {"review": True, "reason": "numeric_unresolved"}
+    pool.get_available_client.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_resolve_channel_once_flood_rotates_three_clients_then_raises():
+    """Flood-waited resolves rotate clients at most 3 times, then the last
+    HandledFloodWaitError propagates — a widened rotation budget would burn a
+    fourth account (#mutation slice 5)."""
+    from datetime import datetime, timezone
+
+    from telethon_floodgate import FloodWaitInfo, HandledFloodWaitError
+
+    from src.telegram.client_pool import ClientPool
+
+    def _flood_error():
+        info = FloodWaitInfo(
+            operation="resolve_channel",
+            phone="+2",
+            wait_seconds=5,
+            next_available_at_utc=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            detail="flood 5s",
+        )
+        return HandledFloodWaitError(info)
+
+    pool = _resolve_pool()
+    pool.get_available_client = AsyncMock(return_value=(MagicMock(), "+2"))
+    pool.resolve_entity_with_warm = AsyncMock(side_effect=_flood_error())
+
+    with pytest.raises(HandledFloodWaitError):
+        await ClientPool._resolve_channel_once(pool, "somechannel")
+    assert pool.resolve_entity_with_warm.await_count == 3
+    assert pool.release_client.await_count == 3
+
+
+@pytest.mark.anyio
+async def test_resolve_channel_once_remember_phone_force_only_for_fallback():
+    """The gone-check self-heal remembers the resolving account: force=True only
+    when the resolver was a FALLBACK account, never for the routed owner
+    (#mutation slice 5)."""
+    from src.telegram.client_pool import ClientPool
+
+    entity = MagicMock()
+    entity.title = "Ch"
+    entity.id = 1234567
+    entity.username = None
+    entity.date = datetime(2025, 6, 1, tzinfo=timezone.utc)
+
+    # Arbitrary account resolved it → force the map update.
+    pool = _resolve_pool()
+    pool.get_available_client = AsyncMock(return_value=(MagicMock(), "+2"))
+    pool.resolve_entity_with_warm = AsyncMock(return_value=entity)
+
+    result = await ClientPool._resolve_channel_once(pool, "1234567", signal_gone=True)
+    assert result == {
+        "channel_id": 1234567,
+        "title": "Ch",
+        "username": None,
+        "channel_type": "channel",
+        "deactivate": False,
+        "created_at": datetime(2025, 6, 1, tzinfo=timezone.utc),
+    }
+    pool.remember_channel_phone.assert_awaited_once_with(1234567, "+2", force=True)
+
+    # The routed OWNER resolved it → no force (owner routing is already right).
+    pool = _resolve_pool()
+    pool.get_client_by_phone = AsyncMock(return_value=(MagicMock(), "+1"))
+    pool.resolve_entity_with_warm = AsyncMock(return_value=entity)
+
+    await ClientPool._resolve_channel_once(pool, "1234567", signal_gone=True, gone_phone="+1")
+    pool.remember_channel_phone.assert_awaited_once_with(1234567, "+1", force=False)
