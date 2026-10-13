@@ -525,3 +525,99 @@ def test_aggregate_drops_collected_instances(isolated_registry):
     assert stats["instances"] == 1
     assert stats["total_errors"] == 5
     del a  # keep strong refs alive until here (WeakSet)
+
+
+# ---------------------------------------------------------------------------
+# Mutation slice #4 killer tests: behaviors that survived mutmut
+# ---------------------------------------------------------------------------
+
+
+def test_guard_not_image_flags_image_module_even_without_name_marker():
+    """__module__ 'image_generation_service' is enough to refuse (#958,
+    #mutation slice 4). The name/qualname marker path is covered elsewhere; this
+    pins the module half of the OR — an or→and drift would let a renamed image
+    closure slip into the retrying (billed) path."""
+    from src.services.error_recovery_service import ImageAdapterRetryError, guard_not_image
+
+    async def call_model(prompt, model):
+        return "url"
+
+    call_model.__module__ = "src.services.image_generation_service"
+    call_model.__qualname__ = "SomeFactory.<locals>.inner"
+
+    with pytest.raises(ImageAdapterRetryError):
+        guard_not_image(call_model)
+
+
+def test_guard_not_image_all_llm_callables_from_provider_adapters():
+    """A provider_adapters callable WITHOUT image markers must pass the guard:
+    the inner and/or of the module check must not degrade to a blanket refuse
+    (#mutation slice 4)."""
+    from src.services.error_recovery_service import guard_not_image
+
+    async def complete_chat(prompt, model):
+        return "text"
+
+    complete_chat.__module__ = "src.services.provider_adapters"
+    complete_chat.__qualname__ = "build_llm_provider.<locals>.complete_chat"
+
+    guard_not_image(complete_chat)  # must not raise
+
+
+@pytest.mark.anyio
+async def test_retry_budget_is_exactly_max_retries_plus_one_attempts():
+    """Transient failures are attempted max_retries + 1 times in total —
+    not max_retries + 2 (#mutation slice 4)."""
+    service = ErrorRecoveryService(
+        retry_policy=RetryPolicy(max_retries=2, base_delay=0.0, jitter=False)
+    )
+
+    calls = 0
+
+    async def always_fails():
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("transient failure")
+
+    with pytest.raises(RuntimeError, match="transient failure"):
+        await service.execute_with_recovery(always_fails)
+
+    assert calls == 3
+
+
+def test_calculate_delay_exponential_cap_without_jitter():
+    """No jitter: delay = base * base_exp ** attempt, capped at max_delay
+    (#mutation slice 4)."""
+    policy = RetryPolicy(
+        base_delay=2.0, exponential_base=3.0, max_delay=100.0, jitter=False
+    )
+    service = ErrorRecoveryService(retry_policy=policy)
+
+    assert service._calculate_delay(0) == 2.0
+    assert service._calculate_delay(2) == 18.0
+    assert service._calculate_delay(10) == 100.0  # capped
+
+
+def test_calculate_delay_jitter_bounds(monkeypatch):
+    """With jitter the delay is scaled by 0.5 + random.random(), i.e. within
+    [0.5x, 1.5x] of the exponential delay (#mutation slice 4)."""
+    policy = RetryPolicy(
+        base_delay=4.0, exponential_base=2.0, max_delay=1000.0, jitter=True
+    )
+    service = ErrorRecoveryService(retry_policy=policy)
+
+    monkeypatch.setattr("random.random", lambda: 0.0)
+    assert service._calculate_delay(0) == 2.0  # 4 * 0.5
+
+    monkeypatch.setattr("random.random", lambda: 1.0)
+    assert service._calculate_delay(0) == 6.0  # 4 * 1.5
+
+
+def test_record_error_truncates_message_to_200_chars():
+    """ErrorRecord.message is hard-truncated at 200 chars (#mutation slice 4)."""
+    service = ErrorRecoveryService()
+    service._record_error(RuntimeError("x" * 300), ErrorCategory.TRANSIENT)
+
+    record = service._error_history[-1]
+    assert record.error_type == "RuntimeError"
+    assert len(record.message) == 200
