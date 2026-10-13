@@ -592,6 +592,195 @@ async def test_delete_dialogs_transient_flood_retries():
     pool.report_flood.assert_awaited_once_with("+1234567890", 5)
 
 
+# ------------------------------------------------------------------
+# Mutation slice #5 killer tests: behaviors that survived mutmut
+# ------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_delete_dialogs_no_client_marks_every_dialog_failed():
+    """Without an available client delete_dialogs must report EVERY dialog as
+    failed — a mutant flipping the comprehension to True would make the caller
+    believe irreversible deletions succeeded (#mutation slice 5)."""
+    from src.telegram.client_pool import ClientPool
+
+    pool = MagicMock(spec=ClientPool)
+    pool.get_client_by_phone = AsyncMock(return_value=None)
+    pool.release_client = AsyncMock()
+
+    result = await ClientPool.delete_dialogs(pool, "+1234567890", [(999, "dm"), (-100111, "channel")])
+
+    assert result == {999: False, -100111: False}
+    pool.get_client_by_phone.assert_awaited_once_with("+1234567890")
+    pool.release_client.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_delete_dialogs_blocking_flood_defers_only_that_dialog():
+    """A blocking FloodWait (>60s) defers THIS dialog (False) but must not stop
+    the loop: the remaining dialogs are still deleted (#mutation slice 5 — the
+    flood-path outcome flip to True survived)."""
+    from telethon.errors import FloodWaitError
+
+    from src.telegram.client_pool import ClientPool
+
+    pool = MagicMock(spec=ClientPool)
+    mock_client = MagicMock()
+    mock_client.delete_dialog = AsyncMock()
+
+    async def _resolve(session, phone, peer, *, operation, use_input_entity):
+        if operation.endswith(":-100111"):
+            err = FloodWaitError(request=None)
+            err.seconds = 3600  # blocking (>60s)
+            raise err
+        return MagicMock()
+
+    pool.resolve_entity_with_warm = _resolve
+    pool.get_client_by_phone = AsyncMock(return_value=(mock_client, "+1234567890"))
+    pool.release_client = AsyncMock()
+    pool.report_flood = AsyncMock()
+    pool._db = MagicMock()
+    pool._db.repos.dialog_cache.clear_dialogs = AsyncMock()
+    pool.invalidate_dialogs_cache = MagicMock()
+
+    dialogs = [(-100111, "channel"), (999, "dm")]
+    with patch("src.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
+        result = await ClientPool.delete_dialogs(pool, "+1234567890", dialogs)
+
+    assert result == {-100111: False, 999: True}
+    pool.report_flood.assert_awaited_once_with("+1234567890", 3600)
+    assert mock_client.delete_dialog.await_count == 1  # dm still processed
+
+
+@pytest.mark.anyio
+async def test_delete_dialogs_generic_failure_marks_failed_and_releases_client():
+    """Any non-flood failure marks that dialog False (never True) and the client
+    is released in finally with the SAME phone (#mutation slice 5)."""
+    from telethon.tl.functions.channels import DeleteChannelRequest
+
+    from src.telegram.client_pool import ClientPool
+
+    pool = MagicMock(spec=ClientPool)
+    invoked_requests = []
+
+    async def _invoke(request):
+        invoked_requests.append(request)
+
+    mock_client = MagicMock(side_effect=_invoke)
+
+    async def _delete_dialog(entity):
+        raise RuntimeError("boom")
+
+    mock_client.delete_dialog = _delete_dialog
+
+    pool.resolve_entity_with_warm = AsyncMock(return_value=MagicMock())
+    pool.get_client_by_phone = AsyncMock(return_value=(mock_client, "+1234567890"))
+    pool.release_client = AsyncMock()
+    pool._db = MagicMock()
+    pool._db.repos.dialog_cache.clear_dialogs = AsyncMock()
+    pool.invalidate_dialogs_cache = MagicMock()
+
+    dialogs = [(999, "dm"), (-100111, "channel")]
+    with patch("src.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
+        result = await ClientPool.delete_dialogs(pool, "+1234567890", dialogs)
+
+    assert result == {999: False, -100111: True}
+    assert len([r for r in invoked_requests if isinstance(r, DeleteChannelRequest)]) == 1
+    pool.release_client.assert_awaited_once_with("+1234567890")
+
+
+@pytest.mark.anyio
+async def test_delete_dialogs_dm_resolves_peer_user_and_passes_resolved_entity():
+    """The dm/bot/saved path resolves PeerUser(dialog_id) and hands the RESOLVED
+    entity to delete_dialog — a mutant dropping the peer or the entity would
+    delete the wrong target (#mutation slice 5)."""
+    from telethon.tl.types import PeerUser
+
+    from src.telegram.client_pool import ClientPool
+
+    pool = MagicMock(spec=ClientPool)
+    mock_client = MagicMock()
+    entity_sentinel = object()
+    received_peers = []
+    received_kwargs = []
+    removed_entities = []
+
+    async def _resolve(session, phone, peer, *, operation, use_input_entity):
+        received_peers.append(peer)
+        received_kwargs.append({"operation": operation, "use_input_entity": use_input_entity})
+        return entity_sentinel
+
+    async def _delete_dialog(entity):
+        removed_entities.append(entity)
+
+    mock_client.delete_dialog = _delete_dialog
+
+    pool.resolve_entity_with_warm = _resolve
+    pool.get_client_by_phone = AsyncMock(return_value=(mock_client, "+1234567890"))
+    pool.release_client = AsyncMock()
+    pool._db = MagicMock()
+    pool._db.repos.dialog_cache.clear_dialogs = AsyncMock()
+    pool.invalidate_dialogs_cache = MagicMock()
+
+    dialogs = [(999, "dm"), (777, "bot")]
+    with patch("src.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
+        result = await ClientPool.delete_dialogs(pool, "+1234567890", dialogs)
+
+    assert result == {999: True, 777: True}
+    assert [isinstance(p, PeerUser) for p in received_peers] == [True, True]
+    assert [p.user_id for p in received_peers] == [999, 777]
+    assert received_kwargs[0] == {"operation": "delete_dialogs:999", "use_input_entity": True}
+    assert received_kwargs[1] == {"operation": "delete_dialogs:777", "use_input_entity": True}
+    assert removed_entities == [entity_sentinel, entity_sentinel]
+
+
+@pytest.mark.anyio
+async def test_get_dialogs_for_phone_cache_mode_follows_include_dm_and_mode():
+    """cache_mode is "full" when include_dm is set OR mode=="full", else
+    "channels_only" — the DB cache key depends on it (#mutation slice 5)."""
+    from src.telegram.client_pool import ClientPool
+
+    async def _run(include_dm, mode, expected_mode):
+        pool = MagicMock(spec=ClientPool)
+        pool._dialogs_cache = {}
+        pool._dialogs_cache_ttl_sec = 60.0
+        pool._dialogs_db_cache_ttl_sec = 3600.0
+        pool._get_cached_dialogs = MagicMock(return_value=None)
+        db_rows = [{"channel_id": 1, "title": "x"}]
+        recorder = AsyncMock(return_value=db_rows)
+        pool._get_db_cached_dialogs = recorder
+
+        result = await ClientPool.get_dialogs_for_phone(pool, "+1234567890", include_dm, mode)
+
+        assert result == db_rows
+        recorder.assert_awaited_once_with("+1234567890", expected_mode)
+
+    await _run(True, "channels_only", "full")
+    await _run(False, "full", "full")
+    await _run(False, "channels_only", "channels_only")
+
+
+@pytest.mark.anyio
+async def test_get_dialogs_for_phone_cache_miss_fetches_with_default_mode():
+    """On a full cache miss the background sweep is launched with the ORIGINAL
+    defaults (include_dm=False, mode="channels_only") — a default flip would
+    silently widen every caller's sweep to DMs (#mutation slice 5)."""
+    from src.telegram.client_pool import ClientPool
+    from src.telegram.pool_dialogs import DialogFetchResult
+
+    pool = MagicMock(spec=ClientPool)
+    pool._get_cached_dialogs = MagicMock(return_value=None)
+    pool._get_db_cached_dialogs = AsyncMock(return_value=None)  # miss + stale None
+    fetcher = AsyncMock(return_value=DialogFetchResult([]))
+    pool._fetch_dialogs_for_phone = fetcher
+    pool._dialog_refresh_tasks = {}
+
+    result = await ClientPool.get_dialogs_for_phone(pool, "+1234567890")
+
+    assert isinstance(result, DialogFetchResult)
+    fetcher.assert_awaited_once_with("+1234567890", False, "channels_only", "channels_only")
+
+
 @pytest.mark.anyio
 async def test_leave_dialogs_post(client):
     """POST /dialogs/leave enqueues a dialogs.leave command."""
