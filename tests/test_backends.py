@@ -675,3 +675,68 @@ async def test_telethon_cli_backend_disconnects_partial_client_on_acquire_error(
         )
 
     fake_client.disconnect.assert_awaited_once()
+
+
+# ------------------------------------------------------------------
+# Mutation slice #6 killer tests: proactive gate reservation contract
+# ------------------------------------------------------------------
+
+
+def _gated_session(gate):
+    session = TelegramTransportSession(FakeCliTelethonClient())
+    return session.with_flood_context(
+        phone="+7000", pool=SimpleNamespace(_rate_limit_gate=gate)
+    )
+
+
+def test_reserve_gate_slot_passes_phone_category_and_slots():
+    """The gate sees the session phone, the resolved category and the slot
+    count: slots=1 reserves bare, slots>1 carries the count, per-peer always
+    carries it (#mutation slice 6)."""
+    from telethon_floodgate import TelegramRateLimitGate
+
+    gate = TelegramRateLimitGate()
+    gate.category_for = MagicMock(return_value="send")
+    gate.try_acquire = MagicMock(return_value=0)
+    session = _gated_session(gate)
+
+    session._reserve_gate_slot("telegram_op")
+    gate.try_acquire.assert_called_once_with("+7000", "send")
+
+    gate.try_acquire.reset_mock()
+    session._reserve_gate_slot("telegram_op", slots=3)
+    gate.try_acquire.assert_called_once_with("+7000", "send", slots=3)
+
+    gate.try_acquire.reset_mock()
+    session._reserve_gate_slot("telegram_op", category="send_peer", peer="@chan")
+    gate.try_acquire.assert_called_once_with("+7000", "send_peer", slots=1, peer="@chan")
+
+
+def test_reserve_gate_slot_boundary_and_raised_contracts():
+    """Any positive retry_after defers — including exactly 1 — and the raised
+    errors carry phone + peer/category + retry seconds (#mutation slice 6)."""
+    from telethon_floodgate import TelegramRateLimitGate
+
+    from src.telegram.backends import TelegramPeerRateLimitedError, TelegramRateLimitedError
+
+    gate = TelegramRateLimitGate()
+    gate.category_for = MagicMock(return_value="send")
+    gate.try_acquire = MagicMock(return_value=1)
+    session = _gated_session(gate)
+
+    with pytest.raises(TelegramPeerRateLimitedError) as peer_exc:
+        session._reserve_gate_slot("op", category="send_peer", peer="@chan")
+    assert peer_exc.value.phone == "+7000"
+    assert peer_exc.value.peer == "@chan"
+    assert peer_exc.value.retry_after_sec == 1
+
+    gate.try_acquire.return_value = 7
+    with pytest.raises(TelegramRateLimitedError) as cat_exc:
+        session._reserve_gate_slot("op")
+    assert cat_exc.value.phone == "+7000"
+    assert cat_exc.value.category == "send"
+    assert cat_exc.value.retry_after_sec == 7
+
+    # retry_after == 0 → reserved, nothing raised.
+    gate.try_acquire.return_value = 0
+    session._reserve_gate_slot("op")
