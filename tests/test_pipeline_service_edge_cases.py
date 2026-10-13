@@ -1420,3 +1420,263 @@ async def test_resolve_scope_empty_name_yields_empty_query():
     pipeline = ContentPipeline(id=13, name="", prompt_template="t")
     scope = await resolve_retrieval_scope(pipeline, list_sources=None)
     assert scope.query == ""
+
+
+# ---------------------------------------------------------------------------
+# Mutation slice #4 killer tests: behaviors that survived mutmut
+# ---------------------------------------------------------------------------
+
+
+def test_to_since_hours_converts_units():
+    """m -> /60, d -> *24, anything else -> float hours (pipeline_service.py)."""
+    from src.services.pipeline_service import to_since_hours
+
+    assert to_since_hours(90, "m") == 1.5
+    assert to_since_hours(2, "d") == 48.0
+    assert to_since_hours(5, "h") == 5.0
+
+
+def test_coerce_target_ref_string_dict_and_garbage():
+    """_coerce_target_ref: string partition, dict form, and None for garbage
+    (#1246, #mutation slice 4). partition (not rpartition) keeps the phone part
+    left of the FIRST pipe."""
+    from src.services.pipeline_service import _coerce_target_ref
+
+    ref = _coerce_target_ref("+100|77")
+    assert ref == PipelineTargetRef(phone="+100", dialog_id=77)
+    # passthrough
+    assert _coerce_target_ref(ref) is ref
+    # garbage in every shape -> None (caller skips it)
+    assert _coerce_target_ref("|77") is None
+    assert _coerce_target_ref("+100|") is None
+    assert _coerce_target_ref("+100|abc") is None
+    assert _coerce_target_ref("no-pipe") is None
+    # multi-pipe string is garbage: phone is everything BEFORE THE FIRST pipe
+    assert _coerce_target_ref("+100|77|88") is None
+    assert _coerce_target_ref({"phone": "+100", "dialog_id": "abc"}) is None
+    assert _coerce_target_ref({"phone": "", "dialog_id": 77}) is None
+    assert _coerce_target_ref(42) is None
+
+
+@pytest.mark.anyio
+async def test_edit_via_llm_saves_parsed_graph_without_json_fence(svc, db, pipeline_id):
+    """A ```-fenced answer WITHOUT the json prefix still parses and is SAVED —
+    the test re-reads the pipeline so a set_pipeline_json(pipeline_id, None)
+    drift cannot pass (#mutation slice 4)."""
+    graph_payload = json.dumps({
+        "nodes": [{
+            "id": "n1", "type": "llm_generate", "name": "RenamedByLLM",
+            "config": {}, "position": {"x": 0, "y": 0},
+        }],
+        "edges": [],
+    })
+    mock_provider = AsyncMock(return_value=f"```\n{graph_payload}\n```")
+
+    with patch("src.services.provider_service.RuntimeProviderRegistry") as mock_aps:
+        instance = mock_aps.return_value
+        instance.get_provider_callable.return_value = mock_provider
+
+        result = await svc.edit_via_llm(pipeline_id, "rename the node", db)
+
+    assert result["ok"] is True
+    p = await svc.get(pipeline_id)
+    assert p.pipeline_json is not None
+    assert p.pipeline_json.nodes[0].name == "RenamedByLLM"
+
+
+@pytest.mark.anyio
+async def test_edit_via_llm_dict_falls_back_to_generated_text(svc, db, pipeline_id):
+    """Provider dict: non-empty 'text' wins; empty 'text' falls back to
+    'generated_text' (#mutation slice 4)."""
+    payload_a = json.dumps({
+        "nodes": [{
+            "id": "n1", "type": "llm_generate", "name": "FromText",
+            "config": {}, "position": {"x": 0, "y": 0},
+        }],
+        "edges": [],
+    })
+    payload_b = json.dumps({
+        "nodes": [{
+            "id": "n1", "type": "llm_generate", "name": "FromGeneratedText",
+            "config": {}, "position": {"x": 0, "y": 0},
+        }],
+        "edges": [],
+    })
+
+    # text present and non-empty: it must be used, generated_text ignored
+    mock_provider = AsyncMock(return_value={"text": payload_a, "generated_text": "not json"})
+    with patch("src.services.provider_service.RuntimeProviderRegistry") as mock_aps:
+        instance = mock_aps.return_value
+        instance.get_provider_callable.return_value = mock_provider
+
+        result = await svc.edit_via_llm(pipeline_id, "rename", db)
+
+    assert result["ok"] is True
+    p = await svc.get(pipeline_id)
+    assert p.pipeline_json.nodes[0].name == "FromText"
+
+    # empty text: fallback to generated_text
+    mock_provider = AsyncMock(return_value={"text": "", "generated_text": payload_b})
+    with patch("src.services.provider_service.RuntimeProviderRegistry") as mock_aps:
+        instance = mock_aps.return_value
+        instance.get_provider_callable.return_value = mock_provider
+
+        result = await svc.edit_via_llm(pipeline_id, "rename", db)
+
+    assert result["ok"] is True
+    p = await svc.get(pipeline_id)
+    assert p.pipeline_json.nodes[0].name == "FromGeneratedText"
+
+
+@pytest.mark.anyio
+async def test_create_from_template_applies_overrides(svc, db):
+    """Every overrides key lands on the created pipeline (#mutation slice 4):
+    prompt_template/llm_model/image_model/publish_mode/generation_backend/
+    generate_interval_minutes are read from the dict, not silently defaulted."""
+    graph = PipelineGraph(
+        nodes=[
+            PipelineNode(
+                id="n1",
+                type=PipelineNodeType.LLM_GENERATE,
+                name="gen",
+                config={"prompt_template": "Template default prompt"},
+            ),
+        ],
+        edges=[],
+    )
+    tpl = MagicMock()
+    tpl.template_json = graph
+
+    mock_tpl_repo = MagicMock()
+    mock_tpl_repo.get_by_id = AsyncMock(return_value=tpl)
+    svc._bundle = PipelineBundle(
+        content_pipelines=db.repos.content_pipelines,
+        channels=db.repos.channels,
+        accounts=db.repos.accounts,
+        dialog_cache=db.repos.dialog_cache,
+        pipeline_templates=mock_tpl_repo,
+    )
+
+    pid = await svc.create_from_template(
+        template_id=1,
+        name="Overridden",
+        source_ids=[],
+        target_refs=[],
+        overrides={
+            "prompt_template": "Override {source_messages}",
+            "llm_model": "override-model",
+            "image_model": "override:img",
+            "publish_mode": "auto",
+            "generation_backend": "deep_agents",
+            "generate_interval_minutes": 7,
+        },
+    )
+    p = await svc.get(pid)
+    assert p.prompt_template == "Override {source_messages}"
+    assert p.llm_model == "override-model"
+    assert p.image_model == "override:img"
+    assert p.publish_mode == "auto"
+    assert p.generation_backend == "deep_agents"
+    assert p.generate_interval_minutes == 7
+
+
+def _injection_graph() -> PipelineGraph:
+    return PipelineGraph(
+        nodes=[
+            PipelineNode(
+                id="src", type=PipelineNodeType.SOURCE, name="source",
+                config={"channel_ids": [1001]},
+            ),
+            PipelineNode(
+                id="react", type=PipelineNodeType.REACT, name="react", config={},
+            ),
+            PipelineNode(
+                id="filt", type=PipelineNodeType.FILTER, name="filter", config={},
+            ),
+        ],
+        edges=[
+            PipelineEdge(from_node="src", to_node="react"),
+            PipelineEdge(from_node="react", to_node="filt"),
+        ],
+    )
+
+
+@pytest.mark.anyio
+async def test_update_injects_react_dag_and_filter_configs(svc, db):
+    """update() node-level injections (#mutation slice 4): react_emoji splits on
+    commas/whitespace (single vs multi emoji), dag_source_channel_ids rewrites
+    SOURCE nodes, filter_config is normalized into FILTER nodes."""
+    pid = await svc.add(
+        name="InjectionPipeline",
+        prompt_template="Test",
+        source_channel_ids=[1001],
+        target_refs=[PipelineTargetRef(phone="+100", dialog_id=77)],
+    )
+    await db.repos.content_pipelines.set_pipeline_json(pid, _injection_graph())
+
+    ok = await svc.update(
+        pid,
+        name="InjectionPipeline",
+        prompt_template="Test",
+        source_channel_ids=[1001],
+        target_refs=[PipelineTargetRef(phone="+100", dialog_id=77)],
+        react_emoji="👍 ❤️",
+        dag_source_channel_ids=[1002],
+        filter_config={"keywords": ["spam"], "match_links": True},
+    )
+    assert ok is True
+
+    from src.services.pipeline_filters import normalize_filter_config
+
+    graph = await svc.get_graph(pid)
+    by_id = {n.id: n for n in graph.nodes}
+    # multi-emoji: first emoji + full random_emojis list
+    assert by_id["react"].config["emoji"] == "👍"
+    assert by_id["react"].config["random_emojis"] == ["👍", "❤️"]
+    # dag source ids rewritten into the SOURCE node
+    assert by_id["src"].config["channel_ids"] == [1002]
+    # filter config normalized into the FILTER node
+    assert by_id["filt"].config == normalize_filter_config(
+        {"keywords": ["spam"], "match_links": True}
+    )
+
+
+@pytest.mark.anyio
+async def test_update_single_react_emoji_clears_random_emojis(svc, db):
+    """One emoji -> config['emoji'] = it, random_emojis emptied (#mutation slice 4)."""
+    pid = await svc.add(
+        name="ReactPipeline",
+        prompt_template="Test",
+        source_channel_ids=[1001],
+        target_refs=[PipelineTargetRef(phone="+100", dialog_id=77)],
+    )
+    await db.repos.content_pipelines.set_pipeline_json(pid, _injection_graph())
+
+    await svc.update(
+        pid,
+        name="ReactPipeline",
+        prompt_template="Test",
+        source_channel_ids=[1001],
+        target_refs=[PipelineTargetRef(phone="+100", dialog_id=77)],
+        react_emoji="🔥",
+    )
+
+    graph = await svc.get_graph(pid)
+    react = next(n for n in graph.nodes if n.type == PipelineNodeType.REACT)
+    assert react.config["emoji"] == "🔥"
+    assert react.config["random_emojis"] == []
+
+
+@pytest.mark.anyio
+async def test_add_accepts_interval_of_exactly_one_minute(svc, db):
+    """generate_interval_minutes == 1 is valid — the < 1 boundary, not <= 1
+    (#mutation slice 4)."""
+    pid = await svc.add(
+        name="EveryMinute",
+        prompt_template="Test {source_messages}",
+        source_channel_ids=[1001],
+        target_refs=[PipelineTargetRef(phone="+100", dialog_id=77)],
+        generate_interval_minutes=1,
+    )
+    p = await svc.get(pid)
+    assert p.generate_interval_minutes == 1
