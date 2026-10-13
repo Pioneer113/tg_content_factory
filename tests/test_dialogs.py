@@ -1866,3 +1866,158 @@ async def test_completed_sweep_leaves_a_fresh_snapshot(db):
     assert age_sec < 3600, (
         f"a completed sweep left the snapshot looking stale: cached_at={cached_at}"
     )
+
+
+# ------------------------------------------------------------------
+# Mutation slice #5 killer tests: _resolve_channel_once contracts
+# ------------------------------------------------------------------
+
+
+def _resolve_pool():
+    from src.telegram.client_pool import ClientPool
+
+    pool = MagicMock(spec=ClientPool)
+    pool.release_client = AsyncMock()
+    pool.remember_channel_phone = AsyncMock()
+    pool.forget_channel_phone = AsyncMock()
+    pool._classify_entity = MagicMock(return_value=("channel", False))
+    return pool
+
+
+@pytest.mark.anyio
+async def test_resolve_channel_once_numeric_on_owner_confirms_gone():
+    """A numeric miss on the OWNING account is a trusted gone — not a review
+    sentinel and not a silent None (#mutation slice 5)."""
+    from src.telegram.client_pool import ClientPool
+
+    pool = _resolve_pool()
+    pool.get_client_by_phone = AsyncMock(return_value=(MagicMock(), "+1"))
+    pool.resolve_entity_with_warm = AsyncMock(side_effect=ValueError("Could not find the input entity"))
+
+    result = await ClientPool._resolve_channel_once(
+        pool, "1234567", signal_gone=True, gone_phone="+1"
+    )
+    assert result == {"gone": True}
+
+
+@pytest.mark.anyio
+async def test_resolve_channel_once_numeric_elsewhere_flags_review_not_gone():
+    """The same numeric miss on an ARBITRARY account is only a cache-miss: with
+    review_on_uncertain it surfaces the quarantine sentinel, and a username
+    miss stays None (#mutation slice 5)."""
+    from src.telegram.client_pool import ClientPool
+
+    pool = _resolve_pool()
+    pool.get_available_client = AsyncMock(return_value=(MagicMock(), "+2"))
+    pool.resolve_entity_with_warm = AsyncMock(side_effect=ValueError("Could not find the input entity"))
+
+    result = await ClientPool._resolve_channel_once(
+        pool, "1234567", signal_gone=True, review_on_uncertain=True
+    )
+    assert result == {"review": True, "reason": "numeric_unresolved"}
+
+    result = await ClientPool._resolve_channel_once(
+        pool, "somechannel", signal_gone=True, review_on_uncertain=True
+    )
+    assert result is None
+
+
+@pytest.mark.anyio
+async def test_resolve_channel_once_review_requires_signal_gone():
+    """Without signal_gone an uncertain numeric miss stays None even when
+    review_on_uncertain is requested — review is a gone-check affordance
+    (#mutation slice 5)."""
+    from src.telegram.client_pool import ClientPool
+
+    pool = _resolve_pool()
+    pool.get_available_client = AsyncMock(return_value=(MagicMock(), "+2"))
+    pool.resolve_entity_with_warm = AsyncMock(side_effect=ValueError("Could not find the input entity"))
+
+    result = await ClientPool._resolve_channel_once(pool, "1234567", review_on_uncertain=True)
+    assert result is None
+
+
+@pytest.mark.anyio
+async def test_resolve_channel_once_owner_unavailable_defers_to_review():
+    """When the owning account is unavailable we must NOT confirm gone — the
+    uncertain sentinel is returned instead (#mutation slice 5)."""
+    from src.telegram.client_pool import ClientPool
+
+    pool = _resolve_pool()
+    pool.get_client_by_phone = AsyncMock(return_value=None)
+    pool.get_available_client = AsyncMock()
+
+    result = await ClientPool._resolve_channel_once(
+        pool, "1234567", signal_gone=True, gone_phone="+1", review_on_uncertain=True
+    )
+    assert result == {"review": True, "reason": "numeric_unresolved"}
+    pool.get_available_client.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_resolve_channel_once_flood_rotates_three_clients_then_raises():
+    """Flood-waited resolves rotate clients at most 3 times, then the last
+    HandledFloodWaitError propagates — a widened rotation budget would burn a
+    fourth account (#mutation slice 5)."""
+    from datetime import datetime, timezone
+
+    from telethon_floodgate import FloodWaitInfo, HandledFloodWaitError
+
+    from src.telegram.client_pool import ClientPool
+
+    def _flood_error():
+        info = FloodWaitInfo(
+            operation="resolve_channel",
+            phone="+2",
+            wait_seconds=5,
+            next_available_at_utc=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            detail="flood 5s",
+        )
+        return HandledFloodWaitError(info)
+
+    pool = _resolve_pool()
+    pool.get_available_client = AsyncMock(return_value=(MagicMock(), "+2"))
+    pool.resolve_entity_with_warm = AsyncMock(side_effect=_flood_error())
+
+    with pytest.raises(HandledFloodWaitError):
+        await ClientPool._resolve_channel_once(pool, "somechannel")
+    assert pool.resolve_entity_with_warm.await_count == 3
+    assert pool.release_client.await_count == 3
+
+
+@pytest.mark.anyio
+async def test_resolve_channel_once_remember_phone_force_only_for_fallback():
+    """The gone-check self-heal remembers the resolving account: force=True only
+    when the resolver was a FALLBACK account, never for the routed owner
+    (#mutation slice 5)."""
+    from src.telegram.client_pool import ClientPool
+
+    entity = MagicMock()
+    entity.title = "Ch"
+    entity.id = 1234567
+    entity.username = None
+    entity.date = datetime(2025, 6, 1, tzinfo=timezone.utc)
+
+    # Arbitrary account resolved it → force the map update.
+    pool = _resolve_pool()
+    pool.get_available_client = AsyncMock(return_value=(MagicMock(), "+2"))
+    pool.resolve_entity_with_warm = AsyncMock(return_value=entity)
+
+    result = await ClientPool._resolve_channel_once(pool, "1234567", signal_gone=True)
+    assert result == {
+        "channel_id": 1234567,
+        "title": "Ch",
+        "username": None,
+        "channel_type": "channel",
+        "deactivate": False,
+        "created_at": datetime(2025, 6, 1, tzinfo=timezone.utc),
+    }
+    pool.remember_channel_phone.assert_awaited_once_with(1234567, "+2", force=True)
+
+    # The routed OWNER resolved it → no force (owner routing is already right).
+    pool = _resolve_pool()
+    pool.get_client_by_phone = AsyncMock(return_value=(MagicMock(), "+1"))
+    pool.resolve_entity_with_warm = AsyncMock(return_value=entity)
+
+    await ClientPool._resolve_channel_once(pool, "1234567", signal_gone=True, gone_phone="+1")
+    pool.remember_channel_phone.assert_awaited_once_with(1234567, "+1", force=False)
