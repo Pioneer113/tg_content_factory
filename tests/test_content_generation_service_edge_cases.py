@@ -740,6 +740,50 @@ async def test_refinement_returns_dict_generated_text():
         _restore_provider(orig)
 
 
+@pytest.mark.anyio
+async def test_refinement_empty_prompt_step_does_not_stop_later_steps():
+    """A step without a prompt is skipped, later steps still run (#mutation slice 4).
+
+    Pins the ``continue`` on an empty step prompt: a break there would silently
+    drop every refinement step after the first promptless one.
+    """
+    engine = DummySearchEngine([_make_msg()])
+    db = FakeDB()
+    service = ContentGenerationService(db, engine)
+
+    prompts_seen = []
+
+    async def recording_provider(prompt=None, **kwargs):
+        prompts_seen.append(prompt)
+        return f"Out{len(prompts_seen)}"
+
+    pipeline = ContentPipeline(
+        id=1,
+        name="Test",
+        prompt_template="prompt",
+        llm_model="m",
+        generation_backend=PipelineGenerationBackend.CHAIN,
+        publish_mode=PipelinePublishMode.MODERATED,
+        refinement_steps=[
+            {"name": "stepA", "prompt": "Step A: {text}"},
+            {"name": "noPrompt"},
+            {"name": "stepC", "prompt": "Step C: {text}"},
+        ],
+    )
+
+    orig = _patch_provider(recording_provider)
+    try:
+        run = await service.generate(pipeline)
+        assert run is not None
+        # base generation + step A + step C (the promptless step is skipped)
+        assert len(prompts_seen) == 3
+        assert prompts_seen[1] == "Step A: Out1"
+        assert prompts_seen[2] == "Step C: Out2"
+        assert run.generated_text == "Out3"
+    finally:
+        _restore_provider(orig)
+
+
 # ---------------------------------------------------------------------------
 # Tests: _run_deep_agents
 # ---------------------------------------------------------------------------
@@ -1001,6 +1045,44 @@ async def test_generate_exception_sets_failed():
             pytest.fail("No run was marked as failed")
     finally:
         _restore_provider(orig)
+
+
+@pytest.mark.anyio
+async def test_mark_generation_failed_keeps_node_errors_in_metadata():
+    """Exc with node_errors -> failed run metadata carries them (#mutation slice 4).
+
+    Graph-pipeline failures attach a node_errors attribute to the exception;
+    without this pin, the failure reason could be silently dropped from the
+    failed generation_runs row.
+    """
+    engine = DummySearchEngine([_make_msg()])
+    db = FakeDB()
+    service = ContentGenerationService(db, engine)
+
+    pipeline = ContentPipeline(
+        id=1,
+        name="Test",
+        prompt_template="prompt",
+        llm_model="m",
+        generation_backend=PipelineGenerationBackend.CHAIN,
+        publish_mode=PipelinePublishMode.MODERATED,
+    )
+
+    node_errors = [{"node_id": "llm_1", "code": "provider_error", "detail": "boom"}]
+    exc = RuntimeError("Graph execution failed")
+    exc.node_errors = node_errors  # type: ignore[attr-defined]
+
+    calls = []
+    repo = db.repos.generation_runs
+
+    async def spy_set_status(run_id, status, metadata=None):
+        calls.append((run_id, status, metadata))
+
+    repo.set_status = spy_set_status  # type: ignore[method-assign]
+
+    await service._mark_generation_failed(3, pipeline, exc)
+
+    assert calls == [(3, "failed", {"node_errors": node_errors})]
 
 
 @pytest.mark.anyio

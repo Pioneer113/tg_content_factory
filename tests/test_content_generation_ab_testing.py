@@ -251,3 +251,34 @@ async def test_image_generated_from_selected_variant_not_base(db):
     # The image was rendered for the selected variant, never the base text.
     assert image_service.rendered_for == ["WINNER VARIANT"]
     assert run.image_url == "http://img/example.png"
+
+
+class _SingleVariantABService:
+    """AB service whose provider yields exactly one variant (nothing usable)."""
+
+    def __init__(self):
+        self.saved: list[tuple[int, list[str]]] = []
+
+    async def generate_variants(self, pipeline, base_text, num_variants):
+        return [base_text + " VARIANT"]
+
+    async def save_variants(self, run_id, variants):
+        self.saved.append((run_id, variants))
+
+
+@pytest.mark.anyio
+async def test_single_variant_leaves_run_on_base_text(db):
+    """len(variants) == 1 -> keep base text, do NOT persist the variant list
+    (#mutation slice 4). A <=1 -> <1 drift would save a one-element variant
+    list and auto-select would swap the run's text for a rewrite of itself."""
+    engine = DummySearchEngine([_msg()])
+    ab = _SingleVariantABService()
+    provider = FakeProviderService([])
+    service = ContentGenerationService(
+        db, engine, provider_service=provider, ab_testing_service=ab
+    )
+
+    run = await service.generate(_pipeline(ab_num_variants=2, ab_auto_select=True))
+
+    assert run.generated_text == "BASE TEXT"
+    assert ab.saved == []
