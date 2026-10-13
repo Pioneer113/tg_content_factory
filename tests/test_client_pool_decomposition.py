@@ -20,7 +20,10 @@ These tests are GREEN on the monolith and MUST stay GREEN after the split.
 
 from __future__ import annotations
 
+import asyncio
 import inspect
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -236,3 +239,128 @@ async def test_primary_account_sorts_first_in_users_info(real_pool_harness_facto
     assert infos, "expected at least one connected account"
     assert infos[0].is_primary is True
     assert infos[0].phone == "+70000000001"
+
+
+# ------------------------------------------------------------------
+# Mutation slice #5 killer tests: lease acquisition contracts
+# ------------------------------------------------------------------
+
+
+def _lease_stub(phone: str = "+1", shared: bool = False):
+    return SimpleNamespace(account=SimpleNamespace(phone=phone), shared=shared)
+
+
+def _lease_pool_mock():
+    from collections import defaultdict
+
+    pool = MagicMock(spec=ClientPool)
+    pool._disconnecting = False
+    pool._lock = asyncio.Lock()
+    pool._active_leases = defaultdict(list)
+    pool.clients = {}
+    pool._lease_pool = SimpleNamespace(release=AsyncMock())
+    pool._direct_session = MagicMock(return_value=None)
+    pool._backend_router = SimpleNamespace(acquire_client=AsyncMock(), release=AsyncMock())
+    pool.reset_dialogs_warm = MagicMock()
+    return pool
+
+
+@pytest.mark.anyio
+async def test_acquire_from_lease_direct_session_keeps_connection_on_release():
+    """A pooled DIRECT session is registered with disconnect_on_release=False —
+    releasing the lease must not kill the persistent connection (#mutation
+    slice 5)."""
+    from src.telegram.client_pool import ClientPool
+
+    pool = _lease_pool_mock()
+    raw = MagicMock()
+    direct = SimpleNamespace(raw_client=raw)
+    direct_ctx = SimpleNamespace(raw_client=raw)
+    direct.with_flood_context = MagicMock(return_value=direct_ctx)
+    pool._direct_session = MagicMock(return_value=direct)
+
+    result = await ClientPool._acquire_from_lease(pool, _lease_stub())
+
+    assert result == (direct_ctx, "+1")
+    lease = pool._active_leases["+1"][-1]
+    assert lease.disconnect_on_release is False
+    assert lease.backend_name == "direct"
+
+
+@pytest.mark.anyio
+async def test_acquire_from_lease_teardown_race_releases_and_disconnects(caplog):
+    """If teardown starts while the acquire waits for the lock, the
+    'client pool is disconnecting' failure releases the account lease and
+    disconnects the borrowed direct client instead of leasing it out
+    (#mutation slice 5)."""
+    from src.telegram.client_pool import ClientPool
+
+    class _TeardownWhileWaitingLock:
+        def __init__(self, pool):
+            self._pool = pool
+
+        async def __aenter__(self):
+            self._pool._disconnecting = True
+
+        async def __aexit__(self, *exc):
+            return False
+
+    pool = _lease_pool_mock()
+    pool._lock = _TeardownWhileWaitingLock(pool)
+    raw = MagicMock()
+    direct = SimpleNamespace(raw_client=raw)
+    direct.with_flood_context = MagicMock(return_value=SimpleNamespace(raw_client=raw))
+    pool._direct_session = MagicMock(return_value=direct)
+
+    with caplog.at_level("ERROR", logger="src.telegram.pool_lifecycle"):
+        result = await ClientPool._acquire_from_lease(pool, _lease_stub())
+
+    assert result is None
+    assert "client pool is disconnecting" in caplog.text
+    pool._lease_pool.release.assert_awaited_once_with("+1")
+    raw.disconnect.assert_called_once()
+
+
+@pytest.mark.anyio
+async def test_acquire_from_lease_backend_install_pools_connection():
+    """A fresh backend client is wrapped into the persistent pool session and
+    its lease is marked disconnect_on_release=False (#mutation slice 5)."""
+    from src.telegram.client_pool import ClientPool
+
+    pool = _lease_pool_mock()
+    raw = MagicMock()
+    lease_session = SimpleNamespace(raw_client=raw)
+    lease_session.with_flood_context = MagicMock(return_value=lease_session)
+    backend_lease = SimpleNamespace(session=lease_session, disconnect_on_release=True)
+    pool._backend_router.acquire_client = AsyncMock(return_value=backend_lease)
+
+    result = await ClientPool._acquire_from_lease(pool, _lease_stub())
+
+    assert result == (lease_session, "+1")
+    assert pool._active_leases["+1"][-1] is backend_lease
+    assert backend_lease.disconnect_on_release is False
+    assert "+1" in pool.clients
+    pool.reset_dialogs_warm.assert_called_once_with("+1")
+
+
+@pytest.mark.anyio
+async def test_acquire_from_lease_failed_backend_acquire_evicts_pooled_session():
+    """A failed pooled acquisition evicts the pooled session (next pass
+    re-acquires) and releases the account lease; a force_native acquire never
+    owns self.clients, so the pooled session must survive (#1385, #mutation
+    slice 5)."""
+    from src.telegram.client_pool import ClientPool
+
+    pool = _lease_pool_mock()
+    pool._backend_router.acquire_client = AsyncMock(side_effect=RuntimeError("no backend"))
+    pool.clients["+1"] = "POOLED"
+
+    result = await ClientPool._acquire_from_lease(pool, _lease_stub())
+    assert result is None
+    assert "+1" not in pool.clients
+    pool._lease_pool.release.assert_awaited_once_with("+1")
+
+    pool.clients["+1"] = "POOLED"
+    result = await ClientPool._acquire_from_lease(pool, _lease_stub(), force_native=True)
+    assert result is None
+    assert pool.clients["+1"] == "POOLED"
