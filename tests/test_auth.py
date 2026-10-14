@@ -371,3 +371,190 @@ class TestSignInFresh:
         # sign_in_fresh has no in-memory pending to preserve, but it must always
         # disconnect its throwaway client (no leak) even on the save failure.
         mock_client.disconnect.assert_awaited_once()
+
+
+# ------------------------------------------------------------------
+# Mutation slice #6 killer tests: auth contract pins
+# ------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_send_code_pins_full_result_contract():
+    """send_code must hand back the CAPTURED session string (the code hash is
+    bound to it) and the delivery metadata verbatim (#mutation slice 6)."""
+    auth = TelegramAuth(api_id=123, api_hash="abc")
+    fake_result = SimpleNamespace(
+        phone_code_hash="hash123",
+        type=FakeSentCodeTypeApp(),
+        next_type=None,
+        timeout=60,
+    )
+    mock_client = MagicMock()
+    mock_client.connect = AsyncMock()
+    mock_client.session = SimpleNamespace(save=lambda: "session_str_123")
+    mock_client.send_code_request = AsyncMock(return_value=fake_result)
+
+    with (
+        patch("src.telegram.auth.TelegramClient", return_value=mock_client) as fake_tc,
+        patch("src.telegram.auth.SentCodeTypeApp", FakeSentCodeTypeApp),
+    ):
+        info = await auth.send_code("+1234567890")
+
+    assert set(info) == {
+        "phone_code_hash",
+        "session_str",
+        "code_type",
+        "next_type",
+        "timeout",
+    }
+    assert info["session_str"] == "session_str_123"
+    mock_client.send_code_request.assert_awaited_once_with("+1234567890")
+    # The client is built on a FRESH StringSession with this auth's credentials.
+    args, kwargs = fake_tc.call_args
+    assert args[1:] == (123, "abc")
+    assert kwargs == {"proxy": None}
+
+
+@pytest.mark.anyio
+async def test_resend_code_reuses_original_phone_and_code_hash():
+    """ResendCodeRequest must carry the ORIGINAL phone and phone_code_hash —
+    the code hash is bound to that session, a drift makes the resend useless
+    (#mutation slice 6)."""
+    from telethon.tl.functions.auth import ResendCodeRequest
+
+    auth = TelegramAuth(api_id=123, api_hash="abc")
+    client = AsyncMock()
+    client.return_value = SimpleNamespace(
+        phone_code_hash="hash_new",
+        type=FakeSentCodeTypeApp(),
+        next_type=None,
+        timeout=30,
+    )
+    client.session = SimpleNamespace(save=lambda: "session_resend")
+    auth._pending["+1234567890"] = (client, "hash_old")
+
+    with patch("src.telegram.auth.SentCodeTypeApp", FakeSentCodeTypeApp):
+        info = await auth.resend_code("+1234567890")
+
+    request = client.call_args.args[0]
+    assert isinstance(request, ResendCodeRequest)
+    assert request.phone_number == "+1234567890"
+    assert request.phone_code_hash == "hash_old"
+    assert info["phone_code_hash"] == "hash_new"
+    assert info["session_str"] == "session_resend"
+    assert auth._pending["+1234567890"] == (client, "hash_new")
+
+
+@pytest.mark.anyio
+async def test_verify_code_rejects_hash_from_another_session():
+    """A phone_code_hash that does not match the pending one must be rejected
+    before any sign_in RPC — the hash is session-bound (#mutation slice 6)."""
+    auth = TelegramAuth(api_id=123, api_hash="abc")
+    client = MagicMock()
+    client.sign_in = AsyncMock()
+    auth._pending["+1234567890"] = (client, "hash_session")
+
+    with pytest.raises(ValueError, match=r"^Phone code hash mismatch$"):
+        await auth.verify_code("+1234567890", "11111", "hash_foreign")
+
+    client.sign_in.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_sign_in_fresh_consumed_code_requires_and_uses_2fa_password():
+    """code_consumed=True: without a password the sign-in must NOT proceed;
+    with one, sign_in is called with EXACTLY that password (#mutation slice 6)."""
+    auth = TelegramAuth(api_id=123, api_hash="abc")
+    mock_client = MagicMock()
+    mock_client.connect = AsyncMock()
+    mock_client.disconnect = AsyncMock()
+    mock_client.sign_in = AsyncMock()
+    mock_client.session = SimpleNamespace(save=lambda: "session_fresh")
+
+    with (
+        patch("src.telegram.auth.TelegramClient", return_value=mock_client),
+        patch("src.telegram.auth.StringSession", lambda _value="": SimpleNamespace()),
+    ):
+        with pytest.raises(TwoFactorRequiredError):
+            await auth.sign_in_fresh(
+                "+1234567890", "11111", "hash1", session_str="state", code_consumed=True
+            )
+        mock_client.sign_in.assert_not_awaited()
+
+        result = await auth.sign_in_fresh(
+            "+1234567890",
+            "11111",
+            "hash1",
+            session_str="state",
+            password_2fa="hunter2",
+            code_consumed=True,
+        )
+
+    assert result == "session_fresh"
+    mock_client.sign_in.assert_awaited_once_with(password="hunter2")
+    mock_client.disconnect.assert_awaited()
+
+
+@pytest.mark.anyio
+async def test_sign_in_fresh_password_needed_falls_back_to_2fa():
+    """SessionPasswordNeededError on the code sign-in falls back to the 2FA
+    password sign-in; without a password TwoFactorRequiredError propagates
+    (#mutation slice 6)."""
+    auth = TelegramAuth(api_id=123, api_hash="abc")
+
+    client = MagicMock()
+    client.connect = AsyncMock()
+    client.disconnect = AsyncMock()
+    client.sign_in = AsyncMock(side_effect=SessionPasswordNeededError(request=None))
+    client.session = SimpleNamespace(save=lambda: "session_no_2fa")
+    with (
+        patch("src.telegram.auth.TelegramClient", return_value=client),
+        patch("src.telegram.auth.StringSession", lambda _value="": SimpleNamespace()),
+    ):
+        with pytest.raises(TwoFactorRequiredError):
+            await auth.sign_in_fresh("+1234567890", "11111", "hash1", session_str="state")
+        client.disconnect.assert_awaited_once()
+
+    client2 = MagicMock()
+    client2.connect = AsyncMock()
+    client2.disconnect = AsyncMock()
+
+    async def _sign_in(*args, **kwargs):
+        if kwargs.get("password") == "hunter2":
+            return None
+        raise SessionPasswordNeededError(request=None)
+
+    client2.sign_in = AsyncMock(side_effect=_sign_in)
+    client2.session = SimpleNamespace(save=lambda: "session_2fa")
+    with (
+        patch("src.telegram.auth.TelegramClient", return_value=client2),
+        patch("src.telegram.auth.StringSession", lambda _value="": SimpleNamespace()),
+    ):
+        result = await auth.sign_in_fresh(
+            "+1234567890", "11111", "hash1", session_str="state", password_2fa="hunter2"
+        )
+
+    assert result == "session_2fa"
+    assert client2.sign_in.await_count == 2
+    assert client2.sign_in.await_args_list[1].kwargs == {"password": "hunter2"}
+
+
+def test_describe_code_type_labels_every_delivery_variant():
+    """Every SentCodeType maps to its operator-facing label; unknown stays
+    'Telegram' (#mutation slice 6)."""
+    cases = [
+        ("SentCodeTypeCall", "телефонный звонок"),
+        ("SentCodeTypeFlashCall", "flash-звонок"),
+        ("SentCodeTypeMissedCall", "пропущенный звонок"),
+        ("SentCodeTypeFirebaseSms", "SMS"),
+        ("SentCodeTypeFragmentSms", "SMS (Fragment)"),
+        ("SentCodeTypeSmsPhrase", "SMS (фраза)"),
+        ("SentCodeTypeSmsWord", "SMS (слово)"),
+        ("SentCodeTypeEmailCode", "email"),
+        ("SentCodeTypeSetUpEmailRequired", "email (требуется настройка)"),
+    ]
+    for cls_name, label in cases:
+        fake_cls = type(cls_name, (), {})
+        with patch(f"src.telegram.auth.{cls_name}", fake_cls):
+            assert _describe_code_type(fake_cls()) == label
+    assert _describe_code_type(object()) == "Telegram"
