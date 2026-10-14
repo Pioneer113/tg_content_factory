@@ -2,14 +2,14 @@
 
 [![Release](https://img.shields.io/github/v/release/axisrow/tg_content_factory)](https://github.com/axisrow/tg_content_factory/releases)
 
-Персональный инструмент автоматизации Telegram, созданный для управления **агентами кодирования** — Claude Code, OpenCode, Codex. Установите CLI, добавьте скилл — и ваш агент сможет действовать в Telegram за вас: читать и отправлять сообщения, управлять каналами и чатами, скачивать медиа, гонять контент-фабрику на LLM. Контент-фабрика (сбор → поиск → генерация → публикация) — один из модулей.
+Автоматизация Telegram для **агентов кодирования** — Claude Code, OpenCode, Codex. Распространяется как **плагин Claude Code** (скилл + CLI): установите плагин — и ваш агент сможет действовать в Telegram за вас: читать и отправлять сообщения, управлять каналами и чатами, скачивать медиа, гонять контент-фабрику на LLM. Контент-фабрика (сбор → поиск → генерация → публикация) — один из модулей.
 
 [English version](README.md)
 
 ## Как это устроено
 
+- **Скилл + плагин Claude Code** — в репо лежит [скилл](skills/tg-agent/SKILL.md) (ставится из маркетплейса плагинов или копируется вручную), который обучает агента каталогу команд, модели рантайма и правилам безопасности. Скилл управляет CLI — никакой MCP-поверхности, поедающей контекстное окно.
 - **`tg-agent` CLI** — поверхность продукта: ~250 команд на весь спектр Telegram (`channel`, `dialogs`, `messages`, `search`, `pipeline`, `photo-loader`, `analytics`, `scheduler`, `account`, …). Каждая команда самодостаточна: открывает Telegram-подключение, делает работу, завершается. Демон не нужен.
-- **Скилл для агентов кодирования** — в репо лежит [скилл](skills/tg-agent/SKILL.md), который обучает агента каталогу команд, модели рантайма и правилам безопасности.
 - **`tg-agent worker`** — опциональный долгоживущий процесс для сбора по расписанию и очередей отправки.
 
 ## Быстрый старт (агенты кодирования)
@@ -19,7 +19,24 @@
 - Python 3.11+
 - API-ключи Telegram с [my.telegram.org/apps](https://my.telegram.org/apps)
 
-### 1. Установите CLI
+### 1. Установите плагин (Claude Code) — или только скилл
+
+```
+/plugin marketplace add https://github.com/axisrow/tg_content_factory
+/plugin install tg-agent@tg-agent-marketplace
+```
+
+> Короткая форма (`axisrow/tg_content_factory`) клонирует по SSH — без GitHub SSH-ключей падает; используйте полный HTTPS-URL как выше. Если маркетплейс не виден сразу после `marketplace add`, выполните `/reload-plugins` перед `plugin install`.
+
+**OpenCode / Codex / другие агенты** — без плагина: отдайте агенту файл [`skills/tg-agent/SKILL.md`](skills/tg-agent/SKILL.md) как инструкцию (include в AGENTS.md, вложение в системный промпт и т.п.) или скопируйте каталог скилла:
+
+```bash
+cp -r skills/tg-agent ~/.claude/skills/tg-agent
+```
+
+### 2. Установите CLI
+
+Скилл управляет CLI `tg-agent`, он должен быть на машине, где работает агент:
 
 ```bash
 pip install tg-agent
@@ -33,32 +50,13 @@ TG_API_HASH=ваш_api_hash
 SESSION_ENCRYPTION_KEY=    # опционально: шифрование session string в БД
 ```
 
-### 2. Авторизуйте аккаунт (интерактивно, один раз)
+### 3. Авторизуйте аккаунт (интерактивно, один раз)
 
 ```bash
 tg-agent account add
 ```
 
 Код входа придёт в Telegram — вводите его сами. Проверка: `tg-agent account list`.
-
-### 3. Добавьте скилл своему агенту
-
-**Claude Code** — оба пути равнозначны:
-
-```
-/plugin marketplace add https://github.com/axisrow/tg_content_factory
-/plugin install tg-agent@tg-agent-marketplace
-```
-
-> Короткая форма (`axisrow/tg_content_factory`) клонирует по SSH — без GitHub SSH-ключей падает; используйте полный HTTPS-URL как выше. Если маркетплейс не виден сразу после `marketplace add`, выполните `/reload-plugins` перед `plugin install`.
-
-или скопируйте каталог скилла:
-
-```bash
-cp -r skills/tg-agent ~/.claude/skills/tg-agent
-```
-
-**OpenCode / Codex / другие агенты** — отдайте агенту файл [`skills/tg-agent/SKILL.md`](skills/tg-agent/SKILL.md) как инструкцию (include в AGENTS.md, вложение в системный промпт и т.п.).
 
 ### 4. Просто попросите агента
 

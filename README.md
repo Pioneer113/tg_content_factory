@@ -2,14 +2,14 @@
 
 [![Release](https://img.shields.io/github/v/release/axisrow/tg_content_factory)](https://github.com/axisrow/tg_content_factory/releases)
 
-A personal Telegram automation tool built to be driven by **coding agents** — Claude Code, OpenCode, Codex. Install the CLI, add the skill, and your agent can act on Telegram for you: read and send messages, manage channels and chats, download media, run LLM content pipelines. The content factory (collect → search → generate → publish) is one module among many.
+Telegram automation for **coding agents** — Claude Code, OpenCode, Codex. Ships as a **Claude Code plugin** (skill + CLI): install the plugin and your agent can act on Telegram for you — read and send messages, manage channels and chats, download media, run LLM content pipelines. The content factory (collect → search → generate → publish) is one module among many.
 
 [Русская версия](README.ru.md)
 
 ## How it works
 
+- **Skill + Claude Code plugin** — this repo ships a [skill](skills/tg-agent/SKILL.md) (installed from the plugin marketplace, or copied manually) that teaches your agent the command catalog, the runtime model and safety rules. The skill drives the CLI — no MCP tool surface eating your context window.
 - **`tg-agent` CLI** — the product surface: ~250 commands covering the full Telegram spectrum (`channel`, `dialogs`, `messages`, `search`, `pipeline`, `photo-loader`, `analytics`, `scheduler`, `account`, …). Every command is a self-contained one-shot: it opens a Telegram connection, does the work, exits. No daemon required.
-- **Skill for coding agents** — this repo ships a [skill](skills/tg-agent/SKILL.md) that teaches your agent the command catalog, the runtime model and safety rules.
 - **`tg-agent worker`** — optional long-lived process for scheduled collection and queued sends.
 
 ## Quick Start (coding agents)
@@ -19,7 +19,26 @@ A personal Telegram automation tool built to be driven by **coding agents** — 
 - Python 3.11+
 - Telegram API credentials from [my.telegram.org/apps](https://my.telegram.org/apps)
 
-### 1. Install the CLI
+### 1. Install the plugin (Claude Code) — or the skill alone
+
+```
+/plugin marketplace add https://github.com/axisrow/tg_content_factory
+/plugin install tg-agent@tg-agent-marketplace
+```
+
+> The short form (`axisrow/tg_content_factory`) clones over SSH — without GitHub SSH keys it
+> fails; use the full HTTPS URL as above. If the marketplace is not visible right after
+> `marketplace add`, run `/reload-plugins` before `plugin install`.
+
+**OpenCode / Codex / other agents** — skip the plugin: point the agent at [`skills/tg-agent/SKILL.md`](skills/tg-agent/SKILL.md) as an instruction file (AGENTS.md include, system-prompt attachment, etc.), or copy the skill folder:
+
+```bash
+cp -r skills/tg-agent ~/.claude/skills/tg-agent
+```
+
+### 2. Install the CLI
+
+The skill drives the `tg-agent` CLI, which must be on the machine where your agent runs:
 
 ```bash
 pip install tg-agent
@@ -33,34 +52,13 @@ TG_API_HASH=your_api_hash
 SESSION_ENCRYPTION_KEY=    # optional: encrypt session strings in the DB
 ```
 
-### 2. Authorize an account (interactive, once)
+### 3. Authorize an account (interactive, once)
 
 ```bash
 tg-agent account add
 ```
 
 You will receive a Telegram login code — enter it yourself. Verify with `tg-agent account list`.
-
-### 3. Add the skill to your agent
-
-**Claude Code** — both ways are equivalent:
-
-```
-/plugin marketplace add https://github.com/axisrow/tg_content_factory
-/plugin install tg-agent@tg-agent-marketplace
-```
-
-> The short form (`axisrow/tg_content_factory`) clones over SSH — without GitHub SSH keys it
-> fails; use the full HTTPS URL as above. If the marketplace is not visible right after
-> `marketplace add`, run `/reload-plugins` before `plugin install`.
-
-or copy the skill folder:
-
-```bash
-cp -r skills/tg-agent ~/.claude/skills/tg-agent
-```
-
-**OpenCode / Codex / other agents** — point the agent at [`skills/tg-agent/SKILL.md`](skills/tg-agent/SKILL.md) as an instruction file (AGENTS.md include, system-prompt attachment, etc.).
 
 ### 4. Just ask your agent
 
