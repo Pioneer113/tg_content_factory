@@ -8,7 +8,12 @@ provably non-behavioral.
 """
 from __future__ import annotations
 
+import subprocess
+import sys
+from pathlib import Path
 from types import SimpleNamespace
+
+import pytest
 
 from src.services.pipeline_filters import filter_messages, match_message_filter
 
@@ -69,6 +74,35 @@ def test_message_kinds_service_legacy_text_fallback_passes():
     # and the text carries a service keyword → legacy fallback lets it through.
     msg = _msg(message_kind="text", service_action_semantic=None, text="User joined the group")
     assert match_message_filter(msg, _mf(message_kinds=["service"])) is True
+
+
+@pytest.mark.mutmut_skip
+@pytest.mark.parametrize("pattern", ["a+$", "(a+)+$"], ids=["simple", "pathological"])
+def test_pipeline_regex_rejects_pathological_input_without_hanging(pattern):
+    # A child process bounds runaway matching without blocking pytest's event loop.
+    program = """
+from types import SimpleNamespace
+import sys
+from src.services.pipeline_filters import match_message_filter
+result = match_message_filter(SimpleNamespace(text="a" * 2500 + "!"), {"type": "regex", "pattern": sys.argv[1]})
+print(result)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", program, pattern], cwd=Path(__file__).resolve().parents[1],
+        capture_output=True, text=True, timeout=5, check=True,
+    )
+    assert result.stdout.strip() == "False"
+
+
+def test_regex_match_timeout_budget_rejects_instead_of_hanging(monkeypatch):
+    # Even the regex engine can backtrack catastrophically on some patterns
+    # (the "$"-anchored tail forces full backtracking). With the per-search
+    # budget exhausted the filter rejects instead of hanging — and raising
+    # TimeoutError out of match_message_filter is a contract break.
+    import src.services.pipeline_filters as pf
+
+    monkeypatch.setattr(pf, "_REGEX_MATCH_TIMEOUT_SECONDS", 0.0001)
+    assert match_message_filter(_msg(text="a" * 45), _mf(regex="(a+)+$b")) is False
 
 
 def test_message_kinds_service_legacy_text_fallback_no_keyword_rejected():

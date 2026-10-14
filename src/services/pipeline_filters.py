@@ -1,8 +1,18 @@
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Iterable
 from typing import NamedTuple
+
+import regex
+
+logger = logging.getLogger(__name__)
+
+# User-supplied regex runs on every collected message in the worker's event
+# loop; re has no match timeout and a catastrophic-backtracking pattern would
+# hang it forever. The regex engine bounds the search instead.
+_REGEX_MATCH_TIMEOUT_SECONDS = 1.0
 
 
 def _empty_message_filter() -> dict:
@@ -213,9 +223,20 @@ def _check_regex(attrs: _MessageAttrs, config: dict) -> bool:
         return False
     if pattern:
         try:
-            if not re.search(pattern, attrs.text, re.IGNORECASE):
+            if not regex.search(pattern, attrs.text, re.IGNORECASE, timeout=_REGEX_MATCH_TIMEOUT_SECONDS):
                 return False
-        except re.error:
+        except TimeoutError:
+            # Catastrophic backtracking — reject without matching. Logged because
+            # a filter timing out on every message silently drops everything and
+            # is worth rewriting (same policy as notification_matcher).
+            logger.warning(
+                "Pipeline filter regex timed out after %.3gs (possible ReDoS); pattern=%r",
+                _REGEX_MATCH_TIMEOUT_SECONDS,
+                pattern,
+            )
+            return False
+        except regex.error:
+            # invalid pattern → do not match
             return False
     return True
 
