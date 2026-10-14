@@ -10,6 +10,7 @@ import pytest
 from src.services.telegram_actions import (
     TelegramActionMessageNotFoundError,
     TelegramActionNoMediaError,
+    TelegramActionPathEscapeError,
     TelegramActionService,
     classify_media_kind,
     media_subdir,
@@ -186,3 +187,95 @@ async def test_message_not_found_raises(tmp_path):
 
     with pytest.raises(TelegramActionMessageNotFoundError):
         await svc.download_media_sized(phone="+1", chat_id="@c", message_id=99, output_dir=tmp_path)
+
+
+# ── mutation slice #7 killer tests ────────────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_no_media_sized_error_carries_code(tmp_path):
+    """The no-media failure code is part of the CLI error contract."""
+    msg = SimpleNamespace(id=9, media=None)
+    client = _client_for(msg, download_path=None)
+    svc = TelegramActionService(_pool_with_client(client))
+
+    with pytest.raises(TelegramActionNoMediaError, match=r"^no_media$"):
+        await svc.download_media_sized(phone="+1", chat_id="@c", message_id=9, output_dir=tmp_path)
+
+
+@pytest.mark.anyio
+async def test_size_equal_to_limit_downloads(tmp_path):
+    """A file exactly at the limit is not oversized — boundary is strict >."""
+    limit = 3 * 1024 * 1024
+    msg = _photo_message(size=limit)
+    client = _client_for(msg, download_path=str(tmp_path / "photos" / "edge.jpg"))
+    svc = TelegramActionService(_pool_with_client(client))
+
+    outcome = await svc.download_media_sized(
+        phone="+1", chat_id="@c", message_id=7, output_dir=tmp_path, max_size_bytes=limit
+    )
+
+    assert outcome.skipped is False
+    client.download_media.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_sized_path_escape_raises_with_code(tmp_path):
+    """A download landing outside the output root must be rejected."""
+    msg = _photo_message(size=1000)
+    escape_path = str(tmp_path.parent / "escape.jpg")
+    client = _client_for(msg, download_path=escape_path)
+    svc = TelegramActionService(_pool_with_client(client))
+
+    with pytest.raises(TelegramActionPathEscapeError, match=r"^path_escape$"):
+        await svc.download_media_sized(
+            phone="+1", chat_id="@c", message_id=7, output_dir=tmp_path, max_size_bytes=None
+        )
+
+
+@pytest.mark.anyio
+async def test_repeat_download_into_existing_dir(tmp_path):
+    """The typed subdir is created with exist_ok=True — a second export run
+    into the same root must not fail on mkdir."""
+    msg = _photo_message(size=1000)
+    download_path = str(tmp_path / "photos" / "img.jpg")
+    client = _client_for(msg, download_path=download_path)
+
+    async def _fresh_iter(entity, ids):
+        yield msg
+
+    client.iter_messages = MagicMock(side_effect=_fresh_iter)
+    svc = TelegramActionService(_pool_with_client(client))
+
+    first = await svc.download_media_sized(
+        phone="+1", chat_id="@c", message_id=7, output_dir=tmp_path, max_size_bytes=None
+    )
+    second = await svc.download_media_sized(
+        phone="+1", chat_id="@c", message_id=7, output_dir=tmp_path, max_size_bytes=None
+    )
+
+    assert first.rel_path == "photos/img.jpg"
+    assert second.rel_path == "photos/img.jpg"
+
+
+@pytest.mark.anyio
+async def test_download_media_none_path_raises_no_media_code(tmp_path):
+    """Unsized download: a falsy download result is the no_media failure."""
+    msg = _photo_message(size=1000)
+    client = _client_for(msg, download_path=None)
+    svc = TelegramActionService(_pool_with_client(client))
+
+    with pytest.raises(TelegramActionNoMediaError, match=r"^no_media$"):
+        await svc.download_media(phone="+1", chat_id="@c", message_id=7, output_dir=tmp_path)
+
+
+@pytest.mark.anyio
+async def test_download_media_path_escape_raises_with_code(tmp_path):
+    """Unsized download rejects paths escaping the output root too."""
+    msg = _photo_message(size=1000)
+    escape_path = str(tmp_path.parent / "escape.jpg")
+    client = _client_for(msg, download_path=escape_path)
+    svc = TelegramActionService(_pool_with_client(client))
+
+    with pytest.raises(TelegramActionPathEscapeError, match=r"^path_escape$"):
+        await svc.download_media(phone="+1", chat_id="@c", message_id=7, output_dir=tmp_path)
