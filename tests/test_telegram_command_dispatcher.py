@@ -627,14 +627,24 @@ async def test_run_loop_requeues_handled_flood_wait():
         d._stop_event.set()
 
     db.repos.telegram_commands.update_command = AsyncMock(side_effect=_update_and_stop)
+    update_safely = AsyncMock(side_effect=d._update_command_safely)
+    d._update_command_safely = update_safely
 
     await d._run_loop()
 
     db.repos.telegram_commands.update_command.assert_awaited_once()
     kwargs = db.repos.telegram_commands.update_command.await_args.kwargs
     assert kwargs["status"] == TelegramCommandStatus.PENDING
-    assert kwargs["run_after"] > datetime.now(timezone.utc)
-    assert kwargs["result_payload"]["state"] == "waiting_flood_wait"
+    assert kwargs["run_after"] == info.next_available_at_utc + timedelta(seconds=1)
+    assert kwargs["error"] == "Flood wait 21s for +1"
+    assert kwargs["result_payload"] == {
+        "state": "waiting_flood_wait",
+        "operation": "telegram_send_reaction",
+        "phone": "+1",
+        "wait_seconds": 21,
+        "next_available_at_utc": info.next_available_at_utc.isoformat(),
+    }
+    assert update_safely.await_args.kwargs["log_action"] == "pending after flood-wait"
 
 
 async def test_run_loop_marks_invalid_reaction_failed_without_calling_telegram():
@@ -1565,6 +1575,8 @@ async def test_run_loop_cancelled():
         raise asyncio.CancelledError()
 
     d._dispatch = dispatch_then_cancel
+    update_safely = AsyncMock(side_effect=d._update_command_safely)
+    d._update_command_safely = update_safely
 
     with pytest.raises(asyncio.CancelledError):
         await d._run_loop()
@@ -1572,6 +1584,8 @@ async def test_run_loop_cancelled():
     update_call = db.repos.telegram_commands.update_command.call_args
     assert update_call is not None
     assert update_call[1]["status"] == TelegramCommandStatus.PENDING
+    assert update_call[1]["error"] == "cancelled while running; reset for retry"
+    assert update_safely.await_args.kwargs["log_action"] == "pending after cancellation"
 
 
 async def test_run_loop_success_update_busy_does_not_kill_loop():
@@ -1628,6 +1642,98 @@ async def test_run_loop_cancelled_reraises_when_update_busy():
         await d._run_loop()
 
     db.repos.telegram_commands.update_command.assert_awaited_once()
+
+
+async def test_run_loop_requeues_retry_later_with_contract():
+    """RetryLaterError: command returns to PENDING with the handler's full
+    retry contract — reason as error, result_payload, original payload and
+    run_after preserved verbatim."""
+    from src.models import TelegramCommand, TelegramCommandStatus
+
+    db = _mock_db()
+    cmd = TelegramCommand(id=21, command_type="dialogs.cache_clear", payload={"k": "v"})
+    db.repos.telegram_commands.claim_next_command = AsyncMock(return_value=cmd)
+    d = _dispatcher(db=db, pool=_mock_pool())
+    run_after = datetime.now(timezone.utc) + timedelta(seconds=30)
+    d._dispatch = AsyncMock(
+        side_effect=TelegramCommandRetryLaterError(
+            run_after=run_after,
+            reason="warm-up",
+            result_payload={"progress": "warming"},
+        )
+    )
+
+    async def _update_and_stop(*args, **kwargs):
+        d._stop_event.set()
+
+    db.repos.telegram_commands.update_command = AsyncMock(side_effect=_update_and_stop)
+    update_safely = AsyncMock(side_effect=d._update_command_safely)
+    d._update_command_safely = update_safely
+
+    await d._run_loop()
+
+    kwargs = update_safely.await_args.kwargs
+    assert kwargs["status"] == TelegramCommandStatus.PENDING
+    assert kwargs["error"] == "warm-up"
+    assert kwargs["result_payload"] == {"progress": "warming"}
+    assert kwargs["payload"] == {"k": "v"}
+    assert kwargs["run_after"] == run_after
+    assert kwargs["log_action"] == "pending for retry"
+
+
+async def test_run_loop_success_persists_unwrapped_result_and_payload_update():
+    """Success path: flat dict is persisted whole (payload_update stripped),
+    payload_update lands in payload, log_action is "succeeded"."""
+    from src.models import TelegramCommand, TelegramCommandStatus
+
+    db = _mock_db()
+    cmd = TelegramCommand(id=22, command_type="dialogs.cache_clear", payload={})
+    db.repos.telegram_commands.claim_next_command = AsyncMock(return_value=cmd)
+    d = _dispatcher(db=db, pool=_mock_pool())
+    d._dispatch = AsyncMock(
+        return_value={"phone": "+1", "status": "ok", "payload_update": {"a": 1}}
+    )
+
+    async def _update_and_stop(*args, **kwargs):
+        d._stop_event.set()
+
+    db.repos.telegram_commands.update_command = AsyncMock(side_effect=_update_and_stop)
+    update_safely = AsyncMock(side_effect=d._update_command_safely)
+    d._update_command_safely = update_safely
+
+    await d._run_loop()
+
+    kwargs = update_safely.await_args.kwargs
+    assert kwargs["status"] == TelegramCommandStatus.SUCCEEDED
+    assert kwargs["result_payload"] == {"phone": "+1", "status": "ok"}
+    assert kwargs["payload"] == {"a": 1}
+    assert kwargs["log_action"] == "succeeded"
+
+
+async def test_run_loop_marks_failure_with_error_and_payload():
+    """Generic dispatch failure: FAILED with str(exc), original payload kept."""
+    from src.models import TelegramCommand, TelegramCommandStatus
+
+    db = _mock_db()
+    cmd = TelegramCommand(id=23, command_type="dialogs.cache_clear", payload={"k": "v"})
+    db.repos.telegram_commands.claim_next_command = AsyncMock(return_value=cmd)
+    d = _dispatcher(db=db, pool=_mock_pool())
+    d._dispatch = AsyncMock(side_effect=RuntimeError("boom"))
+
+    async def _update_and_stop(*args, **kwargs):
+        d._stop_event.set()
+
+    db.repos.telegram_commands.update_command = AsyncMock(side_effect=_update_and_stop)
+    update_safely = AsyncMock(side_effect=d._update_command_safely)
+    d._update_command_safely = update_safely
+
+    await d._run_loop()
+
+    kwargs = update_safely.await_args.kwargs
+    assert kwargs["status"] == TelegramCommandStatus.FAILED
+    assert kwargs["error"] == "boom"
+    assert kwargs["payload"] == {"k": "v"}
+    assert kwargs["log_action"] == "failed after dispatch error"
 
 
 # --- характеризующие тесты _update_command_safely (#1132: ручной цикл → tenacity) ---
