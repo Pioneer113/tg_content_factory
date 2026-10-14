@@ -495,6 +495,9 @@ class ContentGenerationService:
             "pipeline_id": pipeline.id,
             "run_id": run_id,
             "reusable_image": reusable_image,
+            # Side-effect node handlers (delete/forward/react/edit/notify/image)
+            # must observe instead of act during a dry run (issue #1535).
+            "dry_run": dry_run,
         }
 
         # Inject read-only agent tools for AgentLoopHandler

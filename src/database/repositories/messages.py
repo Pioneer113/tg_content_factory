@@ -553,15 +553,23 @@ class MessagesRepository:
         )
         return cur.rowcount if cur.rowcount >= 0 else len(payload)
 
-    async def load_all_embeddings_json(self) -> list[tuple[int, list[float]]]:
-        """Load embeddings from the portable JSON table, excluding filtered channels."""
-        cur = await self._db.execute(
+    async def load_all_embeddings_json(self, include_filtered: bool = False) -> list[tuple[int, list[float]]]:
+        """Load embeddings from the portable JSON table.
+
+        Filtered channels are excluded unless ``include_filtered`` — the
+        caller decides; excluding them unconditionally made
+        ``search_semantic(include_filtered=True)`` return nothing because the
+        messages were never in the index at all (issue #1541).
+        """
+        sql = (
             "SELECT e.message_id, e.embedding FROM message_embeddings_json e "
             "JOIN messages m ON m.id = e.message_id "
             "LEFT JOIN channels c ON m.channel_id = c.channel_id "
-            "WHERE (c.is_filtered IS NULL OR c.is_filtered = 0) "
-            "ORDER BY e.message_id"
         )
+        if not include_filtered:
+            sql += "WHERE (c.is_filtered IS NULL OR c.is_filtered = 0) "
+        sql += "ORDER BY e.message_id"
+        cur = await self._db.execute(sql)
         rows = await cur.fetchall()
         result: list[tuple[int, list[float]]] = []
         for row in rows:
@@ -1611,21 +1619,38 @@ class MessagesRepository:
         ``target`` is the destination language code (e.g. 'en'); it also selects the
         storage column ('en' → translation_en, otherwise translation_custom).
         """
-        col = "translation_en" if target == "en" else "translation_custom"
         # Exclude the 'und' sentinel (undetectable source language) — translating
         # those wastes LLM calls on emoji/too-short messages (audit #836/1).
         # Also exclude rows already in the target language: translate_batch skips
         # source==target by design, so selecting them only churns no-work batches
         # through the cursor chain (#866 review cleanup).
+        #
+        # A cached non-English translation satisfies only requests for the SAME
+        # destination language: translation_custom is shared by every non-en
+        # language, so the language it was produced for is recorded alongside
+        # (translation_custom_lang, issue #1542) and a request for another
+        # language keeps the message pending. Legacy rows with a text but no
+        # recorded language are treated as translated — re-translating all of
+        # them would burn the LLM budget on a maybe-wrong cache.
+        if target == "en":
+            untranslated_condition = "m.translation_en IS NULL"
+        else:
+            untranslated_condition = (
+                "(m.translation_custom IS NULL "
+                "OR (m.translation_custom_lang IS NOT NULL AND m.translation_custom_lang != ?))"
+            )
         conditions = [
-            f"m.{col} IS NULL",
+            untranslated_condition,
             "m.text IS NOT NULL",
             "m.text != ''",
             "m.detected_lang IS NOT NULL",
             "m.detected_lang != 'und'",
             "m.detected_lang != ?",
         ]
-        params: list = [target]
+        params: list = []
+        if target != "en":
+            params.append(target)
+        params.append(target)
         if after_id:
             conditions.append("m.id > ?")
             params.append(after_id)
@@ -1651,11 +1676,18 @@ class MessagesRepository:
         assert self._database is not None, (
             "MessagesRepository.update_translation requires a Database reference"
         )
-        col = "translation_en" if target == "en" else "translation_custom"
-        await self._database.execute_write(
-            f"UPDATE messages SET {col} = ? WHERE id = ?",
-            (translated_text, message_db_id),
-        )
+        if target == "en":
+            await self._database.execute_write(
+                "UPDATE messages SET translation_en = ? WHERE id = ?",
+                (translated_text, message_db_id),
+            )
+        else:
+            # Record which language the shared custom column now holds so a
+            # request for a different destination language stays pending (#1542).
+            await self._database.execute_write(
+                "UPDATE messages SET translation_custom = ?, translation_custom_lang = ? WHERE id = ?",
+                (translated_text, target, message_db_id),
+            )
 
     async def get_language_stats(self) -> list[tuple[str, int]]:
         """Return (lang_code, count) pairs for detected languages."""

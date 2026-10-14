@@ -70,6 +70,12 @@ class FakeGenerationRunsRepo:
         # so without copying every persisted snapshot would alias the same dict.
         self.metadata_by_id.setdefault(run_id, {}).update(metadata)
 
+    async def get(self, run_id):
+        """Real contract: publish_run re-reads persisted progress (#1538)."""
+        from types import SimpleNamespace
+
+        return SimpleNamespace(id=run_id, metadata=dict(self.metadata_by_id.get(run_id, {})))
+
 
 class FakeClientPool:
     def __init__(self, should_succeed=True, fail_phones=None):
@@ -428,14 +434,16 @@ async def test_publish_service_retry_skips_delivered_targets():
     service = PublishService(db, pool)
 
     # Simulate a prior attempt that already delivered to the first target.
+    # Progress is persisted state — the retry must read it from the DB, not
+    # from the handed-in run snapshot (#1538), so the run itself carries none.
     run = GenerationRun(
         id=1,
         pipeline_id=1,
         generated_text="Test content",
         moderation_status="approved",
         status="completed",
-        metadata={"published_targets": ["+1111111111:-1001"]},
     )
+    await db.repos.generation_runs.set_metadata(1, {"published_targets": ["+1111111111:-1001"]})
 
     results = await service.publish_run(run, make_pipeline())
 
@@ -466,14 +474,17 @@ async def test_publish_service_all_targets_already_delivered():
     pool = FakeClientPool()
     service = PublishService(db, pool)
 
-    # A prior attempt already delivered to every target.
+    # A prior attempt already delivered to every target (persisted state — the
+    # only place the retry reads progress from, #1538).
     run = GenerationRun(
         id=1,
         pipeline_id=1,
         generated_text="Test content",
         moderation_status="approved",
         status="completed",
-        metadata={"published_targets": ["+1111111111:-1001", "+2222222222:-1002"]},
+    )
+    await db.repos.generation_runs.set_metadata(
+        1, {"published_targets": ["+1111111111:-1001", "+2222222222:-1002"]}
     )
 
     results = await service.publish_run(run, make_pipeline())
@@ -482,8 +493,9 @@ async def test_publish_service_all_targets_already_delivered():
     assert [r.success for r in results] == [True, True]
     assert pool._clients == {}
     assert pool.released == []
-    # newly_delivered is empty → set_metadata must NOT be called (no clobber, no redundant write).
-    assert 1 not in db.repos.generation_runs.metadata_by_id
+    # newly_delivered is empty → set_metadata must NOT be called again
+    # (no clobber, no redundant write) — only the pre-existing progress row.
+    assert db.repos.generation_runs.set_metadata_calls == 1
     # All results succeeded → idempotent re-publish still closes the run.
     assert 1 in db.repos.generation_runs.published_ids
 

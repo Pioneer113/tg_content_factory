@@ -854,6 +854,66 @@ class CollectionTasksRepository:
             return row["id"]
         return cur.lastrowid or 0
 
+    async def create_generic_task_if_inactive(
+        self,
+        task_type: CollectionTaskType | str,
+        *,
+        title: str = "",
+        payload: (
+            dict[str, Any]
+            | StatsAllTaskPayload
+            | SqStatsTaskPayload
+            | PipelineRunTaskPayload
+            | ContentGenerateTaskPayload
+            | ContentPublishTaskPayload
+            | TranslateBatchTaskPayload
+            | ExportTaskPayload
+            | None
+        ) = None,
+        payload_filter_key: str | None = None,
+        payload_filter_value: str | int | None = None,
+    ) -> int | None:
+        """Atomically enqueue a task unless an active (pending/running) one exists.
+
+        The dedup check and the insert are a single INSERT…SELECT statement, so
+        two concurrent enqueuers (web container + worker, separate connections)
+        cannot both pass the check and create duplicate active tasks
+        (issue #1539) — SQLite serializes the single write across processes.
+        Same payload-filter whitelist as has_active_task. Returns the new task
+        id, or None when an active task already exists.
+        """
+        assert self._database is not None, (
+            "CollectionTasksRepository.create_generic_task_if_inactive requires a Database reference"
+        )
+        tt = task_type
+        task_type_value = tt.value if isinstance(tt, CollectionTaskType) else tt
+        sql = (
+            "INSERT INTO collection_tasks "
+            "(channel_id, channel_title, channel_username, task_type, run_after, payload, parent_task_id, created_at) "
+            "SELECT NULL, NULL, NULL, ?, NULL, ?, NULL, ? "
+            "WHERE NOT EXISTS ("
+            "    SELECT 1 FROM collection_tasks "
+            "    WHERE task_type = ? AND status IN (?, ?)"
+        )
+        params: list[Any] = [
+            task_type_value,
+            self._serialize_payload(payload),
+            datetime.now(timezone.utc).isoformat(),
+            task_type_value,
+            CollectionTaskStatus.PENDING.value,
+            CollectionTaskStatus.RUNNING.value,
+        ]
+        if payload_filter_key is not None and payload_filter_value is not None:
+            if payload_filter_key not in _ALLOWED_PAYLOAD_FILTER_KEYS:
+                raise ValueError(f"Invalid payload filter key: {payload_filter_key!r}")
+            sql += f" AND json_extract(payload, '$.{payload_filter_key}') = ?"
+            params.append(payload_filter_value)
+        sql += ")"
+        cur = await self._database.execute_write(sql, tuple(params))
+        if cur.rowcount == 0:
+            return None
+        return cur.lastrowid or 0
+
     async def claim_next_due_generic_task(
         self, now: datetime, handled_types: list[str]
     ) -> CollectionTask | None:

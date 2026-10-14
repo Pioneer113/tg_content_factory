@@ -129,8 +129,14 @@ def _extract_message_attributes(message) -> _MessageAttrs:
 
 def _check_message_kinds(attrs: _MessageAttrs, config: dict) -> bool:
     if config["message_kinds"] and attrs.message_kind not in config["message_kinds"]:
+        # The keyword fallback is for legacy rows recorded before the message-kind
+        # taxonomy existed (message_kind IS NULL). An explicitly typed "text"
+        # message that merely CONTAINS a keyword ("Please join our meeting")
+        # is not a service event — treating it as one deleted regular posts
+        # (issue #1536).
         if not (
             config["message_kinds"] == ["service"]
+            and attrs.message_kind is None
             and attrs.service_action is None
             and any(
                 item in attrs.text_lower

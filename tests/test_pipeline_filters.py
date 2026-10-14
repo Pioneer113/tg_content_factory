@@ -70,10 +70,16 @@ def test_message_kinds_mismatch_rejected():
 
 
 def test_message_kinds_service_legacy_text_fallback_passes():
-    # message_kind != "service" but config wants ["service"], no semantic action,
-    # and the text carries a service keyword → legacy fallback lets it through.
-    msg = _msg(message_kind="text", service_action_semantic=None, text="User joined the group")
+    # Legacy rows lack a message kind; explicitly typed text is not a service event.
+    msg = _msg(message_kind=None, service_action_semantic=None, text="User joined the group")
     assert match_message_filter(msg, _mf(message_kinds=["service"])) is True
+
+
+def test_message_kinds_typed_text_with_keyword_is_not_service_event():
+    # A regular text message that merely contains a service keyword must not
+    # pass a service_message filter — cleanup pipelines delete what passes (#1536).
+    msg = _msg(message_kind="text", service_action_semantic=None, text="Please join our meeting at 10:00")
+    assert match_message_filter(msg, _mf(message_kinds=["service"])) is False
 
 
 @pytest.mark.mutmut_skip
@@ -84,12 +90,15 @@ def test_pipeline_regex_rejects_pathological_input_without_hanging(pattern):
 from types import SimpleNamespace
 import sys
 from src.services.pipeline_filters import match_message_filter
-result = match_message_filter(SimpleNamespace(text="a" * 2500 + "!"), {"type": "regex", "pattern": sys.argv[1]})
+result = match_message_filter(SimpleNamespace(text="a" * 3000 + "!"), {"type": "regex", "pattern": sys.argv[1]})
 print(result)
 """
+    # 10s cap: the bounded engine finishes in ~1-2s even on a loaded machine,
+    # while the unbounded engine needs ~17s on this input — both sides of the
+    # cap stay comfortably clear under -n auto (flaked at 5s/2500).
     result = subprocess.run(
         [sys.executable, "-c", program, pattern], cwd=Path(__file__).resolve().parents[1],
-        capture_output=True, text=True, timeout=5, check=True,
+        capture_output=True, text=True, timeout=10, check=True,
     )
     assert result.stdout.strip() == "False"
 
