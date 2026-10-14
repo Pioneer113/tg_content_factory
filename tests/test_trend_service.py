@@ -571,3 +571,144 @@ async def test_get_trending_topics_filters_english_and_generic_topic_noise(servi
     assert "data" not in keywords
     assert "page" not in keywords
     assert "site" not in keywords
+
+
+# === Mutation slice #7 killer tests (survivor pins) ===
+
+
+@pytest.mark.anyio
+async def test_get_trending_topics_limit_zero_returns_empty(service, mock_db):
+    """limit <= 0 short-circuits to [] before touching the DB."""
+    await service.get_trending_topics(days=7, limit=0)
+
+    mock_db.execute_fetchall.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_get_trending_topics_limit_one_returns_single_topic(service, mock_db):
+    """limit == 1 is a valid limit — exactly one topic comes back."""
+    mock_db.execute_fetchall = AsyncMock(
+        return_value=[{"text": "alpha"}, {"text": "bravo"}, {"text": "alpha"}, {"text": "bravo"}, {"text": "alpha"}]
+    )
+
+    result = await service.get_trending_topics(days=7, limit=1)
+
+    assert len(result) == 1
+    assert result[0].keyword == "alpha"
+
+
+@pytest.mark.anyio
+async def test_get_trending_topics_pagination_advances_offset(service, mock_db):
+    """A full first batch continues with OFFSET advanced by its row count."""
+    first_batch = [{"text": "alpha"} for _ in range(5000)]
+    second_batch = [{"text": "bravo"} for _ in range(3000)]
+    mock_db.execute_fetchall = AsyncMock(side_effect=[first_batch, second_batch])
+
+    result = await service.get_trending_topics(days=7, limit=5)
+
+    calls = mock_db.execute_fetchall.await_args_list
+    assert len(calls) == 2
+    first_params = calls[0].args[1]
+    second_params = calls[1].args[1]
+    assert first_params == ("-7 days", 5000, 0)
+    assert second_params == ("-7 days", 5000, 5000)
+    keywords = [t.keyword for t in result]
+    assert keywords[0] == "alpha"  # 5000 mentions outrank bravo's 3000
+
+
+@pytest.mark.anyio
+async def test_get_trending_topics_stops_at_corpus_cap(service, mock_db):
+    """Two full batches hit _MAX_TOPIC_DOCUMENTS and stop — no third query."""
+    batches = [[{"text": "alpha"}] * 5000, [{"text": "bravo"}] * 5000]
+    mock_db.execute_fetchall = AsyncMock(side_effect=batches)
+
+    result = await service.get_trending_topics(days=7, limit=5)
+
+    assert mock_db.execute_fetchall.await_count == 2
+    assert result  # corpus still ranks
+
+
+def test_rank_trending_topics_orders_by_score_descending(service):
+    """The more frequent keyword ranks before the less frequent one."""
+    result = service._rank_trending_topics(
+        ["alpha bravo", "alpha bravo", "alpha", "charlie", "delta"], limit=5
+    )
+
+    assert [t.keyword for t in result] == ["alpha", "bravo"]
+    assert [t.count for t in result] == [3, 2]
+
+
+@pytest.mark.anyio
+async def test_get_trending_topics_default_args(service, mock_db, monkeypatch):
+    """No-arg call uses days=7 and limit=20."""
+    captured = {}
+
+    def recorder(self, texts, limit):
+        captured["limit"] = limit
+        return [TrendingTopic(keyword="alpha", count=len(texts))]
+
+    monkeypatch.setattr(TrendService, "_rank_trending_topics", recorder)
+    mock_db.execute_fetchall = AsyncMock(return_value=[{"text": "alpha"}, {"text": "alpha"}])
+
+    await service.get_trending_topics()
+
+    assert captured["limit"] == 20
+    assert mock_db.execute_fetchall.await_args.args[1][0] == "-7 days"
+
+
+@pytest.mark.anyio
+async def test_get_trending_channels_maps_row_fields(service, mock_db):
+    """Row values map into the dataclass fields under their exact keys."""
+    mock_db.execute_fetchall = AsyncMock(
+        return_value=[
+            {
+                "channel_id": 7,
+                "title": "Channel Seven",
+                "username": "channel_seven",
+                "avg_views": 250,
+                "message_count": 9,
+            },
+        ]
+    )
+
+    result = await service.get_trending_channels(days=7, limit=10)
+
+    assert result[0].channel_id == 7
+    assert result[0].title == "Channel Seven"
+    assert result[0].username == "channel_seven"
+    assert result[0].avg_views == 250.0
+    assert result[0].message_count == 9
+
+
+@pytest.mark.anyio
+async def test_get_trending_channels_default_args(service, mock_db):
+    """No-arg call uses days=7 and limit=10."""
+    mock_db.execute_fetchall = AsyncMock(return_value=[])
+
+    await service.get_trending_channels()
+
+    assert mock_db.execute_fetchall.await_args.args[1] == ("-7 days", 10)
+
+
+@pytest.mark.anyio
+async def test_get_message_velocity_includes_channel_filter_in_sql(service, mock_db):
+    """channel_id filtering lands in the SQL text, not just the params."""
+    mock_db.execute_fetchall = AsyncMock(return_value=[{"day": "2024-01-01", "cnt": 3}])
+
+    await service.get_message_velocity(channel_id=123, days=30)
+
+    sql = mock_db.execute_fetchall.await_args.args[0]
+    assert "AND m.channel_id = ?" in sql
+    assert mock_db.execute_fetchall.await_args.args[1] == ("-30 days", 123)
+
+
+@pytest.mark.anyio
+async def test_get_peak_hours_includes_channel_filter_in_sql(service, mock_db):
+    """channel_id filtering lands in the peak-hours SQL text too."""
+    mock_db.execute_fetchall = AsyncMock(return_value=[{"hour": 9, "cnt": 3}])
+
+    await service.get_peak_hours(channel_id=123, days=30)
+
+    sql = mock_db.execute_fetchall.await_args.args[0]
+    assert "AND m.channel_id = ?" in sql
+    assert mock_db.execute_fetchall.await_args.args[1] == ("-30 days", 123)
