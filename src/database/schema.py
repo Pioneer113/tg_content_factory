@@ -66,6 +66,7 @@ CREATE TABLE IF NOT EXISTS messages (
     detected_lang TEXT,
     translation_en TEXT,
     translation_custom TEXT,
+    translation_custom_lang TEXT,
     premium_search_query TEXT,
     UNIQUE(channel_id, message_id)
 );
@@ -616,7 +617,12 @@ CREATE TABLE IF NOT EXISTS pipeline_action_log (
     action      TEXT NOT NULL,
     channel_id  INTEGER NOT NULL,
     message_id  INTEGER NOT NULL,
-    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(pipeline_id, node_id, action, channel_id, message_id)
+    target      TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- The dedup UNIQUE key is split by target scope: per-target rows must each
+-- persist (a message forwarded to A must not block logging it to B, #1537),
+-- while NULL-target rows (react/delete: once per message) keep the old
+-- single-row dedup — plain UNIQUE treats NULLs as distinct, so the NULL
+-- branch needs its own partial index.
 """

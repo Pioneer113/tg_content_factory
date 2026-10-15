@@ -44,14 +44,38 @@ class NumpySemanticIndex:
         self._index = NearestNeighbors(metric="cosine")
         self._index.fit(self._matrix)
 
-    def search(self, query_vec: list[float], k: int = 50) -> list[tuple[int, float]]:
-        """Return (message_id, score) sorted descending by cosine similarity."""
+    def search(
+        self, query_vec: list[float], k: int = 50, allowed_ids: set[int] | None = None
+    ) -> list[tuple[int, float]]:
+        """Return (message_id, score) sorted descending by cosine similarity.
+
+        ``allowed_ids`` restricts the neighbor search to that subset of message
+        ids BEFORE top-k selection — a channel filter applied only after the
+        global top-k would let noise from other channels crowd the wanted
+        messages out of the candidate window entirely (issue #1541).
+        """
         if self._matrix is None or self._index is None or not self._ids:
             return []
         try:
             import numpy as np
         except ImportError:
             return []
+
+        if allowed_ids is not None:
+            positions = [i for i, mid in enumerate(self._ids) if mid in allowed_ids]
+            if not positions:
+                return []
+            from sklearn.neighbors import NearestNeighbors
+
+            sub_index = NearestNeighbors(metric="cosine")
+            sub_index.fit(self._matrix[positions])
+            k = min(k, len(positions))
+            q = np.array([query_vec], dtype=np.float32)
+            distances, indices = sub_index.kneighbors(q, n_neighbors=k)
+            return [
+                (self._ids[positions[int(idx)]], float(1.0 - distance))
+                for distance, idx in zip(distances[0], indices[0], strict=False)
+            ]
 
         k = min(k, len(self._ids))
         if k <= 0:

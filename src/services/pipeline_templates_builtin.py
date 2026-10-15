@@ -152,10 +152,14 @@ def get_builtin_templates() -> list[PipelineTemplate]:
             template_json=PipelineGraph(
                 nodes=[
                     _node("source_1", PipelineNodeType.SOURCE, "Источник", {"channel_ids": []}, 0, 0),
+                    # Without FETCH the forward node sees an empty context and the
+                    # run completes without forwarding anything (issue #1540).
+                    _node("fetch_1", PipelineNodeType.FETCH_MESSAGES, "Загрузка сообщений", {}, 110, 0),
                     _node("forward_1", PipelineNodeType.FORWARD, "Пересылка", {"targets": []}, 220, 0),
                 ],
                 edges=[
-                    _edge("source_1", "forward_1"),
+                    _edge("source_1", "fetch_1"),
+                    _edge("fetch_1", "forward_1"),
                 ],
             ),
         ),

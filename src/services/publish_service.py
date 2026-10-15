@@ -207,7 +207,12 @@ class PublishService:
             # Track per-target delivery across attempts: on a partial failure the run
             # stays eligible for retry, so without this a re-publish would re-send to
             # targets that already succeeded, duplicating messages (issue #633).
-            metadata = dict(run.metadata or {})
+            # Progress is read from persisted state, not from the handed-in run
+            # object: the caller may hold a snapshot fetched before a previous
+            # attempt recorded published_targets, and re-sending from it would
+            # duplicate posts (issue #1538).
+            fresh = await self._db.repos.generation_runs.get(run.id)
+            metadata = dict((fresh.metadata if fresh is not None else run.metadata) or {})
             delivered: set[str] = set(metadata.get("published_targets") or [])
             # A transport-level send timeout may happen AFTER the request reached
             # Telegram (issue #1239). The delivery is UNCONFIRMED — neither known-

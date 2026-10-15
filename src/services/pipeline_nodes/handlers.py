@@ -63,7 +63,9 @@ def _current_node_id(services: dict, default: str = "?") -> str:
     return str(value) if value else default
 
 
-async def _dedup_context(services: dict, node_id: str, action: str, node_config: dict):
+async def _dedup_context(
+    services: dict, node_id: str, action: str, node_config: dict, *, target: str | None = None
+):
     """Return (repo, processed_message_ids) when action dedup is active (issue #471).
 
     Dedup is opt-out via node_config["deduplicate"]=false and only engages when a
@@ -71,6 +73,8 @@ async def _dedup_context(services: dict, node_id: str, action: str, node_config:
     tests and ad-hoc executions without those keys keep the previous behaviour.
     The processed-id set is a snapshot of *prior* runs; callers must not mutate it
     mid-run so that multi-target forwards still reach every target in one run.
+    ``target`` scopes the snapshot to a delivery destination (issue #1537): a
+    message already forwarded to dialog A must not block its delivery to B.
     """
     if not node_config.get("deduplicate", True):
         return None, set()
@@ -85,7 +89,9 @@ async def _dedup_context(services: dict, node_id: str, action: str, node_config:
     # run's candidates, so loading it would only grow memory unboundedly over the
     # life of the pipeline. Returns {(channel_id, message_id)} pairs.
     since_hours = float(services.get("since_hours", 24.0))
-    processed = await repo.processed_message_ids(pipeline_id, node_id, action, since_hours=since_hours)
+    processed = await repo.processed_message_ids(
+        pipeline_id, node_id, action, since_hours=since_hours, target=target
+    )
     return repo, processed
 
 
@@ -297,6 +303,9 @@ class ImageGenerateHandler(BaseNodeHandler):
 
     async def execute(self, node_config: dict, context: NodeContext, services: dict) -> None:
         node_id = _current_node_id(services, default="image_generate")
+        if services.get("dry_run"):
+            logger.info("ImageGenerateHandler[%s]: dry-run — skipping paid generation", node_id)
+            return
         image_service = services.get("image_service")
         if image_service is None:
             context.record_error(
@@ -389,6 +398,9 @@ class NotifyHandler(BaseNodeHandler):
         # and the success log on the normal path. Assigning it only inside the guard
         # left it undefined for every successful send (NameError at the success log).
         node_id = _current_node_id(services, default="notify")
+        if services.get("dry_run"):
+            logger.info("NotifyHandler[%s]: dry-run — skipping notification", node_id)
+            return
         notification_service = services.get("notification_service")
         if notification_service is None:
             context.record_error(
@@ -449,6 +461,9 @@ class ReactHandler(BaseNodeHandler):
 
     async def execute(self, node_config: dict, context: NodeContext, services: dict) -> None:
         node_id = _current_node_id(services, default="react")
+        if services.get("dry_run"):
+            logger.info("ReactHandler[%s]: dry-run — skipping reactions", node_id)
+            return
         client_pool = services.get("client_pool")
         if client_pool is None:
             context.record_error(
@@ -575,6 +590,9 @@ class ForwardHandler(BaseNodeHandler):
 
     async def execute(self, node_config: dict, context: NodeContext, services: dict) -> None:
         node_id = _current_node_id(services, default="forward")
+        if services.get("dry_run"):
+            logger.info("ForwardHandler[%s]: dry-run — skipping forwards", node_id)
+            return
         client_pool = services.get("client_pool")
         if client_pool is None:
             context.record_error(
@@ -588,7 +606,6 @@ class ForwardHandler(BaseNodeHandler):
         messages = context.get_global("context_messages", [])
         targets = node_config.get("targets", [])
         action_service = services.get("telegram_actions") or TelegramActionService(client_pool)
-        dedup_repo, processed_ids = await _dedup_context(services, node_id, "forward", node_config)
         pipeline_id = services.get("pipeline_id")
 
         for target in targets:
@@ -596,6 +613,13 @@ class ForwardHandler(BaseNodeHandler):
             dialog_id = target.get("dialog_id")
             if not phone or not dialog_id:
                 continue
+            # Delivery dedup is per target (issue #1537): a retry after one
+            # target failed must still deliver to the failed target while
+            # skipping the targets that already received the message.
+            target_key = f"{phone}:{dialog_id}"
+            dedup_repo, processed_ids = await _dedup_context(
+                services, node_id, "forward", node_config, target=target_key
+            )
             try:
                 if not messages:
                     await action_service.ensure_client(phone=phone, native=False)
@@ -617,7 +641,8 @@ class ForwardHandler(BaseNodeHandler):
                     increment_action_count(context, "forward")
                     if dedup_repo is not None:
                         await dedup_repo.log_action(
-                            pipeline_id, node_id, "forward", message.channel_id, message.message_id
+                            pipeline_id, node_id, "forward", message.channel_id, message.message_id,
+                            target=target_key,
                         )
                     logger.info(
                         "ForwardHandler[%s]: forwarded message_id=%s channel_id=%s to dialog_id=%s phone=%s",
@@ -666,6 +691,9 @@ class DeleteMessageHandler(BaseNodeHandler):
 
     async def execute(self, node_config: dict, context: NodeContext, services: dict) -> None:
         node_id = _current_node_id(services, default="delete_message")
+        if services.get("dry_run"):
+            logger.info("DeleteMessageHandler[%s]: dry-run — skipping deletes", node_id)
+            return
         client_pool = services.get("client_pool")
         if client_pool is None:
             context.record_error(
@@ -766,6 +794,9 @@ class EditMessageHandler(BaseNodeHandler):
 
     async def execute(self, node_config: dict, context: NodeContext, services: dict) -> None:
         node_id = _current_node_id(services, default="edit_message")
+        if services.get("dry_run"):
+            logger.info("EditMessageHandler[%s]: dry-run — skipping edits", node_id)
+            return
         client_pool = services.get("client_pool")
         if client_pool is None:
             context.record_error(

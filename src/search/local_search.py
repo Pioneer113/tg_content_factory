@@ -8,12 +8,23 @@ from src.search.numpy_semantic import NumpySemanticIndex
 from src.services.embedding_service import EmbeddingService
 
 
+def _as_aware(value: datetime) -> datetime:
+    """Naive datetimes are UTC by project convention — compare chronologically."""
+    return value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+
+
+def _parse_date_bound(raw: str) -> datetime:
+    """Parse an ISO date bound ("YYYY-MM-DD" or full timestamp) into a datetime."""
+    return _as_aware(datetime.fromisoformat(raw))
+
+
 class LocalSearch:
     def __init__(self, search: SearchBundle, embedding_service: EmbeddingService | None = None):
         self._search = search
         self._embedding_service = embedding_service
         self._numpy_index: NumpySemanticIndex | None = None
         self._numpy_index_loaded: bool = False
+        self._numpy_index_include_filtered: bool = False
 
     def invalidate_numpy_index(self) -> None:
         """Reset the cached numpy index so it is rebuilt on the next search."""
@@ -26,14 +37,20 @@ class LocalSearch:
             messages=page.messages, total=page.total, has_more=page.has_more, query=params.query
         )
 
-    async def _ensure_numpy_index(self) -> NumpySemanticIndex:
-        """Lazily load and build the numpy in-memory index from the JSON table."""
-        if not self._numpy_index_loaded:
+    async def _ensure_numpy_index(self, include_filtered: bool = False) -> NumpySemanticIndex:
+        """Lazily load and build the numpy in-memory index from the JSON table.
+
+        The filtered-channel scope is part of the index: a scope change rebuilds
+        it, otherwise include_filtered=True would silently search the
+        filtered-out subset.
+        """
+        if not self._numpy_index_loaded or self._numpy_index_include_filtered != include_filtered:
             index = NumpySemanticIndex()
-            embeddings = await self._search.messages.load_all_embeddings_json()
+            embeddings = await self._search.messages.load_all_embeddings_json(include_filtered=include_filtered)
             index.load(embeddings)
             self._numpy_index = index
             self._numpy_index_loaded = True
+            self._numpy_index_include_filtered = include_filtered
         assert self._numpy_index is not None
         return self._numpy_index
 
@@ -72,39 +89,39 @@ class LocalSearch:
             raise RuntimeError(
                 "Semantic search is unavailable: sqlite-vec is not loaded and numpy is not installed."
             )
-        index = await self._ensure_numpy_index()
+        index = await self._ensure_numpy_index(include_filtered=include_filtered)
         if index.size == 0:
             return SearchResult(messages=[], total=0, query=query)
-        # Build set of filtered channel IDs to exclude (matches vec SQL behavior)
-        filtered_channels: set[int] = set()
-        if not include_filtered:
-            cur = await self._search.messages._db.execute(
-                "SELECT channel_id FROM channels WHERE is_filtered = 1"
-            )
-            for row in await cur.fetchall():
-                filtered_channels.add(int(row["channel_id"]))
+        # Filtered channels are already excluded (or included) at index load
+        # time — the load scope IS the include_filtered contract (#1541).
+        # Channel filter must constrain the candidate pool BEFORE the top-K
+        # selection: otherwise noise from other channels crowds the wanted
+        # messages out of the candidate window and the post-filter finds
+        # nothing (issue #1541). Date bounds are post-filters — their bug was
+        # the string comparison, fixed below.
+        allowed_ids: set[int] | None = None
+        if channel_id is not None:
+            allowed_ids = await self._channel_candidate_ids(channel_id)
+            if not allowed_ids:
+                return SearchResult(messages=[], total=0, query=query)
+        parsed_from = _parse_date_bound(date_from) if date_from else None
+        parsed_to = _parse_date_bound(date_to) if date_to else None
+        if parsed_to is not None and len(date_to or "") == 10:  # date-only "to" is inclusive
+            parsed_to += timedelta(days=1)
         # Over-fetch to allow for post-filtering
         fetch_k = min(index.size, max((limit + offset) * 4, 200))
-        top_ids = [mid for mid, _score in index.search(query_embedding, k=fetch_k)]
+        top_ids = [mid for mid, _score in index.search(query_embedding, k=fetch_k, allowed_ids=allowed_ids)]
         filtered: list = []
         for mid in top_ids:
             msg = await self._search.messages.get_by_id(mid)
             if msg is None:
                 continue
-            if msg.channel_id in filtered_channels:
-                continue
             if channel_id is not None and msg.channel_id != channel_id:
                 continue
-            if date_from and msg.date and str(msg.date) < date_from:
+            if parsed_from is not None and msg.date is not None and _as_aware(msg.date) < parsed_from:
                 continue
-            if date_to and msg.date:
-                # Normalize date-only strings to be inclusive (match SQL path behavior)
-                effective_to = date_to
-                if len(date_to) == 10:  # "YYYY-MM-DD" without time
-                    next_day = datetime.strptime(date_to, "%Y-%m-%d").replace(tzinfo=timezone.utc) + timedelta(days=1)
-                    effective_to = next_day.strftime("%Y-%m-%d")
-                if str(msg.date) >= effective_to:
-                    continue
+            if parsed_to is not None and msg.date is not None and _as_aware(msg.date) >= parsed_to:
+                continue
             text_len = len(msg.text) if msg.text else 0
             if min_length is not None and text_len < min_length:
                 continue
@@ -114,6 +131,12 @@ class LocalSearch:
         total = len(filtered)
         messages = filtered[offset : offset + limit]
         return SearchResult(messages=messages, total=total, query=query)
+
+    async def _channel_candidate_ids(self, channel_id: int) -> set[int]:
+        cur = await self._search.messages._db.execute(
+            "SELECT id FROM messages WHERE channel_id = ?", (channel_id,)
+        )
+        return {int(row["id"]) for row in await cur.fetchall()}
 
     async def search_hybrid(
         self,

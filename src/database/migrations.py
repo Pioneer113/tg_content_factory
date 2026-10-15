@@ -64,6 +64,7 @@ SCHEMA_REPAIR_COLUMNS: Mapping[str, ColumnSpec] = {
         "detected_lang": "detected_lang TEXT",
         "translation_en": "translation_en TEXT",
         "translation_custom": "translation_custom TEXT",
+        "translation_custom_lang": "translation_custom_lang TEXT",
         "premium_search_query": "premium_search_query TEXT",
     },
     "collection_tasks": {
@@ -159,6 +160,11 @@ SCHEMA_REPAIR_COLUMNS: Mapping[str, ColumnSpec] = {
         "is_builtin": "is_builtin INTEGER DEFAULT 0",
         "created_at": "created_at TEXT",
     },
+    # Per-target delivery dedup for forward nodes (issue #1537). NULL on legacy
+    # rows is read back as "delivered everywhere" (safe against duplicates).
+    "pipeline_action_log": {
+        "target": "target TEXT",
+    },
     "agent_threads": {
         "title": "title TEXT NOT NULL DEFAULT 'Новый тред'",
         "created_at": "created_at TEXT",
@@ -238,6 +244,21 @@ SCHEMA_REPAIR_INDEXES: Sequence[str] = (
     """
     CREATE INDEX IF NOT EXISTS idx_pipeline_action_log_lookup
     ON pipeline_action_log(pipeline_id, node_id, action)
+    """,
+    # Dedup keys for the action log, split by target scope (#1537): per-target
+    # rows must each persist (a message forwarded to A must not block logging
+    # it to B), while NULL-target rows (react/delete: once per message) keep
+    # the old single-row dedup — plain UNIQUE treats NULLs as distinct, so the
+    # NULL branch needs its own partial index.
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_pipeline_action_log_targeted
+    ON pipeline_action_log(pipeline_id, node_id, action, channel_id, message_id, target)
+    WHERE target IS NOT NULL
+    """,
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_pipeline_action_log_untargeted
+    ON pipeline_action_log(pipeline_id, node_id, action, channel_id, message_id)
+    WHERE target IS NULL
     """,
     # Enforce at-most-one primary account (#733). Partial unique index: at most
     # one row may have is_primary = 1. Existing duplicate primaries are collapsed
@@ -845,6 +866,12 @@ async def run_migrations(db: aiosqlite.Connection) -> bool:
     for table, columns in SCHEMA_REPAIR_COLUMNS.items():
         await ensure_columns(db, table, columns)
 
+    # The target-scoped dedup key requires a table rebuild on legacy DBs —
+    # ALTER cannot change UNIQUE constraints. Runs after ensure_columns (so
+    # target exists) and before ensure_indexes (so the partial unique indexes
+    # land on the final table).
+    await _rebuild_pipeline_action_log_for_target_scope(db)
+
     await ensure_indexes(db, SCHEMA_REPAIR_INDEXES)
 
     # One-off: private channels are owner-supplied by construction. Do not
@@ -957,6 +984,66 @@ async def _seed_channel_ratings(db: aiosqlite.Connection) -> None:
     await db.execute(
         "INSERT OR IGNORE INTO settings (key, value) VALUES ('_seed_channel_ratings_v1', '1')"
     )
+
+
+async def _rebuild_pipeline_action_log_for_target_scope(db: aiosqlite.Connection) -> None:
+    """Extend the action-log dedup key with the target column (#1537).
+
+    Legacy rows keep their target as NULL, which processed_message_ids reads
+    back as "delivered everywhere" — the conservative post-migration behavior
+    (skip rather than re-deliver). The partial unique indexes themselves are
+    created by ensure_indexes right after this runs.
+    """
+    if not await table_exists(db, "pipeline_action_log"):
+        return
+    cur = await db.execute("PRAGMA index_list(pipeline_action_log)")
+    names = {row["name"] for row in await cur.fetchall()}
+    if "idx_pipeline_action_log_targeted" in names:
+        return  # fresh schema or already rebuilt
+
+    # Same discipline as _rebuild_collection_tasks: orphan tmp cleanup outside
+    # the transaction, the entire copy+swap under one BEGIN IMMEDIATE so a
+    # concurrent writer cannot lose a row between snapshot and rename.
+    await db.execute("DROP TABLE IF EXISTS pipeline_action_log_tmp")
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        await db.execute("""
+            CREATE TABLE pipeline_action_log_tmp (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                pipeline_id INTEGER NOT NULL,
+                node_id     TEXT NOT NULL,
+                action      TEXT NOT NULL,
+                channel_id  INTEGER NOT NULL,
+                message_id  INTEGER NOT NULL,
+                target      TEXT,
+                created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """)
+        await db.execute(
+            """
+            INSERT INTO pipeline_action_log_tmp (
+                id, pipeline_id, node_id, action, channel_id, message_id, target, created_at
+            )
+            SELECT id, pipeline_id, node_id, action, channel_id, message_id, target, created_at
+            FROM pipeline_action_log
+            """
+        )
+        await db.execute("DROP TABLE pipeline_action_log")
+        # A plain RENAME re-parses every trigger body in the schema; on legacy
+        # databases whose messages_fts_ai trigger predates the messages.id
+        # column that parse fails ("no such column: new.id") even though no
+        # trigger or view references pipeline_action_log (grep: none exist).
+        # Legacy mode skips trigger rewriting entirely.
+        await db.execute("PRAGMA legacy_alter_table = 1")
+        try:
+            await db.execute("ALTER TABLE pipeline_action_log_tmp RENAME TO pipeline_action_log")
+        finally:
+            await db.execute("PRAGMA legacy_alter_table = 0")
+    except Exception:
+        await db.execute("ROLLBACK")
+        raise
+    await db.commit()
+    logger.info("Migrated pipeline_action_log: dedup key scoped by target")
 
 
 async def _migrate_vec_to_portable(db: aiosqlite.Connection) -> None:

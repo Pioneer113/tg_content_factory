@@ -66,63 +66,56 @@ class TaskEnqueuer:
 
     async def enqueue_photo_auto(self) -> int | None:
         """Create a PHOTO_AUTO task if none is already pending/running."""
-        has = await self._db.repos.tasks.has_active_task(CollectionTaskType.PHOTO_AUTO)
-        if has:
-            return None
-        task_id = await self._db.repos.tasks.create_generic_task(
+        task_id = await self._db.repos.tasks.create_generic_task_if_inactive(
             CollectionTaskType.PHOTO_AUTO,
             title="Автозагрузка фото",
         )
+        if task_id is None:
+            return None
+        logger.info("Enqueued PHOTO_AUTO task #%d", task_id)
         return task_id
 
     async def enqueue_pipeline_run(
         self, pipeline_id: int, dry_run: bool = False, since_hours: float = 24.0,
     ) -> int | None:
         """Create a PIPELINE_RUN task for a specific pipeline with deduplication."""
-        has = await self._db.repos.tasks.has_active_task(
-            CollectionTaskType.PIPELINE_RUN,
-            payload_filter_key="pipeline_id",
-            payload_filter_value=pipeline_id,
-        )
-        if has:
-            logger.info("PIPELINE_RUN for pipeline_id=%d already active, skipping", pipeline_id)
-            return None
-        task_id = await self._db.repos.tasks.create_generic_task(
+        task_id = await self._db.repos.tasks.create_generic_task_if_inactive(
             CollectionTaskType.PIPELINE_RUN,
             title=f"Запуск пайплайна #{pipeline_id}",
             payload=PipelineRunTaskPayload(pipeline_id=pipeline_id, dry_run=dry_run, since_hours=since_hours),
+            payload_filter_key="pipeline_id",
+            payload_filter_value=pipeline_id,
         )
+        if task_id is None:
+            logger.info("PIPELINE_RUN for pipeline_id=%d already active, skipping", pipeline_id)
+            return None
         logger.info("Enqueued PIPELINE_RUN task #%d for pipeline_id=%d", task_id, pipeline_id)
         return task_id
 
     async def enqueue_content_generate(self, pipeline_id: int) -> int | None:
         """Create a CONTENT_GENERATE task for a specific pipeline with deduplication."""
-        has = await self._db.repos.tasks.has_active_task(
-            CollectionTaskType.CONTENT_GENERATE,
-            payload_filter_key="pipeline_id",
-            payload_filter_value=pipeline_id,
-        )
-        if has:
-            logger.info("CONTENT_GENERATE for pipeline_id=%d already active, skipping", pipeline_id)
-            return None
-        task_id = await self._db.repos.tasks.create_generic_task(
+        task_id = await self._db.repos.tasks.create_generic_task_if_inactive(
             CollectionTaskType.CONTENT_GENERATE,
             title=f"Content generate #{pipeline_id}",
             payload=ContentGenerateTaskPayload(pipeline_id=pipeline_id),
+            payload_filter_key="pipeline_id",
+            payload_filter_value=pipeline_id,
         )
+        if task_id is None:
+            logger.info("CONTENT_GENERATE for pipeline_id=%d already active, skipping", pipeline_id)
+            return None
         logger.info("Enqueued CONTENT_GENERATE task #%d for pipeline_id=%d", task_id, pipeline_id)
         return task_id
 
     async def enqueue_content_publish(self, pipeline_id: int | None = None) -> int | None:
         """Create a CONTENT_PUBLISH task for publishing approved drafts."""
-        has = await self._db.repos.tasks.has_active_task(CollectionTaskType.CONTENT_PUBLISH)
-        if has:
-            logger.info("CONTENT_PUBLISH task already active, skipping")
-            return None
-        task_id = await self._db.repos.tasks.create_generic_task(
+        task_id = await self._db.repos.tasks.create_generic_task_if_inactive(
             CollectionTaskType.CONTENT_PUBLISH,
             title="Content publish",
             payload=ContentPublishTaskPayload(pipeline_id=pipeline_id),
         )
+        if task_id is None:
+            logger.info("CONTENT_PUBLISH task already active, skipping")
+            return None
         logger.info("Enqueued CONTENT_PUBLISH task #%d", task_id)
         return task_id

@@ -29,6 +29,7 @@ class PipelineActionLogRepository:
         node_id: str,
         action: str,
         since_hours: float | None = None,
+        target: str | None = None,
     ) -> set[tuple[int, int]]:
         """Return already-processed ``(channel_id, message_id)`` pairs for this
         pipeline+node+action.
@@ -38,24 +39,29 @@ class PipelineActionLogRepository:
         channels could otherwise dedup a fresh message in channel B against an
         already-processed message with the same id in channel A.
 
+        When ``target`` is given, rows are additionally scoped to that delivery
+        destination — or to legacy rows recorded before per-target scoping existed
+        (target IS NULL, treated as "delivered everywhere"). A message already
+        forwarded to dialog A therefore no longer blocks a retry delivering it to
+        dialog B (issue #1537).
+
         When ``since_hours`` is given, only rows newer than that window are loaded.
         Messages older than the fetch window can never match the current run's
         candidates anyway, so this caps memory/scan growth on long-lived pipelines
         instead of reading the whole unbounded log every run.
         """
+        sql = (
+            "SELECT channel_id, message_id FROM pipeline_action_log "
+            "WHERE pipeline_id = ? AND node_id = ? AND action = ?"
+        )
+        params: list = [pipeline_id, node_id, action]
         if since_hours is not None:
-            cur = await self._db.execute(
-                "SELECT channel_id, message_id FROM pipeline_action_log "
-                "WHERE pipeline_id = ? AND node_id = ? AND action = ? "
-                "AND created_at > datetime('now', ?)",
-                (pipeline_id, node_id, action, f"-{float(since_hours)} hours"),
-            )
-        else:
-            cur = await self._db.execute(
-                "SELECT channel_id, message_id FROM pipeline_action_log "
-                "WHERE pipeline_id = ? AND node_id = ? AND action = ?",
-                (pipeline_id, node_id, action),
-            )
+            sql += " AND created_at > datetime('now', ?)"
+            params.append(f"-{float(since_hours)} hours")
+        if target is not None:
+            sql += " AND (target IS NULL OR target = ?)"
+            params.append(target)
+        cur = await self._db.execute(sql, params)
         rows = await cur.fetchall()
         return {(int(r["channel_id"]), int(r["message_id"])) for r in rows}
 
@@ -66,13 +72,18 @@ class PipelineActionLogRepository:
         action: str,
         channel_id: int,
         message_id: int,
+        target: str | None = None,
     ) -> None:
-        """Record that (pipeline, node, action) acted on a message. Idempotent."""
+        """Record that (pipeline, node, action) acted on a message. Idempotent.
+
+        ``target`` scopes the record to a delivery destination (issue #1537);
+        it stays NULL for actions that are once-per-message (react, delete).
+        """
         assert self._database is not None, (
             "PipelineActionLogRepository.log_action requires a Database reference"
         )
         await self._database.execute_write(
             "INSERT OR IGNORE INTO pipeline_action_log "
-            "(pipeline_id, node_id, action, channel_id, message_id) VALUES (?, ?, ?, ?, ?)",
-            (pipeline_id, node_id, action, channel_id, message_id),
+            "(pipeline_id, node_id, action, channel_id, message_id, target) VALUES (?, ?, ?, ?, ?, ?)",
+            (pipeline_id, node_id, action, channel_id, message_id, target),
         )
