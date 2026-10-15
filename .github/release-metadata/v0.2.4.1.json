@@ -1,0 +1,26 @@
+{
+  "tag": "v0.2.4.1",
+  "title": "Stability: Cancel Propagation, Spam-Farm Filters & Audit Hardening",
+  "highlights": [
+    {
+      "title": "Collection cancel and retry made real",
+      "description": "A DB-side cancel now stops a running collect — the supervisor arms cancel_events instead of only flipping a status row (#1500); the cancel sweep covers the validation-phase tail window so revived tasks can't slip through (#1503); failed channel collections get an end-of-run retry pass (#1472); and task creation and reports are retry-safe for external agents (#1469)."
+    },
+    {
+      "title": "Spam-farm filter wave",
+      "description": "The short CAPS-username spam wave (8-9 chars with an internal digit) and CamelCase+digits patterns are caught (#1511, #1483); template-generated link feeds get an auto_feed flag (#1491); a whitelist-suspects report shows what the filter would drop (#1493); non_cyrillic becomes label-only with keep-tag escrow instead of hard skipping (#1497); and `channel candidates` lists search-discovered channels awaiting activation (#1479)."
+    },
+    {
+      "title": "Audit fixes: 8 backend regressions closed",
+      "description": "The red-test audit regressions are fixed with UNIQUE+OR IGNORE guards and RENAME-trigger reparsing (#1535-#1542, #1544), and user-supplied regex matching is bounded with a per-search timeout against ReDoS (#1534)."
+    },
+    {
+      "title": "Telegram layer resilience",
+      "description": "Channels with unknown Telegram TL types are skipped with one warning instead of failing the pass (#1470); live username resolves run under an hourly volume budget (#1498); the DM listener handler is properly awaited by telethon (#1478); a catch-up pass survives one broken dialog (#1504); CLI scheduler mutations notify the live worker via scheduler.reconcile (#1474); the default account is the DB primary, not the sorted-first connected (#1484); and search results show @username/title instead of bare numeric ids (#1489)."
+    },
+    {
+      "title": "Ops and CI",
+      "description": "`restart`/`worker` are the managed daemon with no web panel (#1465); the daemon auto-restarts when checked-out src/ is newer than the build (#1476); collection logs a progress line after each finished task (#1466); CI test jobs are sharded under a 5-minute budget with coverage measurement dropped (#1506-#1509); and a mutmut mutation-testing stand is documented for the flat src/ layout (#1501, #1512)."
+    }
+  ]
+}
