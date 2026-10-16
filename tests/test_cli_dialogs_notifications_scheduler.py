@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -834,9 +835,42 @@ class TestSchedulerCommandRW:
         _sched_run_with_db(db_path, cli_init_patch, _ns(scheduler_action="queue-status"))
 
         out = capsys.readouterr().out
-        # rate = 4 completed за окно 5 мин = 0.8/мин; ETA = ceil(2 / 0.8) = 3 мин.
-        assert "4 completed" in out
-        assert "ETA: ~3 min" in out
+        # Завершения «сейчас» → наблюдение зажато в 0.5 мин: rate = 4/0.5 = 8/мин,
+        # ETA = ceil(2/8) = 1 (деление на полное окно занизило бы rate ~в 10 раз).
+        assert "Last 0.5 min: 4 completed" in out
+        assert "ETA: ~1 min" in out
+
+    def test_queue_status_rate_uses_observed_span(
+        self, tmp_path, cli_init_patch, sched_pool_patch, capsys
+    ):
+        db_path = str(tmp_path / "sched_qstatus_span.db")
+        seed = Database(db_path)
+        asyncio.run(seed.initialize())
+        try:
+            ids = [_sched_seed_collection_task(seed, channel_id=222_070 + i) for i in range(6)]
+            for task_id in ids[:4]:
+                asyncio.run(
+                    seed.repos.tasks.update_collection_task(
+                        task_id, CollectionTaskStatus.COMPLETED
+                    )
+                )
+            # Завершения 3 минуты назад: наблюдение = 3 мин, rate = 4/3,
+            # ETA = ceil(2 / (4/3)) = 2.
+            old_ts = (datetime.now(timezone.utc) - timedelta(minutes=3)).isoformat()
+            asyncio.run(
+                seed.execute_write(
+                    "UPDATE collection_tasks SET completed_at = ? WHERE status = ?",
+                    (old_ts, CollectionTaskStatus.COMPLETED.value),
+                )
+            )
+        finally:
+            asyncio.run(seed.close())
+
+        _sched_run_with_db(db_path, cli_init_patch, _ns(scheduler_action="queue-status"))
+
+        out = capsys.readouterr().out
+        assert "min: 4 completed" in out
+        assert "ETA: ~2 min" in out
 
     def test_queue_status_paused_marker(
         self, tmp_path, cli_init_patch, sched_pool_patch, capsys
@@ -876,6 +910,7 @@ class TestSchedulerCommandRW:
         assert data["remaining"] == 1
         assert data["pending"] == 1
         assert data["running"] == 0
+        assert data["observed_min"] == 5  # завершений нет — наблюдение = полное окно
         assert data["paused"] is False
         assert data["rate_per_min"] == 0.0
         assert data["eta_min"] is None

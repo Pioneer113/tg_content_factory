@@ -583,6 +583,8 @@ async def test_queue_snapshot_counts_statuses_and_window(collection_tasks_repo):
     assert snap.remaining == 2
     assert snap.completed_window == 1
     assert snap.failed_window == 1
+    # first_completion_at = самое раннее завершение в окне (для знаменателя rate).
+    assert snap.first_completion_at is not None
 
     wide = await collection_tasks_repo.queue_snapshot(window_min=15)
     assert wide.completed_window == 2
@@ -591,7 +593,7 @@ async def test_queue_snapshot_counts_statuses_and_window(collection_tasks_repo):
 async def test_queue_snapshot_empty(collection_tasks_repo):
     """Пустая таблица — нулевой срез, не NULL."""
     snap = await collection_tasks_repo.queue_snapshot()
-    assert snap == (0, 0, 0, 0)
+    assert snap == (0, 0, 0, 0, None)
     assert snap.remaining == 0
 
 

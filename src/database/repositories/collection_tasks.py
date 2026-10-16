@@ -47,6 +47,7 @@ class QueueSnapshot(NamedTuple):
     running: int
     completed_window: int
     failed_window: int
+    first_completion_at: str | None
 
     @property
     def remaining(self) -> int:
@@ -626,13 +627,18 @@ class CollectionTasksRepository:
             " SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS pending,"
             " SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS running,"
             " SUM(CASE WHEN status = ? AND completed_at >= ? THEN 1 ELSE 0 END) AS completed_win,"
-            " SUM(CASE WHEN status = ? AND completed_at >= ? THEN 1 ELSE 0 END) AS failed_win"
+            " SUM(CASE WHEN status = ? AND completed_at >= ? THEN 1 ELSE 0 END) AS failed_win,"
+            " MIN(CASE WHEN status IN (?, ?) AND completed_at >= ?"
+            "     THEN completed_at END) AS first_completion"
             " FROM collection_tasks WHERE task_type = ?",
             (
                 CollectionTaskStatus.PENDING.value,
                 CollectionTaskStatus.RUNNING.value,
                 CollectionTaskStatus.COMPLETED.value,
                 window_start,
+                CollectionTaskStatus.FAILED.value,
+                window_start,
+                CollectionTaskStatus.COMPLETED.value,
                 CollectionTaskStatus.FAILED.value,
                 window_start,
                 task_type,
@@ -644,6 +650,7 @@ class CollectionTasksRepository:
             running=row["running"] or 0,
             completed_window=row["completed_win"] or 0,
             failed_window=row["failed_win"] or 0,
+            first_completion_at=row["first_completion"],
         )
 
     async def get_collection_tasks_paginated(

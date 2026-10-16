@@ -16,6 +16,7 @@ import asyncio
 import json
 import logging
 import math
+from datetime import datetime, timezone
 
 import typer
 
@@ -32,6 +33,7 @@ from src.services.collection_service import CollectionService
 from src.services.task_enqueuer import TaskEnqueuer
 from src.services.telegram_command_service import TelegramCommandService
 from src.telegram.collector import Collector
+from src.utils.datetime import parse_datetime
 
 
 async def _enqueue_reconcile(db: Database, command: str) -> None:
@@ -271,7 +273,17 @@ async def queue_status_impl(config_path: str, *, output_format: str = "text") ->
         window_min = 5
         snap = await db.repos.tasks.queue_snapshot(task_type, window_min=window_min)
         paused = (await db.get_setting("collection_queue_paused") or "0") == "1"
-        rate = (snap.completed_window + snap.failed_window) / window_min
+        finished_window = snap.completed_window + snap.failed_window
+        # Rate по фактической длительности наблюдения: делить на всё окно,
+        # когда сбор идёт первую минуту, занижает скорость в разы (ETA ~×5).
+        observed_min = window_min
+        first_dt = parse_datetime(snap.first_completion_at) if snap.first_completion_at else None
+        if first_dt is not None:
+            observed_min = min(
+                window_min,
+                max((datetime.now(timezone.utc) - first_dt).total_seconds() / 60, 0.5),
+            )
+        rate = finished_window / observed_min if finished_window else 0.0
         eta_min = math.ceil(snap.remaining / rate) if rate > 0 and snap.remaining else None
 
         if output_format == "json":
@@ -280,6 +292,7 @@ async def queue_status_impl(config_path: str, *, output_format: str = "text") ->
                     {
                         "task_type": task_type,
                         "window_min": window_min,
+                        "observed_min": round(observed_min, 2),
                         "pending": snap.pending,
                         "running": snap.running,
                         "remaining": snap.remaining,
@@ -302,8 +315,11 @@ async def queue_status_impl(config_path: str, *, output_format: str = "text") ->
             f"Collection queue ({task_type}): {snap.remaining} remaining "
             f"({snap.pending} pending, {snap.running} running){paused_mark}"
         )
+        window_label = (
+            f"{observed_min:.1f} min" if observed_min < window_min else f"{window_min} min"
+        )
         print(
-            f"Last {window_min} min: {snap.completed_window} completed, "
+            f"Last {window_label}: {snap.completed_window} completed, "
             f"{snap.failed_window} failed — rate ~{rate:.1f}/min"
         )
         if eta_min is None:
