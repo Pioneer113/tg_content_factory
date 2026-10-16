@@ -92,7 +92,7 @@ python -m src.main stop|restart   # restart = worker daemon, no web panel
 python -m src.main search-query list|get|add|edit|delete|toggle|run|stats
 python -m src.main pipeline list|show|add|dry-run-count|edit|delete|toggle|run|generate|generate-stream|runs|run-show|queue|moderation-list|moderation-view|publish|approve|reject|bulk-approve|bulk-reject|refinement-steps|export|import|templates|from-template|ai-edit|filter|node|edge|graph
 python -m src.main photo-loader dialogs|refresh|send|schedule-send|batch-create|batch-list|items|batch-cancel|auto-create|auto-list|auto-update|auto-toggle|auto-delete|run-due
-python -m src.main dialogs list|refresh|resolve|leave|join|topics|cache-clear|cache-status|send|forward|edit-message|delete-message|create-channel|create-group|pin-message|react|unpin-message|download-media|participants|edit-admin|edit-permissions|kick|broadcast-stats|archive|unarchive|mark-read|queue|status|cancel|clear-pending
+python -m src.main dialogs list|refresh|resolve|leave|join|topics|cache-clear|cache-status|send|forward|edit-message|delete-message|create-channel|create-group|pin-message|react|unpin-message|download-media|transcribe|participants|edit-admin|edit-permissions|kick|broadcast-stats|archive|unarchive|mark-read|queue|status|cancel|clear-pending
 python -m src.main agent threads|thread-create|thread-delete|chat|thread-rename|thread-stop|messages|context|test-escaping|test-tools
 python -m src.main analytics top|content-types|hourly|summary|daily|pipeline-stats|trending-topics|trending-channels|velocity|peak-hours|calendar|trending-emojis|channel
 python -m src.main provider list|add|delete|probe|refresh|test-all

@@ -36,6 +36,7 @@ from src.telegram.reactions import (
     TelegramReactionInvalidError,
     normalize_outgoing_reaction_emoji,
 )
+from src.telegram.transcription import default_engine
 from src.utils.datetime import parse_required_datetime
 from src.utils.text_safety import csv_safe_cell
 
@@ -541,6 +542,52 @@ async def _dialogs_download_media(args, db, pool) -> None:
         print(f"Flood wait: {exc.info.detail}")
     except Exception as exc:
         print(f"Error downloading media: {exc}")
+
+
+async def _dialogs_transcribe(args, db, pool) -> None:
+    phone = await _resolve_phone(db, pool, args)
+    if phone is None:
+        return
+    engine = getattr(args, "engine", None) or default_engine()
+    try:
+        result = await TelegramActionService(pool).transcribe_voice(
+            phone=phone,
+            chat_id=args.chat_id,
+            message_id=args.message_id,
+            engine=engine,
+            db=db,
+        )
+    except TelegramActionClientUnavailableError:
+        print(f"Client for {phone} unavailable.")
+        return
+    except TelegramActionMessageNotFoundError:
+        print(f"Message #{args.message_id} not found.")
+        return
+    except TelegramActionNoMediaError:
+        print("No media in this message.")
+        return
+    except HandledFloodWaitError as exc:
+        print(f"Flood wait: {exc.info.detail}")
+        return
+    except Exception as exc:
+        print(f"Error transcribing: {exc}")
+        return
+
+    status = result.get("status")
+    if status == "ok":
+        meta = result.get("source") or engine
+        if result.get("cached"):
+            meta += ", cached"
+        if result.get("lang"):
+            meta += f", {result['lang']}"
+        print(f"[{meta}, not verbatim]")
+        print(result.get("text") or "")
+    elif status == "premium_required":
+        print(result.get("error") or "Нужен Telegram Premium для движка telegram (или --engine groq|openai|whisper).")
+    elif status == "pending":
+        print("Telegram ещё не готов транскрипт (pending) — повторите вызов позже.")
+    else:
+        print(result.get("error") or "Transcription failed.")
 
 
 def _print_dm_messages(messages: list[DialogMessage], fmt: str) -> None:
@@ -1205,6 +1252,7 @@ _DIALOGS_HANDLERS: dict[str, tuple[Callable[..., Awaitable[None]], bool]] = {
     "pin-message": (_dialogs_pin_message, False),
     "unpin-message": (_dialogs_unpin_message, False),
     "download-media": (_dialogs_download_media, False),
+    "transcribe": (_dialogs_transcribe, False),
     "read": (_dialogs_read, False),
     "archive-history": (_dialogs_archive_history, False),
     "participants": (_dialogs_participants, False),
@@ -1544,6 +1592,24 @@ def dialogs_download_media(
 ) -> None:
     """Download media from a message."""
     _run_dialogs(ctx, "download-media", chat_id=chat_id, message_id=message_id, phone=phone, output_dir=output_dir)
+
+
+@dialogs_app.command("transcribe", context_settings=_NEG_ID_POSITIONAL)
+def dialogs_transcribe(
+    ctx: typer.Context,
+    chat_id: str = typer.Argument(..., help="Chat ID or @username"),
+    message_id: int = typer.Argument(..., help="Message ID with the voice note / video note"),
+    engine: str | None = typer.Option(
+        None,
+        "--engine",
+        help="telegram (native Premium) | groq | openai | whisper (default: TELEGRAM_TRANSCRIBE_ENGINE or groq)",
+    ),
+    phone: str | None = typer.Option(
+        None, "--phone", help="Account phone (default: primary; telegram engine: premium lease)"
+    ),
+) -> None:
+    """Transcribe a voice note or video note into text (cached in the DB)."""
+    _run_dialogs(ctx, "transcribe", chat_id=chat_id, message_id=message_id, engine=engine, phone=phone)
 
 
 @dialogs_app.command("read", context_settings=_NEG_ID_POSITIONAL)

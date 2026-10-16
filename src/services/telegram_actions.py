@@ -12,9 +12,17 @@ from urllib.parse import parse_qs, urlparse
 
 from telethon_floodgate import HandledFloodWaitError, run_with_flood_wait
 
+from src.database import Database
 from src.models import MessagesResult
 from src.telegram.client_pool import ClientPool
 from src.telegram.dm_history import read_dialog_history
+from src.telegram.transcription import (
+    ENGINES,
+    engine_config_error,
+    is_transcribable,
+    marked_chat_id,
+    transcribe_cached,
+)
 from src.utils.introspection import explicit_pool_method
 
 logger = logging.getLogger(__name__)
@@ -787,6 +795,65 @@ class TelegramActionService:
                 path=str(resolved),
                 rel_path=str(resolved.relative_to(root_resolved)),
                 size_bytes=size_bytes,
+            )
+
+    async def transcribe_voice(
+        self,
+        *,
+        phone: str | None,
+        chat_id: Any,
+        message_id: int,
+        engine: str,
+        db: Database,
+    ) -> dict:
+        """Transcribe a voice note / video note (#1545).
+
+        Thin orchestration around :mod:`src.telegram.transcription`: resolve the
+        chat + message, guard the media type, then run the cache-first engine
+        call (cache lives in the project ``transcripts`` table). ``engine=
+        'telegram'`` needs a Premium account, so without an explicit phone the
+        existing premium lease picks one. Misconfigured engines fail here,
+        before any download. Returns the engine status dict.
+        """
+        if engine not in ENGINES:
+            return {
+                "status": "error",
+                "error": f"Unknown engine '{engine}'. Expected one of: {', '.join(sorted(ENGINES))}.",
+            }
+        misconfig = engine_config_error(engine)
+        if misconfig:
+            return {"status": "error", "error": misconfig}
+
+        resolved_phone = phone
+        if engine == "telegram" and not resolved_phone:
+            # Premium-lease pick: native transcription requires Premium.
+            result = await self._pool.get_premium_client()
+            if result is None:
+                return {
+                    "status": "premium_required",
+                    "error": await self._pool.get_premium_unavailability_reason(),
+                }
+            _, resolved_phone = result
+            # The phone is all we needed from the lease; the transcription itself
+            # re-acquires the client through the standard ``_client`` path below.
+            await self._pool.release_client(resolved_phone)
+
+        async with self._client(phone=resolved_phone, native=True) as (client, acquired_phone):
+            entity = await self._resolve_entity(client, phone=acquired_phone, identifier=chat_id)
+            message = await self._fetch_message_with_flood_wait(
+                client,
+                acquired_phone,
+                entity,
+                message_id,
+                operation_prefix="telegram_action_transcribe",
+            )
+            if not is_transcribable(message):
+                return {
+                    "status": "error",
+                    "error": "В сообщении нет голосового или видеокружка для транскрипции.",
+                }
+            return await transcribe_cached(
+                client, entity, message, engine, db, marked_chat_id(entity)
             )
 
     async def leave_dialogs(

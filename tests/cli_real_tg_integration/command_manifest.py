@@ -196,6 +196,11 @@ CLI_REAL_TG_MANUAL_OR_EXCLUDED_COMMANDS: dict[tuple[str, ...], str] = {
     ("channel", "tag", "set"): "local channel tag write",
     ("channel", "toggle"): "local channel state mutation",
     ("dialogs", "cache-clear"): "local dialog cache mutation",
+    ("dialogs", "transcribe"): (
+        "downloads media and spends a third-party STT provider or a Premium RPC; "
+        "covered by unit/integration tests with fakes, live provider calls are "
+        "real_provider_smoke-gated (#1545)"
+    ),
     ("dialogs", "edit-admin"): "Telegram-visible admin mutation",
     ("dialogs", "edit-permissions"): "Telegram-visible permissions mutation",
     ("dialogs", "join"): "Telegram-visible join/subscribe action",

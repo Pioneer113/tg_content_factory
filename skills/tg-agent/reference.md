@@ -75,7 +75,7 @@ search-query list | get | add | edit | delete | toggle | run | stats
 ```
 dialogs list | refresh | resolve | topics
 dialogs read | send | forward | edit-message | delete-message | react | pin-message | unpin-message
-dialogs download-media | mark-read | archive | unarchive
+dialogs download-media | transcribe | mark-read | archive | unarchive
 dialogs participants | edit-admin | edit-permissions | kick
 dialogs create-channel | create-group | leave | join
 dialogs queue | status | cancel | clear-pending
@@ -86,6 +86,12 @@ dialogs archive-history
 All of these touch the user's live Telegram account — see Safety in SKILL.md.
 `dialogs send` posts a message to a chat by identifier; `dialogs queue`/`status` manage the
 send queue. `dialogs read` supports history reads with limits.
+`dialogs transcribe <chat> <message-id> [--engine telegram|groq|openai|whisper]` returns the
+text of a voice note / video note, cached in the DB (a repeat call costs nothing). Engines:
+`groq` (default, needs GROQ_API_KEY — sends audio to a third party), `telegram` (native,
+needs a Premium account, drops the last speech segment), `openai` (any OpenAI-compatible
+endpoint via TELEGRAM_TRANSCRIBE_OPENAI_URL), `whisper` (local faster-whisper). The printed
+text is a machine reading, not a verbatim quote.
 `dialogs archive-history [--phone P] [--chat-id ID]` backfills the full personal-chat
 history (people, bots and Saved Messages, both directions) into the local `dm_messages`
 archive — no TTL, idempotent/resumable. Each run takes a FRESH dialog snapshot first
