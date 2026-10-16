@@ -166,13 +166,21 @@ class DmReplyDraftsRepository:
         и False: отправка уходит ровно один раз (против двойной отправки,
         #1429). ``rejected``/``draft``/``sent`` не клеймятся — отклонённый
         черновик не отправляется никогда.
+
+        Осиротевший лиза-клейм реклеймится: ``sending`` старше 10 минут
+        (updated_at ставится клеймом; живой отправитель при 120-секундном
+        send-timeout пула не может держать лизу дольше) — это сирота убитого
+        воркера, и 60-секундный ретрай команды реанимирует её без ожидания
+        рестарта (startup-sweep остаётся belt-and-braces). Живой чужой клейм
+        моложе 10 минут не реклеймится — двойная отправка исключена.
         """
         assert self._database is not None, (
             "DmReplyDraftsRepository.claim_for_send requires a Database reference"
         )
         cur = await self._database.execute_write(
             "UPDATE dm_reply_drafts SET status = 'sending', updated_at = datetime('now') "
-            "WHERE id = ? AND status = 'approved'",
+            "WHERE id = ? AND (status = 'approved' "
+            "OR (status = 'sending' AND updated_at < datetime('now', '-10 minutes')))",
             (draft_id,),
         )
         return bool(cur.rowcount)

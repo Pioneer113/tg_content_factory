@@ -258,6 +258,41 @@ async def test_handler_claim_conflict_requeues_not_success(db):
     assert (await db.repos.dm_reply_drafts.get(draft_id)).status == "sending"
 
 
+async def test_stale_claim_is_reclaimed_by_retry(db):
+    """Сирота старше 10 минут реклеймится ретраем без рестарта воркера: живой
+    отправитель при 120s send-timeout не может держать лизу дольше (#1566)."""
+    drafts = db.repos.dm_reply_drafts
+    orphan = await _make_draft(db, status="sending", incoming_dm_id=21)
+    fresh_claim = await _make_draft(db, status="sending", incoming_dm_id=22)
+    await db.execute_write(
+        "UPDATE dm_reply_drafts SET updated_at = datetime('now', '-11 minutes') WHERE id = ?",
+        (orphan,),
+    )
+
+    assert await drafts.claim_for_send(orphan) is True
+    # Свежий чужой клейм не реклеймится — двойная отправка исключена.
+    assert await drafts.claim_for_send(fresh_claim) is False
+    assert (await drafts.get(orphan)).status == "sending"
+
+
+async def test_handler_delivers_orphaned_draft_on_retry(db):
+    """Сквозной: ретрай команды доставляет осиротевший черновик, а не флапает."""
+    draft_id = await _make_draft(db, status="sending", incoming_dm_id=23)
+    await db.execute_write(
+        "UPDATE dm_reply_drafts SET updated_at = datetime('now', '-11 minutes') WHERE id = ?",
+        (draft_id,),
+    )
+    send_message = AsyncMock(return_value=_send_result_mock("+10000000001", 4242))
+    dispatcher = TelegramCommandDispatcher(db, _mock_pool())
+
+    with _patched_action(send_message):
+        result = await dispatcher._dispatch("dm.send_reply", {"draft_id": draft_id})
+
+    assert result["message_id"] == 4242
+    send_message.assert_awaited_once()
+    assert (await db.repos.dm_reply_drafts.get(draft_id)).status == "sent"
+
+
 async def test_reset_sending_on_startup_releases_abandoned_claim(db):
     """Lease-половина паттерна (#1036): сирота из убитого воркера возвращается
     в approved; живая свежая лиза и sent не трогаются."""
