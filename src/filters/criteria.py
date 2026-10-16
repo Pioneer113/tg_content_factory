@@ -40,11 +40,9 @@ CHAT_NOISE_THRESHOLD = 70.0
 # <200 символов, литерал в _SQL_AUTO_FEED (repositories/filters.py), SQL-слой не
 # импортирует пакет filters. Минимум сообщений — ниже нет статистики.
 #
-# Ограничение (ревью #1491): ссылка детектится только в видимом тексте поста
-# (LIKE '%http%' / '%t.me%'). Замаскированные гиперссылки (MessageEntityTextUrl)
-# при парсинге отбрасываются — в messages.text остаётся лишь надпись («Read
-# more»), такие ленты не флагаются. Системный фикс — persist link metadata при
-# сборе, отдельная задача.
+# Ссылка детектится и в entities_json (#1492): замаскированная гиперссылка
+# (MessageEntityTextUrl) хранит url только там, в messages.text остаётся лишь
+# надпись («Read more»).
 AUTO_FEED_MIN_MESSAGES = 30
 AUTO_FEED_THRESHOLD = 85.0
 

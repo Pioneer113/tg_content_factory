@@ -105,6 +105,9 @@ _SQL_CYRILLIC = """
 """
 
 # «Автогенерённая лента»: доля коротких (<200 симв.) постов со ссылкой наружу.
+# Ссылка считается и в entities_json (#1492): замаскированная гиперссылка
+# (MessageEntityTextUrl) хранит url только там — в text остаётся лишь надпись.
+# LIKE по NULL даёт 0, обычные посты без сущностей не меняют счёт.
 # Порог флага — в criteria.py (AUTO_FEED_*), литерал 200 здесь сознательно
 # дублирован: SQL-слой не импортирует пакет filters (см. комментарий к UDF выше).
 _SQL_AUTO_FEED = """
@@ -112,7 +115,8 @@ _SQL_AUTO_FEED = """
         channel_id,
         COUNT(*) AS total,
         SUM(CASE WHEN length(text) < 200
-                AND (text LIKE '%http%' OR text LIKE '%t.me%')
+                AND (text LIKE '%http%' OR text LIKE '%t.me%'
+                     OR entities_json LIKE '%http%' OR entities_json LIKE '%t.me%')
             THEN 1 ELSE 0 END) AS short_link
     FROM messages
     WHERE text IS NOT NULL AND text != ''
@@ -190,9 +194,10 @@ _SQL_AUTO_FEED_SAMPLED = """
             ORDER BY m.message_id DESC LIMIT ?
          ) s WHERE s.text IS NOT NULL AND s.text != '') AS total,
         (SELECT SUM(CASE WHEN length(text) < 200
-                    AND (text LIKE '%http%' OR text LIKE '%t.me%')
+                    AND (text LIKE '%http%' OR text LIKE '%t.me%'
+                         OR entities_json LIKE '%http%' OR entities_json LIKE '%t.me%')
                 THEN 1 ELSE 0 END) FROM (
-            SELECT text FROM messages m
+            SELECT text, entities_json FROM messages m
             WHERE m.channel_id = ch.channel_id
             ORDER BY m.message_id DESC LIMIT ?
          ) s WHERE s.text IS NOT NULL AND s.text != '') AS short_link
