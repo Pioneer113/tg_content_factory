@@ -26,6 +26,7 @@ from telethon_floodgate import (
 
 from src.database import DatabaseBusyError
 from src.filters.criteria import (
+    KEEP_TAG,
     LOW_SUBSCRIBER_RATIO_CHAT_THRESHOLD,
     LOW_SUBSCRIBER_RATIO_THRESHOLD,
     LOW_UNIQUENESS_THRESHOLD,
@@ -1020,7 +1021,12 @@ class CollectionMixin:
                         e,
                     )
 
-        if is_first_run and not force and collected_count >= 50:
+        if (
+            is_first_run
+            and not force
+            and collected_count >= 50
+            and not await self._is_keep_channel(channel_id)
+        ):
             cur = await self._db.execute(
                 "SELECT COUNT(*) as total,"
                 " COUNT(DISTINCT substr(text,1,100)) as uniq"
@@ -1064,6 +1070,14 @@ class CollectionMixin:
             attempted_resolve_phones,
         )
 
+    async def _is_keep_channel(self: "Collector", channel_id: int) -> bool:
+        """Keep-тег (#1516): канал выведен из авто-метрик фильтрации — тот же
+        контракт, что apply_filters/precheck (#1497). Rename-детекция
+        (username/title_changed) guard'ом не покрывается: это защита от подмены
+        канала, а не метрика кураторства."""
+        rows = await self._db.repos.channels.fetch_channels_with_tag(KEEP_TAG)
+        return channel_id in {row["channel_id"] for row in rows}
+
     async def _apply_pre_collection_filters(
         self: "Collector",
         channel: Channel,
@@ -1084,6 +1098,10 @@ class CollectionMixin:
         A precheck ``HandledFloodWaitError`` propagates
         to ``_collect_channel``'s outer handler unchanged. Split out of
         ``_collect_channel`` (#923)."""
+        # Keep-эскроу (#1516): тег выводит канал из всех авто-метрик пречека
+        # (min_subs, ratio, cross-dupe) — сбор продолжается.
+        if await self._is_keep_channel(channel_id):
+            return True
         # Превентивная фильтрация по subscriber_ratio до загрузки сообщений.
         # Пропускается при force=True (ручной запуск не должен менять фильтр-статус).
         if not force:
