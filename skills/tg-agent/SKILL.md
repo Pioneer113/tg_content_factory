@@ -75,6 +75,12 @@ stops any previous daemon and starts the worker runtime — no web panel, no WEB
 required, managed via a PID file (`tg-agent stop` halts it). Check scheduler state with
 `tg-agent scheduler status`.
 
+While the daemon runs, live one-shot commands that open a Telegram connection are
+**refused** after a short wait (`SessionLockError ... held by PID N`) — Telegram kills
+sessions seen from two connections at once. Stop the daemon (`tg-agent stop`) for direct
+work, or route through the worker (`dialogs queue`, `scheduler trigger`). Details:
+[reference.md](reference.md) → "Session lock".
+
 ## Legacy surfaces — do not use for integration
 
 The web panel, TUI, embedded agent chat (`tg-agent agent chat`) and MCP server still work,

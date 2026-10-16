@@ -9,6 +9,25 @@ Telegram traffic through that proxy when MTProto is blocked; unset = direct.
 Groups below mirror `tg-agent --help`. This file lists common commands and their notable
 flags; anything not listed — check `--help`.
 
+## Session lock — live commands vs the running daemon
+
+Every live command that opens a Telegram connection (anything touching `dialogs *`,
+`messages read --live`, `channel collect`, `account add`, …) takes a cross-process lock on
+the account session. While the worker daemon runs, a one-shot command **waits** for the
+daemon to release the session (up to `TGCF_SESSION_LOCK_GRACE_SECONDS`, default 20) and
+then fails:
+
+```
+SessionLockError: Another tg-agent process is already connected with this session
+(lock .../session-<hash>.lock held by PID 12345). Refusing to connect a second time...
+```
+
+This is intentional: a second simultaneous connection with the same auth key risks
+Telegram killing the session (`AuthKeyDuplicatedError`). If you hit `SessionLockError`:
+stop the daemon first (`tg-agent stop`), or better — do the work through the worker
+(`dialogs queue`, `scheduler trigger`) without a direct connection. A refused command
+never disturbs the live session; when the holder exits, the lock clears on its own.
+
 ## channels / collection
 
 ```
@@ -67,8 +86,8 @@ history (people, bots and Saved Messages, both directions) into the local `dm_me
 archive — no TTL, idempotent/resumable. Each run takes a FRESH dialog snapshot first
 (same engine as `dialogs refresh`, rate-limited per page), then reads history per chat;
 a partial snapshot or flood marks the run incomplete — rerun the command, it continues
-from archive cursors. Local DB write, no Telegram send; still stop the worker first:
-it opens a second MTProto connection on the same session.
+from archive cursors. Local DB write, no Telegram send; while the worker daemon runs it
+is refused by the session lock (`tg-agent stop` first — see Session lock above).
 
 ## content factory (LLM pipelines)
 
