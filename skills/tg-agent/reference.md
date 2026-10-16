@@ -100,6 +100,25 @@ a partial snapshot or flood marks the run incomplete — rerun the command, it c
 from archive cursors. Local DB write, no Telegram send; while the worker daemon runs it
 is refused by the session lock (`tg-agent stop` first — see Session lock above).
 
+## dm — reply drafts for incoming private messages (#1429)
+
+```
+dm drafts list [--status draft|approved|rejected|sending|sent] [--limit N]
+dm drafts create <incoming-dm-id> --text TEXT [--phone P] [--chat-id ID]
+dm drafts approve <id>
+dm drafts reject <id>
+dm drafts send <id>
+```
+
+Draft lifecycle: `draft → approved → sending → sent` (atomic DB claim makes a
+double send impossible); `reject` is terminal for sending — a rejected draft is
+never delivered. `dm drafts send` never sends in-process: it enqueues the
+`dm.send_reply` command and the worker delivers it (safe to run while the
+daemon is up; repeated `send` calls on the same approved draft dedupe into one
+queued command). `create` reads phone/chat from the 24h incoming-DM journal by
+id; pass `--phone`/`--chat-id` explicitly if the journal row was already
+pruned. Approve after send is a no-op — a delivered draft cannot be re-queued.
+
 ## content factory (LLM pipelines)
 
 ```

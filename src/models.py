@@ -414,6 +414,32 @@ DmCatchupMode = Literal["full", "journal_only", "ignore"]
 
 DM_CATCHUP_SETTING_KEY = "dm_catchup"
 
+# Статусы черновика ответа на DM (#1429) — по образцу generation_runs
+# (status-машина в докстринге DmReplyDraftsRepository.claim_for_send).
+DM_REPLY_DRAFT_STATUSES = ("draft", "approved", "rejected", "sending", "sent")
+DmReplyDraftStatus = Literal["draft", "approved", "rejected", "sending", "sent"]
+
+
+class DmReplyDraft(BaseModel):
+    """Черновик ответа на входящее DM (#1429, эпик #1416 этап 2.4).
+
+    Автомат готовит — владелец подтверждает. Отправка идёт только через
+    воркер: веб/CLI кладут команду `dm.send_reply` в очередь, хендлер
+    атомарно клеймит черновик, поэтому два конкурентных потребителя не
+    отправят ответ дважды.
+    """
+
+    id: int | None = None
+    incoming_dm_id: int
+    phone: str
+    chat_id: int
+    reply_text: str
+    status: DmReplyDraftStatus = "draft"
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    sent_message_id: int | None = None
+
+
 # Входящее старше порога не получает автоматического черновика — защита от
 # неловких поздних ответов после долгого простоя воркера.
 DM_CATCHUP_DEFAULT_STALENESS_SEC = 3600

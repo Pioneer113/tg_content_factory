@@ -68,6 +68,7 @@ from src.cli.commands.common import (
 )
 from src.cli.commands.debug import debug_app
 from src.cli.commands.dialogs import dialogs_app
+from src.cli.commands.dm import dm_app
 from src.cli.commands.export import export_app
 from src.cli.commands.filter import filter_app
 from src.cli.commands.image import image_app
@@ -322,6 +323,13 @@ app.add_typer(channel_app, name="channel")
 #   cache-status / send / forward / edit-message / delete-message /
 
 app.add_typer(dialogs_app, name="dialogs")
+
+
+# --------------------------------------------------------------------------- #
+# dm → drafts (list / create / approve / reject / send) — этап 2.4 #1429
+# --------------------------------------------------------------------------- #
+
+app.add_typer(dm_app, name="dm")
 
 
 # --------------------------------------------------------------------------- #

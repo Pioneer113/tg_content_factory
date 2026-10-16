@@ -26,6 +26,7 @@ from src.database.repositories.decisions import DecisionsRepository
 from src.database.repositories.dialog_batch import DialogBatchRepository
 from src.database.repositories.dialog_cache import DialogCacheRepository
 from src.database.repositories.dm_messages import DmMessagesRepository
+from src.database.repositories.dm_reply_drafts import DmReplyDraftsRepository
 from src.database.repositories.filters import FilterRepository
 from src.database.repositories.generated_images import GeneratedImagesRepository
 from src.database.repositories.generation_runs import GenerationRunsRepository
@@ -101,6 +102,7 @@ class DatabaseRepositories:
     pipeline_action_log: PipelineActionLogRepository
     incoming_dms: IncomingDmsRepository
     dm_messages: DmMessagesRepository
+    dm_reply_drafts: DmReplyDraftsRepository
     notified_messages: NotifiedMessagesRepository
     decisions: DecisionsRepository
 
