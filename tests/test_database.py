@@ -1,4 +1,5 @@
 import asyncio
+import json
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
@@ -1636,6 +1637,54 @@ async def test_search_and_trending_emojis_work_with_entities_json(db):
 
     trending = await db.get_trending_emojis(limit=10)
     assert {"emoji": "👍", "count": 2} in trending
+
+
+@pytest.mark.anyio
+async def test_masked_link_url_reaches_db_and_reads(db):
+    """Acceptance #1492: a MessageEntityTextUrl collected from a Telethon msg
+    survives to storage and is available on reads; the stored plain text keeps
+    its old format — only the visible label, no appended URL."""
+    from types import SimpleNamespace
+
+    from telethon.tl.types import MessageEntityTextUrl
+
+    from src.telegram.collector_message_parse import build_message_from_telethon
+
+    await db.add_channel(Channel(channel_id=-100994, title="MaskedLinks"))
+    raw = SimpleNamespace(
+        id=42,
+        text="Read more",
+        message="Read more",
+        media=None,
+        sender_id=None,
+        sender=None,
+        post=True,
+        action=None,
+        reply_to=None,
+        fwd_from=None,
+        views=None,
+        forwards=None,
+        replies=None,
+        date=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        reactions=None,
+        entities=[
+            MessageEntityTextUrl(offset=0, length=9, url="https://example.internal/post")
+        ],
+    )
+    await db.insert_message(build_message_from_telethon(raw, channel_id=-100994))
+
+    messages, _ = await db.search_messages(channel_id=-100994)
+    assert messages[0].text == "Read more"
+    assert messages[0].entities_json is not None
+    entities = json.loads(messages[0].entities_json)
+    assert entities == [
+        {
+            "length": 9,
+            "offset": 0,
+            "type": "text_url",
+            "url": "https://example.internal/post",
+        }
+    ]
 
 
 def test_rows_to_messages_tolerates_legacy_rows_without_entities_json():

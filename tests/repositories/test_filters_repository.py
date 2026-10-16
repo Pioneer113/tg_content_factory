@@ -11,6 +11,10 @@ from src.models import Channel
 _INSERT_MSG = (
     "INSERT INTO messages (channel_id, message_id, text, date)" " VALUES (?, ?, ?, datetime('now'))"
 )
+_INSERT_MSG_ENTITIES = (
+    "INSERT INTO messages (channel_id, message_id, text, entities_json, date)"
+    " VALUES (?, ?, ?, ?, datetime('now'))"
+)
 _INSERT_MSG_NO_TEXT = (
     "INSERT INTO messages (channel_id, message_id, date)" " VALUES (?, ?, datetime('now'))"
 )
@@ -645,3 +649,42 @@ async def test_fetch_auto_feed_map_by_channel(filters_repo, channels_repo):
     result = await filters_repo.fetch_auto_feed_map(channel_id=1)
     assert 1 in result
     assert 2 not in result
+
+
+async def test_fetch_auto_feed_map_masked_link_entities(filters_repo, channels_repo):
+    """#1492: a masked hyperlink keeps its url only in entities_json — the text
+    side is just the visible label («Read more»). Such posts count as short_link
+    in both SQL templates; LIKE on NULL entities_json is a no-op for plain posts."""
+    await channels_repo.add_channel(Channel(channel_id=1, title="MaskedFeed"))
+    await channels_repo.add_channel(Channel(channel_id=2, title="PlainFeed"))
+
+    await filters_repo._db.executemany(
+        _INSERT_MSG_ENTITIES,
+        [
+            (1, 100, "Read more", '[{"length": 9, "offset": 0, "type": "text_url", "url": "https://example.internal/a"}]'),
+            (1, 101, "Join our feed", '[{"length": 13, "offset": 0, "type": "text_url", "url": "https://t.me/somechannel"}]'),
+        ],
+    )
+    # Обычные посты: без ссылки в тексте и с entities_json NULL — счёт не меняют.
+    await filters_repo._db.executemany(
+        _INSERT_MSG,
+        [
+            (1, 102, "just words, no link"),
+            (1, 103, "another plain short post"),
+            (2, 100, "Read more"),
+        ],
+    )
+    await filters_repo._db.commit()
+
+    result = await filters_repo.fetch_auto_feed_map()
+    assert result[1] == (4, 2)
+    assert result[2] == (1, 0)
+
+    sampled = await filters_repo.fetch_auto_feed_map(sample_size=1)
+    assert sampled[1] == (1, 0)  # срез = последний пост (id=103) — без ссылки
+
+    # Позитивный кейс sampled-шаблона: срез 103..101 содержит entities-ссылку
+    # (id=101) — этот ассерт краснеет, если из _SQL_AUTO_FEED_SAMPLED убрать
+    # ветку OR entities_json LIKE или колонку из проекции подзапроса.
+    sampled = await filters_repo.fetch_auto_feed_map(sample_size=3)
+    assert sampled[1] == (3, 1)

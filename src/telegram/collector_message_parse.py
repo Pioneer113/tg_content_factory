@@ -63,9 +63,9 @@ def _entity_type(entity) -> str:
     return _CAMEL_BOUNDARY_RE.sub("_", name).lower()
 
 
-# MessageEntityTextUrl.url is deliberately not serialized here — extracting the
-# URLs hidden behind masked hyperlinks is tracked separately in #1492.
-_ENTITY_DROPPED_FIELDS = frozenset({"_", "url"})
+# MessageEntityTextUrl.url is serialized (#1492) — masked-hyperlink targets must
+# survive collection for feed heuristics and link analytics.
+_ENTITY_DROPPED_FIELDS = frozenset({"_"})
 
 
 def extract_message_entities_json(msg) -> str | None:
