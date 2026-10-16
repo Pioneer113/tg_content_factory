@@ -8,6 +8,7 @@ from src.config import LLMConfig
 from src.database import Database
 from src.database.bundles import SearchBundle
 from src.models import SearchParams, SearchResult
+from src.utils.sanitize import sanitize_user_content
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,8 @@ class AISearchEngine:
             total_display = f"{page.total}+" if page.has_more else str(page.total)
             lines = [f"Found {total_display} results for '{query}'. Top results:"]
             for m in messages:
-                text_preview = (m.text or "")[:200]
+                # Untrusted Telegram content entering the LLM tool result (#1546)
+                text_preview = sanitize_user_content(m.text or "", preserve_emoji=True)[:200]
                 lines.append(f"- [{m.date}] Channel {m.channel_id}: {text_preview}")
             return "\n".join(lines)
 

@@ -7,6 +7,7 @@ from src.agent.prompt_template import DEFAULT_AGENT_PROMPT_TEMPLATE, render_prom
 from src.models import Message, SearchResult
 from src.search.engine import SearchEngine
 from src.services.error_recovery_service import ErrorRecoveryService, for_llm
+from src.utils.sanitize import sanitize_name, sanitize_user_content
 
 
 class GenerationService:
@@ -95,7 +96,10 @@ class GenerationService:
             text = (m.text or "").strip()
             if not text:
                 continue
-            header = m.channel_title or m.channel_username or ""
+            # Untrusted Telegram content entering the LLM prompt (#1546):
+            # strip invisible/bidi/control chars; keep emoji intact.
+            text = sanitize_user_content(text, preserve_emoji=True)
+            header = sanitize_name(m.channel_title or m.channel_username or "")
             when = m.date.isoformat() if isinstance(m.date, datetime) else str(m.date)
             parts.append(f"[{header}] {text} (id:{m.message_id} date:{when})")
         return "\n\n".join(parts)

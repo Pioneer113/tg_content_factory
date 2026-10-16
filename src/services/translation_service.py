@@ -4,6 +4,8 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
+from src.utils.sanitize import sanitize_user_content
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -76,6 +78,8 @@ class TranslationService:
             logger.warning("Translation skipped: only stub default provider available")
             return None
 
+        # Untrusted Telegram content entering the LLM prompt (#1546)
+        text = sanitize_user_content(text, preserve_emoji=True)
         prompt = (
             f"Translate the following text from {source_lang} to {target_lang}. "
             "Return ONLY the translation, no explanations.\n\n"
@@ -127,6 +131,10 @@ class TranslationService:
                     MAX_TRANSLATE_INPUT_CHARS,
                 )
                 text = text[:MAX_TRANSLATE_INPUT_CHARS]
+            # Untrusted Telegram content entering the LLM prompt (#1546)
+            text = sanitize_user_content(
+                text, max_length=MAX_TRANSLATE_INPUT_CHARS, preserve_emoji=True
+            )
             lines.append(f"{i}: {text}")
 
         numbered_block = "\n".join(lines)

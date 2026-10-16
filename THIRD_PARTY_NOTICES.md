@@ -20,6 +20,13 @@ Portions of this project are derived from
   `MessageMediaWebPage` cached pages); upstream's `rich_message_text` wrapper
   itself is not ported — telethon 1.45 does not surface `msg.rich_message`.
 
+- `src/utils/sanitize.py` — prompt-injection sanitizer (`sanitize_user_content`,
+  `sanitize_name`, `sanitize_dict`) ported from `sanitize.py` at commit
+  `e224762671897c1df53deadb51be84eaaaf2cea3` (2026-10-16). Modifications:
+  module docstring adapted to this project; MCP-specific
+  `format_tool_result`/`_json_default` dropped (this project feeds plain-text
+  prompts, not JSON tool-result envelopes).
+
 The full Apache-2.0 license text is in `LICENSES/apache-2.0.txt`.
 
 Per the project licensing strategy, the long-term goal is to replace this
