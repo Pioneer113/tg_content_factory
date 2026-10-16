@@ -354,9 +354,11 @@ class ChannelAnalyzer:
 
     async def apply_filters(self, report: FilterReport) -> int:
         # Dedupe by channel_id (merge flags via set union) to avoid double updates/count inflation.
+        # Every flagged result participates (#1517): label-only flags (non_cyrillic) do not set
+        # is_filtered but must still survive the reset → apply cycle.
         deduped: dict[int, set[str]] = {}
         for result in report.results:
-            if result.is_filtered:
+            if result.flags:
                 existing = deduped.get(result.channel_id, set())
                 existing.update(result.flags)
                 deduped[result.channel_id] = existing
@@ -392,7 +394,17 @@ class ChannelAnalyzer:
         for row in keep_rows:
             deduped.pop(row["channel_id"], None)
 
-        updates = [(cid, ",".join(sorted(flags))) for cid, flags in deduped.items()]
+        # Партиция (#1517): блокирующие флаги идут через bulk (is_filtered=1);
+        # каналы только с метками — отдельным апдейтом с is_filtered=0, иначе
+        # reset стирал бы их метки. Human-решения апдейт не сносит.
+        updates: list[tuple[int, str]] = []
+        label_only_updates: list[tuple[int, str]] = []
+        for cid, flags in deduped.items():
+            flags_csv = ",".join(sorted(flags))
+            if flags - LABEL_ONLY_FLAGS:
+                updates.append((cid, flags_csv))
+            else:
+                label_only_updates.append((cid, flags_csv))
 
         # Run the reset + bulk-apply inside Database.transaction() so they are
         # atomic AND hold _write_lock — preventing any concurrent
@@ -406,6 +418,12 @@ class ChannelAnalyzer:
                 count, _suppressed = await self._database.set_channels_filtered_bulk(
                     updates, commit=False
                 )
+            for cid, flags_csv in label_only_updates:
+                await conn.execute(
+                    "UPDATE channels SET is_filtered = 0, filter_flags = ? "
+                    "WHERE channel_id = ? AND NOT (is_filtered = 1 AND filtered_origin = 'human')",
+                    (flags_csv, cid),
+                )
             for row in keep_rows:
                 old = {f.strip() for f in (row["filter_flags"] or "").split(",") if f.strip()}
                 merged = ",".join(sorted(old | fresh_flags.get(row["channel_id"], set()))) or None
@@ -418,6 +436,12 @@ class ChannelAnalyzer:
     async def precheck_subscriber_ratio(self) -> int:
         """Filter channels by subscriber_count/message_count without Telegram.
         Returns count of newly filtered channels."""
+        # Keep-эскроу (#1516): тег выводит канал из авто-пречека — тот же
+        # контракт, что apply_filters (#1497).
+        keep_ids = {
+            row["channel_id"]
+            for row in await self._database.repos.channels.fetch_channels_with_tag(KEEP_TAG)
+        }
         channels = await self._database.get_channels_with_counts(
             active_only=True,
             include_filtered=False,
@@ -425,6 +449,8 @@ class ChannelAnalyzer:
         stats_map = await self._database.get_latest_stats_for_all()
         to_filter: list[tuple[int, str]] = []
         for channel in channels:
+            if channel.channel_id in keep_ids:
+                continue
             stats = stats_map.get(channel.channel_id)
             subscriber_count = stats.subscriber_count if stats else None
             if not subscriber_count or not channel.message_count:
@@ -443,7 +469,7 @@ class ChannelAnalyzer:
         if min_subs > 0:
             already = {cid for cid, _ in to_filter}
             for channel in channels:
-                if channel.channel_id in already:
+                if channel.channel_id in already or channel.channel_id in keep_ids:
                     continue
                 stats = stats_map.get(channel.channel_id)
                 subs = stats.subscriber_count if stats else None

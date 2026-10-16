@@ -42,6 +42,7 @@ def mock_db():
     db.set_channel_active = AsyncMock()
     db.get_channel_stats = AsyncMock(return_value=[])
     db.filter_repo.count_matching_prefixes_in_other_channels = AsyncMock(return_value=0)
+    db.repos.channels.fetch_channels_with_tag = AsyncMock(return_value=[])
     db.get_notification_queries = AsyncMock(return_value=[])
     db.get_forum_topics = AsyncMock(return_value=[])
     db.upsert_forum_topics = AsyncMock()
@@ -617,6 +618,57 @@ async def test_pre_filter_cross_dupe_sample_and_ratio_boundaries(collector, mock
         is_first_run=True, force=False, min_subs=0, cancel_event=None, phone="+1",
     ) is True
     mock_db.set_channels_filtered_bulk.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_pre_collection_filters_skip_keep_channel(collector, mock_db):
+    """Keep-тег выводит канал из авто-метрик pre-фильтра (#1516): min_subs и
+    ratio не применяются, сбор продолжается; без тега — фильтрует как раньше."""
+    from src.models import Channel, ChannelStats
+
+    channel = Channel(channel_id=123, title="Ch", channel_type="channel")
+    collector._maybe_auto_delete = AsyncMock()
+    mock_db.get_channel_stats.return_value = [ChannelStats(channel_id=123, subscriber_count=0)]
+
+    # keep-тег → guard, ни min_subs, ни ratio не применяются.
+    mock_db.repos.channels.fetch_channels_with_tag = AsyncMock(
+        return_value=[{"pk": 1, "channel_id": 123, "filter_flags": ""}]
+    )
+    assert await collector._apply_pre_collection_filters(
+        channel, 123, MagicMock(), MagicMock(),
+        is_first_run=False, force=False, min_subs=100, cancel_event=None, phone="+1",
+    ) is True
+    mock_db.set_channels_filtered_bulk.assert_not_called()
+
+    # Без тега → 0 подписчиков < min_subs=100 → фильтр (контраст).
+    mock_db.repos.channels.fetch_channels_with_tag = AsyncMock(return_value=[])
+    assert await collector._apply_pre_collection_filters(
+        channel, 123, MagicMock(), MagicMock(),
+        is_first_run=False, force=False, min_subs=100, cancel_event=None, phone="+1",
+    ) is False
+    mock_db.set_channels_filtered_bulk.assert_called_once_with([(123, "low_subscriber_manual")])
+
+
+@pytest.mark.anyio
+async def test_post_collection_low_uniqueness_skips_keep_channel(collector, mock_db):
+    """Post-collection low_uniqueness тоже соблюдает контракт keep (#1516)."""
+    collector._maybe_auto_delete = AsyncMock()
+    mock_db.execute.return_value.fetchone.return_value = {"total": 60, "uniq": 5}  # 8.3% < порога
+
+    mock_db.repos.channels.fetch_channels_with_tag = AsyncMock(
+        return_value=[{"pk": 1, "channel_id": 55, "filter_flags": ""}]
+    )
+    await collector._post_collection_actions(
+        55, is_first_run=True, force=False, collected_count=60, saw_topic_message=False
+    )
+    mock_db.set_channels_filtered_bulk.assert_not_called()
+
+    # Без тега → low_uniqueness ставится (контраст).
+    mock_db.repos.channels.fetch_channels_with_tag = AsyncMock(return_value=[])
+    await collector._post_collection_actions(
+        55, is_first_run=True, force=False, collected_count=60, saw_topic_message=False
+    )
+    mock_db.set_channels_filtered_bulk.assert_called_once_with([(55, "low_uniqueness")])
 
 
 @pytest.mark.anyio

@@ -1043,3 +1043,156 @@ class TestApplyFiltersKeepTag:
         from src.filters.criteria import LABEL_ONLY_FLAGS
 
         assert set((filter_flags or "").split(",")) - {""} <= LABEL_ONLY_FLAGS
+
+
+_ENGLISH_TEXTS = ["hello world", "test message", "no cyrillic here"] + ["another eng text"] * 7
+
+
+async def _tag_channel(raw_db, channel_id: int, tag: str) -> None:
+    await raw_db.execute("INSERT OR IGNORE INTO tags (name) VALUES (?)", (tag,))
+    await raw_db.execute(
+        "INSERT INTO channel_tags (channel_pk, tag_id) "
+        "SELECT c.id, t.id FROM channels c, tags t "
+        "WHERE c.channel_id = ? AND t.name = ?",
+        (channel_id, tag),
+    )
+    await raw_db.commit()
+
+
+class TestApplyFiltersLabelOnly:
+    """#1517: метки (LABEL_ONLY_FLAGS) должны переживать apply и у обычных
+    каналов — apply сохраняет флаги независимо от решения блокировать."""
+
+    async def test_label_only_flag_survives_apply(self, db, raw_db):
+        from src.filters.criteria import LABEL_ONLY_FLAGS
+
+        await _insert_channel(raw_db, 920)
+        await _insert_messages(raw_db, 920, _ENGLISH_TEXTS)
+
+        analyzer = ChannelAnalyzer(db)
+        report = await analyzer.analyze_all()
+        ch920 = next(r for r in report.results if r.channel_id == 920)
+        assert ch920.flags == ["non_cyrillic"]
+        assert ch920.is_filtered is False
+
+        await analyzer.apply_filters(report)
+
+        cur = await raw_db.execute(
+            "SELECT is_filtered, filter_flags FROM channels WHERE channel_id = 920"
+        )
+        is_filtered, filter_flags = await cur.fetchone()
+        assert is_filtered == 0
+        assert set((filter_flags or "").split(",")) - {""} == set(LABEL_ONLY_FLAGS)
+
+    async def test_label_only_apply_idempotent(self, db, raw_db):
+        from src.filters.criteria import LABEL_ONLY_FLAGS
+
+        await _insert_channel(raw_db, 921)
+        await _insert_messages(raw_db, 921, _ENGLISH_TEXTS)
+
+        analyzer = ChannelAnalyzer(db)
+        for _ in range(2):
+            report = await analyzer.analyze_all()
+            await analyzer.apply_filters(report)
+
+        cur = await raw_db.execute(
+            "SELECT is_filtered, filter_flags FROM channels WHERE channel_id = 921"
+        )
+        is_filtered, filter_flags = await cur.fetchone()
+        assert is_filtered == 0
+        assert set((filter_flags or "").split(",")) - {""} == set(LABEL_ONLY_FLAGS)
+
+    async def test_label_only_with_blocking_flag_filters(self, db, raw_db):
+        # non_cyrillic + блокирующий suspicious_username → блокировка и оба флага.
+        await _insert_channel(raw_db, 922, username="S0IMD1EDUAW")
+        await _insert_messages(raw_db, 922, _ENGLISH_TEXTS)
+
+        analyzer = ChannelAnalyzer(db)
+        report = await analyzer.analyze_all()
+        ch922 = next(r for r in report.results if r.channel_id == 922)
+        assert ch922.is_filtered is True
+
+        await analyzer.apply_filters(report)
+
+        cur = await raw_db.execute(
+            "SELECT is_filtered, filter_flags FROM channels WHERE channel_id = 922"
+        )
+        is_filtered, filter_flags = await cur.fetchone()
+        assert is_filtered == 1
+        assert set((filter_flags or "").split(",")) == {"non_cyrillic", "suspicious_username"}
+
+    async def test_label_only_respects_human_decision(self, db, raw_db):
+        # Human-блокировка не сносится label-only апдейтом (#1517, criterion 5).
+        await _insert_channel(raw_db, 923)
+        await _insert_messages(raw_db, 923, _ENGLISH_TEXTS)
+        await raw_db.execute(
+            "UPDATE channels SET is_filtered = 1, filtered_origin = 'human', "
+            "filter_flags = '' WHERE channel_id = 923"
+        )
+        await raw_db.commit()
+
+        analyzer = ChannelAnalyzer(db)
+        report = await analyzer.analyze_all()
+        await analyzer.apply_filters(report)
+
+        cur = await raw_db.execute(
+            "SELECT is_filtered, filter_flags FROM channels WHERE channel_id = 923"
+        )
+        is_filtered, filter_flags = await cur.fetchone()
+        assert is_filtered == 1
+        assert (filter_flags or "") == ""
+
+
+class TestPrecheckKeepTag:
+    """#1516: precheck_subscriber_ratio соблюдает контракт keep-тега."""
+
+    async def test_precheck_skips_keep_channel(self, db, raw_db):
+        from src.filters.criteria import KEEP_TAG
+
+        # Repro #1516: broadcast-канал с keep, 1 подписчик, 3 сообщения.
+        await _insert_channel(raw_db, 930)
+        await _insert_messages(raw_db, 930, ["msg 1", "msg 2", "msg 3"])
+        await _insert_stats(raw_db, 930, 1)
+        await _tag_channel(raw_db, 930, KEEP_TAG)
+        # Контраст: те же данные без тега → фильтруется как раньше.
+        await _insert_channel(raw_db, 931)
+        await _insert_messages(raw_db, 931, ["msg 1", "msg 2", "msg 3"])
+        await _insert_stats(raw_db, 931, 1)
+
+        analyzer = ChannelAnalyzer(db)
+        count = await analyzer.precheck_subscriber_ratio()
+        assert count == 1
+
+        cur = await raw_db.execute(
+            "SELECT channel_id, is_filtered, filter_flags FROM channels "
+            "WHERE channel_id IN (930, 931)"
+        )
+        rows = {r[0]: (r[1], r[2]) for r in await cur.fetchall()}
+        assert rows[930] == (0, "")
+        assert rows[931][0] == 1
+        assert "low_subscriber_ratio" in rows[931][1]
+
+    async def test_precheck_min_subs_skips_keep_channel(self, db, raw_db):
+        from src.filters.criteria import KEEP_TAG
+
+        await _insert_channel(raw_db, 932)
+        await _insert_messages(raw_db, 932, ["msg 1", "msg 2", "msg 3"])
+        await _insert_stats(raw_db, 932, 5)
+        await _tag_channel(raw_db, 932, KEEP_TAG)
+        await _insert_channel(raw_db, 933)
+        await _insert_messages(raw_db, 933, ["msg 1", "msg 2", "msg 3"])
+        await _insert_stats(raw_db, 933, 5)
+        await db.repos.settings.set_setting("min_subscribers_filter", "100")
+
+        analyzer = ChannelAnalyzer(db)
+        count = await analyzer.precheck_subscriber_ratio()
+        assert count == 1
+
+        cur = await raw_db.execute(
+            "SELECT channel_id, is_filtered, filter_flags FROM channels "
+            "WHERE channel_id IN (932, 933)"
+        )
+        rows = {r[0]: (r[1], r[2]) for r in await cur.fetchall()}
+        assert rows[932] == (0, "")
+        assert rows[933][0] == 1
+        assert "low_subscriber_manual" in rows[933][1]
