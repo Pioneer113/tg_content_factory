@@ -16,7 +16,7 @@ from telethon.errors import PasswordHashInvalidError, SessionPasswordNeededError
 
 from src.telegram.auth import QR_MAX_REFRESHES, TelegramAuth
 
-PHONE = "+79991234567"
+BARE_PHONE = "79991234567"  # Telethon user.phone arrives without the leading +
 SESSION_STR = "session_string_qr"
 
 
@@ -56,7 +56,7 @@ def _client_mock() -> MagicMock:
     client.connect = AsyncMock()
     client.disconnect = AsyncMock()
     client.session.save = MagicMock(return_value=SESSION_STR)
-    client.get_me = AsyncMock(return_value=SimpleNamespace(phone=PHONE))
+    client.get_me = AsyncMock(return_value=SimpleNamespace(phone=BARE_PHONE))
     return client
 
 
@@ -106,17 +106,17 @@ async def test_qr_wait_loop_success_captures_session_one_shot():
     client = _client_mock()
     auth = TelegramAuth(1, "h")
     try:
-        client.qr_login = AsyncMock(return_value=FakeQRLogin([SimpleNamespace(phone=PHONE)]))
+        client.qr_login = AsyncMock(return_value=FakeQRLogin([SimpleNamespace(phone=BARE_PHONE)]))
         with patch("src.telegram.auth.TelegramClient", return_value=client):
             started = await auth.qr_start()
         await auth._qr.task
         status = auth.qr_status(started["qr_id"])
         assert status["state"] == "success"
-        assert status["phone"] == PHONE
+        assert status["phone"] == BARE_PHONE
         consumed = await auth.consume_qr_session(started["qr_id"])
         assert consumed is not None
         assert consumed["session_string"] == SESSION_STR
-        assert consumed["phone"] == PHONE
+        assert consumed["phone"] == BARE_PHONE
         # flow flips to consumed; second consume gets nothing (no dup account)
         assert auth.qr_status(started["qr_id"])["state"] == "consumed"
         assert await auth.consume_qr_session(started["qr_id"]) is None
@@ -163,7 +163,7 @@ async def test_qr_password_flow_invalid_then_valid():
         consumed = await auth.consume_qr_session(started["qr_id"])
         assert consumed is not None
         assert consumed["session_string"] == SESSION_STR
-        assert consumed["phone"] == PHONE
+        assert consumed["phone"] == BARE_PHONE
     finally:
         await auth.cleanup()
 
@@ -190,7 +190,7 @@ async def test_qr_password_rejects_non_password_needed_state():
     client = _client_mock()
     auth = TelegramAuth(1, "h")
     try:
-        client.qr_login = AsyncMock(return_value=FakeQRLogin([SimpleNamespace(phone=PHONE)]))
+        client.qr_login = AsyncMock(return_value=FakeQRLogin([SimpleNamespace(phone=BARE_PHONE)]))
         with patch("src.telegram.auth.TelegramClient", return_value=client):
             started = await auth.qr_start()
         await auth._qr.task
@@ -272,3 +272,31 @@ async def test_cleanup_cancels_running_qr_task():
     assert task.done()
     client.disconnect.assert_awaited()
     assert auth._qr is None
+
+
+async def test_qr_fail_flips_only_consumed_flow():
+    client = _client_mock()
+    auth = TelegramAuth(1, "h")
+    try:
+        client.qr_login = AsyncMock(return_value=FakeQRLogin([SimpleNamespace(phone=BARE_PHONE)]))
+        with patch("src.telegram.auth.TelegramClient", return_value=client):
+            started = await auth.qr_start()
+        qr_id = started["qr_id"]
+
+        # pending/active flows are untouched
+        auth.qr_fail(qr_id, "boom")
+        assert auth.qr_status(qr_id)["state"] == "pending"
+
+        # unknown qr_id is a no-op
+        auth.qr_fail("other", "boom")
+        assert auth.qr_status(qr_id)["state"] == "pending"
+
+        # consumed flow → failed, so later polls report the error
+        await auth._qr.task
+        await auth.consume_qr_session(qr_id)
+        auth.qr_fail(qr_id, "qr_materialization_failed")
+        status = auth.qr_status(qr_id)
+        assert status["state"] == "failed"
+        assert status["error"] == "qr_materialization_failed"
+    finally:
+        await auth.cleanup()
