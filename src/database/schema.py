@@ -626,4 +626,20 @@ CREATE TABLE IF NOT EXISTS pipeline_action_log (
 -- while NULL-target rows (react/delete: once per message) keep the old
 -- single-row dedup — plain UNIQUE treats NULLs as distinct, so the NULL
 -- branch needs its own partial index.
+
+-- Voice/video-note transcripts (#1545), one row per (chat, message, engine):
+-- ``source`` is in the primary key so a cheap telegram transcript can never
+-- shadow an explicitly requested groq/openai/whisper one (the native engine
+-- drops the recording's last segment, and the loss is invisible in the text).
+-- chat_id is the Telethon marked id (channels -100…, chats -…, users +…).
+CREATE TABLE IF NOT EXISTS transcripts (
+    chat_id INTEGER NOT NULL,
+    message_id INTEGER NOT NULL,
+    source TEXT NOT NULL,
+    text TEXT NOT NULL,
+    duration INTEGER,
+    lang TEXT,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (chat_id, message_id, source)
+);
 """

@@ -165,6 +165,17 @@ async def fetch_message_reaction_users_raw(client: Any, peer: Any, message_id: i
     )
 
 
+async def transcribe_audio_raw(client: Any, peer: Any, message_id: int) -> Any:
+    """Issue one native Premium ``messages.transcribeAudio`` request (#1545).
+
+    Long recordings come back ``pending=True``; the caller polls by re-invoking
+    this until the transcript matures or its attempt budget runs out.
+    """
+    from telethon.tl.functions.messages import TranscribeAudioRequest
+
+    return await client(TranscribeAudioRequest(peer=peer, msg_id=int(message_id)))
+
+
 async def _disconnect_client_safely(client: Any, *, phone: str) -> None:
     try:
         result = client.disconnect()
