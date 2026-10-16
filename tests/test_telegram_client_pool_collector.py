@@ -77,6 +77,8 @@ def mock_db():
     db.repos.dialog_cache.clear_dialogs = AsyncMock()
     db.repos.dialog_cache.get_dialog = AsyncMock(return_value=None)
     db.repos.channels.get_preferred_phone = AsyncMock(return_value=None)
+    # collect-пути зовут keep-эскроу (#1516): без тегов guard молчит.
+    db.repos.channels.fetch_channels_with_tag = AsyncMock(return_value=[])
     db.repos.channels.update_channel_preferred_phone = AsyncMock()
     db.repos.channels.clear_preferred_phone_if_matches = AsyncMock()
     db.repos.channels.update_channel_created_at = AsyncMock()
@@ -2301,6 +2303,7 @@ async def test_stats_entity_lookup_quarantines_uncertain_channel():
     pool = make_mock_pool()
     pool.resolve_entity_with_warm = AsyncMock(side_effect=ValueError("temporary miss"))
     db = MagicMock()
+    db.repos.channels.fetch_channels_with_tag = AsyncMock(return_value=[])
     db.set_channel_active = AsyncMock()
     db.repos.channels.set_channel_review = AsyncMock()
     collector = Collector(pool, db, SchedulerConfig())
@@ -3323,6 +3326,7 @@ async def test_collect_channel_username_not_occupied_deactivates():
 
     pool = make_mock_pool(get_available_client=AsyncMock(return_value=(transport_session, "+7001")))
     db = MagicMock()
+    db.repos.channels.fetch_channels_with_tag = AsyncMock(return_value=[])
     db.set_channel_active = AsyncMock()
     db.insert_messages_batch = AsyncMock()
     db.get_channel_by_channel_id = AsyncMock(return_value=ch)
@@ -3358,6 +3362,7 @@ async def test_collect_channel_flush_error_in_finally():
     pool = make_mock_pool(get_available_client=AsyncMock(return_value=(client, "+7001")))
 
     db = MagicMock()
+    db.repos.channels.fetch_channels_with_tag = AsyncMock(return_value=[])
     db.insert_messages_batch = AsyncMock(side_effect=RuntimeError("db error"))
     db.get_channel_by_channel_id = AsyncMock(return_value=ch)
     db.get_channel_stats = AsyncMock(return_value=[])
@@ -3386,6 +3391,7 @@ async def test_collect_channel_update_last_id_error():
     pool = make_mock_pool(get_available_client=AsyncMock(return_value=(client, "+7001")))
 
     db = MagicMock()
+    db.repos.channels.fetch_channels_with_tag = AsyncMock(return_value=[])
     db.insert_messages_batch = AsyncMock()
 
     # Mock execute to return message_id 11 for the flush batch check
