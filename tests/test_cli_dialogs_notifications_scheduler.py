@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from src.config import AppConfig
 from src.database import Database
-from src.models import Account, Channel, NotificationBot
+from src.models import Account, Channel, CollectionTaskStatus, NotificationBot
 
 pytestmark = pytest.mark.aiosqlite_serial
 
@@ -786,6 +788,132 @@ class TestSchedulerCommandRW:
 
         assert _sched_read_setting(db_path, "collection_queue_paused") == "0"
         assert "Collection queue resumed" in capsys.readouterr().out
+
+    def test_queue_status_empty(self, tmp_path, cli_init_patch, sched_pool_patch, capsys):
+        db_path = _sched_init_empty_db(tmp_path, "sched_qstatus_empty.db")
+
+        _sched_run_with_db(db_path, cli_init_patch, _ns(scheduler_action="queue-status"))
+
+        assert "empty" in capsys.readouterr().out
+
+    def test_queue_status_remaining_without_throughput(
+        self, tmp_path, cli_init_patch, sched_pool_patch, capsys
+    ):
+        db_path = str(tmp_path / "sched_qstatus_pending.db")
+        seed = Database(db_path)
+        asyncio.run(seed.initialize())
+        try:
+            _sched_seed_collection_task(seed, channel_id=222_030)
+            _sched_seed_collection_task(seed, channel_id=222_031)
+        finally:
+            asyncio.run(seed.close())
+
+        _sched_run_with_db(db_path, cli_init_patch, _ns(scheduler_action="queue-status"))
+
+        out = capsys.readouterr().out
+        assert "2 remaining (2 pending, 0 running)" in out
+        # Нет завершений за окно — ETA из данных не построить, называем unknown.
+        assert "ETA: unknown" in out
+
+    def test_queue_status_eta_from_window_rate(
+        self, tmp_path, cli_init_patch, sched_pool_patch, capsys
+    ):
+        db_path = str(tmp_path / "sched_qstatus_eta.db")
+        seed = Database(db_path)
+        asyncio.run(seed.initialize())
+        try:
+            ids = [_sched_seed_collection_task(seed, channel_id=222_040 + i) for i in range(6)]
+            for task_id in ids[:4]:
+                asyncio.run(
+                    seed.repos.tasks.update_collection_task(
+                        task_id, CollectionTaskStatus.COMPLETED
+                    )
+                )
+        finally:
+            asyncio.run(seed.close())
+
+        _sched_run_with_db(db_path, cli_init_patch, _ns(scheduler_action="queue-status"))
+
+        out = capsys.readouterr().out
+        # Завершения «сейчас» → наблюдение зажато в 0.5 мин: rate = 4/0.5 = 8/мин,
+        # ETA = ceil(2/8) = 1 (деление на полное окно занизило бы rate ~в 10 раз).
+        assert "Last 0.5 min: 4 completed" in out
+        assert "ETA: ~1 min" in out
+
+    def test_queue_status_rate_uses_observed_span(
+        self, tmp_path, cli_init_patch, sched_pool_patch, capsys
+    ):
+        db_path = str(tmp_path / "sched_qstatus_span.db")
+        seed = Database(db_path)
+        asyncio.run(seed.initialize())
+        try:
+            ids = [_sched_seed_collection_task(seed, channel_id=222_070 + i) for i in range(6)]
+            for task_id in ids[:4]:
+                asyncio.run(
+                    seed.repos.tasks.update_collection_task(
+                        task_id, CollectionTaskStatus.COMPLETED
+                    )
+                )
+            # Завершения 3 минуты назад: наблюдение = 3 мин, rate = 4/3,
+            # ETA = ceil(2 / (4/3)) = 2.
+            old_ts = (datetime.now(timezone.utc) - timedelta(minutes=3)).isoformat()
+            asyncio.run(
+                seed.execute_write(
+                    "UPDATE collection_tasks SET completed_at = ? WHERE status = ?",
+                    (old_ts, CollectionTaskStatus.COMPLETED.value),
+                )
+            )
+        finally:
+            asyncio.run(seed.close())
+
+        _sched_run_with_db(db_path, cli_init_patch, _ns(scheduler_action="queue-status"))
+
+        out = capsys.readouterr().out
+        assert "min: 4 completed" in out
+        assert "ETA: ~2 min" in out
+
+    def test_queue_status_paused_marker(
+        self, tmp_path, cli_init_patch, sched_pool_patch, capsys
+    ):
+        db_path = str(tmp_path / "sched_qstatus_paused.db")
+        seed = Database(db_path)
+        asyncio.run(seed.initialize())
+        try:
+            _sched_seed_collection_task(seed, channel_id=222_050)
+        finally:
+            asyncio.run(seed.close())
+
+        _sched_run_with_db(db_path, cli_init_patch, _ns(scheduler_action="queue-pause"))
+        capsys.readouterr()
+        _sched_run_with_db(db_path, cli_init_patch, _ns(scheduler_action="queue-status"))
+
+        out = capsys.readouterr().out
+        assert "PAUSED" in out
+        assert "1 remaining (1 pending, 0 running)" in out
+
+    def test_queue_status_json(self, tmp_path, cli_init_patch, sched_pool_patch, capsys):
+        db_path = str(tmp_path / "sched_qstatus_json.db")
+        seed = Database(db_path)
+        asyncio.run(seed.initialize())
+        try:
+            _sched_seed_collection_task(seed, channel_id=222_060)
+        finally:
+            asyncio.run(seed.close())
+
+        _sched_run_with_db(
+            db_path,
+            cli_init_patch,
+            _ns(scheduler_action="queue-status", scheduler_format="json"),
+        )
+
+        data = json.loads(capsys.readouterr().out)
+        assert data["remaining"] == 1
+        assert data["pending"] == 1
+        assert data["running"] == 0
+        assert data["observed_min"] == 5  # завершений нет — наблюдение = полное окно
+        assert data["paused"] is False
+        assert data["rate_per_min"] == 0.0
+        assert data["eta_min"] is None
 
     def test_db_only_actions_do_not_init_pool(self, tmp_path, cli_init_patch, capsys):
         """DB-only scheduler subcommands must not connect the Telegram pool.

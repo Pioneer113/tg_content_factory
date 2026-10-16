@@ -13,7 +13,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
+import math
+from datetime import datetime, timezone
 
 import typer
 
@@ -24,11 +27,13 @@ from src.cli.commands.common import (
 )
 from src.database import Database
 from src.database.bundles import ChannelBundle
+from src.models import CollectionTaskType
 from src.scheduler.service import SchedulerManager
 from src.services.collection_service import CollectionService
 from src.services.task_enqueuer import TaskEnqueuer
 from src.services.telegram_command_service import TelegramCommandService
 from src.telegram.collector import Collector
+from src.utils.datetime import parse_datetime
 
 
 async def _enqueue_reconcile(db: Database, command: str) -> None:
@@ -256,6 +261,78 @@ async def queue_resume_impl(config_path: str) -> None:
         await db.close()
 
 
+async def queue_status_impl(config_path: str, *, output_format: str = "text") -> None:
+    """Show live collection-queue progress with an ETA from measured throughput.
+
+    Число — только из данных: rate = завершения за последнее окно (по умолчанию
+    5 мин); без завершений ETA не выдумываем («warming up or stalled»).
+    """
+    _, db = await runtime.init_db(config_path)
+    try:
+        task_type = CollectionTaskType.CHANNEL_COLLECT.value
+        window_min = 5
+        snap = await db.repos.tasks.queue_snapshot(task_type, window_min=window_min)
+        paused = (await db.get_setting("collection_queue_paused") or "0") == "1"
+        finished_window = snap.completed_window + snap.failed_window
+        # Rate по фактической длительности наблюдения: делить на всё окно,
+        # когда сбор идёт первую минуту, занижает скорость в разы (ETA ~×5).
+        observed_min = window_min
+        first_dt = parse_datetime(snap.first_completion_at) if snap.first_completion_at else None
+        if first_dt is not None:
+            observed_min = min(
+                window_min,
+                max((datetime.now(timezone.utc) - first_dt).total_seconds() / 60, 0.5),
+            )
+        rate = finished_window / observed_min if finished_window else 0.0
+        eta_min = math.ceil(snap.remaining / rate) if rate > 0 and snap.remaining else None
+
+        if output_format == "json":
+            print(
+                json.dumps(
+                    {
+                        "task_type": task_type,
+                        "window_min": window_min,
+                        "observed_min": round(observed_min, 2),
+                        "pending": snap.pending,
+                        "running": snap.running,
+                        "remaining": snap.remaining,
+                        "completed_window": snap.completed_window,
+                        "failed_window": snap.failed_window,
+                        "rate_per_min": round(rate, 2),
+                        "eta_min": eta_min,
+                        "paused": paused,
+                    },
+                    ensure_ascii=False,
+                )
+            )
+            return
+
+        paused_mark = " [PAUSED]" if paused else ""
+        if snap.remaining == 0:
+            print(f"Collection queue ({task_type}): empty.{paused_mark}")
+            return
+        print(
+            f"Collection queue ({task_type}): {snap.remaining} remaining "
+            f"({snap.pending} pending, {snap.running} running){paused_mark}"
+        )
+        window_label = (
+            f"{observed_min:.1f} min" if observed_min < window_min else f"{window_min} min"
+        )
+        print(
+            f"Last {window_label}: {snap.completed_window} completed, "
+            f"{snap.failed_window} failed — rate ~{rate:.1f}/min"
+        )
+        if eta_min is None:
+            print(
+                "ETA: unknown — no completions in the last "
+                f"{window_min} min (warming up or stalled; re-check in 2-3 min)"
+            )
+        else:
+            print(f"ETA: ~{eta_min} min")
+    finally:
+        await db.close()
+
+
 def run(args: argparse.Namespace) -> None:
     """Thin argparse adapter over the ``*_impl`` bodies (legacy dispatch path).
 
@@ -284,11 +361,16 @@ def run(args: argparse.Namespace) -> None:
         asyncio.run(queue_pause_impl(args.config))
     elif action == "queue-resume":
         asyncio.run(queue_resume_impl(args.config))
+    elif action == "queue-status":
+        asyncio.run(
+            queue_status_impl(args.config, output_format=getattr(args, "scheduler_format", "text"))
+        )
 
 
 # --------------------------------------------------------------------------- #
 # scheduler → start / trigger / status / stop / job-toggle / set-interval
 #             / task-cancel / clear-pending / queue-pause / queue-resume
+#             / queue-status
 # --------------------------------------------------------------------------- #
 
 scheduler_app = typer.Typer(no_args_is_help=True, help="Scheduler control")
@@ -372,3 +454,13 @@ def scheduler_queue_resume(ctx: typer.Context) -> None:
     """Resume the collection queue."""
     apply_startup(ctx)
     run_async(queue_resume_impl(ctx.obj.config))
+
+
+@scheduler_app.command("queue-status")
+def scheduler_queue_status(
+    ctx: typer.Context,
+    format: str = typer.Option("text", "--format", help="Output format: text or json"),
+) -> None:
+    """Show collection queue progress and an ETA from measured throughput."""
+    apply_startup(ctx)
+    run_async(queue_status_impl(ctx.obj.config, output_format=format))

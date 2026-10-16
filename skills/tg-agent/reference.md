@@ -121,6 +121,7 @@ inspectable via `pipeline runs` / `run-show`.
 ```
 scheduler start | trigger | status | stop | job-toggle | set-interval | task-cancel
 scheduler clear-pending | queue-pause | queue-resume
+scheduler queue-status [--format json]    # live collection queue: remaining, throughput, ETA
 worker    # long-lived process: collection queue, scheduler, dispatchers — run in background
 ```
 
