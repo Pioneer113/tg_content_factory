@@ -355,6 +355,7 @@ app.add_typer(settings_app, name="settings")
 # --------------------------------------------------------------------------- #
 # scheduler → start / trigger / status / stop / job-toggle / set-interval
 #             / task-cancel / clear-pending / queue-pause / queue-resume
+#             / queue-status
 
 app.add_typer(scheduler_app, name="scheduler")
 

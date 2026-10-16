@@ -61,6 +61,7 @@ CLI_REAL_TG_COMMAND_CASES_BY_CATEGORY: dict[str, set[tuple[str, ...]]] = {
         ("pipeline", "templates"),
         ("provider", "list"),
         ("scheduler", "status"),
+        ("scheduler", "queue-status"),
         ("search",),
         ("search-query", "get"),
         ("search-query", "list"),

@@ -427,7 +427,19 @@ def test_settings_semantic_flags():
 # --------------------------------------------------------------------------- #
 # scheduler → start / trigger / status / stop / job-toggle / set-interval
 #             / task-cancel / clear-pending / queue-pause / queue-resume
+#             / queue-status
 # --------------------------------------------------------------------------- #
+
+
+def test_scheduler_queue_status_passes_format():
+    mock_impl = MagicMock()
+    with (
+        patch("src.cli.typer_commands.scheduler_cmd.queue_status_impl", mock_impl),
+        patch("src.cli.typer_commands.run_async"),
+    ):
+        result = runner.invoke(app, ["scheduler", "queue-status", "--format", "json"])
+    assert result.exit_code == 0
+    mock_impl.assert_called_once_with("config.yaml", output_format="json")
 
 
 def test_scheduler_no_arg_subcommands_delegate():

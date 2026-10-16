@@ -554,6 +554,47 @@ async def test_count_active_channel_tasks(collection_tasks_repo):
     assert await collection_tasks_repo.count_active_channel_tasks() == 1
 
 
+async def test_queue_snapshot_counts_statuses_and_window(collection_tasks_repo):
+    """Срез очереди: разбивка активных + завершения за окно; чужие task_type не считаются."""
+    done_old = await collection_tasks_repo.create_collection_task(1, "Old")
+    done_new = await collection_tasks_repo.create_collection_task(2, "New")
+    failed = await collection_tasks_repo.create_collection_task(3, "Failed")
+    await collection_tasks_repo.create_collection_task(4, "Pending")
+    running = await collection_tasks_repo.create_collection_task(5, "Running")
+    # STATS_ALL создаётся PENDING — без фильтра по task_type pending был бы 2.
+    await collection_tasks_repo.create_stats_task(StatsAllTaskPayload(channel_ids=[1]))
+
+    await collection_tasks_repo.update_collection_task(done_old, CollectionTaskStatus.COMPLETED)
+    await collection_tasks_repo.update_collection_task(done_new, CollectionTaskStatus.COMPLETED)
+    await collection_tasks_repo.update_collection_task(
+        failed, CollectionTaskStatus.FAILED, error="boom"
+    )
+    await collection_tasks_repo.update_collection_task(running, CollectionTaskStatus.RUNNING)
+
+    # Один completed сдвинуть за окно (10 минут назад).
+    old_ts = (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()
+    await collection_tasks_repo._database.execute_write(
+        "UPDATE collection_tasks SET completed_at = ? WHERE id = ?", (old_ts, done_old)
+    )
+
+    snap = await collection_tasks_repo.queue_snapshot()
+    assert snap.pending == 1
+    assert snap.running == 1
+    assert snap.remaining == 2
+    assert snap.completed_window == 1
+    assert snap.failed_window == 1
+
+    wide = await collection_tasks_repo.queue_snapshot(window_min=15)
+    assert wide.completed_window == 2
+
+
+async def test_queue_snapshot_empty(collection_tasks_repo):
+    """Пустая таблица — нулевой срез, не NULL."""
+    snap = await collection_tasks_repo.queue_snapshot()
+    assert snap == (0, 0, 0, 0)
+    assert snap.remaining == 0
+
+
 async def test_reset_collection_task_to_pending(collection_tasks_repo):
     task_id = await collection_tasks_repo.create_collection_task(1, "Channel 1")
     await collection_tasks_repo.update_collection_task(task_id, CollectionTaskStatus.RUNNING)

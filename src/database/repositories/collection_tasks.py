@@ -15,8 +15,8 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any, Sequence
+from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING, Any, NamedTuple, Sequence
 
 import aiosqlite
 
@@ -38,6 +38,19 @@ from src.utils.datetime import parse_datetime
 from src.utils.json import safe_json_dumps, safe_json_loads_dict
 
 _ALLOWED_PAYLOAD_FILTER_KEYS = frozenset({"sq_id", "pipeline_id"})
+
+
+class QueueSnapshot(NamedTuple):
+    """Срез очереди одного task_type для `scheduler queue-status` (прогресс + ETA)."""
+
+    pending: int
+    running: int
+    completed_window: int
+    failed_window: int
+
+    @property
+    def remaining(self) -> int:
+        return self.pending + self.running
 
 
 def _safe_task_type(raw: str) -> CollectionTaskType:
@@ -595,6 +608,43 @@ class CollectionTasksRepository:
         cur = await self._db.execute(f"SELECT COUNT(*) as cnt FROM collection_tasks{where}", params)
         row = await cur.fetchone()
         return row["cnt"] if row else 0
+
+    async def queue_snapshot(
+        self,
+        task_type: str = CollectionTaskType.CHANNEL_COLLECT.value,
+        *,
+        window_min: int = 5,
+    ) -> QueueSnapshot:
+        """Срез очереди `task_type`: активные задачи + завершения за последнее окно.
+
+        Read-only (без `_write_lock`): читается CLI `scheduler queue-status` —
+        rate по завершениям за окно, ETA = remaining / rate.
+        """
+        window_start = (datetime.now(timezone.utc) - timedelta(minutes=window_min)).isoformat()
+        cur = await self._db.execute(
+            "SELECT"
+            " SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS pending,"
+            " SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) AS running,"
+            " SUM(CASE WHEN status = ? AND completed_at >= ? THEN 1 ELSE 0 END) AS completed_win,"
+            " SUM(CASE WHEN status = ? AND completed_at >= ? THEN 1 ELSE 0 END) AS failed_win"
+            " FROM collection_tasks WHERE task_type = ?",
+            (
+                CollectionTaskStatus.PENDING.value,
+                CollectionTaskStatus.RUNNING.value,
+                CollectionTaskStatus.COMPLETED.value,
+                window_start,
+                CollectionTaskStatus.FAILED.value,
+                window_start,
+                task_type,
+            ),
+        )
+        row = await cur.fetchone()
+        return QueueSnapshot(
+            pending=row["pending"] or 0,
+            running=row["running"] or 0,
+            completed_window=row["completed_win"] or 0,
+            failed_window=row["failed_win"] or 0,
+        )
 
     async def get_collection_tasks_paginated(
         self, limit: int = 20, offset: int = 0, status_filter: str | None = None
