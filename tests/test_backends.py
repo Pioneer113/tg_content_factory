@@ -7,7 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from telethon.errors import FloodWaitError
+from telethon.errors import FloodWaitError, TypeNotFoundError
 from telethon_floodgate import HandledFloodWaitError
 
 from src.models import Account
@@ -17,7 +17,9 @@ from src.telegram.backends import (
     TelethonCliBackend,
     fetch_message_reaction_users_raw,
 )
+from src.telegram.collector_types import unknown_tl_type_note
 from src.telegram.reactions import TelegramReactionInvalidError
+from src.telegram.schema_drift import SchemaDriftError
 from tests.helpers import AsyncIterMessages, FakeCliTelethonClient
 
 
@@ -740,3 +742,76 @@ def test_reserve_gate_slot_boundary_and_raised_contracts():
     # retry_after == 0 → reserved, nothing raised.
     gate.try_acquire.return_value = 0
     session._reserve_gate_slot("op")
+
+
+# --- Schema drift: TypeNotFoundError ≠ «нет такого чата» (#1549) ---
+
+
+@pytest.mark.anyio
+async def test_transport_session_translates_type_not_found_error_to_schema_drift():
+    err = TypeNotFoundError(0x1C32B11C, b"\x1c\xb12\x1c")
+    pool = AsyncMock()
+    session = TelegramTransportSession(
+        FakeCliTelethonClient(entity_resolver=lambda _arg: err),
+        phone="+7003",
+        pool=pool,
+    )
+
+    with pytest.raises(SchemaDriftError) as exc_info:
+        await session.get_entity("@channel")
+
+    text = str(exc_info.value)
+    # Самоописывающее сообщение вместо телетоновского «Could not find …».
+    assert "schema mismatch" in text
+    assert "NOT a missing user or chat" in text
+    assert "during telegram_resolve_entity" in text
+    assert "Could not find a matching Constructor ID" not in text
+    assert exc_info.value.invalid_constructor_id == 0x1C32B11C
+    # Регресс: isinstance-классификаторы (unknown_tl_type_note в коллекторе) не сломаны.
+    assert isinstance(exc_info.value, TypeNotFoundError)
+    assert unknown_tl_type_note(exc_info.value) is not None
+
+
+@pytest.mark.anyio
+async def test_transport_session_translates_schema_drift_from_stream():
+    err = TypeNotFoundError(0x1C32B11C, b"\x1c\xb12\x1c")
+
+    class DriftIterator:
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise err
+
+    pool = AsyncMock()
+    session = TelegramTransportSession(
+        FakeCliTelethonClient(iter_messages_factory=lambda *a, **kw: DriftIterator()),
+        phone="+7004",
+        pool=pool,
+    )
+
+    with pytest.raises(SchemaDriftError) as exc_info:
+        async for _msg in session.iter_messages("entity"):
+            pass
+
+    assert "schema mismatch during telegram_stream_messages" in str(exc_info.value)
+    pool.report_flood.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_transport_session_leaves_entity_not_found_errors_untouched():
+    # Настоящее «нет такой сущности» (ValueError от Telethon) схемным дрифтом
+    # не маскируется — проходит через _run как было.
+    err = ValueError("Could not find the input entity for PeerChannel(123)")
+    pool = AsyncMock()
+    session = TelegramTransportSession(
+        FakeCliTelethonClient(entity_resolver=lambda _arg: err),
+        phone="+7005",
+        pool=pool,
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        await session.get_entity("@channel")
+
+    assert "input entity" in str(exc_info.value)
+    assert not isinstance(exc_info.value, SchemaDriftError)
