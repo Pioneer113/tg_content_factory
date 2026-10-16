@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -30,6 +31,7 @@ from src.telegram.collector_message_parse import (
     get_sender_kind,
     get_service_action_raw,
     get_service_action_semantic,
+    plain_text_and_entities_json,
 )
 from src.telegram.rich_text import _page_lines, rich_text_to_str, webpage_page_text
 
@@ -259,6 +261,20 @@ def test_build_message_carries_entities_json():
     msg = _msg(text="hello", entities=[MessageEntityBold(offset=0, length=5)])
     message = build_message_from_telethon(msg, channel_id=-100123)
     assert json.loads(message.entities_json) == [{"length": 5, "offset": 0, "type": "bold"}]
+
+
+def test_plain_text_and_entities_ignores_nonstring_message_fakes():
+    """MagicMock-based stream fakes auto-generate a truthy non-string `message`
+    attribute; only str counts as text, so the funnel takes `text` instead of
+    crashing Message validation (CI shard regression, #1547)."""
+    fake = MagicMock()
+    fake.id = 1
+    fake.date = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    fake.message = MagicMock()  # truthy non-string
+    fake.text = "msg 0"
+    text, entities_json = plain_text_and_entities_json(fake)
+    assert text == "msg 0"
+    assert entities_json is None
 
 
 # --- RichText / iv-page flattening (port of telegram-mcp rich_text) -----------

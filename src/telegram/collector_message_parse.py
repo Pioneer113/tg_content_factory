@@ -104,10 +104,13 @@ def plain_text_and_entities_json(msg) -> tuple[str | None, str | None]:
     span metadata on top of the plain text (``None`` when there are none).
     Raw ``message`` wins over ``text``: the Telethon ``.text`` property formats
     through the client parse mode, ``.message`` is always the raw string.
+    Only ``str`` counts as text — a non-string stand-in (MagicMock-based test
+    fake) is not a word source and must not crash the funnel.
     """
-    text = (
-        getattr(msg, "message", None) or getattr(msg, "text", None) or extract_webpage_plain_text(msg)
-    )
+    raw = getattr(msg, "message", None)
+    if not isinstance(raw, str):
+        raw = getattr(msg, "text", None)
+    text = (raw if isinstance(raw, str) else None) or extract_webpage_plain_text(msg)
     return text, extract_message_entities_json(msg)
 
 
