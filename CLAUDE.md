@@ -194,7 +194,7 @@ Reads (`SELECT`) stay lock-free. Repositories accept `database: Database | None 
 
 ## Conventions
 
-- PRs touching pool/lease/session/security layers require dual review (Claude + Codex); reconcile disagreement against the code and prefer the deeper analysis.
+- Review = the standard AO review cycle for all PRs, including pool/lease/session/security layers (`ao review trigger` on the current head → address inline findings → push; re-review after fixes). No extra second-reviewer requirement (dual Claude+Codex retired 2026-10-16); reconcile reviewer disagreement against the code and prefer the deeper analysis.
 - **CLI-first**: the CLI is the product contract for coding agents; every new capability lands as a CLI command first (with tests + real-TG manifest coverage) and updates `skills/tg-agent/SKILL.md` / `reference.md` when it changes the agent-facing surface. Legacy surfaces (see Positioning) are frozen — parity with them is no longer a requirement
 - Async everywhere (asyncio)
 - Pydantic v2 models (`model_validate`, not `parse_obj`)
