@@ -13,11 +13,12 @@ flags; anything not listed — check `--help`.
 
 Every live command that opens its own Telegram connection takes a cross-process lock on
 the account session. While the worker daemon runs, most `dialogs` actions (`send`,
-`forward`, `react`, `refresh`, `pin-message`, `kick`, `archive`, …) are **handed off
-automatically**: the CLI enqueues them for the worker instead of connecting directly, so
-they keep working unchanged.
+`forward`, `react`, `refresh`, `pin-message`, `kick`, `archive`, …) and `channel collect`
+are **handed off automatically**: the CLI enqueues them for the worker instead of
+connecting directly, so they keep working unchanged (`--direct` forces the in-process
+path instead).
 
-Commands without a queue equivalent (`messages read --live`, `channel collect`,
+Commands without a queue equivalent (`messages read --live`,
 `dialogs read`, `dialogs download-media`, `scheduler trigger`, …) wait for the daemon to
 release the session (up to `TGCF_SESSION_LOCK_GRACE_SECONDS`, default 20) and then fail:
 
