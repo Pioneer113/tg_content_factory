@@ -68,7 +68,10 @@ async def test_discover_phone_handles_handled_flood_wait():
 
 
 def _fake_msg(mid: int):
-    m = MagicMock(id=mid, text=f"msg {mid}", date=datetime.now(timezone.utc))
+    # message= pins the real Telethon contract (raw str | None): without it a
+    # MagicMock auto-generates a truthy non-string `message`, which the
+    # shared text/entities helper (#1547) correctly refuses.
+    m = MagicMock(id=mid, text=f"msg {mid}", message=f"msg {mid}", date=datetime.now(timezone.utc))
     m.sender.first_name = "F"
     m.sender.last_name = "L"
     return m
