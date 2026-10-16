@@ -27,6 +27,7 @@ from src.agent.tools._categories import (
     ToolMeta,
 )
 from src.agent.tools._registry import _get_accounts
+from src.services.account_service import pick_default_account_phone
 
 if TYPE_CHECKING:
     from src.database import Database
@@ -340,12 +341,13 @@ async def load_tool_permissions(db: Database, phone: str | None = None) -> dict[
             phone_known = True
         else:
             if phone is None:
-                accounts = await _get_accounts(db)
-                if accounts:
-                    primary = next((a for a in accounts if a.is_primary), accounts[0])
-                    phone_used = primary.phone
-                    if primary.phone in saved:
-                        phone_perms = saved[primary.phone]
+                # Shared default-account rule (#1485): usable = is_active +
+                # session ok, primary first — same as agent resolve_phone.
+                default_phone = pick_default_account_phone(await _get_accounts(db))
+                if default_phone is not None:
+                    phone_used = default_phone
+                    if default_phone in saved:
+                        phone_perms = saved[default_phone]
                         phone_known = True
                     else:
                         phone_perms = {}

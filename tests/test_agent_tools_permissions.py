@@ -158,6 +158,30 @@ class TestLoadToolPermissions:
         assert perms["search_messages"] is False
 
     @pytest.mark.anyio
+    async def test_per_phone_none_skips_inactive_primary(self):
+        # #1485: the default pick must route through pick_default_account_phone —
+        # an inactive primary must not source the ACL.
+        inactive_primary = SimpleNamespace(phone="+111", is_primary=True, is_active=False)
+        usable = SimpleNamespace(phone="+222", is_primary=False, is_active=True)
+        db = MagicMock()
+        raw = json.dumps({"+111": {"search_messages": False}, "+222": {"search_messages": True}})
+        db.get_setting = AsyncMock(return_value=raw)
+        db.get_accounts = AsyncMock(return_value=[inactive_primary, usable])
+        perms = await load_tool_permissions(db, phone=None)
+        assert perms["search_messages"] is True
+
+    @pytest.mark.anyio
+    async def test_per_phone_none_all_unusable_fails_closed(self):
+        # #1485: no usable account → no default phone → deny-all.
+        inactive = SimpleNamespace(phone="+111", is_primary=True, is_active=False)
+        db = MagicMock()
+        raw = json.dumps({"+111": {"search_messages": True}})
+        db.get_setting = AsyncMock(return_value=raw)
+        db.get_accounts = AsyncMock(return_value=[inactive])
+        perms = await load_tool_permissions(db, phone=None)
+        assert all(v is False for v in perms.values())
+
+    @pytest.mark.anyio
     async def test_corrupted_json_returns_defaults(self):
         db = MagicMock()
         db.get_setting = AsyncMock(return_value="not valid json{{{")
