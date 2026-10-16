@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 import sqlite3
 from collections.abc import Mapping
+from contextlib import closing
 from pathlib import Path
 
 # A gate opens only when its env var is set to one of these true tokens.
@@ -41,7 +42,10 @@ def _resolve_api_credentials(config, db_path: Path) -> tuple[int | None, str | N
     api_hash = config.telegram.api_hash
     if api_id == 0 or not api_hash:
         try:
-            with sqlite3.connect(db_path) as conn:
+            # closing(): sqlite3's own context manager commits but never closes, and
+            # the GC-finalized connection leaks a PytestUnraisableExceptionWarning
+            # (an error under filterwarnings=error) into a later test.
+            with closing(sqlite3.connect(db_path)) as conn:
                 stored_id_row = conn.execute(
                     "SELECT value FROM settings WHERE key = ?", ("tg_api_id",)
                 ).fetchone()

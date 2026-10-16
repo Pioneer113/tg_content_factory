@@ -8,6 +8,7 @@ import sys
 import time
 import uuid
 from collections.abc import Callable
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -161,7 +162,10 @@ def _fetch_live_accounts(db_path: Path) -> tuple[str, ...]:
         account_id = int(row["id"] or 0)
         return blocked, -is_primary, account_id
 
-    with sqlite3.connect(db_path) as conn:
+    # closing(): sqlite3's own context manager commits but never closes — the
+    # GC-finalized handle leaks a PytestUnraisableExceptionWarning (an error
+    # under filterwarnings=error) into whichever test runs next. Read-only.
+    with closing(sqlite3.connect(db_path)) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             """
@@ -188,7 +192,7 @@ def _first_premium_phone(db_path: Path, connected: tuple[str, ...]) -> str | Non
     """
     now = datetime.now(timezone.utc)
     try:
-        with sqlite3.connect(db_path) as conn:
+        with closing(sqlite3.connect(db_path)) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 """
@@ -218,7 +222,7 @@ def _first_premium_phone(db_path: Path, connected: tuple[str, ...]) -> str | Non
 def _phone_flood_remaining_seconds(db_path: Path, phone: str) -> float:
     """Seconds until ``phone``'s flood_wait_until expires (0 if clear/unknown)."""
     try:
-        with sqlite3.connect(db_path) as conn:
+        with closing(sqlite3.connect(db_path)) as conn:
             row = conn.execute(
                 "SELECT flood_wait_until FROM accounts WHERE phone = ?", (phone,)
             ).fetchone()
