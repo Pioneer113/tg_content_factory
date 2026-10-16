@@ -44,6 +44,8 @@ name it.
 
 from __future__ import annotations
 
+import asyncio
+import atexit
 import hashlib
 import os
 import tempfile
@@ -236,3 +238,68 @@ def session_identity(client: object) -> str:
             if saved:
                 return f"string:{saved}"
     return f"anon:{id(client)}"
+
+
+# --- tg-agent wiring (original tg-agent code; see THIRD_PARTY_NOTICES.md) ---
+
+
+def _lock_dir() -> Path:
+    """Lock directory: ``TGCF_SESSION_LOCK_DIR`` override, else the default.
+
+    The default lives under the shared tempdir, so the worker daemon, the
+    legacy web panel, and one-shot CLI processes resolve the same directory
+    without sharing any project config.
+    """
+    return Path(os.environ.get("TGCF_SESSION_LOCK_DIR") or DEFAULT_LOCK_DIR)
+
+
+def _grace_seconds() -> float:
+    raw = os.environ.get("TGCF_SESSION_LOCK_GRACE_SECONDS")
+    if not raw:
+        return DEFAULT_GRACE_SECONDS
+    try:
+        return float(raw)
+    except ValueError:
+        return DEFAULT_GRACE_SECONDS
+
+
+# Locks held by this process, keyed by session identity. The registry makes
+# acquisition re-entrant within the process: an ephemeral force-native client
+# opened over a live pooled session must not deadlock against its own lock.
+_held_locks: dict[str, SessionLock] = {}
+
+
+def release_all_session_locks() -> None:
+    """Release every session lock this process holds (also wired via atexit)."""
+    for lock in _held_locks.values():
+        lock.release()
+    _held_locks.clear()
+
+
+atexit.register(release_all_session_locks)
+
+
+async def acquire_session_lock(session_string: str, *, phone: str) -> SessionLock | None:
+    """Take this process's cross-process lock for a stored session string.
+
+    Returns ``None`` for an empty session string — interactive auth flows use
+    fresh sessions, which carry no auth key to duplicate. Re-entrant within
+    the process (see ``_held_locks``). The blocking grace-period poll runs in
+    a worker thread so the event loop stays responsive while another holder
+    winds down.
+
+    The lock is held until process exit: the pool keeps its clients connected
+    for the process lifetime, so per-lease release would churn the lock (and
+    momentarily allow a second process in) while the connection is still open.
+    OS release on process death is the backstop for crashes.
+    """
+    if not session_string:
+        return None
+    identity = f"string:{session_string}"
+    held = _held_locks.get(identity)
+    if held is not None:
+        return held
+    lock = SessionLock(phone, identity, lock_dir=_lock_dir())
+    await asyncio.to_thread(lock.acquire, grace_seconds=_grace_seconds())
+    _held_locks[identity] = lock
+    return lock

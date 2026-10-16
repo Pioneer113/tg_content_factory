@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from telethon import TelegramClient
+from telethon.errors import AuthKeyDuplicatedError
 from telethon.tl.functions.messages import GetDialogsRequest, GetHistoryRequest
 from telethon_cli import runtime as telethon_cli_runtime
 from telethon_cli.errors import CLIError
@@ -24,11 +25,12 @@ from telethon_floodgate import (
 from telethon_floodgate.peer import peer_key
 
 from src.models import Account
-from src.telegram.auth import TelegramAuth
+from src.telegram.auth import TelegramAuth, connect_with_auth_key_retry
 from src.telegram.mtproto_watchdog import bind_telethon_base_logger
 from src.telegram.outgoing_ceiling import OutgoingRateCeiling
 from src.telegram.reactions import normalize_outgoing_reaction_emoji
 from src.telegram.schema_drift import translate_schema_drift
+from src.telegram.session_lock import acquire_session_lock
 from src.telegram.session_materializer import SessionMaterializer
 
 logger = logging.getLogger(__name__)
@@ -1098,7 +1100,7 @@ class TelethonCliBackend(TelegramBackend):
                 bind_telethon_base_logger(
                     client, self.client_logger_provider(account.phone)
                 )
-            await client.connect()
+            await connect_with_auth_key_retry(client, phone=account.phone)
             if not await client.is_user_authorized():
                 await _disconnect_client_safely(client, phone=account.phone)
                 client = None
@@ -1136,12 +1138,24 @@ class BackendRouter:
         *,
         force_native: bool = False,
     ) -> BackendClientLease:
+        # Cross-process guard (#1548): while the worker daemon holds this
+        # session, a one-shot CLI process must not open a second MTProto
+        # connection with the same auth key (AuthKeyDuplicatedError risk).
+        # Waits out the holder within the configured grace, then raises
+        # SessionLockError naming the holder PID. No-op for a fresh/empty
+        # session string (interactive auth flows), re-entrant in-process.
+        await acquire_session_lock(account.session_string, phone=account.phone)
         if force_native or self._mode == "native":
             return await self._native.acquire_client(account, ephemeral=force_native)
 
         if self._mode == "auto":
             try:
                 return await self._primary.acquire_client(account)
+            except AuthKeyDuplicatedError:
+                # The auth key is duplicated at Telegram's side: the native
+                # fallback materialises the SAME session string and would only
+                # repeat the (bounded) retry storm against an angry session.
+                raise
             except Exception as exc:
                 logger.warning(
                     "Primary backend failed for %s, falling back to native: %s",

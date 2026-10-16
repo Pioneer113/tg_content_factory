@@ -433,6 +433,21 @@ def no_running_server(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_session_locks(monkeypatch, tmp_path, request):
+    """Point cross-process session locks (#1548) at a per-test lock directory.
+
+    Tests hardcode session strings; without isolation, two xdist workers are
+    real OS processes and would contend on the shared-tempdir lock for the
+    same string, stalling unrelated tests for the grace period. Live real-TG
+    runs keep the default directory so the lock guards real processes.
+    """
+    if any(fixture in request.fixturenames for fixture in REAL_TG_LIVE_FIXTURES):
+        return
+    monkeypatch.setenv("TGCF_SESSION_LOCK_DIR", str(tmp_path / "session-locks"))
+    monkeypatch.setenv("TGCF_SESSION_LOCK_GRACE_SECONDS", "0.05")
+
+
+@pytest.fixture(autouse=True)
 def _enforce_cli_transport(
     monkeypatch,
     request,
