@@ -12,4 +12,11 @@ Portions of this project are derived from
   `telegram_mcp/runtime.py` at commit `e224762671897c1df53deadb51be84eaaaf2cea3`
   (2026-10-13); the rest of the upstream file is not ported.
 
+- `src/utils/sanitize.py` — prompt-injection sanitizer (`sanitize_user_content`,
+  `sanitize_name`, `sanitize_dict`) ported from `sanitize.py` at commit
+  `e224762671897c1df53deadb51be84eaaaf2cea3` (2026-10-16). Modifications:
+  module docstring adapted to this project; MCP-specific
+  `format_tool_result`/`_json_default` dropped (this project feeds plain-text
+  prompts, not JSON tool-result envelopes).
+
 The full Apache-2.0 license text is in `LICENSES/apache-2.0.txt`.
