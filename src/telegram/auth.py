@@ -3,14 +3,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, TypeVar
 from uuid import uuid4
 
 from telethon import TelegramClient
-from telethon.errors import PasswordHashInvalidError, SessionPasswordNeededError
+from telethon.errors import AuthKeyDuplicatedError, PasswordHashInvalidError, SessionPasswordNeededError
 from telethon.sessions import StringSession
 from telethon.tl.functions.auth import ResendCodeRequest
 from telethon.tl.types.auth import (
@@ -31,11 +31,21 @@ from telethon.tl.types.auth import (
     SentCodeTypeSmsPhrase,
     SentCodeTypeSmsWord,
 )
+from tenacity import AsyncRetrying, RetryCallState, retry_if_exception_type, stop_after_attempt
+from tenacity.wait import wait_exponential
 
 logger = logging.getLogger(__name__)
 
 AUTH_CONNECT_TIMEOUT_SECONDS = 30
 AUTH_RPC_TIMEOUT_SECONDS = 60
+
+# Bounded connect retries for AuthKeyDuplicatedError (#1548, ported from
+# telegram-mcp runner.py): a transient duplicate-key report (session briefly
+# seen from another IP) should not kill the caller, but retries stay bounded —
+# a truly duplicated auth key never recovers by waiting.
+AUTH_KEY_RETRY_ATTEMPTS = 4
+AUTH_KEY_RETRY_INITIAL_DELAY_SECONDS = 2.0
+AUTH_KEY_RETRY_MAX_DELAY_SECONDS = 15.0
 
 # How many times an unscanned QR token is regenerated (recreate) before the
 # flow gives up (#1551). Mirrors the interactive reference loop.
@@ -135,6 +145,59 @@ async def _with_auth_timeout(
         raise TelegramAuthTimeoutError(
             f"telegram_auth_timeout: {operation} timed out after {_format_timeout(timeout_seconds)}"
         ) from exc
+
+
+def _log_auth_key_retry(phone: str, max_attempts: int) -> Callable[[RetryCallState], None]:
+    def _log(retry_state: RetryCallState) -> None:
+        logger.warning(
+            "AuthKeyDuplicatedError connecting %s (attempt %d/%d): session in use "
+            "elsewhere; retrying with backoff",
+            phone or "session",
+            retry_state.attempt_number,
+            max_attempts,
+        )
+
+    return _log
+
+
+async def connect_with_auth_key_retry(
+    client: TelegramClient,
+    *,
+    phone: str = "",
+    max_attempts: int = AUTH_KEY_RETRY_ATTEMPTS,
+    initial_delay: float = AUTH_KEY_RETRY_INITIAL_DELAY_SECONDS,
+    max_delay: float = AUTH_KEY_RETRY_MAX_DELAY_SECONDS,
+) -> None:
+    """Connect a client, tolerating transient AuthKeyDuplicatedError (#1548).
+
+    Up to ``max_attempts`` attempts with exponential backoff (``initial_delay``,
+    2×, … capped at ``max_delay`` — upstream telegram-mcp ladder); the
+    half-open transport is disconnected between attempts. Any other error and
+    exhausted attempts re-raise immediately; ``reraise=True`` keeps the original
+    AuthKeyDuplicatedError instead of tenacity's RetryError.
+    """
+
+    async def _connect_once() -> None:
+        try:
+            await client.connect()
+        except AuthKeyDuplicatedError:
+            try:
+                await client.disconnect()
+            except Exception:
+                logger.debug(
+                    "Failed to disconnect %s after AuthKeyDuplicatedError", phone, exc_info=True
+                )
+            raise
+
+    retryer = AsyncRetrying(
+        retry=retry_if_exception_type(AuthKeyDuplicatedError),
+        stop=stop_after_attempt(max_attempts),
+        wait=wait_exponential(multiplier=initial_delay, max=max_delay),
+        sleep=asyncio.sleep,
+        before_sleep=_log_auth_key_retry(phone, max_attempts),
+        reraise=True,
+    )
+    await retryer(_connect_once)
 
 
 def _describe_code_type(sent_code_type: object) -> str:
@@ -482,7 +545,7 @@ class TelegramAuth:
             proxy=self._proxy,
             **extra_kwargs,
         )
-        await client.connect()
+        await connect_with_auth_key_retry(client)
         if not await client.is_user_authorized():
             raise ConnectionError("Session is no longer valid")
         return client

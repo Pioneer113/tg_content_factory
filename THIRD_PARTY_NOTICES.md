@@ -1,11 +1,13 @@
 # Third-party notices
 
-This project incorporates third-party code covered by the licenses below.
+Vendored third-party code carried in this repository, with license and provenance.
+Each vendored file carries its own `SPDX-License-Identifier` header and a
+provenance comment listing the source repo, commit, date, and modifications.
 
-## Apache-2.0
+## telegram-mcp (Apache-2.0)
 
-Portions of this project are derived from
-[telegram-mcp](https://github.com/axisrow/telegram-mcp) (Apache-2.0). Ported code:
+- **Source:** [axisrow/telegram-mcp](https://github.com/axisrow/telegram-mcp), commit `e224762`
+- **License:** Apache-2.0 (full text: [`LICENSES/apache-2.0.txt`](LICENSES/apache-2.0.txt))
 
 - `src/telegram/schema_drift.py` — schema-drift detection (`_is_schema_drift` and
   the schema-drift message of `log_and_format_error`) extracted from
@@ -19,6 +21,13 @@ Portions of this project are derived from
   `_blocks_text`; `webpage_page_text` is our own addition (same walk applied to
   `MessageMediaWebPage` cached pages); upstream's `rich_message_text` wrapper
   itself is not ported — telethon 1.45 does not surface `msg.rich_message`.
+- `src/telegram/session_lock.py` — per-session cross-process lock (`SessionLock`,
+  `SessionLockError` and the fcntl/msvcrt primitives) from `telegram_mcp/singleton.py`
+  at commit `e224762671897c1df53deadb51be84eaaaf2cea3` (2026-10-16, #1548).
+  Modifications: docstrings/error wording recontextualised for tg-agent processes and
+  the lock-directory default renamed; the process-level lock registry and the
+  `acquire_session_lock()` wrapper are tg-agent wiring added on top of the vendored
+  code in later commits.
 
 - `src/utils/sanitize.py` — prompt-injection sanitizer (`sanitize_user_content`,
   `sanitize_name`, `sanitize_dict`) ported from `sanitize.py` at commit
