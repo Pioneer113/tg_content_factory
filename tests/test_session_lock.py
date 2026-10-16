@@ -250,15 +250,22 @@ class TestRouterSessionLock:
         assert primary.calls == []
         assert native.calls == []
 
-    async def test_empty_session_string_skips_lock(self, monkeypatch):
+    async def test_empty_session_string_reaches_helper_verbatim(self, monkeypatch):
+        # The no-op for fresh/empty strings lives inside acquire_session_lock
+        # (TestAcquireSessionLockWiring); the router must forward the value
+        # unchanged and proceed to the backend either way.
+        seen: list[str] = []
+
         async def _spy(session_string: str, *, phone: str):
-            raise AssertionError("must not lock a fresh/empty session")
+            seen.append(session_string)
+            return None
 
         monkeypatch.setattr(backends_module, "acquire_session_lock", _spy)
         primary, native = _FakeBackend(), _FakeNativeBackend()
         router = BackendRouter(mode="auto", primary=primary, native=native)
 
         await router.acquire_client(_account(session_string=""))
+        assert seen == [""]
         assert len(primary.calls) == 1
 
     async def test_auth_key_duplicated_does_not_fall_back_to_native(self):
