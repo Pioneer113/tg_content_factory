@@ -96,6 +96,21 @@ def extract_message_entities_json(msg) -> str | None:
     return json.dumps(serialized, ensure_ascii=False, sort_keys=True) if serialized else None
 
 
+def plain_text_and_entities_json(msg) -> tuple[str | None, str | None]:
+    """``(plain text, entities JSON)`` shared by both ingestion pipelines (#1547).
+
+    Plain text stays the FTS source; an iv-page fills it in only when the raw
+    message carries no words of its own (link-only posts). Entities are the
+    span metadata on top of the plain text (``None`` when there are none).
+    Raw ``message`` wins over ``text``: the Telethon ``.text`` property formats
+    through the client parse mode, ``.message`` is always the raw string.
+    """
+    text = (
+        getattr(msg, "message", None) or getattr(msg, "text", None) or extract_webpage_plain_text(msg)
+    )
+    return text, extract_message_entities_json(msg)
+
+
 def extract_webpage_plain_text(msg) -> str | None:
     """Plain text of the link preview's instant-view page, ``None`` when absent.
 
@@ -207,9 +222,7 @@ def build_message_from_telethon(msg, channel_id: int) -> Message:
     is identical to the previous inline construction.
     """
     sender_identity = extract_message_sender_identity(msg)
-    # Plain text stays the FTS source; an iv-page fills it in only when the raw
-    # message carries no words of its own (link-only posts, #1547).
-    text = msg.text or extract_webpage_plain_text(msg)
+    text, entities_json = plain_text_and_entities_json(msg)
     return Message(
         channel_id=channel_id,
         message_id=msg.id,
@@ -228,7 +241,7 @@ def build_message_from_telethon(msg, channel_id: int) -> Message:
         sender_kind=get_sender_kind(msg),
         topic_id=extract_topic_id(msg),
         reactions_json=extract_reactions(msg),
-        entities_json=extract_message_entities_json(msg),
+        entities_json=entities_json,
         views=getattr(msg, "views", None),
         forwards=getattr(msg, "forwards", None),
         reply_count=getattr(getattr(msg, "replies", None), "replies", None),
