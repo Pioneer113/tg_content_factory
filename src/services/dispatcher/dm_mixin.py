@@ -9,8 +9,10 @@ releases the claim without overwriting a later state.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any
 
+from src.services.dispatcher._errors import TelegramCommandRetryLaterError
 from src.services.telegram_actions import TelegramActionService
 
 if TYPE_CHECKING:
@@ -19,6 +21,10 @@ if TYPE_CHECKING:
     _Base = _DispatcherProtocol
 else:
     _Base = object
+
+# Повтор команды, чей клейм держит чужой потребитель: живой конкурент успеет
+# дойти до mark_sent, и ретрай увидит already_sent.
+_CLAIM_CONFLICT_RETRY_SEC = 60
 
 
 class DmCommandsMixin(_Base):
@@ -36,10 +42,17 @@ class DmCommandsMixin(_Base):
             return {"draft_id": draft_id, "already_sent": True}
         if draft.status == "rejected":
             raise RuntimeError("draft_rejected")
-        # Атомарный клейм: второй конкурентный потребитель получает False и
-        # уходит без отправки — двойная отправка невозможна (#1429).
+        # Атомарный клейм: второй конкурентный потребитель получает False —
+        # двойная отправка невозможна (#1429). Не «успех»: команда уходит в
+        # отложенный ретрай, иначе чужой live-клейм завершал бы команду
+        # благополучно, а черновик ждал бы живого отправителя.
         if not await drafts.claim_for_send(draft_id):
-            return {"draft_id": draft_id, "already_claimed": True}
+            raise TelegramCommandRetryLaterError(
+                run_after=datetime.now(timezone.utc)
+                + timedelta(seconds=_CLAIM_CONFLICT_RETRY_SEC),
+                reason="draft already claimed by another consumer",
+                result_payload={"draft_id": draft_id, "state": "claim_conflict"},
+            )
         try:
             result = await TelegramActionService(self._pool).send_message(
                 phone=draft.phone,

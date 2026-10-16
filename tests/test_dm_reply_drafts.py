@@ -21,16 +21,25 @@ import typer
 from src.cli.commands import dm as dm_cli
 from src.config import AppConfig
 from src.models import IncomingDm, TelegramCommandStatus
+from src.services.dispatcher._errors import TelegramCommandRetryLaterError
 from src.services.telegram_command_dispatcher import TelegramCommandDispatcher
 
 
-async def _make_draft(db, *, status: str = "draft") -> int:
+async def _make_draft(db, *, status: str = "draft", incoming_dm_id: int = 1) -> int:
     """Черновик + журнальная строка; статус поднимается только легальными API."""
     await db.repos.incoming_dms.record(
-        IncomingDm(phone="+10000000001", chat_id=555, message_id=1, text="привет")
+        IncomingDm(
+            phone="+10000000001",
+            chat_id=555 + incoming_dm_id,
+            message_id=incoming_dm_id,
+            text="привет",
+        )
     )
     draft_id, _ = await db.repos.dm_reply_drafts.create_draft(
-        incoming_dm_id=1, phone="+10000000001", chat_id=555, reply_text="ответ"
+        incoming_dm_id=incoming_dm_id,
+        phone="+10000000001",
+        chat_id=555 + incoming_dm_id,
+        reply_text="ответ",
     )
     if status in ("approved", "sending"):
         await db.repos.dm_reply_drafts.decide(draft_id, "approved")
@@ -210,10 +219,13 @@ async def test_handler_concurrent_claims_send_exactly_once(db):
         results = await asyncio.gather(
             dispatcher._dispatch("dm.send_reply", {"draft_id": draft_id}),
             dispatcher._dispatch("dm.send_reply", {"draft_id": draft_id}),
+            return_exceptions=True,
         )
 
-    sent_results = [r for r in results if "already_claimed" not in r]
-    assert len(sent_results) == 1
+    delivered = [r for r in results if not isinstance(r, BaseException)]
+    conflict = [r for r in results if isinstance(r, TelegramCommandRetryLaterError)]
+    assert len(delivered) == 1
+    assert len(conflict) == 1
     send_message.assert_awaited_once()
     assert (await db.repos.dm_reply_drafts.get(draft_id)).status == "sent"
 
@@ -230,17 +242,46 @@ async def test_handler_rejected_draft_never_sends(db):
     assert (await db.repos.dm_reply_drafts.get(draft_id)).status == "rejected"
 
 
-async def test_handler_claim_conflict_skips_send(db):
-    """Чужой живой клейм: второй потребитель уходит без отправки и без ошибки."""
+async def test_handler_claim_conflict_requeues_not_success(db):
+    """Чужой живой клейм — отложенный ретрай, не благополучное завершение."""
     draft_id = await _make_draft(db, status="sending")
     send_message = AsyncMock()
     dispatcher = TelegramCommandDispatcher(db, _mock_pool())
 
-    with _patched_action(send_message):
-        result = await dispatcher._dispatch("dm.send_reply", {"draft_id": draft_id})
+    with (
+        _patched_action(send_message),
+        pytest.raises(TelegramCommandRetryLaterError, match="claim"),
+    ):
+        await dispatcher._dispatch("dm.send_reply", {"draft_id": draft_id})
 
-    assert result == {"draft_id": draft_id, "already_claimed": True}
     send_message.assert_not_awaited()
+    assert (await db.repos.dm_reply_drafts.get(draft_id)).status == "sending"
+
+
+async def test_reset_sending_on_startup_releases_abandoned_claim(db):
+    """Lease-половина паттерна (#1036): сирота из убитого воркера возвращается
+    в approved; живая свежая лиза и sent не трогаются."""
+    drafts = db.repos.dm_reply_drafts
+    abandoned = await _make_draft(db, status="sending", incoming_dm_id=11)
+    live_claim = await _make_draft(db, status="sending", incoming_dm_id=12)
+    # Тот же SQL-формат updated_at, что пишет claim (datetime('now')).
+    await db.execute_write(
+        "UPDATE dm_reply_drafts SET updated_at = datetime('now', '-15 minutes') WHERE id = ?",
+        (abandoned,),
+    )
+    delivered = await _make_draft(db, status="sending", incoming_dm_id=13)
+    await drafts.mark_sent(delivered, 5)
+    await db.execute_write(
+        "UPDATE dm_reply_drafts SET updated_at = datetime('now', '-15 minutes') WHERE id = ?",
+        (delivered,),
+    )
+
+    released = await drafts.reset_sending_on_startup()
+
+    assert released == 1
+    assert (await drafts.get(abandoned)).status == "approved"
+    assert (await drafts.get(live_claim)).status == "sending"
+    assert (await drafts.get(delivered)).status == "sent"
 
 
 async def test_handler_send_failure_releases_claim(db):

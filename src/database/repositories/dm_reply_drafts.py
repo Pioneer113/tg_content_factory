@@ -204,3 +204,23 @@ class DmReplyDraftsRepository:
             (sent_message_id, draft_id),
         )
         return bool(cur.rowcount)
+
+    async def reset_sending_on_startup(self) -> int:
+        """На старте воркера вернуть осиротевшие ``sending`` в ``approved``; вернуть число.
+
+        Клейм — лиза: воркер, убитый между ``claim_for_send`` и ``mark_sent``,
+        оставляет черновик в ``sending`` навсегда. Гард по staleness 10 минут
+        (лейза обновляется самим клеймом; единичная отправка DM — секунды,
+        120-секундный send-timeout пула) не трогает живой клейм при
+        перекрывающемся роллауте — тот же трейдофф redelivery, что у
+        ``generation_runs.reset_running_on_startup`` (#1036).
+        """
+        assert self._database is not None, (
+            "DmReplyDraftsRepository.reset_sending_on_startup requires a Database reference"
+        )
+        cur = await self._database.execute_write(
+            "UPDATE dm_reply_drafts SET status = 'approved', updated_at = datetime('now') "
+            "WHERE status = 'sending' "
+            "AND updated_at < datetime('now', '-10 minutes')",
+        )
+        return cur.rowcount or 0

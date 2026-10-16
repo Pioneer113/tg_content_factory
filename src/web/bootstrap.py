@@ -477,6 +477,11 @@ async def _recover_startup_state(
         gr_recovered = await container.db.repos.generation_runs.reset_running_on_startup()
         if gr_recovered:
             logger.warning("Reset %d stuck generation_runs to 'failed' on startup", gr_recovered)
+        draft_recovered = await container.db.repos.dm_reply_drafts.reset_sending_on_startup()
+        if draft_recovered:
+            logger.warning(
+                "Released %d abandoned DM reply drafts from 'sending' on startup", draft_recovered
+            )
         tc_recovered = await container.db.repos.telegram_commands.reset_running_on_startup()
         if tc_recovered:
             logger.warning(
