@@ -241,9 +241,9 @@ def test_extract_entities_custom_emoji_keeps_document_id():
     ]
 
 
-def test_extract_entities_drops_masked_link_target():
-    """MessageEntityTextUrl.url is not serialized — masked-hyperlink URLs are
-    tracked separately in #1492; the entity itself is kept as a span marker."""
+def test_extract_entities_keeps_masked_link_url():
+    """MessageEntityTextUrl.url is serialized (#1492) — masked-hyperlink targets
+    must survive collection instead of leaving only the visible label."""
     from telethon.tl.types import MessageEntityTextUrl
 
     msg = _msg(
@@ -251,7 +251,7 @@ def test_extract_entities_drops_masked_link_target():
         entities=[MessageEntityTextUrl(offset=0, length=6, url="https://example.internal")],
     )
     assert json.loads(extract_message_entities_json(msg)) == [
-        {"length": 6, "offset": 0, "type": "text_url"}
+        {"length": 6, "offset": 0, "type": "text_url", "url": "https://example.internal"}
     ]
 
 
