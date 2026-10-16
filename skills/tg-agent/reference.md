@@ -11,11 +11,15 @@ flags; anything not listed — check `--help`.
 
 ## Session lock — live commands vs the running daemon
 
-Every live command that opens a Telegram connection (anything touching `dialogs *`,
-`messages read --live`, `channel collect`, `account add`, …) takes a cross-process lock on
-the account session. While the worker daemon runs, a one-shot command **waits** for the
-daemon to release the session (up to `TGCF_SESSION_LOCK_GRACE_SECONDS`, default 20) and
-then fails:
+Every live command that opens its own Telegram connection takes a cross-process lock on
+the account session. While the worker daemon runs, most `dialogs` actions (`send`,
+`forward`, `react`, `refresh`, `pin-message`, `kick`, `archive`, …) are **handed off
+automatically**: the CLI enqueues them for the worker instead of connecting directly, so
+they keep working unchanged.
+
+Commands without a queue equivalent (`messages read --live`, `channel collect`,
+`dialogs read`, `dialogs download-media`, `scheduler trigger`, …) wait for the daemon to
+release the session (up to `TGCF_SESSION_LOCK_GRACE_SECONDS`, default 20) and then fail:
 
 ```
 SessionLockError: Another tg-agent process is already connected with this session
@@ -23,10 +27,10 @@ SessionLockError: Another tg-agent process is already connected with this sessio
 ```
 
 This is intentional: a second simultaneous connection with the same auth key risks
-Telegram killing the session (`AuthKeyDuplicatedError`). If you hit `SessionLockError`:
-stop the daemon first (`tg-agent stop`), or better — do the work through the worker
-(`dialogs queue`, `scheduler trigger`) without a direct connection. A refused command
-never disturbs the live session; when the holder exits, the lock clears on its own.
+Telegram killing the session (`AuthKeyDuplicatedError`). If you hit `SessionLockError`,
+stop the daemon first (`tg-agent stop`) — or switch to a hand-off `dialogs` action, which
+the running worker executes without a second connection. A refused command never
+disturbs the live session; when the holder exits, the lock clears on its own.
 
 ## channels / collection
 
