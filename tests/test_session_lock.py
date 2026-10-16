@@ -129,6 +129,25 @@ class TestAcquireSessionLockWiring:
         assert third is not first
         release_all_session_locks()
 
+    async def test_concurrent_acquisitions_share_held_lock(
+        self, tmp_path, monkeypatch
+    ):
+        """Regression (review #1556): two acquisitions STARTED TOGETHER must
+        join, not race. Without the per-identity mutex the second call built
+        its own SessionLock, waited out the whole grace on flock, and failed
+        with SessionLockError naming this process's own PID as the holder."""
+        import asyncio
+
+        monkeypatch.setenv("TGCF_SESSION_LOCK_DIR", str(tmp_path / "locks"))
+        monkeypatch.setenv("TGCF_SESSION_LOCK_GRACE_SECONDS", "5")
+        first, second = await asyncio.gather(
+            acquire_session_lock(SESSION, phone=PHONE),
+            acquire_session_lock(SESSION, phone=PHONE),
+        )
+        assert first is not None
+        assert first is second
+        release_all_session_locks()
+
 
 def _holder_child(
     session_string: str, lock_dir: str, ready_path: str, hold_seconds: float

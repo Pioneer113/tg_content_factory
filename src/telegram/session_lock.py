@@ -268,6 +268,15 @@ def _grace_seconds() -> float:
 # opened over a live pooled session must not deadlock against its own lock.
 _held_locks: dict[str, SessionLock] = {}
 
+# Per-identity mutex serialising the check/acquire/register sequence. Without
+# it, two concurrent acquisitions of the same session in this process each
+# build their own SessionLock; the loser waits out the whole grace on flock and
+# fails with SessionLockError naming the winner — which reports THIS process's
+# PID (review #1556). Serialised per identity, the second caller joins the
+# first via the registry instead. Distinct identities use distinct mutexes, so
+# one session's grace wait never blocks another's acquisition.
+_identity_locks: dict[str, asyncio.Lock] = {}
+
 
 def release_all_session_locks() -> None:
     """Release every session lock this process holds (also wired via atexit)."""
@@ -284,9 +293,10 @@ async def acquire_session_lock(session_string: str, *, phone: str) -> SessionLoc
 
     Returns ``None`` for an empty session string — interactive auth flows use
     fresh sessions, which carry no auth key to duplicate. Re-entrant within
-    the process (see ``_held_locks``). The blocking grace-period poll runs in
-    a worker thread so the event loop stays responsive while another holder
-    winds down.
+    the process (see ``_held_locks``); concurrent acquisitions of the same
+    session are serialised on a per-identity mutex (see ``_identity_locks``).
+    The blocking grace-period poll runs in a worker thread so the event loop
+    stays responsive while another holder winds down.
 
     The lock is held until process exit: the pool keeps its clients connected
     for the process lifetime, so per-lease release would churn the lock (and
@@ -296,10 +306,11 @@ async def acquire_session_lock(session_string: str, *, phone: str) -> SessionLoc
     if not session_string:
         return None
     identity = f"string:{session_string}"
-    held = _held_locks.get(identity)
-    if held is not None:
-        return held
-    lock = SessionLock(phone, identity, lock_dir=_lock_dir())
-    await asyncio.to_thread(lock.acquire, grace_seconds=_grace_seconds())
-    _held_locks[identity] = lock
-    return lock
+    async with _identity_locks.setdefault(identity, asyncio.Lock()):
+        held = _held_locks.get(identity)
+        if held is not None:
+            return held
+        lock = SessionLock(phone, identity, lock_dir=_lock_dir())
+        await asyncio.to_thread(lock.acquire, grace_seconds=_grace_seconds())
+        _held_locks[identity] = lock
+        return lock
