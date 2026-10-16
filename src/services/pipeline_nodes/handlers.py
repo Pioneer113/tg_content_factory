@@ -41,12 +41,17 @@ def _build_source_messages(messages: list) -> str:
     """
     from datetime import datetime
 
+    from src.utils.sanitize import sanitize_name, sanitize_user_content
+
     source_parts: list[str] = []
     for m in messages:
         text = (m.text or "").strip()
         if not text:
             continue
-        header = m.channel_title or m.channel_username or ""
+        # Untrusted Telegram content entering the LLM/agent prompt (#1546):
+        # strip invisible/bidi/control chars; keep emoji intact.
+        text = sanitize_user_content(text, preserve_emoji=True)
+        header = sanitize_name(m.channel_title or m.channel_username or "")
         when = m.date.isoformat() if isinstance(m.date, datetime) else str(m.date)
         source_parts.append(f"[{header}] {text} (id:{m.message_id} date:{when})")
     return "\n\n".join(source_parts)
