@@ -30,6 +30,7 @@ from src.services.dispatcher.accounts_mixin import AccountsCommandsMixin
 from src.services.dispatcher.auth_mixin import AuthCommandsMixin
 from src.services.dispatcher.channels_mixin import ChannelsCommandsMixin
 from src.services.dispatcher.dialogs_mixin import DialogsCommandsMixin
+from src.services.dispatcher.dm_mixin import DmCommandsMixin
 from src.services.dispatcher.moderation_mixin import ModerationCommandsMixin
 from src.services.dispatcher.notifications_mixin import NotificationsCommandsMixin
 from src.services.dispatcher.photo_mixin import PhotoCommandsMixin
@@ -86,6 +87,7 @@ class TelegramCommandDispatcher(
     AccountsCommandsMixin,
     SchedulerCommandsMixin,
     DialogsCommandsMixin,
+    DmCommandsMixin,
     ChannelsCommandsMixin,
     NotificationsCommandsMixin,
     PhotoCommandsMixin,

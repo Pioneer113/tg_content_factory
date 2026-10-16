@@ -364,6 +364,7 @@ async def test_startup_continues_after_pool_initialize_timeout(tmp_path, db, cap
     ai_search = SimpleNamespace(initialize=lambda: None)
     scheduler = SimpleNamespace(load_settings=AsyncMock(), start=AsyncMock())
     gen_runs = SimpleNamespace(reset_running_on_startup=AsyncMock(return_value=0))
+    dm_drafts = SimpleNamespace(reset_sending_on_startup=AsyncMock(return_value=0))
     tg_cmds = SimpleNamespace(reset_running_on_startup=AsyncMock(return_value=0))
 
     container = SimpleNamespace(
@@ -372,7 +373,9 @@ async def test_startup_continues_after_pool_initialize_timeout(tmp_path, db, cap
         channel_bundle=channel_bundle,
         photo_task_service=photo_task_service,
         db=SimpleNamespace(
-            repos=SimpleNamespace(generation_runs=gen_runs, telegram_commands=tg_cmds),
+            repos=SimpleNamespace(
+                generation_runs=gen_runs, dm_reply_drafts=dm_drafts, telegram_commands=tg_cmds
+            ),
             get_setting=AsyncMock(return_value=None),
         ),
         collection_queue=None,

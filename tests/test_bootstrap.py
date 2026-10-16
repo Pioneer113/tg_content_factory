@@ -33,6 +33,7 @@ def _make_container(db: Database) -> MagicMock:
     container.channel_bundle.fail_running_collection_tasks_on_startup = AsyncMock(return_value=0)
     container.photo_task_service.recover_running = AsyncMock(return_value=0)
     container.db.repos.generation_runs.reset_running_on_startup = AsyncMock(return_value=0)
+    container.db.repos.dm_reply_drafts.reset_sending_on_startup = AsyncMock(return_value=0)
     return container
 
 
@@ -127,6 +128,7 @@ async def test_start_container_web_mode_skips_inflight_recovery(tmp_path):
         await start_container(container)
         container.photo_task_service.recover_running.assert_not_called()
         container.db.repos.generation_runs.reset_running_on_startup.assert_not_called()
+        container.db.repos.dm_reply_drafts.reset_sending_on_startup.assert_not_called()
     finally:
         await db.close()
 
@@ -146,6 +148,7 @@ async def test_start_container_worker_mode_runs_inflight_recovery(tmp_path):
         await start_container(container)
         container.photo_task_service.recover_running.assert_awaited_once()
         container.db.repos.generation_runs.reset_running_on_startup.assert_awaited_once()
+        container.db.repos.dm_reply_drafts.reset_sending_on_startup.assert_awaited_once()
     finally:
         await db.close()
 
@@ -401,6 +404,7 @@ async def test_start_container_worker_startup_phase_order(tmp_path):
     container.pool = OrderedPool()
     container.photo_task_service.recover_running = async_step("recover.photo")
     container.db.repos.generation_runs.reset_running_on_startup = async_step("recover.generation")
+    container.db.repos.dm_reply_drafts.reset_sending_on_startup = async_step("recover.dm_drafts")
     container.db.repos.telegram_commands.reset_running_on_startup = async_step("recover.commands")
     container.collection_queue = SimpleNamespace(
         pause=sync_step("queue.pause"),
@@ -430,6 +434,7 @@ async def test_start_container_worker_startup_phase_order(tmp_path):
     assert order == [
         "recover.photo",
         "recover.generation",
+        "recover.dm_drafts",
         "recover.commands",
         "pool.initialize",
         "queue.requeue",

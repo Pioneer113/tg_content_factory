@@ -193,6 +193,29 @@ CREATE TABLE IF NOT EXISTS dm_messages (
 CREATE INDEX IF NOT EXISTS idx_dm_messages_chat_date
     ON dm_messages(phone, chat_id, message_date);
 
+-- Черновики ответов на входящие DM (#1429, эпик #1416 этап 2.4): автомат
+-- готовит — владелец подтверждает. Статусная машина по образцу
+-- generation_runs.moderation_status: draft|approved|rejected|sending|sent;
+-- `sending` — атомарный клейм (lease) перед необратимой отправкой, охраняется
+-- WHERE-гардами, а не проверками в коде. phone/chat_id копируются из
+-- входящего сообщения: журнальная строка incoming_dms живёт 24ч и может быть
+-- вычищена prune'ом раньше, чем апрувнутый черновик уйдёт в отправку.
+-- UNIQUE(incoming_dm_id) — один черновик на входящее сообщение.
+CREATE TABLE IF NOT EXISTS dm_reply_drafts (
+    id INTEGER PRIMARY KEY,
+    incoming_dm_id INTEGER NOT NULL UNIQUE,
+    phone TEXT NOT NULL,
+    chat_id INTEGER NOT NULL,
+    reply_text TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    sent_message_id INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_dm_reply_drafts_status
+    ON dm_reply_drafts(status, id);
+
 CREATE TABLE IF NOT EXISTS channel_ratings (
     channel_id INTEGER PRIMARY KEY,
     title TEXT,

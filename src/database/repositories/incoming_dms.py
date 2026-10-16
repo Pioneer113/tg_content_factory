@@ -100,6 +100,12 @@ class IncomingDmsRepository:
             await conn.execute(_PRUNE_SQL, (f"-{ttl_seconds} seconds",))
         return inserted
 
+    async def get(self, dm_id: int) -> IncomingDm | None:
+        """Запись журнала по pk; None — нет или уже вычищена prune'ом (TTL)."""
+        cur = await self._db.execute("SELECT * FROM incoming_dms WHERE id = ?", (dm_id,))
+        row = await cur.fetchone()
+        return self._to_dm(row) if row else None
+
     async def max_message_id(self, phone: str, chat_id: int) -> int:
         """Водяной знак догона: максимум message_id журнала диалога, 0 если пусто."""
         cur = await self._db.execute(

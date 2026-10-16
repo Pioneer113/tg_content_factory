@@ -151,6 +151,14 @@ CLI_REAL_TG_CLEANUP_COMMAND_CASES: set[tuple[str, ...]] = {
 
 CLI_REAL_TG_MANUAL_OR_EXCLUDED_COMMANDS: dict[tuple[str, ...], str] = {
     ("mcp-server",): "stdio MCP daemon serving the tool registry; not a Telegram leaf operation",
+    ("dm", "drafts", "approve"): "local dm_reply_drafts decision — DB-only mutation (#1429)",
+    ("dm", "drafts", "create"): "local dm_reply_drafts upsert — DB-only mutation (#1429)",
+    ("dm", "drafts", "list"): "list-only local dm_reply_drafts view (#1429)",
+    ("dm", "drafts", "reject"): "local dm_reply_drafts decision — DB-only mutation (#1429)",
+    ("dm", "drafts", "send"): (
+        "enqueues the worker-only dm.send_reply command (DB-only mutation); the "
+        "Telegram send itself is covered by dispatcher tests with a fake client (#1429)"
+    ),
     ("dialogs", "archive-history"): (
         "bulk history backfill into the local dm_messages archive (#1453); "
         "reads live Telegram for the whole account and requires the worker "

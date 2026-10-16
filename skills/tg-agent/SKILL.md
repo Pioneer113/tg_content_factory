@@ -45,6 +45,7 @@ Task → group (details in [reference.md](reference.md)):
 | Search-discovered channel candidates (premium search cache) | `channel candidates [--json]` |
 | Channels: list, add, collect, stats, import | `channel`, `filter` |
 | Chats: read, send, edit, forward, media, participants, admins — real actions, see Safety | `dialogs` |
+| Incoming-DM reply drafts: prepare → owner approves → worker sends (queue, no double-send) | `dm drafts` |
 | Content factory (LLM pipelines, images) | `pipeline`, `photo-loader` |
 | Analytics, notifications, scheduling, accounts, settings | `analytics`, `notification`, `scheduler`, `account`, `settings` |
 
