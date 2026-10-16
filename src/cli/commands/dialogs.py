@@ -545,10 +545,17 @@ async def _dialogs_download_media(args, db, pool) -> None:
 
 
 async def _dialogs_transcribe(args, db, pool) -> None:
-    phone = await _resolve_phone(db, pool, args)
-    if phone is None:
-        return
     engine = getattr(args, "engine", None) or default_engine()
+    explicit_phone = getattr(args, "phone", None)
+    if explicit_phone or engine != "telegram":
+        phone = await _resolve_phone(db, pool, args)
+    else:
+        # No explicit --phone: pass None so the service's premium lease picks a
+        # premium account instead of forcing the default (possibly non-premium)
+        # one into a guaranteed premium_required.
+        phone = None
+    if phone is None and engine != "telegram":
+        return
     try:
         result = await TelegramActionService(pool).transcribe_voice(
             phone=phone,

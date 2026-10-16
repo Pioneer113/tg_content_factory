@@ -852,8 +852,15 @@ class TelegramActionService:
                     "status": "error",
                     "error": "В сообщении нет голосового или видеокружка для транскрипции.",
                 }
-            return await transcribe_cached(
-                client, entity, message, engine, db, marked_chat_id(entity)
+            # Under the project-wide flood-wait wrapper: a FloodWaitError from the
+            # native transcribe RPC (or the download) is reported to the pool's
+            # flood tracking and re-raised as HandledFloodWaitError for the
+            # caller, instead of drowning in a generic status-error dict.
+            return await run_with_flood_wait(
+                transcribe_cached(client, entity, message, engine, db, marked_chat_id(entity)),
+                operation="telegram_action_transcribe",
+                phone=acquired_phone,
+                pool=self._pool,
             )
 
     async def leave_dialogs(

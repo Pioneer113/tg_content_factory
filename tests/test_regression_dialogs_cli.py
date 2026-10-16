@@ -373,6 +373,37 @@ class TestMyTelegramActions:
             assert await_args is not None
             assert await_args.kwargs["engine"] == "whisper"
 
+    def test_transcribe_action_telegram_without_phone_lets_premium_lease_pick(self, capsys):
+        """No explicit --phone + engine=telegram → phone=None reaches the service
+        so the premium lease picks a premium account (review on #1561)."""
+        pool = _make_pool_with_clients()
+        with patch("src.cli.commands.dialogs.TelegramActionService") as service_cls:
+            service_cls.return_value.transcribe_voice = AsyncMock(
+                return_value={"status": "ok", "text": "нативно", "source": "telegram", "cached": False}
+            )
+            self._run_action(
+                "transcribe", pool=pool,
+                extra_args={"chat_id": "@ch", "message_id": 42, "engine": "telegram", "phone": None},
+            )
+            await_args = service_cls.return_value.transcribe_voice.await_args
+            assert await_args is not None
+            assert await_args.kwargs["phone"] is None
+            assert await_args.kwargs["engine"] == "telegram"
+
+    def test_transcribe_action_explicit_phone_is_honored_for_telegram(self, capsys):
+        pool = _make_pool_with_clients()
+        with patch("src.cli.commands.dialogs.TelegramActionService") as service_cls:
+            service_cls.return_value.transcribe_voice = AsyncMock(
+                return_value={"status": "ok", "text": "нативно", "source": "telegram", "cached": False}
+            )
+            self._run_action(
+                "transcribe", pool=pool,
+                extra_args={"chat_id": "@ch", "message_id": 42, "engine": "telegram", "phone": "+1111"},
+            )
+            await_args = service_cls.return_value.transcribe_voice.await_args
+            assert await_args is not None
+            assert await_args.kwargs["phone"] == "+1111"
+
     def test_participants_action(self, capsys):
         pool = _make_pool_with_clients()
         mock_client = AsyncMock()

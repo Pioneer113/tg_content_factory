@@ -533,6 +533,44 @@ async def test_service_transcribe_voice_rejects_non_voice_message(db: Database, 
     assert "голосов" in result["error"]
 
 
+async def test_service_transcribe_voice_runs_under_flood_wait_wrapper(
+    db: Database, monkeypatch
+):
+    """The engine call is wrapped in run_with_flood_wait: a native-RPC flood is
+    reported to the pool and re-raised as HandledFloodWaitError (review #1561)."""
+    import src.services.telegram_actions as ta
+
+    _no_stt_env(monkeypatch)
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    message = _voice_msg()
+    client = AsyncMock()
+    client.get_entity = AsyncMock(return_value=PeerChannel(555))
+    await _fetch_via_iter(client, None, message)
+
+    async def fake_engine(cl, entity, msg, engine):
+        return {"status": "ok", "text": "текст", "lang": "ru"}
+
+    monkeypatch.setattr(transcription, "transcribe", fake_engine)
+
+    wrapped_kwargs: dict = {}
+
+    async def fake_flood_wait(coro, **kwargs):
+        wrapped_kwargs.update(kwargs)
+        return await coro
+
+    monkeypatch.setattr(ta, "run_with_flood_wait", fake_flood_wait)
+    pool = _transcribe_pool(client)
+    service = ta.TelegramActionService(pool)
+
+    result = await service.transcribe_voice(
+        phone="+1111", chat_id="@ch", message_id=42, engine="groq", db=db
+    )
+    assert result["status"] == "ok"
+    assert wrapped_kwargs["operation"] == "telegram_action_transcribe"
+    assert wrapped_kwargs["phone"] == "+1111"
+    assert wrapped_kwargs["pool"] is pool
+
+
 async def test_service_transcribe_voice_telegram_picks_premium_lease(db: Database, monkeypatch):
     from src.services.telegram_actions import TelegramActionService
 
