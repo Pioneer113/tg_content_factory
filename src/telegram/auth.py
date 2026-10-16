@@ -539,6 +539,19 @@ class TelegramAuth:
             return None
         return session.snapshot()
 
+    def qr_fail(self, qr_id: str, error: str) -> None:
+        """Mark a consumed-but-unmaterialized flow failed (#1555 review).
+
+        After the one-shot consume a failed materialization would otherwise
+        leave the flow in ``consumed`` — later polls then report success and
+        the web page redirects to /settings with no account created. Only a
+        ``consumed`` flow is flipped; terminal/active states are untouched.
+        """
+        session = self._qr
+        if session is not None and session.qr_id == qr_id and session.state == "consumed":
+            session.state = "failed"
+            session.error = error
+
     async def consume_qr_session(self, qr_id: str) -> dict | None:
         """Atomically flip a successful flow to ``consumed`` and return its secrets.
 

@@ -12,15 +12,16 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from src.database import Database
-from src.models import Account
+from src.models import Account, TelegramCommand, TelegramCommandStatus
 from src.services.telegram_command_dispatcher import TelegramCommandDispatcher
 
-PHONE = "+79991234567"
+BARE_PHONE = "79991234567"  # Telethon user.phone arrives without the leading +
+PHONE = "+" + BARE_PHONE  # canonical stored form
 SESSION_STR = "SECRET_QR_SESSION"
 
 
 class FakeQrAuth:
-    """Minimal TelegramAuth surface for the three qr handlers."""
+    """Minimal TelegramAuth surface for the qr handlers (real contract shapes)."""
 
     is_configured = True
 
@@ -28,8 +29,11 @@ class FakeQrAuth:
         self.snapshots: dict[str, dict] = {}
         self.consumed: dict[str, dict] = {}
         self.password_results: dict[str, dict] = {}
+        self.qr_start_calls = 0
+        self.failures: list[tuple[str, str]] = []
 
     async def qr_start(self) -> dict:
+        self.qr_start_calls += 1
         return {
             "qr_id": "q1",
             "url": "tg://login?token=AAA",
@@ -38,6 +42,13 @@ class FakeQrAuth:
 
     def qr_status(self, qr_id: str) -> dict | None:
         return self.snapshots.get(qr_id)
+
+    def qr_fail(self, qr_id: str, error: str) -> None:
+        self.failures.append((qr_id, error))
+        snapshot = self.snapshots.get(qr_id)
+        if snapshot is not None and snapshot.get("state") == "success":
+            snapshot["state"] = "failed"
+            snapshot["error"] = error
 
     async def consume_qr_session(self, qr_id: str) -> dict | None:
         return self.consumed.pop(qr_id, None)
@@ -70,6 +81,19 @@ async def test_qr_start_requires_auth(tmp_path):
         d = TelegramCommandDispatcher(db, _pool_mock(), auth=None)
         with pytest.raises(RuntimeError, match="auth_not_configured"):
             await d._handle_auth_qr_start({})
+    finally:
+        await db.close()
+
+
+async def test_qr_start_fails_fast_without_encryption_key(tmp_path):
+    """A deployment that cannot persist the session must not waste a scan (#1555 review)."""
+    db = await _db(tmp_path, encryption=False)
+    try:
+        auth = FakeQrAuth()
+        d = TelegramCommandDispatcher(db, _pool_mock(), auth=auth)
+        with pytest.raises(RuntimeError, match="SESSION_ENCRYPTION_KEY"):
+            await d._handle_auth_qr_start({})
+        assert auth.qr_start_calls == 0
     finally:
         await db.close()
 
@@ -114,11 +138,11 @@ async def test_qr_status_success_materializes_account_once(tmp_path):
     db = await _db(tmp_path)
     try:
         auth = FakeQrAuth()
-        auth.snapshots["q1"] = {"qr_id": "q1", "state": "success", "phone": PHONE}
+        auth.snapshots["q1"] = {"qr_id": "q1", "state": "success", "phone": BARE_PHONE}
         auth.consumed["q1"] = {
             "qr_id": "q1",
             "state": "success",
-            "phone": PHONE,
+            "phone": BARE_PHONE,  # bare, as Telethon reports it
             "session_string": SESSION_STR,
         }
         pool = _pool_mock()
@@ -126,7 +150,7 @@ async def test_qr_status_success_materializes_account_once(tmp_path):
 
         result = await d._handle_auth_qr_status({"qr_id": "q1"})
         assert result["result"]["state"] == "success"
-        assert result["result"]["phone"] == PHONE
+        assert result["result"]["phone"] == PHONE  # normalized to canonical +E.164
         assert SESSION_STR not in str(result)  # secret never reaches the command result
 
         accounts = await db.get_accounts()
@@ -136,11 +160,38 @@ async def test_qr_status_success_materializes_account_once(tmp_path):
         pool.add_client.assert_awaited_once_with(PHONE, SESSION_STR)
 
         # duplicate poll after consume: terminal state, no second account
-        auth.snapshots["q1"] = {"qr_id": "q1", "state": "success", "phone": PHONE}
+        auth.snapshots["q1"] = {"qr_id": "q1", "state": "success", "phone": BARE_PHONE}
         result = await d._handle_auth_qr_status({"qr_id": "q1"})
         assert result["result"]["state"] == "consumed"
         assert len(await db.get_accounts()) == 1
         pool.add_client.assert_awaited_once()
+    finally:
+        await db.close()
+
+
+async def test_qr_status_materialization_failure_marks_flow_failed(tmp_path):
+    """Failed materialization after the one-shot consume must not look like success (#1555 review)."""
+    db = await _db(tmp_path)
+    try:
+        auth = FakeQrAuth()
+        auth.snapshots["q1"] = {"qr_id": "q1", "state": "success", "phone": BARE_PHONE}
+        auth.consumed["q1"] = {
+            "qr_id": "q1",
+            "state": "success",
+            "phone": BARE_PHONE,
+            "session_string": SESSION_STR,
+        }
+        d = TelegramCommandDispatcher(db, _pool_mock(), auth=auth)
+        db.add_account = AsyncMock(side_effect=RuntimeError("boom"))
+
+        with pytest.raises(RuntimeError, match="boom"):
+            await d._handle_auth_qr_status({"qr_id": "q1"})
+        assert auth.failures == [("q1", "qr_materialization_failed")]
+
+        # the next poll reports the failure, not a fake success
+        result = await d._handle_auth_qr_status({"qr_id": "q1"})
+        assert result["result"]["state"] == "failed"
+        assert result["result"]["error"] == "qr_materialization_failed"
     finally:
         await db.close()
 
@@ -150,11 +201,11 @@ async def test_qr_status_success_not_primary_when_account_exists(tmp_path):
     try:
         await db.add_account(Account(phone="+111", session_string="EXISTING", is_primary=True))
         auth = FakeQrAuth()
-        auth.snapshots["q1"] = {"qr_id": "q1", "state": "success", "phone": PHONE}
+        auth.snapshots["q1"] = {"qr_id": "q1", "state": "success", "phone": BARE_PHONE}
         auth.consumed["q1"] = {
             "qr_id": "q1",
             "state": "success",
-            "phone": PHONE,
+            "phone": BARE_PHONE,
             "session_string": SESSION_STR,
         }
         d = TelegramCommandDispatcher(db, _pool_mock(), auth=auth)
@@ -171,11 +222,11 @@ async def test_qr_status_success_requires_session_encryption_key(tmp_path):
     db = await _db(tmp_path, encryption=False)
     try:
         auth = FakeQrAuth()
-        auth.snapshots["q1"] = {"qr_id": "q1", "state": "success", "phone": PHONE}
+        auth.snapshots["q1"] = {"qr_id": "q1", "state": "success", "phone": BARE_PHONE}
         auth.consumed["q1"] = {
             "qr_id": "q1",
             "state": "success",
-            "phone": PHONE,
+            "phone": BARE_PHONE,
             "session_string": SESSION_STR,
         }
         d = TelegramCommandDispatcher(db, _pool_mock(), auth=auth)
@@ -200,14 +251,27 @@ async def test_qr_password_invalid_keeps_state(tmp_path):
         await db.close()
 
 
-async def test_qr_password_scrubs_secret_from_payload(tmp_path):
+async def test_qr_password_scrubs_secret_from_persisted_payload(tmp_path):
+    """The scrub must reach the DB row, not just the in-memory dict (#1555 review)."""
     db = await _db(tmp_path)
     try:
         auth = FakeQrAuth()
-        payload = {"qr_id": "q1", "password_2fa": "topsecret"}
+        auth.snapshots["q1"] = {"qr_id": "q1", "state": "password_needed"}
+        command_id = await db.repos.telegram_commands.create_command(
+            TelegramCommand(
+                command_type="auth.qr_password",
+                payload={"qr_id": "q1", "password_2fa": "topsecret"},
+            )
+        )
         d = TelegramCommandDispatcher(db, _pool_mock(), auth=auth)
-        await d._handle_auth_qr_password(payload)
-        assert payload["password_2fa"] == ""
+        # one full claim → dispatch → update cycle, exactly like the worker loop
+        await d._run_iteration()
+
+        command = await db.repos.telegram_commands.get_command(command_id)
+        assert command.status == TelegramCommandStatus.SUCCEEDED
+        assert command.result_payload["state"] == "password_needed"
+        assert command.payload["password_2fa"] == ""
+        assert "topsecret" not in (command.payload or {})
     finally:
         await db.close()
 
@@ -217,11 +281,11 @@ async def test_qr_password_success_materializes_account(tmp_path):
     try:
         auth = FakeQrAuth()
         auth.password_results["q1"] = {"state": "success"}
-        auth.snapshots["q1"] = {"qr_id": "q1", "state": "success", "phone": PHONE}
+        auth.snapshots["q1"] = {"qr_id": "q1", "state": "success", "phone": BARE_PHONE}
         auth.consumed["q1"] = {
             "qr_id": "q1",
             "state": "success",
-            "phone": PHONE,
+            "phone": BARE_PHONE,
             "session_string": SESSION_STR,
         }
         pool = _pool_mock()
