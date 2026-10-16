@@ -6,6 +6,7 @@ import aiosqlite
 import pytest
 
 from src.database import Database, DatabaseBusyError
+from src.database.repositories.messages import MessagesRepository
 from src.models import (
     Account,
     AccountSessionStatus,
@@ -1475,7 +1476,8 @@ async def test_update_channel_meta(db):
 @pytest.mark.aiosqlite_serial
 @pytest.mark.anyio
 async def test_migrate_adds_reactions_json_column(tmp_path):
-    """Migration adds reactions_json column to existing DB without it."""
+    """Migration adds reactions_json (and entities_json, same mechanism) to an
+    existing DB without them."""
     db_path = str(tmp_path / "migrate_reactions.db")
 
     conn = await aiosqlite.connect(db_path)
@@ -1527,6 +1529,7 @@ async def test_migrate_adds_reactions_json_column(tmp_path):
     cur = await database.execute("PRAGMA table_info(messages)")
     columns = {row["name"] for row in await cur.fetchall()}
     assert "reactions_json" in columns
+    assert "entities_json" in columns
 
     msg = Message(
         channel_id=-100123,
@@ -1575,6 +1578,89 @@ async def test_reactions_json_null_when_absent(db):
 
     messages, _ = await db.search_messages(channel_id=-100998)
     assert messages[0].reactions_json is None
+
+
+@pytest.mark.anyio
+async def test_entities_json_roundtrip(db):
+    """entities_json is persisted and retrieved via search_messages (#1547)."""
+    await db.add_channel(Channel(channel_id=-100997, title="EntityTest"))
+    msg = Message(
+        channel_id=-100997,
+        message_id=7,
+        text="hello",
+        entities_json='[{"length": 5, "offset": 0, "type": "bold"}]',
+        date=datetime.now(timezone.utc),
+    )
+    await db.insert_message(msg)
+
+    messages, total = await db.search_messages(channel_id=-100997)
+    assert total == 1
+    assert messages[0].entities_json == '[{"length": 5, "offset": 0, "type": "bold"}]'
+
+
+@pytest.mark.anyio
+async def test_entities_json_null_when_absent(db):
+    """entities_json stays None for messages without serialized entities."""
+    await db.add_channel(Channel(channel_id=-100996, title="NoEntities"))
+    msg = Message(
+        channel_id=-100996,
+        message_id=1,
+        text="plain",
+        date=datetime.now(timezone.utc),
+    )
+    await db.insert_message(msg)
+
+    messages, _ = await db.search_messages(channel_id=-100996)
+    assert messages[0].entities_json is None
+
+
+@pytest.mark.anyio
+async def test_search_and_trending_emojis_work_with_entities_json(db):
+    """Acceptance #1547: search and analytics trending-emojis keep working on
+    rows carrying the new entities_json field."""
+    await db.add_channel(Channel(channel_id=-100995, title="TrendEntities"))
+    await db.insert_message(
+        Message(
+            channel_id=-100995,
+            message_id=1,
+            text="Bitcoin with emoji",
+            entities_json='[{"length": 7, "offset": 0, "type": "bold"}]',
+            reactions_json='[{"emoji": "👍", "count": 2}]',
+            date=datetime.now(timezone.utc),
+        )
+    )
+
+    results, total = await db.search_messages(query="Bitcoin")
+    assert total == 1
+    assert results[0].entities_json is not None
+
+    trending = await db.get_trending_emojis(limit=10)
+    assert {"emoji": "👍", "count": 2} in trending
+
+
+def test_rows_to_messages_tolerates_legacy_rows_without_entities_json():
+    """Regression #1547: rows persisted before the entities_json column read
+    back with entities_json=None instead of raising."""
+    row = {
+        "id": 1,
+        "channel_id": -100123,
+        "message_id": 5,
+        "sender_id": None,
+        "sender_name": None,
+        "text": "legacy",
+        "media_type": None,
+        "topic_id": None,
+        "reactions_json": None,
+        "views": None,
+        "forwards": None,
+        "reply_count": None,
+        "date": "2026-01-01T00:00:00+00:00",
+        "collected_at": None,
+        "channel_title": None,
+        "channel_username": None,
+    }
+    [msg] = MessagesRepository._rows_to_messages([row])
+    assert msg.entities_json is None
 
 
 # ---------------------------------------------------------------------------

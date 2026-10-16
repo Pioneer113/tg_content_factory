@@ -4,6 +4,7 @@ from datetime import timezone
 
 from src.models import Message
 from src.services.translation_service import TranslationService
+from src.telegram.collector_message_parse import plain_text_and_entities_json
 from src.telegram.identity import SenderIdentity, extract_message_sender_identity, extract_sender_identity
 from src.telegram.reactions import extract_message_reactions_json
 
@@ -52,6 +53,11 @@ class TelegramMessageTransformer:
         if date and date.tzinfo is None:
             date = date.replace(tzinfo=timezone.utc)
 
+        # Same plain-text/entities contract as the collector pipeline (#1547):
+        # link-only posts get their words from the iv page, formatted posts
+        # keep their MessageEntity spans instead of persisting entities_json=NULL.
+        text, entities_json = plain_text_and_entities_json(msg)
+
         return Message(
             channel_id=chat_id,
             message_id=msg.id,
@@ -60,7 +66,8 @@ class TelegramMessageTransformer:
             sender_first_name=sender_identity.sender_first_name,
             sender_last_name=sender_identity.sender_last_name,
             sender_username=sender_identity.sender_username,
-            text=getattr(msg, "message", None) or getattr(msg, "text", None),
+            text=text,
+            entities_json=entities_json,
             media_type=TelegramMessageTransformer.media_type_from_message(msg),
             date=date,
             channel_title=chat_title,

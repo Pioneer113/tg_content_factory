@@ -144,6 +144,43 @@ def test_convert_telethon_message_no_chat():
     assert TelegramMessageTransformer.convert_telethon_message(msg) is None
 
 
+def test_convert_telethon_message_carries_entities_and_webpage_fallback():
+    """Search-ingestion keeps the same plain-text/entities contract as the
+    collector pipeline (#1547 review): entity spans survive, and a link-only
+    post takes its words from the iv page instead of an empty text."""
+    from telethon.tl.types import MessageEntityBold, PageBlockParagraph, TextPlain
+
+    page_blocks = [PageBlockParagraph(text=TextPlain(text="IV body"))]
+    msg = SimpleNamespace(
+        id=125,
+        chat=SimpleNamespace(id=456, title="Chat", username="user"),
+        sender=SimpleNamespace(id=789, first_name="John", last_name=None, username=None),
+        date=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        message="",
+        text="",
+        entities=[MessageEntityBold(offset=0, length=1)],
+        media=SimpleNamespace(webpage=SimpleNamespace(cached_page=SimpleNamespace(blocks=page_blocks))),
+    )
+    res = TelegramMessageTransformer.convert_telethon_message(msg)
+
+    assert res.text == "IV body"
+    assert res.entities_json == '[{"length": 1, "offset": 0, "type": "bold"}]'
+
+
+def test_convert_telethon_message_entities_none_without_entities():
+    msg = SimpleNamespace(
+        id=126,
+        chat=SimpleNamespace(id=456, title="Chat", username="user"),
+        date=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        message="plain",
+        text="plain",
+        media=None,
+    )
+    res = TelegramMessageTransformer.convert_telethon_message(msg)
+    assert res.text == "plain"
+    assert res.entities_json is None
+
+
 def test_resolve_sender_user():
     msg = MagicMock(from_id=PeerUser(user_id=1))
     user = MagicMock(first_name="First", last_name="Last", username="firstlast")

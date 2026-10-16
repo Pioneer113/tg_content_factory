@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -24,12 +25,15 @@ from src.telegram.collector import Collector
 from src.telegram.collector_message_parse import (
     build_message_from_telethon,
     extract_forward_from_channel_id,
+    extract_message_entities_json,
     extract_topic_id,
     get_message_kind,
     get_sender_kind,
     get_service_action_raw,
     get_service_action_semantic,
+    plain_text_and_entities_json,
 )
+from src.telegram.rich_text import _page_lines, rich_text_to_str, webpage_page_text
 
 
 def _msg(**kwargs) -> SimpleNamespace:
@@ -197,3 +201,154 @@ def test_collector_helpers_still_exposed(post, sender_id, expected):
     msg = _msg(post=post, sender_id=sender_id)
     assert Collector._get_sender_kind(msg) == expected
     assert Collector._get_message_kind(_msg(action=None)) == "regular"
+
+
+# --- MessageEntity* serialization (#1547) -------------------------------------
+
+
+def test_extract_entities_none_without_entities():
+    assert extract_message_entities_json(_msg()) is None
+    assert extract_message_entities_json(_msg(entities=[])) is None
+
+
+def test_extract_entities_serializes_formatting_spans():
+    from telethon.tl.types import MessageEntityBold, MessageEntitySpoiler
+
+    msg = _msg(
+        text="bold secret",
+        entities=[
+            MessageEntityBold(offset=0, length=4),
+            MessageEntitySpoiler(offset=5, length=6),
+        ],
+    )
+    assert json.loads(extract_message_entities_json(msg)) == [
+        {"length": 4, "offset": 0, "type": "bold"},
+        {"length": 6, "offset": 5, "type": "spoiler"},
+    ]
+
+
+def test_extract_entities_custom_emoji_keeps_document_id():
+    """Custom emoji keep their raw document id — same id the reactions layer
+    labels as ``custom:<document_id>``."""
+    from telethon.tl.types import MessageEntityCustomEmoji
+
+    msg = _msg(
+        text="a 🎯 b",
+        entities=[MessageEntityCustomEmoji(offset=2, length=2, document_id=555999)],
+    )
+    assert json.loads(extract_message_entities_json(msg)) == [
+        {"document_id": 555999, "length": 2, "offset": 2, "type": "custom_emoji"}
+    ]
+
+
+def test_extract_entities_drops_masked_link_target():
+    """MessageEntityTextUrl.url is not serialized — masked-hyperlink URLs are
+    tracked separately in #1492; the entity itself is kept as a span marker."""
+    from telethon.tl.types import MessageEntityTextUrl
+
+    msg = _msg(
+        text="masked",
+        entities=[MessageEntityTextUrl(offset=0, length=6, url="https://example.internal")],
+    )
+    assert json.loads(extract_message_entities_json(msg)) == [
+        {"length": 6, "offset": 0, "type": "text_url"}
+    ]
+
+
+def test_build_message_carries_entities_json():
+    from telethon.tl.types import MessageEntityBold
+
+    msg = _msg(text="hello", entities=[MessageEntityBold(offset=0, length=5)])
+    message = build_message_from_telethon(msg, channel_id=-100123)
+    assert json.loads(message.entities_json) == [{"length": 5, "offset": 0, "type": "bold"}]
+
+
+def test_plain_text_and_entities_ignores_nonstring_message_fakes():
+    """MagicMock-based stream fakes auto-generate a truthy non-string `message`
+    attribute; only str counts as text, so the funnel takes `text` instead of
+    crashing Message validation (CI shard regression, #1547)."""
+    fake = MagicMock()
+    fake.id = 1
+    fake.date = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    fake.message = MagicMock()  # truthy non-string
+    fake.text = "msg 0"
+    text, entities_json = plain_text_and_entities_json(fake)
+    assert text == "msg 0"
+    assert entities_json is None
+
+
+# --- RichText / iv-page flattening (port of telegram-mcp rich_text) -----------
+
+
+def test_rich_text_to_str_flattens_nested_nodes():
+    from telethon.tl.types import TextBold, TextPlain
+
+    node = [TextPlain(text="see "), TextBold(text="this"), TextPlain(text=" now")]
+    assert rich_text_to_str(node) == "see this now"
+    assert rich_text_to_str("plain") == "plain"
+
+
+def test_rich_text_to_str_custom_emoji_keeps_alt():
+    from telethon.tl.types import TextCustomEmoji
+
+    assert rich_text_to_str(TextCustomEmoji(document_id=1, alt="🎯")) == "🎯"
+
+
+def test_rich_text_to_str_empty_for_textless_nodes():
+    from telethon.tl.types import TextEmpty
+
+    assert rich_text_to_str(TextEmpty()) == ""
+    assert rich_text_to_str(None) == ""
+
+
+def test_page_lines_blocks_and_table_row():
+    from telethon.tl.types import PageBlockParagraph, PageBlockTitle, PageTableCell, PageTableRow, TextPlain
+
+    blocks = [
+        PageBlockTitle(text=TextPlain(text="Heading")),
+        PageBlockParagraph(text=TextPlain(text="Para line")),
+    ]
+    assert _page_lines(blocks) == ["Heading", "Para line"]
+
+    row = PageTableRow(
+        cells=[PageTableCell(text=TextPlain(text="a")), PageTableCell(text=TextPlain(text="b"))]
+    )
+    assert _page_lines(row) == ["a | b"]
+
+
+def test_webpage_page_text_walks_cached_page_blocks():
+    from telethon.tl.types import PageBlockParagraph, PageBlockTitle, TextPlain
+
+    blocks = [
+        PageBlockTitle(text=TextPlain(text="Title")),
+        PageBlockParagraph(text=TextPlain(text="Body")),
+    ]
+    page = SimpleNamespace(blocks=blocks)
+    assert webpage_page_text(SimpleNamespace(media=SimpleNamespace(webpage=SimpleNamespace(cached_page=page)))) == (
+        "Title\n\nBody"
+    )
+    assert webpage_page_text(SimpleNamespace(media=None)) == ""
+    no_page = SimpleNamespace(media=SimpleNamespace(webpage=SimpleNamespace(cached_page=None)))
+    assert webpage_page_text(no_page) == ""
+
+
+def test_build_message_falls_back_to_webpage_text():
+    """A link-only post (empty raw text) takes its words from the preview's iv
+    page instead of reporting an empty message (#1350/#1352 lesson)."""
+    from telethon.tl.types import PageBlockParagraph, TextPlain
+
+    blocks = [PageBlockParagraph(text=TextPlain(text="IV body"))]
+    msg = _msg(
+        text="",
+        media=SimpleNamespace(webpage=SimpleNamespace(cached_page=SimpleNamespace(blocks=blocks))),
+    )
+    message = build_message_from_telethon(msg, channel_id=-100123)
+    assert message.text == "IV body"
+
+
+def test_build_message_keeps_plain_text_over_webpage():
+    """Non-empty raw text is never replaced by the preview page."""
+    page = SimpleNamespace(blocks=[])
+    msg = _msg(text="raw", media=SimpleNamespace(webpage=SimpleNamespace(cached_page=page)))
+    message = build_message_from_telethon(msg, channel_id=-100123)
+    assert message.text == "raw"

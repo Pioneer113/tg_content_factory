@@ -172,7 +172,9 @@ class Message(BaseModel):
     Уникально по паре `(channel_id, message_id)`. `message_kind`/`sender_kind`/
     `media_type` классифицируют содержимое и отправителя; служебные сообщения
     раскладываются в `service_action_*`. Метрики (`views`/`forwards`/
-    `reply_count`/`reactions_json`) собираются вместе с текстом. `detected_lang`
+    `reply_count`/`reactions_json`) собираются вместе с текстом; `entities_json`
+    хранит спаны форматирования (`MessageEntity*`, JSON) поверх
+    гарантированно-plain `text` (#1547). `detected_lang`
     и `translation_*` заполняет слой перевода. `channel_title`/`channel_username`
     — денормализованные поля для вывода без JOIN (заполняются при чтении).
     """
@@ -194,6 +196,7 @@ class Message(BaseModel):
     sender_kind: str | None = None
     topic_id: int | None = None
     reactions_json: str | None = None
+    entities_json: str | None = None
     views: int | None = None
     forwards: int | None = None
     reply_count: int | None = None

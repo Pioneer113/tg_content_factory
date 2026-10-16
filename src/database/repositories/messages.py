@@ -199,10 +199,10 @@ class MessagesRepository:
                     sender_first_name, sender_last_name, sender_username,
                     text, message_kind, media_type, service_action_raw,
                     service_action_semantic, service_action_payload_json, sender_kind,
-                    topic_id, reactions_json,
+                    topic_id, reactions_json, entities_json,
                     views, forwards, reply_count, date, detected_lang,
                     forward_from_channel_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     msg.channel_id,
                     msg.message_id,
@@ -220,6 +220,7 @@ class MessagesRepository:
                     msg.sender_kind,
                     msg.topic_id,
                     msg.reactions_json,
+                    msg.entities_json,
                     msg.views,
                     msg.forwards,
                     msg.reply_count,
@@ -317,6 +318,7 @@ class MessagesRepository:
                 m.sender_kind,
                 m.topic_id,
                 m.reactions_json,
+                m.entities_json,
                 m.views,
                 m.forwards,
                 m.reply_count,
@@ -349,10 +351,10 @@ class MessagesRepository:
                     sender_first_name, sender_last_name, sender_username,
                     text, message_kind, media_type, service_action_raw,
                     service_action_semantic, service_action_payload_json, sender_kind,
-                    topic_id, reactions_json,
+                    topic_id, reactions_json, entities_json,
                     views, forwards, reply_count, date, detected_lang,
                     forward_from_channel_id, premium_search_query)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 data,
             )
             count = cur.rowcount if cur.rowcount >= 0 else len(messages)
@@ -1017,6 +1019,7 @@ class MessagesRepository:
                 sender_kind=r["sender_kind"] if "sender_kind" in r.keys() else None,
                 topic_id=r["topic_id"],
                 reactions_json=r["reactions_json"],
+                entities_json=r["entities_json"] if "entities_json" in r.keys() else None,
                 views=r["views"],
                 forwards=r["forwards"],
                 reply_count=r["reply_count"],

@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS messages (
     sender_kind TEXT,
     topic_id INTEGER,
     reactions_json TEXT,
+    entities_json TEXT,
     views INTEGER,
     forwards INTEGER,
     reply_count INTEGER,
