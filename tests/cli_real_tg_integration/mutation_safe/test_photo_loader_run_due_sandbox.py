@@ -4,6 +4,7 @@ import json
 import sqlite3
 import sys
 import tempfile
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -88,7 +89,7 @@ def _create_due_photo_item(
     caption: str,
 ) -> tuple[int, int]:
     due_at = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
-    with sqlite3.connect(str(db_path)) as conn:
+    with closing(sqlite3.connect(str(db_path))) as conn:
         cur = conn.execute(
             """
             INSERT INTO photo_batches (
@@ -119,12 +120,13 @@ def _create_due_photo_item(
             ),
         )
         item_id = int(cur.lastrowid or 0)
+        conn.commit()
     return batch_id, item_id
 
 
 def _fetch_telegram_message_ids(db_path: Path, item_id: int) -> list[int]:
     try:
-        with sqlite3.connect(str(db_path)) as conn:
+        with closing(sqlite3.connect(str(db_path))) as conn:
             row = conn.execute(
                 "SELECT telegram_message_ids FROM photo_batch_items WHERE id = ?",
                 (int(item_id),),
@@ -146,7 +148,7 @@ def _delete_due_photo_rows(
     batch_id: int | None,
     item_id: int | None,
 ) -> None:
-    with sqlite3.connect(str(db_path)) as conn:
+    with closing(sqlite3.connect(str(db_path))) as conn:
         if item_id is not None:
             conn.execute("DELETE FROM photo_batch_items WHERE id = ?", (int(item_id),))
         if batch_id is not None:
@@ -154,3 +156,4 @@ def _delete_due_photo_rows(
                 "DELETE FROM photo_batches WHERE id = ? AND target_type = 'saved'",
                 (int(batch_id),),
             )
+        conn.commit()

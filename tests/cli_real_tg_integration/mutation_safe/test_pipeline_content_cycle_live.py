@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 import sqlite3
 import sys
+from contextlib import closing
 
 import pytest
 
@@ -53,7 +54,7 @@ def _create_live_cycle_pipeline(
 ) -> int:
     """Создаёт pipeline + target в Saved Messages; возвращает pipeline_id."""
     pipeline_name = f"live-cycle-test-{nonce}"
-    with sqlite3.connect(str(db_path)) as conn:
+    with closing(sqlite3.connect(str(db_path))) as conn:
         cur = conn.execute(
             """
             INSERT INTO content_pipelines (
@@ -84,17 +85,19 @@ def _create_live_cycle_pipeline(
             """,
             (pipeline_id, phone, int(dialog_id)),
         )
+        conn.commit()
     return pipeline_id
 
 
 def _delete_live_cycle_pipeline(db_path, *, pipeline_id: int) -> None:
-    with sqlite3.connect(str(db_path)) as conn:
+    with closing(sqlite3.connect(str(db_path))) as conn:
         conn.execute("DELETE FROM generation_runs WHERE pipeline_id = ?", (int(pipeline_id),))
         conn.execute("DELETE FROM pipeline_targets WHERE pipeline_id = ?", (int(pipeline_id),))
         conn.execute(
             "DELETE FROM content_pipelines WHERE id = ? AND name LIKE 'live-cycle-test-%'",
             (int(pipeline_id),),
         )
+        conn.commit()
 
 
 # pytest-timeout — это hard deadlock-guard, поэтому считаем ПОЛНЫЙ worst-case всех

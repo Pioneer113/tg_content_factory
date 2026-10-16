@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import sqlite3
 import sys
+from contextlib import closing
 
 import pytest
 
@@ -26,7 +27,7 @@ def _create_saved_messages_publish_run(
 ) -> tuple[int, int, str]:
     generated_text = f"codex live cli pipeline publish test {nonce}"
     pipeline_name = f"codex-live-publish-sandbox-{nonce}"
-    with sqlite3.connect(str(db_path)) as conn:
+    with closing(sqlite3.connect(str(db_path))) as conn:
         cur = conn.execute(
             """
             INSERT INTO content_pipelines (
@@ -58,17 +59,19 @@ def _create_saved_messages_publish_run(
             (pipeline_id, generated_text),
         )
         run_id = int(cur.lastrowid or 0)
+        conn.commit()
     return pipeline_id, run_id, generated_text
 
 
 def _delete_saved_messages_publish_run(db_path, *, pipeline_id: int, run_id: int) -> None:
-    with sqlite3.connect(str(db_path)) as conn:
+    with closing(sqlite3.connect(str(db_path))) as conn:
         conn.execute("DELETE FROM generation_runs WHERE id = ?", (int(run_id),))
         conn.execute("DELETE FROM pipeline_targets WHERE pipeline_id = ?", (int(pipeline_id),))
         conn.execute(
             "DELETE FROM content_pipelines WHERE id = ? AND name LIKE 'codex-live-publish-sandbox-%'",
             (int(pipeline_id),),
         )
+        conn.commit()
 
 
 @pytest.mark.timeout(180)

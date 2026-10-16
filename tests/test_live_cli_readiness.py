@@ -8,6 +8,7 @@ their ``RUN_*`` env var is explicitly truthy, and never auto-enable — plus the
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -24,7 +25,11 @@ def _make_config(api_id: int = 0, api_hash: str = "") -> SimpleNamespace:
 
 
 def _make_db(path: Path, *, accounts: bool = False, settings: dict[str, str] | None = None) -> None:
-    with sqlite3.connect(path) as conn:
+    # closing(), not `with sqlite3.connect(...)`: the connection context manager
+    # commits but never closes, and the GC-finalized handle later surfaces as an
+    # unraisable "unclosed database" error attributed to a random later test
+    # (#1494).
+    with closing(sqlite3.connect(path)) as conn:
         conn.execute(
             """
             CREATE TABLE accounts (
@@ -45,6 +50,7 @@ def _make_db(path: Path, *, accounts: bool = False, settings: dict[str, str] | N
             )
         for key, value in (settings or {}).items():
             conn.execute("INSERT INTO settings (key, value) VALUES (?, ?)", (key, value))
+        conn.commit()
 
 
 # --------------------------------------------------------------------------- #

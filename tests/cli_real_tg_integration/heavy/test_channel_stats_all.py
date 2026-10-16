@@ -21,10 +21,12 @@ def test_channel_stats_all(run_cli, assert_cli_ok, cli_real_cli_env):
 
 
 def _blocking_flood_state(db_path):
+    # closing(): sqlite3's context manager commits but never closes (#1494).
     import sqlite3
+    from contextlib import closing
 
     now = datetime.now(timezone.utc)
-    with sqlite3.connect(db_path) as conn:
+    with closing(sqlite3.connect(db_path)) as conn:
         rows = conn.execute(
             "SELECT phone, flood_wait_until FROM accounts WHERE flood_wait_until IS NOT NULL"
         ).fetchall()

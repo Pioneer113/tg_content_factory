@@ -6,6 +6,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -25,7 +26,7 @@ _ITEM_ID_RE = re.compile(r"Sent photo item #(\d+)")
 
 def _fetch_telegram_message_ids(db_path: Path, item_id: str) -> list[str]:
     try:
-        with sqlite3.connect(str(db_path)) as conn:
+        with closing(sqlite3.connect(str(db_path))) as conn:
             row = conn.execute(
                 "SELECT telegram_message_ids FROM photo_batch_items WHERE id = ?",
                 (int(item_id),),
