@@ -682,3 +682,9 @@ async def test_fetch_auto_feed_map_masked_link_entities(filters_repo, channels_r
 
     sampled = await filters_repo.fetch_auto_feed_map(sample_size=1)
     assert sampled[1] == (1, 0)  # срез = последний пост (id=103) — без ссылки
+
+    # Позитивный кейс sampled-шаблона: срез 103..101 содержит entities-ссылку
+    # (id=101) — этот ассерт краснеет, если из _SQL_AUTO_FEED_SAMPLED убрать
+    # ветку OR entities_json LIKE или колонку из проекции подзапроса.
+    sampled = await filters_repo.fetch_auto_feed_map(sample_size=3)
+    assert sampled[1] == (3, 1)
