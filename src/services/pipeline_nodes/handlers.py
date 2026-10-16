@@ -11,6 +11,7 @@ from src.services.pipeline_nodes.base import BaseNodeHandler, NodeContext
 from src.services.pipeline_result import increment_action_count
 from src.services.telegram_actions import TelegramActionClientUnavailableError, TelegramActionService
 from src.telegram.reactions import TelegramReactionInvalidError, normalize_outgoing_reaction_emoji
+from src.utils.sanitize import sanitize_name, sanitize_user_content
 
 try:  # telethon is an optional dependency at test-time
     from telethon.errors import (
@@ -40,8 +41,6 @@ def _build_source_messages(messages: list) -> str:
     blank-separated. Empty/whitespace texts are dropped.
     """
     from datetime import datetime
-
-    from src.utils.sanitize import sanitize_name, sanitize_user_content
 
     source_parts: list[str] = []
     for m in messages:
@@ -269,12 +268,14 @@ class LlmRefineHandler(BaseNodeHandler):
             raise RuntimeError("LlmRefineHandler: no provider_callable in services")
 
         text = context.get_global("generated_text", "") or ""
-        # If no text generated yet, try to use source messages as input
+        # If no text generated yet, try to use source messages as input.
+        # Same untrusted-content path as LlmGenerateHandler (#1546): sanitize
+        # before the text enters the LLM prompt.
         if not text:
             messages = context.get_global("context_messages", [])
             parts = []
             for m in messages:
-                t = (m.text or "").strip()
+                t = sanitize_user_content((m.text or "").strip(), preserve_emoji=True)
                 if t:
                     parts.append(t)
             text = "\n\n".join(parts[:3])
