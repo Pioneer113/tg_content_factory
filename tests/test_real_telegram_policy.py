@@ -8,6 +8,7 @@ import sqlite3
 import subprocess
 import sys
 import tomllib
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -163,7 +164,11 @@ def _live_cli_probe_env(tmp_path: Path) -> CliRealCliEnv:
 
 
 def _create_live_accounts_db(path: Path) -> None:
-    with sqlite3.connect(path) as conn:
+    # closing(), not `with sqlite3.connect(...)`: the connection context manager
+    # commits the transaction but never closes the handle, and the GC-finalized
+    # connection later surfaces as PytestUnraisableExceptionWarning (→ error)
+    # inside whichever test happens to run next.
+    with closing(sqlite3.connect(path)) as conn:
         conn.execute(
             """
             CREATE TABLE accounts (
@@ -176,6 +181,7 @@ def _create_live_accounts_db(path: Path) -> None:
             )
             """
         )
+        conn.commit()
 
 
 def test_fetch_live_accounts_prefers_accounts_not_in_flood_wait(tmp_path, monkeypatch):
@@ -183,7 +189,7 @@ def test_fetch_live_accounts_prefers_accounts_not_in_flood_wait(tmp_path, monkey
     db_path = tmp_path / "live.db"
     _create_live_accounts_db(db_path)
 
-    with sqlite3.connect(db_path) as conn:
+    with closing(sqlite3.connect(db_path)) as conn:
         conn.executemany(
             """
             INSERT INTO accounts (id, phone, session_string, is_active, is_primary, flood_wait_until)
@@ -195,6 +201,7 @@ def test_fetch_live_accounts_prefers_accounts_not_in_flood_wait(tmp_path, monkey
                 (3, "+primary-ready", "session", 1, 1, "2000-01-01T00:00:00+00:00"),
             ),
         )
+        conn.commit()
 
     assert _fetch_live_accounts(db_path) == (
         "+primary-ready",
@@ -207,7 +214,7 @@ def test_fetch_live_accounts_can_pin_requested_phone(tmp_path, monkeypatch):
     db_path = tmp_path / "live.db"
     _create_live_accounts_db(db_path)
 
-    with sqlite3.connect(db_path) as conn:
+    with closing(sqlite3.connect(db_path)) as conn:
         conn.executemany(
             """
             INSERT INTO accounts (id, phone, session_string, is_active, is_primary, flood_wait_until)
@@ -218,6 +225,7 @@ def test_fetch_live_accounts_can_pin_requested_phone(tmp_path, monkeypatch):
                 (2, "+fresh", "session", 1, 0, None),
             ),
         )
+        conn.commit()
 
     monkeypatch.setenv(CLI_REAL_TG_PHONE_ENV, "+fresh")
 
@@ -225,7 +233,7 @@ def test_fetch_live_accounts_can_pin_requested_phone(tmp_path, monkeypatch):
 
 
 def _create_premium_accounts_db(path: Path, rows: tuple) -> None:
-    with sqlite3.connect(path) as conn:
+    with closing(sqlite3.connect(path)) as conn:
         conn.execute(
             """
             CREATE TABLE accounts (
@@ -245,6 +253,7 @@ def _create_premium_accounts_db(path: Path, rows: tuple) -> None:
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
             rows,
         )
+        conn.commit()
 
 
 def test_first_premium_phone_returns_connected_premium(tmp_path):
@@ -282,11 +291,12 @@ def test_first_premium_phone_missing_db_returns_none(tmp_path):
 def test_wait_for_phone_flood_clear_returns_true_when_clear(tmp_path):
     db_path = tmp_path / "live.db"
     _create_live_accounts_db(db_path)
-    with sqlite3.connect(db_path) as conn:
+    with closing(sqlite3.connect(db_path)) as conn:
         conn.execute(
             "INSERT INTO accounts (id, phone, session_string, is_active, is_primary, flood_wait_until)"
             " VALUES (1, '+p', 's', 1, 1, NULL)"
         )
+        conn.commit()
 
     assert wait_for_phone_flood_clear(db_path, "+p", timeout=1, poll=0.1, sleep=lambda _s: None)
 

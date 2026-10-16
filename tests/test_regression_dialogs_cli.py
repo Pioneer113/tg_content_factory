@@ -275,6 +275,135 @@ class TestMyTelegramActions:
         out = capsys.readouterr().out
         assert "downloaded" in out.lower() or "file" in out.lower()
 
+    def test_transcribe_action_prints_transcript(self, capsys):
+        pool = _make_pool_with_clients()
+        with patch("src.cli.commands.dialogs.TelegramActionService") as service_cls:
+            service_cls.return_value.transcribe_voice = AsyncMock(
+                return_value={
+                    "status": "ok",
+                    "text": "текст голосового",
+                    "source": "groq",
+                    "cached": False,
+                    "lang": "ru",
+                    "duration": 23,
+                }
+            )
+            self._run_action(
+                "transcribe", pool=pool,
+                extra_args={"chat_id": "@ch", "message_id": 42, "engine": "groq"},
+            )
+        out = capsys.readouterr().out
+        assert "текст голосового" in out
+        assert "groq" in out
+        assert "not verbatim" in out
+
+    def test_transcribe_action_marks_cache_hits(self, capsys):
+        pool = _make_pool_with_clients()
+        with patch("src.cli.commands.dialogs.TelegramActionService") as service_cls:
+            service_cls.return_value.transcribe_voice = AsyncMock(
+                return_value={
+                    "status": "ok", "text": "повтор", "source": "groq",
+                    "cached": True, "lang": None, "duration": 23,
+                }
+            )
+            self._run_action(
+                "transcribe", pool=pool,
+                extra_args={"chat_id": "@ch", "message_id": 42, "engine": "groq"},
+            )
+        out = capsys.readouterr().out
+        assert "повтор" in out and "cached" in out
+
+    def test_transcribe_action_premium_required_is_a_clear_message(self, capsys):
+        pool = _make_pool_with_clients()
+        with patch("src.cli.commands.dialogs.TelegramActionService") as service_cls:
+            service_cls.return_value.transcribe_voice = AsyncMock(
+                return_value={
+                    "status": "premium_required",
+                    "error": "Нет аккаунтов с Telegram Premium.",
+                }
+            )
+            self._run_action(
+                "transcribe", pool=pool,
+                extra_args={"chat_id": "@ch", "message_id": 42, "engine": "telegram"},
+            )
+        out = capsys.readouterr().out
+        assert "Premium" in out
+
+    def test_transcribe_action_engine_error_is_a_clear_message(self, capsys):
+        pool = _make_pool_with_clients()
+        with patch("src.cli.commands.dialogs.TelegramActionService") as service_cls:
+            service_cls.return_value.transcribe_voice = AsyncMock(
+                return_value={
+                    "status": "error",
+                    "error": "GROQ_API_KEY is not configured on this server.",
+                }
+            )
+            self._run_action(
+                "transcribe", pool=pool,
+                extra_args={"chat_id": "@ch", "message_id": 42, "engine": "groq"},
+            )
+        out = capsys.readouterr().out
+        assert "GROQ_API_KEY" in out
+
+    def test_transcribe_action_service_error_is_caught(self, capsys):
+        pool = _make_pool_with_clients()
+        with patch("src.cli.commands.dialogs.TelegramActionService") as service_cls:
+            service_cls.return_value.transcribe_voice = AsyncMock(
+                side_effect=RuntimeError("boom")
+            )
+            self._run_action(
+                "transcribe", pool=pool,
+                extra_args={"chat_id": "@ch", "message_id": 42, "engine": "groq"},
+            )
+        out = capsys.readouterr().out
+        assert "Error transcribing" in out
+
+    def test_transcribe_action_engine_defaults_from_env(self, capsys, monkeypatch):
+        monkeypatch.setenv("TELEGRAM_TRANSCRIBE_ENGINE", "whisper")
+        pool = _make_pool_with_clients()
+        with patch("src.cli.commands.dialogs.TelegramActionService") as service_cls:
+            service_cls.return_value.transcribe_voice = AsyncMock(
+                return_value={"status": "ok", "text": "локально", "source": "whisper", "cached": False}
+            )
+            self._run_action(
+                "transcribe", pool=pool,
+                extra_args={"chat_id": "@ch", "message_id": 42, "engine": None},
+            )
+            await_args = service_cls.return_value.transcribe_voice.await_args
+            assert await_args is not None
+            assert await_args.kwargs["engine"] == "whisper"
+
+    def test_transcribe_action_telegram_without_phone_lets_premium_lease_pick(self, capsys):
+        """No explicit --phone + engine=telegram → phone=None reaches the service
+        so the premium lease picks a premium account (review on #1561)."""
+        pool = _make_pool_with_clients()
+        with patch("src.cli.commands.dialogs.TelegramActionService") as service_cls:
+            service_cls.return_value.transcribe_voice = AsyncMock(
+                return_value={"status": "ok", "text": "нативно", "source": "telegram", "cached": False}
+            )
+            self._run_action(
+                "transcribe", pool=pool,
+                extra_args={"chat_id": "@ch", "message_id": 42, "engine": "telegram", "phone": None},
+            )
+            await_args = service_cls.return_value.transcribe_voice.await_args
+            assert await_args is not None
+            assert await_args.kwargs["phone"] is None
+            assert await_args.kwargs["engine"] == "telegram"
+
+    def test_transcribe_action_explicit_phone_is_honored_for_telegram(self, capsys):
+        pool = _make_pool_with_clients()
+        with patch("src.cli.commands.dialogs.TelegramActionService") as service_cls:
+            service_cls.return_value.transcribe_voice = AsyncMock(
+                return_value={"status": "ok", "text": "нативно", "source": "telegram", "cached": False}
+            )
+            self._run_action(
+                "transcribe", pool=pool,
+                extra_args={"chat_id": "@ch", "message_id": 42, "engine": "telegram", "phone": "+1111"},
+            )
+            await_args = service_cls.return_value.transcribe_voice.await_args
+            assert await_args is not None
+            assert await_args.kwargs["phone"] == "+1111"
+
     def test_participants_action(self, capsys):
         pool = _make_pool_with_clients()
         mock_client = AsyncMock()

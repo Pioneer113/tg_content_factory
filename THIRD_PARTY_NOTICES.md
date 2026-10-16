@@ -36,6 +36,24 @@ provenance comment listing the source repo, commit, date, and modifications.
   `format_tool_result`/`_json_default` dropped (this project feeds plain-text
   prompts, not JSON tool-result envelopes).
 
+- `src/telegram/transcription.py` — vendored from `telegram_mcp/transcription.py`
+  at the same upstream commit `e224762671897c1df53deadb51be84eaaaf2cea3`
+  (2026-10-16, issue #1545).
+  - Upstream copyright: pathknower, Arnout van Westen, Omid Zaferi,
+    Alexander Kulikov, 4erdenko.
+  - Local modifications (adaptation commit on top of the verbatim vendor commit):
+    transcript cache moved from a standalone SQLite file into the project
+    database (`transcripts` table) with async access via the shared `Database`
+    facade and its connection-wide write lock; the upstream legacy-schema
+    rebuild and listing/prefetch/render helpers dropped (no legacy schema exists
+    here; auto-transcription of listings is a separate follow-up); premium
+    detection inlined and the raw `messages.transcribeAudio` request issued
+    through `src/telegram/backends.py` (`transcribe_audio_raw`) per the
+    project's raw-Telethon allowlist; install hint renamed for this project.
+  - Long-term plan: replace the vendored Apache-2.0 code with an original
+    MIT-licensed implementation (algorithms are not licensable); once a file is
+    fully rewritten it is marked MIT and removed from this notice.
+
 The full Apache-2.0 license text is in `LICENSES/apache-2.0.txt`.
 
 Per the project licensing strategy, the long-term goal is to replace this
