@@ -293,7 +293,8 @@ def _fetch_live_channel(
     PeerChannel against a possibly-cold entity cache (#794 regression).
     """
     extra_where = "AND NULLIF(username, '') IS NULL" if no_username else ""
-    with sqlite3.connect(db_path) as conn:
+    # closing(): sqlite3's context manager commits but never closes (#1494).
+    with closing(sqlite3.connect(db_path)) as conn:
         row = conn.execute(
             f"""
             SELECT id, channel_id, username
@@ -324,7 +325,8 @@ def _fetch_live_owned_broadcast_channel(
     is the one able to request its stats.
     """
     phone_set = set(phones)
-    with sqlite3.connect(db_path) as conn:
+    # closing(): sqlite3's context manager commits but never closes (#1494).
+    with closing(sqlite3.connect(db_path)) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             """
@@ -364,7 +366,8 @@ def _normalize_chat_ref(raw: object) -> str | None:
 
 
 def _fetch_live_media_message(db_path: Path) -> tuple[str | None, int | None]:
-    with sqlite3.connect(db_path) as conn:
+    # closing(): sqlite3's context manager commits but never closes (#1494).
+    with closing(sqlite3.connect(db_path)) as conn:
         row = conn.execute(
             """
             SELECT
@@ -393,7 +396,8 @@ def _fetch_live_message_target(
     require_pin_capable_dialog: bool = False,
 ) -> LiveCliMessageTarget | None:
     phone_set = set(phones)
-    with sqlite3.connect(db_path) as conn:
+    # closing(): sqlite3's context manager commits but never closes (#1494).
+    with closing(sqlite3.connect(db_path)) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             """
@@ -1009,7 +1013,8 @@ def snapshot_pending_collection_task_ids(db_path: Path) -> tuple[set[int], bool]
     exact over-cancellation this guard exists to prevent.
     """
     try:
-        with sqlite3.connect(db_path) as conn:
+        # closing(): sqlite3's context manager commits but never closes (#1494).
+        with closing(sqlite3.connect(db_path)) as conn:
             rows = conn.execute(
                 "SELECT id FROM collection_tasks WHERE status = ? AND task_type = ?",
                 ("pending", "channel_collect"),

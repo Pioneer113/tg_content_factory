@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from urllib.parse import quote
 
@@ -54,7 +55,9 @@ def _configured_prompt(config: AppConfig) -> str:
         # part of the filename rather than becoming SQLite URI syntax.
         encoded_path = quote(path.resolve().as_posix(), safe="/:")
         uri = f"file:{encoded_path}?mode=ro"
-        with sqlite3.connect(uri, uri=True) as connection:
+        # closing(): sqlite3's own context manager commits but never closes,
+        # leaking the connection until GC (#1494).
+        with closing(sqlite3.connect(uri, uri=True)) as connection:
             row = connection.execute(
                 "SELECT value FROM settings WHERE key = ?",
                 (AGENT_PROMPT_TEMPLATE_SETTING,),

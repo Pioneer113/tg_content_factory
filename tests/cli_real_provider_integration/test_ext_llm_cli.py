@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import sqlite3
 import textwrap
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -242,7 +243,7 @@ def test_translate_message(tmp_path: Path, provider_tmp_env: tuple[Path, Path]) 
     extra_env = {"ZAI_API_KEY": _ZAI_KEY}
 
     # Seed a channel and a message directly into the DB
-    with sqlite3.connect(db_path) as conn:
+    with closing(sqlite3.connect(db_path)) as conn:
         conn.execute(
             "CREATE TABLE IF NOT EXISTS channels ("
             "id INTEGER PRIMARY KEY, channel_id INTEGER UNIQUE, "
@@ -269,7 +270,7 @@ def test_translate_message(tmp_path: Path, provider_tmp_env: tuple[Path, Path]) 
     cli_run(config_path, "provider", "list", extra_env=extra_env)
 
     # Fetch the message id assigned by migration
-    with sqlite3.connect(db_path) as conn:
+    with closing(sqlite3.connect(db_path)) as conn:
         row = conn.execute("SELECT id FROM messages WHERE channel_id=100001 LIMIT 1").fetchone()
 
     if row is None:
@@ -305,7 +306,7 @@ def test_translate_run(tmp_path: Path, provider_tmp_env: tuple[Path, Path]) -> N
     # during CLI init adds this column via ALTER TABLE if absent; seeding 'lang' (wrong
     # column name) would leave detected_lang=NULL, making the message invisible to the
     # get_untranslated_messages query which filters on detected_lang IS NOT NULL.
-    with sqlite3.connect(db_path) as conn:
+    with closing(sqlite3.connect(db_path)) as conn:
         conn.execute(
             "CREATE TABLE IF NOT EXISTS channels ("
             "id INTEGER PRIMARY KEY, channel_id INTEGER UNIQUE, "

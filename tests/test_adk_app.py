@@ -6,6 +6,7 @@ import importlib.util
 import os
 import sqlite3
 import sys
+from contextlib import closing
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
@@ -63,12 +64,13 @@ def test_adk_app_loads_saved_prompt_from_sqlite(tmp_path, monkeypatch):
     monkeypatch.setenv("TG_CONFIG_PATH", str(tmp_path / "config.yaml"))
 
     db_path = tmp_path / "agent.db"
-    with sqlite3.connect(db_path) as connection:
+    with closing(sqlite3.connect(db_path)) as connection:
         connection.execute("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
         connection.execute(
             "INSERT INTO settings (key, value) VALUES (?, ?)",
             ("agent_prompt_template", "Custom {date} {source_messages}"),
         )
+        connection.commit()
 
     entrypoint = Path(__file__).parents[1] / "adk" / "tg_content_factory" / "agent.py"
     spec = importlib.util.spec_from_file_location("tg_content_factory_adk_agent_prompt", entrypoint)
@@ -114,12 +116,13 @@ def test_adk_app_loads_dotenv_before_config(tmp_path, monkeypatch):
 
 def test_adk_app_escapes_sqlite_uri_path(tmp_path, monkeypatch):
     db_path = tmp_path / "agent?mode=memory&cache=shared#db.sqlite"
-    with sqlite3.connect(db_path) as connection:
+    with closing(sqlite3.connect(db_path)) as connection:
         connection.execute("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
         connection.execute(
             "INSERT INTO settings (key, value) VALUES (?, ?)",
             ("agent_prompt_template", "URI-safe prompt"),
         )
+        connection.commit()
 
     config_module = ModuleType("src.config")
     config_module.AppConfig = object
