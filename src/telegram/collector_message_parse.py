@@ -15,6 +15,7 @@ extraction for cross-channel citations, and the naive→UTC date normalization.
 from __future__ import annotations
 
 import json
+import re
 from datetime import date as date_cls
 from datetime import datetime, timezone
 
@@ -23,6 +24,7 @@ from src.services.translation_service import TranslationService
 from src.telegram.identity import extract_message_sender_identity
 from src.telegram.media import get_media_type
 from src.telegram.reactions import extract_message_reactions_json
+from src.telegram.rich_text import webpage_page_text
 
 # Telethon service-action class name → coarse semantic label. Lifted verbatim
 # from ``Collector._SERVICE_ACTION_SEMANTICS`` so the mapping has a single home.
@@ -50,6 +52,60 @@ def get_media_type_for(msg) -> str | None:
 def extract_reactions(msg) -> str | None:
     """Extract reactions from a Telethon message as a JSON string."""
     return extract_message_reactions_json(msg)
+
+
+_CAMEL_BOUNDARY_RE = re.compile(r"(?<!^)(?=[A-Z])")
+
+
+def _entity_type(entity) -> str:
+    """``MessageEntityCustomEmoji`` → ``custom_emoji`` (snake_case TL subtype)."""
+    name = type(entity).__name__.removeprefix("MessageEntity")
+    return _CAMEL_BOUNDARY_RE.sub("_", name).lower()
+
+
+# MessageEntityTextUrl.url is deliberately not serialized here — extracting the
+# URLs hidden behind masked hyperlinks is tracked separately in #1492.
+_ENTITY_DROPPED_FIELDS = frozenset({"_", "url"})
+
+
+def extract_message_entities_json(msg) -> str | None:
+    """Serialize a message's ``MessageEntity*`` formatting spans as JSON.
+
+    Each entity keeps its TL fields (``offset``/``length`` plus the subtype's
+    own, e.g. ``document_id`` for custom emoji — same raw id the reactions
+    layer encodes as ``custom:<document_id>``) and gains a ``type`` label
+    (``bold``, ``custom_emoji``, ``spoiler``, ...). ``msg.text`` stays the
+    guaranteed plain-text rendering; the entities are the span metadata on top
+    of it. No entities → ``None`` (not ``"[]"``), so legacy rows and fresh
+    ones are indistinguishable.
+    """
+    entities = getattr(msg, "entities", None)
+    if not entities:
+        return None
+    serialized = [
+        {
+            **{
+                key: value
+                for key, value in entity.to_dict().items()
+                if key not in _ENTITY_DROPPED_FIELDS and value is not None
+            },
+            "type": _entity_type(entity),
+        }
+        for entity in entities
+    ]
+    return json.dumps(serialized, ensure_ascii=False, sort_keys=True) if serialized else None
+
+
+def extract_webpage_plain_text(msg) -> str | None:
+    """Plain text of the link preview's instant-view page, ``None`` when absent.
+
+    A link-only post leaves ``msg.text`` empty while the words sit in the
+    preview's cached iv blocks; returning them as plain text keeps the FTS
+    index (built on ``text``) from silently missing such posts. ``None`` means
+    "no page to add" — the caller keeps the original text untouched.
+    """
+    text = webpage_page_text(msg)
+    return text or None
 
 
 def get_sender_name(msg) -> str | None:
@@ -151,6 +207,9 @@ def build_message_from_telethon(msg, channel_id: int) -> Message:
     is identical to the previous inline construction.
     """
     sender_identity = extract_message_sender_identity(msg)
+    # Plain text stays the FTS source; an iv-page fills it in only when the raw
+    # message carries no words of its own (link-only posts, #1547).
+    text = msg.text or extract_webpage_plain_text(msg)
     return Message(
         channel_id=channel_id,
         message_id=msg.id,
@@ -159,9 +218,9 @@ def build_message_from_telethon(msg, channel_id: int) -> Message:
         sender_first_name=sender_identity.sender_first_name,
         sender_last_name=sender_identity.sender_last_name,
         sender_username=sender_identity.sender_username,
-        text=msg.text,
+        text=text,
         message_kind=get_message_kind(msg),
-        detected_lang=TranslationService.detect_language(msg.text),
+        detected_lang=TranslationService.detect_language(text),
         media_type=get_media_type_for(msg),
         service_action_raw=get_service_action_raw(msg),
         service_action_semantic=get_service_action_semantic(msg),
@@ -169,6 +228,7 @@ def build_message_from_telethon(msg, channel_id: int) -> Message:
         sender_kind=get_sender_kind(msg),
         topic_id=extract_topic_id(msg),
         reactions_json=extract_reactions(msg),
+        entities_json=extract_message_entities_json(msg),
         views=getattr(msg, "views", None),
         forwards=getattr(msg, "forwards", None),
         reply_count=getattr(getattr(msg, "replies", None), "replies", None),

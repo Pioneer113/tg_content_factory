@@ -56,6 +56,7 @@ SCHEMA_REPAIR_COLUMNS: Mapping[str, ColumnSpec] = {
         "sender_kind": "sender_kind TEXT",
         "topic_id": "topic_id INTEGER",
         "reactions_json": "reactions_json TEXT",
+        "entities_json": "entities_json TEXT",
         "views": "views INTEGER",
         "forwards": "forwards INTEGER",
         "reply_count": "reply_count INTEGER",
