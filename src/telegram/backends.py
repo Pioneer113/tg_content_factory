@@ -28,6 +28,7 @@ from src.telegram.auth import TelegramAuth
 from src.telegram.mtproto_watchdog import bind_telethon_base_logger
 from src.telegram.outgoing_ceiling import OutgoingRateCeiling
 from src.telegram.reactions import normalize_outgoing_reaction_emoji
+from src.telegram.schema_drift import translate_schema_drift
 from src.telegram.session_materializer import SessionMaterializer
 
 logger = logging.getLogger(__name__)
@@ -280,7 +281,14 @@ class TelegramTransportSession:
                 self._record_flood_breaker(operation, flooded=True)
             raise
         except Exception as exc:
-            translated = await self._translate_flood_wait(exc, operation)
+            # _translate_flood_wait re-raises non-flood errors unchanged.
+            try:
+                translated = await self._translate_flood_wait(exc, operation)
+            except Exception as untranslated:
+                # #1549: TypeNotFoundError is a TL-schema mismatch, not a
+                # missing entity — re-raise as SchemaDriftError so it stops
+                # reading as "no such chat".
+                raise translate_schema_drift(untranslated, operation) from untranslated
             if record_flood_breaker:
                 self._record_flood_breaker(
                     operation, flooded=isinstance(translated, HandledFloodWaitError)
@@ -328,7 +336,11 @@ class TelegramTransportSession:
             self._record_flood_breaker(operation, flooded=True)
             raise
         except Exception as exc:
-            translated = await self._translate_flood_wait(exc, operation)
+            # Same non-flood re-raise + schema-drift translation as _run (#1549).
+            try:
+                translated = await self._translate_flood_wait(exc, operation)
+            except Exception as untranslated:
+                raise translate_schema_drift(untranslated, operation) from untranslated
             self._record_flood_breaker(
                 operation, flooded=isinstance(translated, HandledFloodWaitError)
             )
