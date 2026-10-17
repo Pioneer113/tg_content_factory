@@ -26,7 +26,7 @@ def offline_default_provider(monkeypatch):
     leaves the process (#1445 — 429/connection flakes in the full suite). ``env={}``
     is the deterministic keyless path these assertions were written against.
     """
-    import src.services.provider_service as provider_service_module
+    import tg_agent.services.provider_service as provider_service_module
 
     real_build = provider_service_module.build_provider_service
 
