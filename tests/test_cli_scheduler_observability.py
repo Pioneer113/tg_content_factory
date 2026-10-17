@@ -175,7 +175,10 @@ RUNTIME_KEYS = [
     ("collect_interval_minutes", "45", "scheduler.reconcile", "45"),
     ("warm_dialogs_interval_minutes", "60", "scheduler.reconcile", "60"),
     ("scheduler_autostart", "1", "scheduler.reconcile", "1"),
+    ("scheduler_autostart", "true", "scheduler.reconcile", "1"),
+    ("scheduler_autostart", "false", "scheduler.reconcile", "0"),
     ("scheduler_job_disabled:collect_all", "1", "scheduler.reconcile", "1"),
+    ("scheduler_job_disabled:collect_all", "true", "scheduler.reconcile", "1"),
 ]
 
 

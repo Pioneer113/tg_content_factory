@@ -54,22 +54,27 @@ async def set_impl(config_path: str, *, key: str, value: str) -> None:
     silently diverges from what the worker actually does (pause gate, job
     intervals). Mirrors the web settings routes, which enqueue
     ``scheduler.reconcile`` after every scheduler mutation.
+
+    Boolean runtime keys (pause gate, autostart, job-disabled flags) are
+    canonicalized to "1"/"0" — the worker reads them as ``== "1"``, so a raw
+    "true"/"yes" would otherwise be a silent no-op.
     """
     _, db = await runtime.init_db(config_path)
     try:
         paused_key = "collection_queue_paused"
         reconcile_keys = {
-            "scheduler_autostart",
             "collect_interval_minutes",
             "warm_dialogs_interval_minutes",
         }
+        truthy = value.strip().lower() in {"1", "true", "yes", "on"}
         followup: str | None = None
         if key == paused_key:
-            # The live pause gate is binary; a raw "true"/"false" string would
-            # read as unpaused (`== "1"`) everywhere else — canonicalize here.
-            value = "1" if value.strip().lower() in {"1", "true", "yes", "on"} else "0"
+            value = "1" if truthy else "0"
             followup = "collection.pause" if value == "1" else "collection.resume"
-        elif key in reconcile_keys or key.startswith("scheduler_job_disabled:"):
+        elif key == "scheduler_autostart" or key.startswith("scheduler_job_disabled:"):
+            value = "1" if truthy else "0"
+            followup = "scheduler.reconcile"
+        elif key in reconcile_keys:
             followup = "scheduler.reconcile"
         await db.set_setting(key, value)
         if followup is None:
