@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import typer
@@ -420,6 +420,36 @@ async def import_impl(config_path: str, *, source: str) -> None:
         await db.close()
 
 
+def _stats_stale_channel_ids(channels: list[Channel], latest_stats: dict, skip_fresh_hours: int) -> list[int]:
+    """Channel ids needing a stats refresh, oldest collection first.
+
+    Same selection semantics as ``Collector.collect_all_stats`` (#1569 review):
+    everything without stats at all, plus anything whose latest snapshot is
+    older than ``stats_all_skip_fresh_hours`` — so a mature DB keeps getting
+    refreshes instead of becoming a permanent no-op once every channel has a
+    snapshot. Ordered never-collected first, then oldest ``collected_at``.
+    """
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=skip_fresh_hours) if skip_fresh_hours > 0 else None
+
+    def _collected_at(channel: Channel) -> datetime:
+        latest = latest_stats.get(channel.channel_id)
+        collected_at = (latest.collected_at if latest else None) or datetime.min.replace(
+            tzinfo=timezone.utc
+        )
+        if collected_at.tzinfo is None:
+            collected_at = collected_at.replace(tzinfo=timezone.utc)
+        return collected_at
+
+    stale = [
+        ch
+        for ch in channels
+        if ch.channel_id not in latest_stats or cutoff is None or _collected_at(ch) < cutoff
+    ]
+    stale.sort(key=lambda ch: (ch.channel_id in latest_stats, _collected_at(ch)))
+    return [ch.channel_id for ch in stale]
+
+
 async def stats_impl(config_path: str, *, all_channels: bool, identifier: str | None, max_channels: int | None) -> None:
     """``channel stats`` — queue stats collection instead of opening a pool.
 
@@ -427,7 +457,7 @@ async def stats_impl(config_path: str, *, all_channels: bool, identifier: str | 
     work through ``channels.collect_stats`` commands and STATS_ALL tasks. The CLI
     now uses those queues too, so a live daemon never races a second pool (#1569).
     """
-    _, db = await runtime.init_db(config_path)
+    config, db = await runtime.init_db(config_path)
     try:
         if all_channels:
             if max_channels is not None and max_channels <= 0:
@@ -440,19 +470,32 @@ async def stats_impl(config_path: str, *, all_channels: bool, identifier: str | 
                 active_only=True, include_filtered=False
             )
             latest_stats = await db.get_latest_stats_for_all()
-            channel_ids = [
-                ch.channel_id for ch in channels if ch.channel_id not in latest_stats
-            ]
+            skip_fresh_hours = int(
+                getattr(config.scheduler, "stats_all_skip_fresh_hours", 24) or 0
+            )
+            channel_ids = _stats_stale_channel_ids(channels, latest_stats, skip_fresh_hours)
             if not channel_ids:
-                print("All active channels already have stats.")
+                print("All active channels already have fresh stats.")
                 return
             if max_channels is not None:
-                channel_ids = channel_ids[:max_channels]
-            task_id = await db.create_stats_task(StatsAllTaskPayload(channel_ids=channel_ids))
+                limit = max_channels
+            else:
+                limit = max(
+                    1, int(getattr(config.scheduler, "stats_all_max_channels_per_run", 10) or 10)
+                )
+            remaining = max(0, len(channel_ids) - limit)
+            task_id = await db.create_stats_task(
+                StatsAllTaskPayload(channel_ids=channel_ids[:limit])
+            )
             print(
-                f"Queued stats task #{task_id} for {len(channel_ids)} channels; "
+                f"Queued stats task #{task_id} for {min(len(channel_ids), limit)} channels; "
                 "the running worker collects it."
             )
+            if remaining:
+                print(
+                    f"{remaining} more stale channels remain — rerun 'channel stats --all' "
+                    "after this task completes."
+                )
             return
         if not identifier:
             print("Specify a channel identifier or use --all")

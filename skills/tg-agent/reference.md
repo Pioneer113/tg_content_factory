@@ -44,9 +44,11 @@ filter analyze | apply | reset | precheck | suspects | toggle | purge | purge-me
 - `channel collect [--channel-id ID]` — incremental collection for one channel; without flags
   interactive selection. One-off; exit when done. With a live daemon the channel is queued
   to the worker (no second MTProto client); `TGCF_CLI_DIRECT=1` forces the in-process path.
-- `channel stats` — queue stats collection: one channel by identifier, `--all` for every
-  active channel without fresh stats (`--max-channels N` caps the list). The worker collects
-  asynchronously; numbers land in DB — read them via `channel list` / `analytics channel`.
+- `channel stats` — queue stats collection: one channel by identifier; `--all` refreshes
+  channels whose stats are missing **or older than** `stats_all_skip_fresh_hours` (24h),
+  oldest first, capped per run at `stats_all_max_channels_per_run` (10; `--max-channels N`
+  overrides). The worker collects asynchronously; numbers land in DB — read them via
+  `channel list` / `analytics channel`.
 - `channel candidates [--json] [--limit N]` — read-only list of channels discovered by
   premium search (`search --mode tg`): inactive rows whose cached messages carry the
   search-query tag. Pick ones worth collecting, then `channel toggle <identifier>`

@@ -59,30 +59,40 @@ async def collect_impl(
     Driven through the single async-bridge ``run_async`` by its callers, so
     there is no local ``asyncio.run`` in the migrated path.
 
-    With a live daemon, ``--channel-id`` hands the channel to the worker's
-    collection queue (same DB-only PENDING-row path as ``channel collect``) —
-    a second in-process pool would race the daemon for the same flood-wait
-    budget and session files (#1569). ``TGCF_CLI_DIRECT=1`` forces the direct
-    path; without a daemon it is the only way to collect at all.
+    With a live daemon both modes hand work to the worker's collection queue
+    (same DB-only PENDING-row path as ``channel collect``) — a second
+    in-process pool would race the daemon for the same flood-wait budget and
+    session files (#1569). The enqueue-all hand-off needs no pool at all: a
+    freshly built CLI pool always reports zero resolve backoff, so reading it
+    here was dead weight. ``TGCF_CLI_DIRECT=1`` forces the direct path; without
+    a daemon it is the only way to collect at all.
     """
     config, db = await runtime.init_db(config_path)
-    if (
-        channel_id
-        and not worker_handoff.direct_requested()
-        and worker_handoff.serve_is_running(config)
-    ):
-        # Live daemon owns the sessions — resolve and refuse DB-only, never
-        # open a second pool (#1569). Same refusals as the direct path below.
+    if not worker_handoff.direct_requested() and worker_handoff.serve_is_running(config):
+        # Live daemon owns the sessions — queue DB-only, never open a second
+        # pool (#1569). Same refusals as the direct path below.
         try:
-            channels = await db.get_channels()
-            channel = next((ch for ch in channels if ch.channel_id == channel_id), None)
-            if channel is None:
-                print(f"Channel {channel_id} not found in DB")
-            elif channel.is_filtered:
-                print(f"Channel {channel_id} is filtered and excluded from collection")
+            if channel_id:
+                channels = await db.get_channels()
+                channel = next((ch for ch in channels if ch.channel_id == channel_id), None)
+                if channel is None:
+                    print(f"Channel {channel_id} not found in DB")
+                elif channel.is_filtered:
+                    print(f"Channel {channel_id} is filtered and excluded from collection")
+                else:
+                    await _handoff_collect_to_worker(
+                        db, identifier=str(channel_id), full=full, wait=False
+                    )
             else:
-                await _handoff_collect_to_worker(
-                    db, identifier=str(channel_id), full=full, wait=False
+                collection_service = CollectionService(
+                    ChannelBundle.from_database(db), None, collection_queue=None
+                )
+                result = await TaskEnqueuer(db, collection_service).enqueue_all_channels()
+                print(
+                    f"Enqueued {result.queued_count} channels "
+                    f"(skipped {result.skipped_existing_count}, "
+                    f"total {result.total_candidates}). "
+                    "The running worker executes them."
                 )
         finally:
             await db.close()

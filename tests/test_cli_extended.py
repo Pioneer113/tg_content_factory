@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 # Pre-import pydantic.root_model to prevent lazy-import conflict
@@ -167,29 +168,46 @@ class TestCLIChannelExtended:
         assert commands[0].payload == {"channel_pk": pk}
 
     def test_stats_all_queues_stats_task(self, cli_env, capsys):
-        """`channel stats --all` creates a STATS_ALL task like the web route."""
+        """`channel stats --all` refreshes missing AND stale stats (#1569 review).
+
+        Same selection as the old collector path: channels without any stats,
+        plus ones older than ``stats_all_skip_fresh_hours`` — never-collected
+        first, then oldest. Fresh snapshots stay untouched.
+        """
         db = cli_env
         asyncio.run(db.add_channel(Channel(channel_id=111, title="NoStats")))
-        asyncio.run(db.add_channel(Channel(channel_id=444, title="NoStats2")))
-        asyncio.run(db.add_channel(Channel(channel_id=222, title="HasStats")))
+        asyncio.run(db.add_channel(Channel(channel_id=444, title="StaleStats")))
+        asyncio.run(db.add_channel(Channel(channel_id=222, title="FreshStats")))
+        asyncio.run(
+            db.save_channel_stats(ChannelStats(channel_id=444, subscriber_count=10))
+        )
         asyncio.run(
             db.save_channel_stats(ChannelStats(channel_id=222, subscriber_count=10))
+        )
+        stale_ts = (datetime.now(timezone.utc) - timedelta(hours=48)).isoformat()
+        asyncio.run(
+            db.execute_write(
+                "UPDATE channel_stats SET collected_at = ? WHERE channel_id = ?",
+                (stale_ts, 444),
+            )
         )
 
         init_pool = AsyncMock()
         with patch("src.cli.commands.channel.runtime.init_pool", init_pool):
             from src.cli.commands.channel import run
 
-            run(_ns(channel_action="stats", identifier=None, all=True, max_channels=1))
+            run(_ns(channel_action="stats", identifier=None, all=True))
 
         init_pool.assert_not_awaited()
-        assert "Queued stats task" in capsys.readouterr().out
+        out = capsys.readouterr().out
+        assert "Queued stats task" in out
+        # Default per-run cap is 10 — both candidates fit under it.
+        assert "1 more stale channels" not in out
 
         _ensure_db_open(db)
         task = asyncio.run(db.get_active_stats_task())
         assert task is not None
-        # --max-channels caps the payload list; channels with fresh stats are skipped.
-        assert task.payload.channel_ids == [111]
+        assert task.payload.channel_ids == [111, 444]
 
     def test_stats_all_skips_when_task_already_active(self, cli_env, capsys):
         """An active STATS_ALL task must not get a duplicate (#1569 race)."""

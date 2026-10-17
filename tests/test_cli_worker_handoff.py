@@ -365,6 +365,34 @@ def test_collect_channel_id_tgcf_cli_direct_forces_pool(collect_cli, capsys, mon
     assert "Collected 5 messages" in capsys.readouterr().out
 
 
+def test_collect_enqueue_all_hands_off_when_serve_is_running(collect_cli, capsys):
+    """Bare `collect` (enqueue-all) must not open a pool against a live daemon.
+
+    The pool on that path was only read for resolve backoff — which a freshly
+    built CLI pool always reports as zero — so the hand-off needs no pool at
+    all (#1569 review).
+    """
+    db = collect_cli
+    _add_channel(db, 6001, "Bulk1")
+    _add_channel(db, 6002, "Bulk2")
+
+    init_pool = AsyncMock()
+    with (
+        patch("src.cli.commands.collect.worker_handoff.serve_is_running", return_value=True),
+        patch("src.cli.commands.collect.runtime.init_pool", init_pool),
+    ):
+        from src.cli.commands.collect import collect_impl
+
+        asyncio.run(collect_impl("config.yaml", channel_id=None, full=False))
+
+    init_pool.assert_not_awaited()
+    assert "The running worker executes them" in capsys.readouterr().out
+
+    _ensure_db_open(db)
+    pending = asyncio.run(db.get_pending_channel_tasks())
+    assert {t.channel_id for t in pending} == {6001, 6002}
+
+
 def test_scheduler_start_enqueues_reconcile(scheduler_cli, capsys):
     """`scheduler start` must not spawn a foreground pool+SchedulerManager.
 
