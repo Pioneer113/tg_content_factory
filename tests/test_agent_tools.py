@@ -216,6 +216,7 @@ class TestSemanticSearchTool:
                 message_id=1,
                 text="Semantic result",
                 date="2025-01-01",
+                topic_id=None,
             ),
         ]
         mock_db.search_semantic_messages = AsyncMock(return_value=(mock_messages, 1))
