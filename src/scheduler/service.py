@@ -57,6 +57,7 @@ class SchedulerManager:
         self._job_id = "collect_all"
         self._photo_due_job_id = "photo_due"
         self._photo_auto_job_id = "photo_auto"
+        self._ping_due_job_id = "ping_due"
         self._warm_dialogs_job_id = "warm_all_dialogs"
         self._warm_dialogs_interval_minutes: int = 1440  # 24 hours default
         self._current_interval_minutes: int = config.collect_interval_minutes
@@ -108,6 +109,13 @@ class SchedulerManager:
             self._scheduler.add_job(
                 self._run_photo_auto,
                 IntervalTrigger(minutes=1),
+                id=job_id,
+                replace_existing=True,
+            )
+        elif job_id == self._ping_due_job_id and self._task_enqueuer:
+            self._scheduler.add_job(
+                self._run_ping_due,
+                IntervalTrigger(hours=1),
                 id=job_id,
                 replace_existing=True,
             )
@@ -197,6 +205,16 @@ class SchedulerManager:
                 logger.info("Registered job %s (every 1 min)", self._photo_auto_job_id)
             else:
                 logger.info("Job %s is disabled, skipping registration", self._photo_auto_job_id)
+            if await self.is_job_enabled(self._ping_due_job_id):
+                self._scheduler.add_job(
+                    self._run_ping_due,
+                    IntervalTrigger(hours=1),
+                    id=self._ping_due_job_id,
+                    replace_existing=True,
+                )
+                logger.info("Registered job %s (every 1 hour)", self._ping_due_job_id)
+            else:
+                logger.info("Job %s is disabled, skipping registration", self._ping_due_job_id)
 
         if self._warm_dialogs_callback:
             if self._scheduler_bundle:
@@ -528,6 +546,18 @@ class SchedulerManager:
             logger.exception("Error enqueuing photo_auto")
         return {"enqueued": True}
 
+    async def _run_ping_due(self) -> dict:
+        """Hourly check for dormant DM pings — real-time is not required (#1415)."""
+        if not await self._wait_if_paused_background_job("ping_due"):
+            return {"enqueued": False}
+        if not self._task_enqueuer:
+            return {"checked": 0}
+        try:
+            await self._task_enqueuer.enqueue_ping_due()
+        except Exception:
+            logger.exception("Error enqueuing ping_due")
+        return {"enqueued": True}
+
     async def get_potential_jobs(self) -> list[dict]:
         """Return jobs that would be registered on start (for UI when scheduler is stopped)."""
         jobs: list[dict] = [
@@ -536,6 +566,7 @@ class SchedulerManager:
         if self._task_enqueuer is not None:
             jobs.append({"job_id": "photo_due", "interval_minutes": 1})
             jobs.append({"job_id": "photo_auto", "interval_minutes": 1})
+            jobs.append({"job_id": "ping_due", "interval_minutes": 60})
         if self._sq_bundle:
             try:
                 all_active = await self._sq_bundle.get_all(active_only=True)

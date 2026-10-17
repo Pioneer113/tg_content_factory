@@ -20,6 +20,7 @@ from src.database.bundles import (
     CollectionBundle,
     NotificationBundle,
     PhotoLoaderBundle,
+    PingMonitorBundle,
     PipelineBundle,
     SchedulerBundle,
     SearchBundle,
@@ -35,7 +36,9 @@ from src.services.notification_target_service import NotificationTargetService
 from src.services.photo_auto_upload_service import PhotoAutoUploadService
 from src.services.photo_publish_service import PhotoPublishService
 from src.services.photo_task_service import PhotoTaskService
+from src.services.ping_monitor_service import PingMonitorService
 from src.services.task_enqueuer import TaskEnqueuer
+from src.services.telegram_actions import TelegramActionService
 from src.services.telegram_command_dispatcher import TelegramCommandDispatcher
 from src.services.unified_dispatcher import UnifiedDispatcher
 from src.settings_utils import parse_int_setting
@@ -299,10 +302,18 @@ async def build_container_with_templates(
     dm_listener = None
     dm_catchup = None
     agent_manager = None
+    ping_monitor_service: PingMonitorService | None = None
     live_runtime_pause_gate = LiveRuntimePauseGate() if runtime_mode == "worker" else None
     collector: WebCollector
     if runtime_mode == "worker":
         live_pool = cast(ClientPool, pool)
+        # Dormant-DM pings (#1415): live history reads + sends through the same
+        # TelegramActionService path as `dialogs read/send` — worker-only,
+        # web snapshots never open Telegram connections.
+        ping_monitor_service = PingMonitorService(
+            PingMonitorBundle.from_database(db),
+            TelegramActionService(live_pool),
+        )
         notifier = Notifier(
             notification_target_service, config.notifications.admin_chat_id, notification_bundle
         )
@@ -352,6 +363,7 @@ async def build_container_with_templates(
             sq_bundle=search_query_bundle,
             photo_task_service=photo_task_service,
             photo_auto_upload_service=photo_auto_upload_service,
+            ping_monitor_service=ping_monitor_service,
             search_engine=search_engine,
             pipeline_bundle=pipeline_bundle,
             db=db,
@@ -443,6 +455,7 @@ async def build_container_with_templates(
         telegram_command_dispatcher=telegram_command_dispatcher,
         dm_listener=dm_listener,
         dm_catchup=dm_catchup,
+        ping_monitor_service=ping_monitor_service,
         search_engine=search_engine,
         ai_search=ai_search,
         scheduler=scheduler,

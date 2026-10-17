@@ -37,6 +37,7 @@ from src.database.repositories.messages import MessageSearchPage, MessagesReposi
 from src.database.repositories.notification_bots import NotificationBotsRepository
 from src.database.repositories.notified_messages import NotifiedMessagesRepository
 from src.database.repositories.photo_loader import PhotoLoaderRepository
+from src.database.repositories.ping_monitors import PingMonitorRepository
 from src.database.repositories.pipeline_action_log import PipelineActionLogRepository
 from src.database.repositories.pipeline_templates import PipelineTemplatesRepository
 from src.database.repositories.runtime_snapshots import RuntimeSnapshotsRepository
@@ -216,6 +217,7 @@ class Database:
         self._incoming_dms = IncomingDmsRepository(read_db, database=self)
         self._dm_messages = DmMessagesRepository(read_db, database=self)
         self._dm_reply_drafts = DmReplyDraftsRepository(read_db, database=self)
+        self._ping_monitors = PingMonitorRepository(read_db, database=self)
         self._repos = DatabaseRepositories(
             accounts=self._accounts,
             channels=self._channels,
@@ -242,6 +244,7 @@ class Database:
             incoming_dms=self._incoming_dms,
             dm_messages=self._dm_messages,
             dm_reply_drafts=self._dm_reply_drafts,
+            ping_monitors=self._ping_monitors,
             decisions=self._decisions,
         )
 

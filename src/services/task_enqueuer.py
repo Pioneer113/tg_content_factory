@@ -75,6 +75,17 @@ class TaskEnqueuer:
         logger.info("Enqueued PHOTO_AUTO task #%d", task_id)
         return task_id
 
+    async def enqueue_ping_due(self) -> int | None:
+        """Create a PING_DUE task if none is already pending/running."""
+        has = await self._db.repos.tasks.has_active_task(CollectionTaskType.PING_DUE)
+        if has:
+            return None
+        task_id = await self._db.repos.tasks.create_generic_task(
+            CollectionTaskType.PING_DUE,
+            title="Проверка пингов DM",
+        )
+        return task_id
+
     async def enqueue_pipeline_run(
         self, pipeline_id: int, dry_run: bool = False, since_hours: float = 24.0,
     ) -> int | None:

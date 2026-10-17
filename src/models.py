@@ -271,6 +271,7 @@ class CollectionTaskType(StrEnum):
     FILTER_ANALYZE = "filter_analyze"
     PHOTO_DUE = "photo_due"
     PHOTO_AUTO = "photo_auto"
+    PING_DUE = "ping_due"
     PIPELINE_RUN = "pipeline_run"
     CONTENT_GENERATE = "content_generate"
     CONTENT_PUBLISH = "content_publish"
@@ -1256,4 +1257,32 @@ class PhotoAutoUploadJob(BaseModel):
     error: str | None = None
     last_run_at: datetime | None = None
     last_seen_marker: str | None = None
+    created_at: datetime | None = None
+
+
+class PingMonitor(BaseModel):
+    """Монитор затихшего 1:1 DM-диалога (issue #1415, MVP).
+
+    Владелец ставит диалог под наблюдение вручную: `phone` — аккаунт, чей диалог
+    (`dialog_id`) мониторим, `nudge_text` — текст дружеского пинга,
+    `silence_threshold_days` — базовый порог N. `cycle_count` — счётчик затухающей
+    прогрессии повторов (см. `_next_threshold_days` в
+    `src/services/ping_monitor_service.py`); ответ контакта сбрасывает его в 0.
+    Метки времени (`last_incoming_message_at`/`last_outgoing_message_at`) —
+    снимки с живой истории диалога при каждой проверке.
+    """
+
+    id: int | None = None
+    phone: str
+    dialog_id: int
+    dialog_title: str | None = None
+    is_active: bool = True
+    silence_threshold_days: int = Field(30, ge=1)
+    nudge_text: str
+    cycle_count: int = 0
+    last_checked_at: datetime | None = None
+    last_incoming_message_at: datetime | None = None
+    last_outgoing_message_at: datetime | None = None
+    last_nudge_sent_at: datetime | None = None
+    error: str | None = None
     created_at: datetime | None = None

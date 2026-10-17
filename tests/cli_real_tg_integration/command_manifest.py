@@ -246,6 +246,14 @@ CLI_REAL_TG_MANUAL_OR_EXCLUDED_COMMANDS: dict[tuple[str, ...], str] = {
     ("photo-loader", "publish"): "local photo batch publish; HELD to PENDING DB-only flip, no Telegram call",
     ("photo-loader", "batch-list"): "list-only but depends on mutable photo-loader setup",
     ("photo-loader", "items"): "list-only but depends on mutable photo-loader setup",
+    ("ping", "create"): "local ping_monitors write; --username path resolves via live client",
+    ("ping", "delete"): "local ping monitor delete mutation",
+    ("ping", "list"): "list-only local ping monitor view",
+    ("ping", "run-due"): (
+        "reads live DM history and may send real ping messages; covered by "
+        "unit/integration tests with fakes — manual only (#1415)"
+    ),
+    ("ping", "update"): "local ping monitor mutation",
     ("pipeline", "add"): "local pipeline write",
     ("pipeline", "ai-edit"): "provider spend/write operation",
     ("pipeline", "auto-select"): "provider spend (quality scoring) + local run mutation",

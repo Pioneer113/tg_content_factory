@@ -436,6 +436,26 @@ CREATE TABLE IF NOT EXISTS photo_auto_upload_files (
     FOREIGN KEY (job_id) REFERENCES photo_auto_upload_jobs(id)
 );
 
+CREATE TABLE IF NOT EXISTS ping_monitors (
+    id INTEGER PRIMARY KEY,
+    phone TEXT NOT NULL,
+    dialog_id INTEGER NOT NULL,
+    dialog_title TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    silence_threshold_days INTEGER NOT NULL DEFAULT 30,
+    nudge_text TEXT NOT NULL,
+    cycle_count INTEGER NOT NULL DEFAULT 0,
+    last_checked_at TEXT,
+    last_incoming_message_at TEXT,
+    last_outgoing_message_at TEXT,
+    last_nudge_sent_at TEXT,
+    error TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(phone, dialog_id)
+);
+CREATE INDEX IF NOT EXISTS idx_ping_monitors_active ON ping_monitors(is_active, id);
+
+
 CREATE TABLE IF NOT EXISTS dialog_cache (
     id INTEGER PRIMARY KEY,
     phone TEXT NOT NULL,

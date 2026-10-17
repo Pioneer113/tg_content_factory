@@ -51,6 +51,15 @@ class TestSchedulerSyncJobState:
         await mgr.sync_job_state("photo_auto", True)
         mgr._scheduler.add_job.assert_called_once()
 
+    async def test_sync_job_enable_ping_due(self):
+        from src.scheduler.service import SchedulerManager
+        mgr = SchedulerManager()
+        mgr._scheduler = MagicMock()
+        mgr._scheduler.running = True
+        mgr._task_enqueuer = MagicMock()
+        await mgr.sync_job_state("ping_due", True)
+        mgr._scheduler.add_job.assert_called_once()
+
     async def test_sync_job_enable_sq_prefix(self):
         from src.scheduler.service import SchedulerManager
         mgr = SchedulerManager()

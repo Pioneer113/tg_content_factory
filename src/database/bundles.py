@@ -35,6 +35,7 @@ from src.database.repositories.messages import MessageSearchPage, MessagesReposi
 from src.database.repositories.notification_bots import NotificationBotsRepository
 from src.database.repositories.notified_messages import NotifiedMessagesRepository
 from src.database.repositories.photo_loader import PhotoLoaderRepository
+from src.database.repositories.ping_monitors import PingMonitorRepository
 from src.database.repositories.pipeline_action_log import PipelineActionLogRepository
 from src.database.repositories.pipeline_templates import PipelineTemplatesRepository
 from src.database.repositories.runtime_snapshots import RuntimeSnapshotsRepository
@@ -57,6 +58,7 @@ from src.models import (
     PhotoBatchItem,
     PhotoBatchStatus,
     PhotoSendMode,
+    PingMonitor,
     PipelineSource,
     PipelineTarget,
     SearchParams,
@@ -105,6 +107,7 @@ class DatabaseRepositories:
     dm_reply_drafts: DmReplyDraftsRepository
     notified_messages: NotifiedMessagesRepository
     decisions: DecisionsRepository
+    ping_monitors: PingMonitorRepository
 
 
 # ---------------------------------------------------------------------------
@@ -1038,3 +1041,63 @@ class PipelineBundle(_AccountReadOps):
     async def list_cached_dialogs(self, phone: str) -> list[dict]:
         """Все закэшированные диалоги аккаунта (для выпадающего списка целей)."""
         return await self.dialog_cache.list_dialogs(phone)
+
+
+@dataclass(frozen=True)
+class PingMonitorBundle:
+    """Фасад пинг-мониторов затихших DM-контактов (#1415).
+
+    Тонкие обёртки над `PingMonitorRepository` для `PingMonitorService` —
+    сервисный слой не тянет весь `db.repos`.
+    """
+
+    ping_monitors: PingMonitorRepository
+
+    @classmethod
+    def from_database(cls, db: "Database") -> "PingMonitorBundle":
+        """Собрать бандл из репозитория пинг-мониторов общего `Database`."""
+        return cls(db.repos.ping_monitors)
+
+    async def create(self, monitor: PingMonitor) -> int:
+        """Создать монитор; вернуть его id."""
+        return await self.ping_monitors.create(monitor)
+
+    async def get(self, monitor_id: int) -> PingMonitor | None:
+        """Монитор по id, либо None."""
+        return await self.ping_monitors.get(monitor_id)
+
+    async def list(self, active_only: bool = False) -> list[PingMonitor]:
+        """Все мониторы; `active_only` — только активные."""
+        return await self.ping_monitors.list(active_only)
+
+    async def update(
+        self,
+        monitor_id: int,
+        *,
+        nudge_text: str | None = None,
+        silence_threshold_days: int | None = None,
+        is_active: bool | None = None,
+        cycle_count: int | None = None,
+        last_checked_at: datetime | None = None,
+        last_incoming_message_at: datetime | None = None,
+        last_outgoing_message_at: datetime | None = None,
+        last_nudge_sent_at: datetime | None = None,
+        error: str | None = None,
+    ) -> None:
+        """Обновить переданные поля монитора (текст, порог, прогрессия, отметки)."""
+        await self.ping_monitors.update(
+            monitor_id,
+            nudge_text=nudge_text,
+            silence_threshold_days=silence_threshold_days,
+            is_active=is_active,
+            cycle_count=cycle_count,
+            last_checked_at=last_checked_at,
+            last_incoming_message_at=last_incoming_message_at,
+            last_outgoing_message_at=last_outgoing_message_at,
+            last_nudge_sent_at=last_nudge_sent_at,
+            error=error,
+        )
+
+    async def delete(self, monitor_id: int) -> None:
+        """Удалить монитор."""
+        await self.ping_monitors.delete(monitor_id)

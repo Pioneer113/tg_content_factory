@@ -129,6 +129,24 @@ queued command). `create` reads phone/chat from the 24h incoming-DM journal by
 id; pass `--phone`/`--chat-id` explicitly if the journal row was already
 pruned. Approve after send is a no-op — a delivered draft cannot be re-queued.
 
+## ping — friendly pings for dormant DM chats (#1415)
+
+```
+ping create --phone P (--dialog-id ID | --username NAME) --text TEXT [--days N] [--title T]
+ping list [--active-only]
+ping update <id> [--text TEXT] [--days N] [--active | --inactive]
+ping delete <id>
+ping run-due
+```
+
+Monitors 1:1 dialogs: if the last message in the chat is yours and older than the
+base threshold (`--days`, default 30), the worker sends `--text` to the contact and
+repeats on a decaying schedule (+1 day, +7, +30, then every 30 days) until the
+contact replies — a reply resets the cycle back to the base threshold. Checking
+runs hourly as the `ping_due` scheduler job; `ping run-due` triggers it immediately
+and performs real Telegram reads/sends. The CRUD commands are local DB writes and
+safe to run while the daemon is up.
+
 ## content factory (LLM pipelines)
 
 ```

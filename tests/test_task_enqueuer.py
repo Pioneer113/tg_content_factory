@@ -186,6 +186,36 @@ async def test_enqueue_photo_due_skips_if_active(task_enqueuer, mock_db):
     assert result is None
 
 
+# === enqueue_ping_due tests (#1415) ===
+
+
+@pytest.mark.anyio
+async def test_enqueue_ping_due_creates_task(task_enqueuer, mock_db):
+    """Creates PING_DUE task when no active task exists."""
+    mock_db.repos.tasks.has_active_task = AsyncMock(return_value=False)
+    mock_db.repos.tasks.create_generic_task = AsyncMock(return_value=17)
+
+    result = await task_enqueuer.enqueue_ping_due()
+
+    mock_db.repos.tasks.has_active_task.assert_called_once_with(CollectionTaskType.PING_DUE)
+    mock_db.repos.tasks.create_generic_task.assert_called_once()
+    args, kwargs = mock_db.repos.tasks.create_generic_task.call_args
+    assert args[0] == CollectionTaskType.PING_DUE
+    assert "пингов" in kwargs.get("title", "")
+    assert result == 17
+
+
+@pytest.mark.anyio
+async def test_enqueue_ping_due_skips_if_active(task_enqueuer, mock_db):
+    """Skips creation if active task exists."""
+    mock_db.repos.tasks.has_active_task = AsyncMock(return_value=True)
+
+    result = await task_enqueuer.enqueue_ping_due()
+
+    mock_db.repos.tasks.create_generic_task.assert_not_called()
+    assert result is None
+
+
 # === enqueue_photo_auto tests ===
 
 
