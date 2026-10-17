@@ -13,9 +13,10 @@ import sqlite3
 
 import typer
 
-from src.cli import runtime
+from src.cli import runtime, worker_handoff
 from src.cli.commands.common import apply_startup, run_async
-from src.models import PingMonitor
+from src.models import CollectionTaskType, PingMonitor
+from src.services.task_enqueuer import TaskEnqueuer
 
 
 async def create_impl(
@@ -135,10 +136,26 @@ async def delete_impl(config_path: str, *, monitor_id: int) -> None:
 
 
 async def run_due_impl(config_path: str) -> None:
-    """Проверить все активные мониторы сейчас: живое чтение истории, пинги — реально."""
+    """Проверить активные мониторы сейчас; при живом демоне — в очередь воркера.
+
+    Воркер и сам гоняет ping_due ежечасно, поэтому параллельный локальный прогон
+    прошёл бы то же пороговое правило вторым процессом и отправил nudge дважды
+    (окно read_history → send_message → update не межпроцессное). Рука передачи:
+    serve_is_running → enqueue PING_DUE, дедуп has_active_task делает наложение
+    невозможным (#1574-паттерн HANDS_OFF).
+    """
     config, db = await runtime.init_db(config_path)
-    _, pool = await runtime.init_pool(config, db)
+    pool = None
     try:
+        if worker_handoff.serve_is_running(config):
+            if await db.repos.tasks.has_active_task(CollectionTaskType.PING_DUE):
+                print("A ping_due task is already active; the worker will run it.")
+                return
+            enqueuer = TaskEnqueuer(db, None)  # type: ignore[arg-type]
+            task_id = await enqueuer.enqueue_ping_due()
+            print(f"PING_DUE task #{task_id} queued; the worker will run it.")
+            return
+        _, pool = await runtime.init_pool(config, db)
         from src.services.ping_monitor_service import PingMonitorService
         from src.services.telegram_actions import TelegramActionService
 
@@ -149,7 +166,8 @@ async def run_due_impl(config_path: str) -> None:
         checked = await service.run_due()
         print(f"Checked {checked} ping monitor(s).")
     finally:
-        await pool.disconnect_all()
+        if pool is not None:
+            await pool.disconnect_all()
         await db.close()
 
 

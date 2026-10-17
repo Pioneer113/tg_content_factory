@@ -15,7 +15,7 @@ import pytest
 import typer
 
 from src.cli.commands import ping as ping_cli
-from src.models import DialogMessage, MessagesResult
+from src.models import CollectionTaskType, DialogMessage, MessagesResult
 from src.services.telegram_actions import TelegramActionService
 
 NOW = datetime(2026, 10, 17, 12, 0, tzinfo=timezone.utc)
@@ -229,6 +229,9 @@ def test_cli_run_due_invokes_service_and_reports(cli_db, capsys):
     with (
         patch("src.cli.commands.ping.runtime.init_db", side_effect=fake_init_db),
         patch("src.cli.commands.ping.runtime.init_pool", side_effect=fake_init_pool),
+        patch(
+            "src.cli.commands.ping.worker_handoff.serve_is_running", return_value=False
+        ),
         # run_due_impl импортирует TelegramActionService локально — патчим источник.
         patch("src.services.telegram_actions.TelegramActionService", return_value=actions),
     ):
@@ -238,3 +241,39 @@ def test_cli_run_due_invokes_service_and_reports(cli_db, capsys):
     assert "Checked 1 ping monitor(s)." in out
     actions.send_message.assert_awaited_once_with(phone="+1234", recipient=777, text="ping")
     pool.disconnect_all.assert_awaited_once()
+
+
+def test_cli_run_due_hands_off_to_running_worker(cli_db, capsys):
+    """Живой демон: run-due ставит PING_DUE задачу, своего пула не открывает."""
+    def _create():
+        return ping_cli.create_impl(
+            "cfg", phone="+1234", dialog_id=777, username=None, text="ping", days=30, title=None,
+        )
+
+    _run_ping_impl(_create, cli_db, capsys)
+
+    pool = MagicMock()
+    pool.disconnect_all = AsyncMock()
+
+    async def fake_init_db(_):
+        return None, cli_db
+
+    async def fake_init_pool(_config, _db):
+        raise AssertionError("must not open a pool while the daemon owns the sessions")
+
+    _reopen(cli_db)
+    with (
+        patch("src.cli.commands.ping.runtime.init_db", side_effect=fake_init_db),
+        patch("src.cli.commands.ping.runtime.init_pool", side_effect=fake_init_pool),
+        patch(
+            "src.cli.commands.ping.worker_handoff.serve_is_running", return_value=True
+        ),
+    ):
+        ping_cli.run_async(ping_cli.run_due_impl("cfg"))
+
+    out = capsys.readouterr().out
+    assert "PING_DUE task #" in out
+    assert "the worker will run it" in out
+    pool.disconnect_all.assert_not_awaited()
+    _reopen(cli_db)
+    assert asyncio.run(cli_db.repos.tasks.has_active_task(CollectionTaskType.PING_DUE))

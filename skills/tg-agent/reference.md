@@ -144,7 +144,9 @@ base threshold (`--days`, default 30), the worker sends `--text` to the contact 
 repeats on a decaying schedule (+1 day, +7, +30, then every 30 days) until the
 contact replies — a reply resets the cycle back to the base threshold. Checking
 runs hourly as the `ping_due` scheduler job; `ping run-due` triggers it immediately
-and performs real Telegram reads/sends. The CRUD commands are local DB writes and
+and performs real Telegram reads/sends. While the daemon is up, `run-due` hands off
+to it instead (queues a PING_DUE task, deduped) — no second pool, no double send.
+The CRUD commands are local DB writes and
 safe to run while the daemon is up.
 
 ## content factory (LLM pipelines)
