@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from src.services.image_generation_service import ImageGenerationService
     from src.services.photo_auto_upload_service import PhotoAutoUploadService
     from src.services.photo_task_service import PhotoTaskService
+    from src.services.ping_monitor_service import PingMonitorService
     from src.telegram.client_pool import ClientPool
     from src.telegram.notifier import Notifier
 
@@ -39,6 +40,7 @@ class TaskHandlerContext:
     sq_bundle: SearchQueryBundle | None = None
     photo_task_service: PhotoTaskService | None = None
     photo_auto_upload_service: PhotoAutoUploadService | None = None
+    ping_monitor_service: PingMonitorService | None = None
     poll_interval_sec: float = 5.0
     channel_timeout_sec: float = 120.0
     search_engine: "SearchEngine | None" = None

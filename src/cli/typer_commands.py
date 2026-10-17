@@ -75,6 +75,7 @@ from src.cli.commands.image import image_app
 from src.cli.commands.messages import messages_app
 from src.cli.commands.notification import notification_app
 from src.cli.commands.photo_loader import photo_loader_app
+from src.cli.commands.ping import ping_app
 from src.cli.commands.pipeline import pipeline_app
 from src.cli.commands.provider import provider_app
 from src.cli.commands.scheduler import scheduler_app
@@ -330,6 +331,13 @@ app.add_typer(dialogs_app, name="dialogs")
 # --------------------------------------------------------------------------- #
 
 app.add_typer(dm_app, name="dm")
+
+
+# --------------------------------------------------------------------------- #
+# ping → create / list / update / delete / run-due — #1415
+# --------------------------------------------------------------------------- #
+
+app.add_typer(ping_app, name="ping")
 
 
 # --------------------------------------------------------------------------- #

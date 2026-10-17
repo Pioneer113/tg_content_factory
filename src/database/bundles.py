@@ -35,6 +35,7 @@ from src.database.repositories.messages import MessageSearchPage, MessagesReposi
 from src.database.repositories.notification_bots import NotificationBotsRepository
 from src.database.repositories.notified_messages import NotifiedMessagesRepository
 from src.database.repositories.photo_loader import PhotoLoaderRepository
+from src.database.repositories.ping_monitors import PingMonitorRepository
 from src.database.repositories.pipeline_action_log import PipelineActionLogRepository
 from src.database.repositories.pipeline_templates import PipelineTemplatesRepository
 from src.database.repositories.runtime_snapshots import RuntimeSnapshotsRepository
@@ -105,6 +106,7 @@ class DatabaseRepositories:
     dm_reply_drafts: DmReplyDraftsRepository
     notified_messages: NotifiedMessagesRepository
     decisions: DecisionsRepository
+    ping_monitors: PingMonitorRepository
 
 
 # ---------------------------------------------------------------------------

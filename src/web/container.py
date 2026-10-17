@@ -30,6 +30,7 @@ from src.services.notification_target_service import NotificationTargetService
 from src.services.photo_auto_upload_service import PhotoAutoUploadService
 from src.services.photo_publish_service import PhotoPublishService
 from src.services.photo_task_service import PhotoTaskService
+from src.services.ping_monitor_service import PingMonitorService
 from src.services.provider_service import RuntimeProviderRegistry
 from src.services.task_enqueuer import TaskEnqueuer
 from src.services.telegram_command_dispatcher import TelegramCommandDispatcher
@@ -93,4 +94,7 @@ class AppContainer:
     # split deployment can never double-listen on the same accounts.
     dm_listener: DmListener | None = None
     dm_catchup: DmCatchupService | None = None
+    # Dormant-DM ping monitors (#1415): needs the live pool for history reads
+    # and sends — worker-only, like the listener.
+    ping_monitor_service: PingMonitorService | None = None
     shutting_down: bool = False
