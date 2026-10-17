@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.models import Account, PhotoBatchStatus
 from tests.agent_tools_helpers import _get_tool_handlers, _text
+from tg_agent.models import Account, PhotoBatchStatus
 
 
 def _make_account(phone="+79001234567", is_active=True, is_primary=True):
@@ -78,10 +78,10 @@ def _make_photo_services():
 def _photo_ctx(photo_task_svc, auto_upload_svc):
     """Context manager that patches photo services at their source modules."""
     with (
-        patch("src.services.photo_task_service.PhotoTaskService", return_value=photo_task_svc),
-        patch("src.services.photo_auto_upload_service.PhotoAutoUploadService", return_value=auto_upload_svc),
-        patch("src.database.bundles.PhotoLoaderBundle"),
-        patch("src.services.photo_publish_service.PhotoPublishService"),
+        patch("tg_agent.services.photo_task_service.PhotoTaskService", return_value=photo_task_svc),
+        patch("tg_agent.services.photo_auto_upload_service.PhotoAutoUploadService", return_value=auto_upload_svc),
+        patch("tg_agent.database.bundles.PhotoLoaderBundle"),
+        patch("tg_agent.services.photo_publish_service.PhotoPublishService"),
     ):
         yield
 
@@ -92,7 +92,7 @@ class TestResolvePhotoTargetLease:
         """resolve_photo_target must release the acquired client lease so the account
         stays in exclusive collector rotation (#1179). Mirror of
         PhotoPublishService._acquire_client_and_resolve's try/finally release."""
-        from src.agent.tools._photo_loader_runtime import resolve_photo_target
+        from tg_agent.agent.tools._photo_loader_runtime import resolve_photo_target
 
         session = MagicMock()
         session.fetch_me = AsyncMock(return_value=MagicMock(id=555))
@@ -119,7 +119,7 @@ class TestResolvePhotoTargetLease:
     @pytest.mark.anyio
     async def test_self_target_releases_even_on_fetch_error(self):
         """If fetch_me raises, the lease must still be released (try/finally) (#1179)."""
-        from src.agent.tools._photo_loader_runtime import resolve_photo_target
+        from tg_agent.agent.tools._photo_loader_runtime import resolve_photo_target
 
         class _BoomSession:
             async def fetch_me(self):
@@ -214,13 +214,13 @@ class TestRefreshPhotoDialogs:
         so a FloodWait-degraded stale snapshot was announced to the user as a
         successful refresh — the same silent success #1350 fixed in the CLI.
         """
-        from src.telegram.pool_dialogs import DialogFetchResult
+        from tg_agent.telegram.pool_dialogs import DialogFetchResult
 
         mock_pool, _ = _make_mock_pool()
         mock_db.get_accounts = AsyncMock(return_value=[_make_account()])
         handlers = _get_tool_handlers(mock_db, client_pool=mock_pool)
 
-        with patch("src.services.channel_service.ChannelService.get_my_dialogs") as gmd:
+        with patch("tg_agent.services.channel_service.ChannelService.get_my_dialogs") as gmd:
             gmd.return_value = DialogFetchResult([{"channel_id": 1}], partial=True)
             result = await handlers["refresh_photo_dialogs"](
                 {"phone": "+79001234567", "confirm": True}
@@ -237,7 +237,7 @@ class TestRefreshPhotoDialogs:
         mock_db.get_accounts = AsyncMock(return_value=[_make_account()])
         handlers = _get_tool_handlers(mock_db, client_pool=mock_pool)
 
-        with patch("src.services.channel_service.ChannelService.get_my_dialogs") as gmd:
+        with patch("tg_agent.services.channel_service.ChannelService.get_my_dialogs") as gmd:
             gmd.return_value = [{"channel_id": 1}, {"channel_id": 2}]
             result = await handlers["refresh_photo_dialogs"](
                 {"phone": "+79001234567", "confirm": True}
@@ -275,7 +275,7 @@ class TestSendPhotosNow:
 
         with (
             _photo_ctx(photo_task_svc, auto_upload_svc),
-            patch("src.services.photo_task_service.PhotoTarget"),
+            patch("tg_agent.services.photo_task_service.PhotoTarget"),
         ):
             handlers = _get_tool_handlers(mock_db, client_pool=mock_pool)
             result = await handlers["send_photos_now"](
@@ -312,7 +312,7 @@ class TestSchedulePhotos:
 
         with (
             _photo_ctx(photo_task_svc, auto_upload_svc),
-            patch("src.services.photo_task_service.PhotoTarget"),
+            patch("tg_agent.services.photo_task_service.PhotoTarget"),
         ):
             handlers = _get_tool_handlers(mock_db, client_pool=mock_pool)
             result = await handlers["schedule_photos"](
@@ -340,7 +340,7 @@ class TestSchedulePhotos:
 
         with (
             _photo_ctx(photo_task_svc, auto_upload_svc),
-            patch("src.services.photo_task_service.PhotoTarget"),
+            patch("tg_agent.services.photo_task_service.PhotoTarget"),
         ):
             handlers = _get_tool_handlers(mock_db, client_pool=mock_pool)
             result = await handlers["schedule_photos"](
@@ -590,7 +590,7 @@ class TestCreatePhotoBatch:
 
         with (
             _photo_ctx(photo_task_svc, auto_upload_svc),
-            patch("src.services.photo_task_service.PhotoTarget"),
+            patch("tg_agent.services.photo_task_service.PhotoTarget"),
         ):
             handlers = _get_tool_handlers(mock_db, client_pool=mock_pool)
             result = await handlers["create_photo_batch"](
@@ -659,9 +659,9 @@ class TestCreatePhotoBatch:
         assert "No files provided" not in text
 
         # Read back through the real bundle and confirm the file was persisted.
-        from src.database.bundles import PhotoLoaderBundle
-        from src.services.photo_publish_service import PhotoPublishService
-        from src.services.photo_task_service import PhotoTaskService
+        from tg_agent.database.bundles import PhotoLoaderBundle
+        from tg_agent.services.photo_publish_service import PhotoPublishService
+        from tg_agent.services.photo_task_service import PhotoTaskService
 
         readback = PhotoTaskService(
             PhotoLoaderBundle.from_database(db), PhotoPublishService(mock_pool)
@@ -677,7 +677,7 @@ class TestCreatePhotoBatch:
         len(files)>1 and keeps ALBUM. Splitting one-entry-per-file makes each entry
         have len==1 → normalize downgrades ALBUM→SEPARATE, silently degrading an
         album into N separate single-photo messages (#1180)."""
-        from src.models import PhotoSendMode
+        from tg_agent.models import PhotoSendMode
 
         files = []
         for name in ("a.jpg", "b.jpg", "c.jpg"):
@@ -697,9 +697,9 @@ class TestCreatePhotoBatch:
         )
         assert "Батч создан" in _text(result)
 
-        from src.database.bundles import PhotoLoaderBundle
-        from src.services.photo_publish_service import PhotoPublishService
-        from src.services.photo_task_service import PhotoTaskService
+        from tg_agent.database.bundles import PhotoLoaderBundle
+        from tg_agent.services.photo_publish_service import PhotoPublishService
+        from tg_agent.services.photo_task_service import PhotoTaskService
 
         readback = PhotoTaskService(
             PhotoLoaderBundle.from_database(db), PhotoPublishService(mock_pool)
@@ -768,8 +768,8 @@ class TestRunPhotoDue:
     async def test_dry_run_previews_without_send_or_confirm(self, mock_db):
         """dry_run=true returns a preview without confirmation, never sends, and never
         touches the photo-item path."""
-        from src.models import PhotoSendMode
-        from src.services.photo_auto_upload_service import PhotoAutoPreview
+        from tg_agent.models import PhotoSendMode
+        from tg_agent.services.photo_auto_upload_service import PhotoAutoPreview
 
         photo_task_svc, auto_upload_svc = _make_photo_services()
         preview = PhotoAutoPreview(

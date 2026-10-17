@@ -11,28 +11,28 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.config import AppConfig
-from src.database import Database
-from src.database.bundles import PhotoLoaderBundle
-from src.models import (
-    PhotoAutoUploadJob,
-    PhotoBatch,
-    PhotoBatchItem,
-    PhotoBatchStatus,
-    PhotoSendMode,
-)
-from src.scheduler.service import SchedulerManager
-from src.services.photo_auto_upload_service import PhotoAutoUploadService
-from src.services.photo_publish_service import PhotoPublishService
-from src.services.photo_task_service import PhotoTarget, PhotoTaskService
-from src.telegram.collector import Collector
-from src.web.app import create_app
 from tests.helpers import (
     AsyncIterMessages,
     FakeCliTelethonClient,
     RealPoolHarness,
     make_test_config,
 )
+from tg_agent.config import AppConfig
+from tg_agent.database import Database
+from tg_agent.database.bundles import PhotoLoaderBundle
+from tg_agent.models import (
+    PhotoAutoUploadJob,
+    PhotoBatch,
+    PhotoBatchItem,
+    PhotoBatchStatus,
+    PhotoSendMode,
+)
+from tg_agent.scheduler.service import SchedulerManager
+from tg_agent.services.photo_auto_upload_service import PhotoAutoUploadService
+from tg_agent.services.photo_publish_service import PhotoPublishService
+from tg_agent.services.photo_task_service import PhotoTarget, PhotoTaskService
+from tg_agent.telegram.collector import Collector
+from tg_agent.web.app import create_app
 
 
 def _photo_dialog_from_spec(spec: dict) -> MagicMock:
@@ -791,12 +791,12 @@ async def test_photo_loader_refresh_warms_dialog_cache(
 def test_photo_loader_cli_parser():
     from typer.testing import CliRunner
 
-    from src.cli.typer_app import app
+    from tg_agent.cli.typer_app import app
 
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.photo_loader_cmd.schedule_send_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.photo_loader_cmd.schedule_send_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = CliRunner().invoke(
             app,
@@ -837,15 +837,15 @@ def test_photo_loader_cli_send_command(tmp_path, cli_init_patch, capsys):
     fake_pool.get_client_by_phone = AsyncMock(return_value=(send_client, "+7000"))
 
     async def fake_init_pool(config, db):
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         return TelegramAuth(0, ""), fake_pool
 
     with (
-        cli_init_patch(db, "src.cli.runtime.init_db", config=AppConfig()),
-        patch("src.cli.runtime.init_pool", side_effect=fake_init_pool),
+        cli_init_patch(db, "tg_agent.cli.runtime.init_db", config=AppConfig()),
+        patch("tg_agent.cli.runtime.init_pool", side_effect=fake_init_pool),
     ):
-        from src.cli.commands.photo_loader import run
+        from tg_agent.cli.commands.photo_loader import run
 
         run(
             argparse.Namespace(
@@ -876,7 +876,7 @@ async def test_photo_schedule_logs_exception(tmp_path, caplog, telethon_cli_spy,
         base_url="http://test",
         headers={"Authorization": f"Basic {auth_header}", "Origin": "http://test"},
     ) as client:
-        with caplog.at_level(logging.ERROR, logger="src.web.routes.photo_loader"):
+        with caplog.at_level(logging.ERROR, logger="tg_agent.web.routes.photo_loader"):
             resp = await client.post(
                 "/dialogs/photos/schedule",
                 data={
@@ -923,7 +923,7 @@ async def test_photo_schedule_redirects_when_target_validation_raises(
         base_url="http://test",
         headers={"Authorization": f"Basic {auth_header}", "Origin": "http://test"},
     ) as client:
-        with caplog.at_level(logging.ERROR, logger="src.web.routes.photo_loader"):
+        with caplog.at_level(logging.ERROR, logger="tg_agent.web.routes.photo_loader"):
             resp = await client.post(
                 "/dialogs/photos/schedule",
                 data={
@@ -1034,7 +1034,7 @@ async def test_photo_send_logs_exception(tmp_path, caplog, telethon_cli_spy, nat
         base_url="http://test",
         headers={"Authorization": f"Basic {auth_header}", "Origin": "http://test"},
     ) as client:
-        with caplog.at_level(logging.ERROR, logger="src.web.routes.photo_loader"):
+        with caplog.at_level(logging.ERROR, logger="tg_agent.web.routes.photo_loader"):
             resp = await client.post(
                 "/dialogs/photos/send",
                 data={
@@ -1080,7 +1080,7 @@ async def test_photo_send_redirects_when_target_validation_raises(
         base_url="http://test",
         headers={"Authorization": f"Basic {auth_header}", "Origin": "http://test"},
     ) as client:
-        with caplog.at_level(logging.ERROR, logger="src.web.routes.photo_loader"):
+        with caplog.at_level(logging.ERROR, logger="tg_agent.web.routes.photo_loader"):
             resp = await client.post(
                 "/dialogs/photos/send",
                 data={
@@ -1150,7 +1150,7 @@ async def test_photo_batch_logs_exception(tmp_path, caplog, telethon_cli_spy, na
         base_url="http://test",
         headers={"Authorization": f"Basic {auth_header}", "Origin": "http://test"},
     ) as client:
-        with caplog.at_level(logging.ERROR, logger="src.web.routes.photo_loader"):
+        with caplog.at_level(logging.ERROR, logger="tg_agent.web.routes.photo_loader"):
             resp = await client.post(
                 "/dialogs/photos/batch",
                 data={
@@ -1194,7 +1194,7 @@ async def test_photo_batch_redirects_when_target_validation_raises(
         base_url="http://test",
         headers={"Authorization": f"Basic {auth_header}", "Origin": "http://test"},
     ) as client:
-        with caplog.at_level(logging.ERROR, logger="src.web.routes.photo_loader"):
+        with caplog.at_level(logging.ERROR, logger="tg_agent.web.routes.photo_loader"):
             resp = await client.post(
                 "/dialogs/photos/batch",
                 data={
@@ -1330,7 +1330,7 @@ async def test_photo_auto_logs_exception(tmp_path, caplog, telethon_cli_spy, nat
         base_url="http://test",
         headers={"Authorization": f"Basic {auth_header}", "Origin": "http://test"},
     ) as client:
-        with caplog.at_level(logging.ERROR, logger="src.web.routes.photo_loader"):
+        with caplog.at_level(logging.ERROR, logger="tg_agent.web.routes.photo_loader"):
             resp = await client.post(
                 "/dialogs/photos/auto",
                 data={
@@ -1376,7 +1376,7 @@ async def test_photo_auto_redirects_when_target_validation_raises(
         base_url="http://test",
         headers={"Authorization": f"Basic {auth_header}", "Origin": "http://test"},
     ) as client:
-        with caplog.at_level(logging.ERROR, logger="src.web.routes.photo_loader"):
+        with caplog.at_level(logging.ERROR, logger="tg_agent.web.routes.photo_loader"):
             resp = await client.post(
                 "/dialogs/photos/auto",
                 data={
@@ -1451,7 +1451,7 @@ async def test_photo_run_due_logs_exception(tmp_path, caplog, telethon_cli_spy, 
         base_url="http://test",
         headers={"Authorization": f"Basic {auth_header}", "Origin": "http://test"},
     ) as client:
-        with caplog.at_level(logging.ERROR, logger="src.web.routes.photo_loader"):
+        with caplog.at_level(logging.ERROR, logger="tg_agent.web.routes.photo_loader"):
             resp = await client.post(
                 "/dialogs/photos/run-due",
                 data={"phone": "+7000"},

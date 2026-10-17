@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from src.agent.permission_gate import (
+from tg_agent.agent.permission_gate import (
     AgentRequestContext,
     PermissionGate,
     PermissionWaitTracker,

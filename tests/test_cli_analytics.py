@@ -5,10 +5,10 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
 
-from src.database import Database
-from src.models import Message
 from tests.helpers import cli_add_channel as _add_channel
 from tests.helpers import cli_ns as _ns
+from tg_agent.database import Database
+from tg_agent.models import Message
 
 NOW = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -19,7 +19,7 @@ def _insert_message(db: Database, msg: Message) -> None:
 
 class TestCLIAnalytics:
     def test_top_empty(self, cli_env, capsys):
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
         run(_ns(analytics_action="top", limit=20, date_from=None, date_to=None))
         assert "No messages with reactions found." in capsys.readouterr().out
@@ -37,7 +37,7 @@ class TestCLIAnalytics:
             ),
         )
 
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
         run(_ns(analytics_action="top", limit=20, date_from=None, date_to=None))
         out = capsys.readouterr().out
@@ -58,7 +58,7 @@ class TestCLIAnalytics:
                 ),
             )
 
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
         run(_ns(analytics_action="top", limit=2, date_from=None, date_to=None))
         out = capsys.readouterr().out
@@ -66,7 +66,7 @@ class TestCLIAnalytics:
         assert "msg0001" not in out  # lowest post not in top 2
 
     def test_content_types_empty(self, cli_env, capsys):
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
         run(_ns(analytics_action="content-types", date_from=None, date_to=None))
         assert "No data." in capsys.readouterr().out
@@ -82,7 +82,7 @@ class TestCLIAnalytics:
             Message(channel_id=702, message_id=2, media_type="photo", date=NOW),
         )
 
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
         run(_ns(analytics_action="content-types", date_from=None, date_to=None))
         out = capsys.readouterr().out
@@ -90,7 +90,7 @@ class TestCLIAnalytics:
         assert "text" in out
 
     def test_hourly_empty(self, cli_env, capsys):
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
         run(_ns(analytics_action="hourly", date_from=None, date_to=None))
         assert "No data." in capsys.readouterr().out
@@ -107,7 +107,7 @@ class TestCLIAnalytics:
             ),
         )
 
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
         run(_ns(analytics_action="hourly", date_from=None, date_to=None))
         out = capsys.readouterr().out

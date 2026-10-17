@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.services.error_recovery_service import (
+from tg_agent.services.error_recovery_service import (
     EMBEDDING_RETRY_POLICY,
     LLM_CIRCUIT_CONFIG,
     LLM_RETRY_POLICY,
@@ -105,7 +105,7 @@ def test_llm_circuit_breaker_threshold_is_five():
 
 def test_guard_rejects_image_adapter_factory():
     """A factory-built image adapter must be refused by the guard."""
-    from src.services.provider_adapters import make_together_image_adapter
+    from tg_agent.services.provider_adapters import make_together_image_adapter
 
     adapter = make_together_image_adapter("fake-key")
     with pytest.raises(ImageAdapterRetryError):
@@ -214,7 +214,7 @@ async def test_image_adapter_called_exactly_once_on_error():
 @pytest.mark.anyio
 async def test_recovered_provider_callable_retries_transient():
     """The registry seam returns a recovered callable that retries transients."""
-    from src.services.provider_service import RuntimeProviderRegistry
+    from tg_agent.services.provider_service import RuntimeProviderRegistry
 
     provider = _CountingProvider(transient_failures=1, success_text="recovered")
     reg = RuntimeProviderRegistry(env={})
@@ -231,8 +231,8 @@ async def test_recovered_provider_callable_retries_transient():
 
 def test_recovered_provider_callable_refuses_image_adapter():
     """The seam screens the resolved callable through the image guard."""
-    from src.services.provider_adapters import make_together_image_adapter
-    from src.services.provider_service import RuntimeProviderRegistry
+    from tg_agent.services.provider_adapters import make_together_image_adapter
+    from tg_agent.services.provider_service import RuntimeProviderRegistry
 
     reg = RuntimeProviderRegistry(env={})
     reg.register_provider("together", make_together_image_adapter("fake-key"))
@@ -249,7 +249,7 @@ def test_recovered_provider_callable_refuses_image_adapter():
 @pytest.mark.anyio
 async def test_quality_scoring_retries_transient(db):
     """A transient provider failure is retried and scoring still succeeds."""
-    from src.services.quality_scoring_service import QualityScoringService
+    from tg_agent.services.quality_scoring_service import QualityScoringService
 
     provider = _CountingProvider(
         transient_failures=1,
@@ -271,7 +271,7 @@ async def test_quality_scoring_retries_transient(db):
 @pytest.mark.anyio
 async def test_quality_scoring_fatal_not_retried(db):
     """A FATAL (401) provider error is NOT retried; one call, default score."""
-    from src.services.quality_scoring_service import QualityScoringService
+    from tg_agent.services.quality_scoring_service import QualityScoringService
 
     provider = _CountingProvider(fatal=True)
 
@@ -293,8 +293,8 @@ async def test_quality_scoring_fatal_not_retried(db):
 
 @pytest.mark.anyio
 async def test_ab_variants_retry_transient(db):
-    from src.models import ContentPipeline
-    from src.services.ab_testing_service import ABTestingService
+    from tg_agent.models import ContentPipeline
+    from tg_agent.services.ab_testing_service import ABTestingService
 
     provider = _CountingProvider(transient_failures=1, success_text="variant")
 
@@ -319,7 +319,7 @@ async def test_ab_variants_retry_transient(db):
 
 @pytest.mark.anyio
 async def test_generation_non_stream_retries_transient():
-    from src.services.generation_service import GenerationService
+    from tg_agent.services.generation_service import GenerationService
 
     provider = _CountingProvider(transient_failures=1, success_text="generated")
 
@@ -328,7 +328,7 @@ async def test_generation_non_stream_retries_transient():
             return False
 
         async def search_local(self, *a, **k):
-            from src.models import SearchResult
+            from tg_agent.models import SearchResult
 
             return SearchResult(messages=[], total=0, query="q")
 
@@ -346,7 +346,7 @@ async def test_generation_non_stream_retries_transient():
 
 @pytest.mark.anyio
 async def test_embedding_documents_retry_transient(db):
-    from src.services.embedding_service import EmbeddingService
+    from tg_agent.services.embedding_service import EmbeddingService
 
     calls = 0
 

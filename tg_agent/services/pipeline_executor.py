@@ -1,0 +1,173 @@
+"""DAG-based pipeline executor (issue #343)."""
+from __future__ import annotations
+
+import logging
+from collections import defaultdict, deque
+from typing import Any
+
+from tg_agent.models import ContentPipeline, PipelineGraph, PipelineNode, PipelineNodeType
+from tg_agent.services.pipeline_nodes import NodeContext, get_handler
+from tg_agent.services.pipeline_result import get_action_counts, summarize_result
+
+logger = logging.getLogger(__name__)
+
+
+class PipelineCycleError(ValueError):
+    """Raised when a pipeline graph contains a cycle and cannot be scheduled.
+
+    A cyclic graph has unsatisfiable dependencies: for side-effecting nodes
+    (publish/delete/react) running them in authoring order could fire an action
+    before its prerequisite. We therefore reject cycles fail-closed (#1077)
+    instead of falling back to authoring order and executing them anyway.
+    """
+
+
+def _topological_sort(graph: PipelineGraph) -> list[PipelineNode]:
+    """Return nodes in topological order (Kahn's algorithm).
+
+    Raises :class:`PipelineCycleError` if the graph contains a cycle — there is
+    no safe authoring-order fallback for a cyclic DAG (#1077, fail-closed).
+    """
+    nodes_by_id = {n.id: n for n in graph.nodes}
+    in_degree: dict[str, int] = {n.id: 0 for n in graph.nodes}
+    adj: dict[str, list[str]] = defaultdict(list)
+
+    for edge in graph.edges:
+        if edge.from_node in nodes_by_id and edge.to_node in nodes_by_id:
+            adj[edge.from_node].append(edge.to_node)
+            in_degree[edge.to_node] += 1
+
+    queue: deque[str] = deque(n_id for n_id, deg in in_degree.items() if deg == 0)
+    order: list[PipelineNode] = []
+
+    while queue:
+        n_id = queue.popleft()
+        order.append(nodes_by_id[n_id])
+        for neighbor in adj[n_id]:
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
+
+    if len(order) != len(graph.nodes):
+        # Every node that never reached in_degree 0 is part of (or fed by) the
+        # cycle; report them so an operator can locate the unschedulable region.
+        ordered_ids = {n.id for n in order}
+        cyclic = [n.id for n in graph.nodes if n.id not in ordered_ids]
+        logger.error("Pipeline graph has a cycle involving nodes %s; rejecting run", cyclic)
+        raise PipelineCycleError(
+            f"Pipeline graph contains a cycle and cannot be executed; "
+            f"nodes still in the cycle: {cyclic}"
+        )
+
+    return order
+
+
+class PipelineExecutor:
+    """Executes a PipelineGraph (node-based DAG).
+
+    Accepts a ``services`` dict that is passed to each node handler. Expected keys:
+    - ``search_engine``: SearchEngine instance
+    - ``provider_callable``: async callable for LLM generation
+    - ``image_service``: ImageGenerationService (optional)
+    - ``notification_service``: DraftNotificationService (optional)
+    - ``client_pool``: ClientPool (optional, for Telegram-side nodes)
+    - ``default_model``: str (optional)
+    - ``default_image_model``: str (optional)
+    - ``db``: Database (optional)
+    """
+
+    async def execute(
+        self,
+        pipeline: ContentPipeline,
+        graph: PipelineGraph,
+        services: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Execute the graph and return a result dict.
+
+        Returns keys:
+        - ``generated_text``: str
+        - ``image_url``: str | None
+        - ``citations``: list
+        - ``publish_mode``: str
+        - ``context``: NodeContext (the full execution context)
+        """
+        context = NodeContext()
+
+        # Seed initial values from pipeline model (for legacy-compat)
+        context.set_global("prompt_template", pipeline.prompt_template or "")
+        context.set_global("generation_query", services.get("generation_query", pipeline.name or ""))
+        context.set_global("channel_id", services.get("channel_id"))
+        context.set_global("default_model", pipeline.llm_model or "")
+
+        ordered = _topological_sort(graph)
+        incoming: dict[str, list[str]] = defaultdict(list)
+        for edge in graph.edges:
+            incoming[edge.to_node].append(edge.from_node)
+        # Nodes whose OUTGOING edges are dead: condition/trigger nodes that did
+        # not pass, plus nodes skipped because every inbound path is dead.
+        suppressed: set[str] = set()
+        node_errors: list[dict[str, Any]] = []
+
+        for node in ordered:
+                preds = incoming.get(node.id, [])
+                # Skip only when EVERY inbound edge originates from a suppressed
+                # node — a merge node still reachable from an independent live
+                # branch must run, not be flood-filled away (audit #837/3).
+                if preds and all(p in suppressed for p in preds):
+                    logger.debug("Skipping node %s (all inbound paths suppressed)", node.id)
+                    suppressed.add(node.id)
+                    continue
+
+                handler = get_handler(node.type)
+                prev_current_node_id = services.get("_current_node_id")
+                services["_current_node_id"] = node.id
+                try:
+                    logger.debug("Executing node %s (%s)", node.id, node.type)
+                    await handler.execute(node.config, context, services)
+
+                    # Condition False / trigger not matched suppress only THIS
+                    # node's outgoing edges; downstream skip is decided per-node above.
+                    if node.type == PipelineNodeType.CONDITION:
+                        if not context.get_global("condition_result", True):
+                            logger.debug("Condition node %s is False; suppressing its edges", node.id)
+                            suppressed.add(node.id)
+
+                    if node.type == PipelineNodeType.SEARCH_QUERY_TRIGGER:
+                        if not context.get_global("trigger_matched", False):
+                            logger.debug("Trigger node %s did not match; suppressing its edges", node.id)
+                            suppressed.add(node.id)
+                except Exception as exc:
+                    logger.exception("Node %s (%s) failed during pipeline execution", node.id, node.type)
+                    errors = context.get_errors()
+                    if errors:
+                        exc.node_errors = errors  # type: ignore[attr-defined]
+                    raise
+                finally:
+                    if prev_current_node_id is None:
+                        services.pop("_current_node_id", None)
+                    else:
+                        services["_current_node_id"] = prev_current_node_id
+
+        node_errors = context.get_errors()
+        generated_text = context.get_global("generated_text", "")
+        citations = context.get_global("citations", [])
+        action_counts = get_action_counts(context)
+        result_kind, result_count = summarize_result(
+            generated_text=generated_text,
+            citations=citations,
+            action_counts=action_counts,
+        )
+
+        return {
+            "generated_text": generated_text,
+            "image_url": context.get_global("image_url"),
+            "citations": citations,
+            "publish_mode": context.get_global("publish_mode", pipeline.publish_mode.value),
+            "publish_reply": context.get_global("publish_reply", False),
+            "reply_to_message_id": context.get_global("reply_to_message_id"),
+            "action_counts": action_counts,
+            "result_kind": result_kind,
+            "result_count": result_count,
+            "node_errors": node_errors,
+            "context": context,
+        }

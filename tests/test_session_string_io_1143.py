@@ -15,10 +15,10 @@ import pytest
 from telethon.crypto import AuthKey
 from telethon.sessions import StringSession
 
-from src.cli.commands import account as account_cmd
-from src.database import Database
-from src.models import Account
-from src.telegram.auth import validate_session_string
+from tg_agent.cli.commands import account as account_cmd
+from tg_agent.database import Database
+from tg_agent.models import Account
+from tg_agent.telegram.auth import validate_session_string
 
 
 def _make_valid_session_string() -> str:

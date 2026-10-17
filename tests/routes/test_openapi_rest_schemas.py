@@ -23,8 +23,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.config import AppConfig
-from src.web.app import create_app
+from tg_agent.config import AppConfig
+from tg_agent.web.app import create_app
 
 # (method, path) of every REST/JSON endpoint annotated under #1070. Paths are the
 # fully-mounted forms (router prefix + route path) as they appear in openapi.json.

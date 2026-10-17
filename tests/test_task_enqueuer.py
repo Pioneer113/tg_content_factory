@@ -6,14 +6,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.models import (
+from tg_agent.models import (
     CollectionTaskType,
     ContentGenerateTaskPayload,
     ContentPublishTaskPayload,
     PipelineRunTaskPayload,
     SqStatsTaskPayload,
 )
-from src.services.task_enqueuer import TaskEnqueuer
+from tg_agent.services.task_enqueuer import TaskEnqueuer
 
 # === enqueue_content_generate tests ===
 

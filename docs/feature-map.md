@@ -8,7 +8,7 @@
 
 ## Что такое «сервис» здесь
 
-Сервис = **функциональная возможность продукта с точки зрения пользователя** («собрать посты в базу», «постить картинки», «AI-генерация контента»…). Это НЕ файл в `src/services/` и НЕ пункт меню. Один сервис обычно размазан по нескольким поверхностям + нескольким backend-модулям.
+Сервис = **функциональная возможность продукта с точки зрения пользователя** («собрать посты в базу», «постить картинки», «AI-генерация контента»…). Это НЕ файл в `tg_agent/services/` и НЕ пункт меню. Один сервис обычно размазан по нескольким поверхностям + нескольким backend-модулям.
 
 ## Пять поверхностей доступа
 
@@ -16,21 +16,21 @@
 
 | # | Поверхность | Для кого | Где живёт |
 |---|-------------|----------|-----------|
-| 1 | **FastAPI REST** (`/api/*`, JSON) | для **программ** (interop, внешние воркеры) | `src/web/routes/tasks.py` (`/api/tasks`, #829) + машинные JSON parity-эндпоинты внутри HTML-роутеров (CLI↔Web parity) |
-| 2 | **Web** (HTML/HTMX) | для **человека** в браузере | `src/web/routes/` — Jinja2-шаблоны, HTMX-фрагменты, формы |
-| 3 | **CLI** | команды терминала | `src/cli/commands/` (тела `*_impl`) + `src/cli/typer_commands.py` (Typer-приложение `app`, ~212 leaf-команд) |
-| 4 | **Agent-tools** | тулы AI-агента (MCP) | `src/agent/tools/` (173 tools в 20 группах) |
-| 5 | **TUI** (Textual) | интерактивный терминальный UI | `src/cli/commands/agent_tui.py` + `.tcss` (dep `textual[syntax]`); запуск — `agent chat` без `--prompt`. **УЗКАЯ**: только AI-чат, см. ниже |
+| 1 | **FastAPI REST** (`/api/*`, JSON) | для **программ** (interop, внешние воркеры) | `tg_agent/web/routes/tasks.py` (`/api/tasks`, #829) + машинные JSON parity-эндпоинты внутри HTML-роутеров (CLI↔Web parity) |
+| 2 | **Web** (HTML/HTMX) | для **человека** в браузере | `tg_agent/web/routes/` — Jinja2-шаблоны, HTMX-фрагменты, формы |
+| 3 | **CLI** | команды терминала | `tg_agent/cli/commands/` (тела `*_impl`) + `tg_agent/cli/typer_commands.py` (Typer-приложение `app`, ~212 leaf-команд) |
+| 4 | **Agent-tools** | тулы AI-агента (MCP) | `tg_agent/agent/tools/` (173 tools в 20 группах) |
+| 5 | **TUI** (Textual) | интерактивный терминальный UI | `tg_agent/cli/commands/agent_tui.py` + `.tcss` (dep `textual[syntax]`); запуск — `agent chat` без `--prompt`. **УЗКАЯ**: только AI-чат, см. ниже |
 
 ### Важно про FastAPI vs Web
 
-- **FastAPI REST** — JSON-эндпоинты, потребляемые **программами**. Единственный полноценный REST-контур для внешних интеграций — `/api/tasks` (interop #829: create/claim/complete/fail). Остальные JSON-эндпоинты (`/jobs/api/list`, `/calendar/api/calendar`, `/messages/{identifier}`, `/pipelines/{id}/runs`, `/settings/flood-status`, `/rss.xml`…) — это **машинные parity-зеркала** внутри HTML-роутеров, дающие CLI↔Web паритет и доступ для скриптов. (Пути указаны с реальными префиксами роутеров из `src/web/assembly.py`.)
+- **FastAPI REST** — JSON-эндпоинты, потребляемые **программами**. Единственный полноценный REST-контур для внешних интеграций — `/api/tasks` (interop #829: create/claim/complete/fail). Остальные JSON-эндпоинты (`/jobs/api/list`, `/calendar/api/calendar`, `/messages/{identifier}`, `/pipelines/{id}/runs`, `/settings/flood-status`, `/rss.xml`…) — это **машинные parity-зеркала** внутри HTML-роутеров, дающие CLI↔Web паритет и доступ для скриптов. (Пути указаны с реальными префиксами роутеров из `tg_agent/web/assembly.py`.)
 - **Web** — то, что видит человек: HTML-страницы, HTMX-частичные обновления, SSE-стримы (agent chat, generate-stream), формы. Это НЕ JSON и НЕ для программ.
 - Один и тот же роутер часто отдаёт **обе** поверхности (HTML-страница + JSON parity-эндпоинт). В таблицах ниже они разнесены.
 
 ### Важно про TUI
 
-TUI — это **единственный** Textual-app в проекте: `AgentTuiApp` (`src/cli/commands/agent_tui.py`, стили в `agent_tui.tcss`). Запускается через `python -m src.main agent chat` в интерактивном режиме (без `--prompt`). Проверено grep'ом по `src/`: больше нигде Textual/`.tcss`/`ComposeResult` не используется. Поэтому **TUI покрывает ровно один сервис — «AI-агент»**; во всех остальных строках TUF-колонка = «—».
+TUI — это **единственный** Textual-app в проекте: `AgentTuiApp` (`tg_agent/cli/commands/agent_tui.py`, стили в `agent_tui.tcss`). Запускается через `python -m tg_agent.main agent chat` в интерактивном режиме (без `--prompt`). Проверено grep'ом по `tg_agent/`: больше нигде Textual/`.tcss`/`ComposeResult` не используется. Поэтому **TUI покрывает ровно один сервис — «AI-агент»**; во всех остальных строках TUF-колонка = «—».
 
 ## Что означает «Статус»
 
@@ -422,7 +422,7 @@ Rate/cost-лимиты на провайдеров, учёт дневных за
 
 **Backend:** `ProductionLimitsService` (подключён в `image_generation_service`, опц., off-by-default), `QualityScoringService` (подключён в content-generation, пишет `quality_score`), `ErrorRecoveryService` (**нигде не импортируется** — 🔴 изолирован).
 **Статус:** 🟡 **только код** — лимиты подключены, но off-by-default; `ErrorRecoveryService` изолирован. Реальная работа лимитов боем не доказана.
-**Vulture-аудит #1044:** `ErrorRecoveryService` верифицирован как изолированный (grep `src/` = только сам файл; `CircuitBreaker` в `notifier.py` — это pybreaker #955, другая реализация; нет DI/динамической регистрации). Решение владельца — **НЕ удалять, подключить как фичу** (отдельная задача, не #1044). ⚠️ При подключении сверять с #958: `execute_with_recovery` ретраит любую `func` (max_retries=3) → подключать только к idempotent-операциям, НЕ к платным image POST (осознанный `max_retries=0` против дубль-биллинга).
+**Vulture-аудит #1044:** `ErrorRecoveryService` верифицирован как изолированный (grep `tg_agent/` = только сам файл; `CircuitBreaker` в `notifier.py` — это pybreaker #955, другая реализация; нет DI/динамической регистрации). Решение владельца — **НЕ удалять, подключить как фичу** (отдельная задача, не #1044). ⚠️ При подключении сверять с #958: `execute_with_recovery` ретраит любую `func` (max_retries=3) → подключать только к idempotent-операциям, НЕ к платным image POST (осознанный `max_retries=0` против дубль-биллинга).
 
 ### 26. 🧪 A/B-тестирование контента (A/B Testing)
 
@@ -438,7 +438,7 @@ Rate/cost-лимиты на провайдеров, учёт дневных за
 
 **Backend:** `ABTestingService` (ab_testing_service.py) — **не импортируется нигде, кроме своего файла + тестов**.
 **Статус:** 🔴 **заглушка/частично** — сервисный код есть, но НЕ подключён ни к одной из пяти поверхностей. Висит изолированно.
-**Vulture-аудит #1044:** изоляция верифицирована (grep `src/` = только сам файл; нет DI/динамической регистрации; репо-методы `generation_runs.set_variants`/`select_variant` зовутся ТОЛЬКО из `ABTestingService` — ни web, ни CLI вариантов не показывают). Решение владельца — **НЕ удалять, подключить как фичу** (отдельная задача-эпик «подключить неиспользуемое», не #1044).
+**Vulture-аудит #1044:** изоляция верифицирована (grep `tg_agent/` = только сам файл; нет DI/динамической регистрации; репо-методы `generation_runs.set_variants`/`select_variant` зовутся ТОЛЬКО из `ABTestingService` — ни web, ни CLI вариантов не показывают). Решение владельца — **НЕ удалять, подключить как фичу** (отдельная задача-эпик «подключить неиспользуемое», не #1044).
 
 ---
 
@@ -448,9 +448,9 @@ Rate/cost-лимиты на провайдеров, учёт дневных за
 
 Инвентарь поверхностей:
 - **FastAPI REST** — 1 полноценный REST-контур (`/api/tasks`, interop #829) + машинные JSON parity-эндпоинты в ~14 роутерах
-- **Web** (HTML/HTMX) — 26 смонтированных роутеров (`src/web/routes/`), 18 UI-страниц меню
+- **Web** (HTML/HTMX) — 26 смонтированных роутеров (`tg_agent/web/routes/`), 18 UI-страниц меню
 - **CLI** — 26 top-level команд, ~209 leaf-команд
-- **Agent-tools** — 20 групп, 173 tools (75 read / 82 write / 16 delete) — авторитетный счёт из `TOOL_CATEGORIES`/`MODULE_GROUPS` (`src/agent/tools/permissions.py`, инвариант `tests/test_agent_tools_permissions.py`)
+- **Agent-tools** — 20 групп, 173 tools (75 read / 82 write / 16 delete) — авторитетный счёт из `TOOL_CATEGORIES`/`MODULE_GROUPS` (`tg_agent/agent/tools/permissions.py`, инвариант `tests/test_agent_tools_permissions.py`)
 - **TUI** — 1 app (`AgentTuiApp`), покрывает только сервис «AI-агент»
 
 Распределение по статусу:

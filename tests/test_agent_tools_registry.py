@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.agent.tools._registry import (
+from tg_agent.agent.tools._registry import (
     AgentToolContext,
     ToolInputError,
     _text_response,
@@ -310,7 +310,7 @@ class TestResolveLiveReadPhone:
         db.get_accounts = AsyncMock(side_effect=[[account], [available_account]])
         pool = SimpleNamespace(clients={"+111": object()})
         sleep = AsyncMock()
-        monkeypatch.setattr("src.agent.tools._registry.sleep_for_flood_wait_seconds", sleep)
+        monkeypatch.setattr("tg_agent.agent.tools._registry.sleep_for_flood_wait_seconds", sleep)
 
         phone, err = await resolve_live_read_phone(db, pool, "+111", tool_name="read_messages")
 
@@ -371,7 +371,7 @@ class TestRequirePhonePermission:
             "+7800": {"search_messages": False},
         }
         db.get_setting = AsyncMock(return_value=__import__("json").dumps(perms))
-        with patch("src.agent.permission_gate.get_gate", return_value=None):
+        with patch("tg_agent.agent.permission_gate.get_gate", return_value=None):
             result = await require_phone_permission(db, "+7800", "search_messages")
         assert result is not None
         text = result["content"][0]["text"]
@@ -385,7 +385,7 @@ class TestRequirePhonePermission:
         db = MagicMock()
         perms = {"+7900": {"search_messages": True}}
         db.get_setting = AsyncMock(return_value=__import__("json").dumps(perms))
-        with patch("src.agent.permission_gate.get_gate", return_value=None):
+        with patch("tg_agent.agent.permission_gate.get_gate", return_value=None):
             result = await require_phone_permission(db, "+7800", "search_messages")
         assert result is not None
         assert "не разрешён" in result["content"][0]["text"]
@@ -395,7 +395,7 @@ class TestRequirePhonePermission:
         db = MagicMock()
         perms = {"+7900": {"search_messages": True}}
         db.get_setting = AsyncMock(return_value=__import__("json").dumps(perms))
-        with patch("src.agent.permission_gate.get_gate", return_value=None):
+        with patch("tg_agent.agent.permission_gate.get_gate", return_value=None):
             result = await require_phone_permission(db, "", "search_messages")
         assert result is not None
         text = result["content"][0]["text"]
@@ -408,7 +408,7 @@ class TestRequirePhonePermission:
         db = MagicMock()
         perms = {"+7900": {"other_tool": True}}
         db.get_setting = AsyncMock(return_value=__import__("json").dumps(perms))
-        with patch("src.agent.permission_gate.get_gate", return_value=None):
+        with patch("tg_agent.agent.permission_gate.get_gate", return_value=None):
             result = await require_phone_permission(db, "+7900", "search_messages")
         assert result is not None
         assert "не разрешён" in result["content"][0]["text"]

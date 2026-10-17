@@ -1,0 +1,394 @@
+from __future__ import annotations
+
+import argparse
+import asyncio
+import csv
+import io
+import json
+import sys
+from datetime import datetime, timezone
+from email.utils import format_datetime
+from typing import Literal, cast
+
+import typer
+
+from tg_agent.cli import runtime
+from tg_agent.cli.commands.common import (
+    ExportFormat,
+    apply_startup,
+    run_async,
+)
+from tg_agent.utils.text_safety import csv_safe_cell, escape_xml_text
+
+ExportMediaFormat = Literal["json", "html", "both"]
+
+
+def _rfc822(dt: datetime | None) -> str:
+    if dt is None:
+        return format_datetime(datetime.now(timezone.utc))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return format_datetime(dt)
+
+
+async def export_impl(
+    config_path: str,
+    *,
+    fmt: str,
+    channel_id: int | None = None,
+    limit: int = 200,
+    output: str | None = None,
+) -> None:
+    """Export messages from the local DB as ``fmt`` (json/csv/rss)."""
+    _, db = await runtime.init_db(config_path)
+    try:
+        capped_limit = max(1, min(limit, 10000))
+
+        messages, _ = await db.search_messages(
+            channel_id=channel_id,
+            limit=capped_limit,
+        )
+        if not messages:
+            print("No messages found.", file=sys.stderr)
+            return
+
+        if fmt == "json":
+            content = _export_json(messages)
+        elif fmt == "csv":
+            content = _export_csv(messages)
+        elif fmt == "rss":
+            content = _export_rss(messages)
+        else:
+            print(f"Unknown format: {fmt}", file=sys.stderr)
+            return
+
+        if output:
+            with open(output, "w", encoding="utf-8") as f:
+                f.write(content)
+            print(f"Exported {len(messages)} messages to {output}", file=sys.stderr)
+        else:
+            print(content, end="")
+    finally:
+        await db.close()
+
+
+async def telegram_impl(
+    config_path: str,
+    *,
+    channel_id: int | None = None,
+    export_format: str = "json",
+    with_media: bool = False,
+    wait: bool = False,
+    max_file_size: int | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    limit: int = 5000,
+    output: str | None = None,
+) -> None:
+    """Export a channel in Telegram-Desktop-compatible JSON/HTML tree form."""
+    from tg_agent.services.export_service import run_offline_export
+
+    _, db = await runtime.init_db(config_path)
+    try:
+        if not channel_id:
+            print("Error: --channel-id is required for telegram export.", file=sys.stderr)
+            return
+
+        if with_media:
+            # Media download needs the live worker (owns the ClientPool); enqueue an
+            # EXPORT task and optionally wait for it.
+            await _enqueue_media_export(
+                db,
+                channel_id=int(channel_id),
+                export_format=export_format,
+                max_file_size=max_file_size,
+                date_from=date_from,
+                date_to=date_to,
+                limit=limit,
+                output=output,
+                wait=wait,
+            )
+            return
+
+        summary = await run_offline_export(
+            db,
+            int(channel_id),
+            fmt=export_format,
+            date_from=date_from,
+            date_to=date_to,
+            limit=int(limit),
+            out_dir=output,
+        )
+        if summary is None:
+            print(f"No messages found for channel {channel_id}.", file=sys.stderr)
+            return
+        print(
+            f"Exported {summary.message_count} messages to {summary.out_dir} "
+            f"(files: {', '.join(summary.files)}; media skipped: {summary.media_skipped})",
+            file=sys.stderr,
+        )
+        if summary.truncated:
+            print(
+                f"Warning: channel has more than {limit} messages; exported the oldest "
+                f"{summary.message_count} (raise --limit to include more).",
+                file=sys.stderr,
+            )
+    finally:
+        await db.close()
+
+
+async def _enqueue_media_export(
+    db,
+    *,
+    channel_id: int,
+    export_format: str,
+    max_file_size: int | None,
+    date_from: str | None,
+    date_to: str | None,
+    limit: int,
+    output: str | None,
+    wait: bool,
+) -> None:
+    from tg_agent.models import CollectionTaskType, ExportTaskPayload
+
+    payload = ExportTaskPayload(
+        channel_id=channel_id,
+        fmt=cast(ExportMediaFormat, export_format),
+        with_media=True,
+        max_file_size_mb=max_file_size,
+        date_from=date_from,
+        date_to=date_to,
+        limit=int(limit),
+        out_dir=output,
+        requested_by="cli",
+    )
+    task_id = await db.repos.tasks.create_generic_task(
+        CollectionTaskType.EXPORT, title=f"export channel {channel_id} (media)", payload=payload
+    )
+    print(
+        f"Enqueued media export task #{task_id}; the worker will download media and build the tree.",
+        file=sys.stderr,
+    )
+    if wait:
+        await _poll_export_task(db, task_id)
+
+
+async def _poll_export_task(db, task_id: int, *, timeout: float = 600.0, interval: float = 2.0) -> None:
+    from tg_agent.models import CollectionTaskStatus
+
+    terminal = {CollectionTaskStatus.COMPLETED, CollectionTaskStatus.FAILED, CollectionTaskStatus.CANCELLED}
+    waited = 0.0
+    while waited < timeout:
+        task = await db.repos.tasks.get_collection_task(task_id)
+        if task and task.status in terminal:
+            if task.status == CollectionTaskStatus.COMPLETED:
+                print(f"Export task #{task_id} completed: {task.note or ''}", file=sys.stderr)
+                return
+            detail = task.error or task.note or ""
+            print(f"Export task #{task_id} {task.status.value}: {detail}", file=sys.stderr)
+            # Non-zero exit so scripts using --wait can detect failure (#939 review).
+            sys.exit(1)
+        await asyncio.sleep(interval)
+        waited += interval
+    print(
+        f"Export task #{task_id} still pending after {int(timeout)}s — is the worker running?",
+        file=sys.stderr,
+    )
+    # Distinct exit code so scripts can tell a timeout apart from a task failure
+    # (exit 1) and from success (exit 0) — #939 review.
+    sys.exit(2)
+
+
+def _export_json(messages) -> str:
+    items = []
+    for msg in messages:
+        items.append({
+            "id": msg.id,
+            "channel_id": msg.channel_id,
+            "message_id": msg.message_id,
+            "date": str(msg.date) if msg.date else None,
+            "text": msg.text,
+            "views": msg.views,
+            "forwards": msg.forwards,
+        })
+    return json.dumps(items, ensure_ascii=False, indent=2)
+
+
+def _export_csv(messages) -> str:
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["id", "channel_id", "message_id", "date", "text", "views", "forwards"])
+    for msg in messages:
+        writer.writerow([
+            msg.id, msg.channel_id, msg.message_id,
+            str(msg.date) if msg.date else "",
+            csv_safe_cell(msg.text or ""),
+            msg.views, msg.forwards,
+        ])
+    return buf.getvalue()
+
+
+def _export_rss(messages) -> str:
+    items: list[str] = []
+    for msg in messages:
+        text = (msg.text or "").strip()
+        if not text:
+            continue
+        msg_id = msg.message_id or ""
+        ch_id = msg.channel_id or ""
+        pub_date = _rfc822(msg.date)
+        item_title = text[:80].replace("\n", " ")
+        guid = f"tg-msg-{ch_id}-{msg_id}"
+        items.append(
+            f"  <item>\n"
+            f"    <title>{escape_xml_text(item_title)}</title>\n"
+            f"    <description>{escape_xml_text(text[:500])}</description>\n"
+            f"    <pubDate>{pub_date}</pubDate>\n"
+            f"    <guid isPermaLink='false'>{guid}</guid>\n"
+            f"  </item>"
+        )
+
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<rss version="2.0">\n'
+        "  <channel>\n"
+        "    <title>TG Content Factory Export</title>\n"
+        "    <description>Exported Telegram messages</description>\n"
+        f"    <lastBuildDate>{_rfc822(None)}</lastBuildDate>\n"
+        + "\n".join(items)
+        + "\n  </channel>\n</rss>"
+    )
+
+
+def run(args: argparse.Namespace) -> None:
+    """Thin argparse adapter over the ``*_impl`` bodies (legacy dispatch path).
+
+    The production CLI routes ``export`` through the Typer ``app`` (#1122); this
+    wrapper keeps the argparse leaf audit and command-level tests working.
+    """
+    action = args.export_action
+    if action == "telegram":
+        asyncio.run(
+            telegram_impl(
+                args.config,
+                channel_id=getattr(args, "channel_id", None),
+                export_format=getattr(args, "export_format", "json"),
+                with_media=getattr(args, "with_media", False),
+                wait=getattr(args, "wait", False),
+                max_file_size=getattr(args, "max_file_size", None),
+                date_from=getattr(args, "date_from", None),
+                date_to=getattr(args, "date_to", None),
+                limit=getattr(args, "limit", 5000),
+                output=getattr(args, "output", None),
+            )
+        )
+    else:
+        asyncio.run(
+            export_impl(
+                args.config,
+                fmt=action,
+                channel_id=getattr(args, "channel_id", None),
+                limit=getattr(args, "limit", 200),
+                output=getattr(args, "output", None),
+            )
+        )
+
+
+# --------------------------------------------------------------------------- #
+# export → json / csv / rss / telegram
+# --------------------------------------------------------------------------- #
+
+export_app = typer.Typer(no_args_is_help=True, help="Export collected messages")
+
+
+def _export_flat(
+    ctx: typer.Context,
+    fmt: str,
+    channel_id: int | None,
+    limit: int,
+    output: str | None,
+) -> None:
+    """Shared body for the flat json/csv/rss export sub-commands."""
+    apply_startup(ctx)
+    run_async(
+        export_impl(
+            ctx.obj.config,
+            fmt=fmt,
+            channel_id=channel_id,
+            limit=limit,
+            output=output,
+        )
+    )
+
+
+@export_app.command("json")
+def export_json(
+    ctx: typer.Context,
+    channel_id: int | None = typer.Option(None, "--channel-id", help="Filter by channel ID"),
+    limit: int = typer.Option(200, "--limit", help="Max messages (default: 200)"),
+    output: str | None = typer.Option(None, "--output", "-o", help="Output file (default: stdout)"),
+) -> None:
+    """Export as JSON."""
+    _export_flat(ctx, "json", channel_id, limit, output)
+
+
+@export_app.command("csv")
+def export_csv(
+    ctx: typer.Context,
+    channel_id: int | None = typer.Option(None, "--channel-id", help="Filter by channel ID"),
+    limit: int = typer.Option(200, "--limit", help="Max messages (default: 200)"),
+    output: str | None = typer.Option(None, "--output", "-o", help="Output file (default: stdout)"),
+) -> None:
+    """Export as CSV."""
+    _export_flat(ctx, "csv", channel_id, limit, output)
+
+
+@export_app.command("rss")
+def export_rss(
+    ctx: typer.Context,
+    channel_id: int | None = typer.Option(None, "--channel-id", help="Filter by channel ID"),
+    limit: int = typer.Option(200, "--limit", help="Max messages (default: 200)"),
+    output: str | None = typer.Option(None, "--output", "-o", help="Output file (default: stdout)"),
+) -> None:
+    """Export as RSS."""
+    _export_flat(ctx, "rss", channel_id, limit, output)
+
+
+@export_app.command("telegram")
+def export_telegram(
+    ctx: typer.Context,
+    channel_id: int | None = typer.Option(None, "--channel-id", help="Telegram channel ID to export (required)"),
+    export_format: ExportFormat = typer.Option(ExportFormat.json, "--format", help="Output format (default: json)"),
+    with_media: bool = typer.Option(
+        False, "--with-media", help="Download media artifacts (enqueues a worker task)"
+    ),
+    wait: bool = typer.Option(
+        False, "--wait", help="With --with-media: poll the enqueued task until it finishes"
+    ),
+    max_file_size: int | None = typer.Option(
+        None, "--max-file-size", help="Skip files larger than N MB (default: from settings or 3)"
+    ),
+    date_from: str | None = typer.Option(None, "--date-from", help="Start date YYYY-MM-DD"),
+    date_to: str | None = typer.Option(None, "--date-to", help="End date YYYY-MM-DD"),
+    limit: int = typer.Option(5000, "--limit", help="Max messages (default: 5000)"),
+    output: str | None = typer.Option(
+        None, "--output", "-o",
+        help="Output directory (default: data/exports/ChatExport_<date>_<channel>)",
+    ),
+) -> None:
+    """Export as Telegram-Desktop JSON/HTML."""
+    apply_startup(ctx)
+    run_async(
+        telegram_impl(
+            ctx.obj.config,
+            channel_id=channel_id,
+            export_format=export_format.value,
+            with_media=with_media,
+            wait=wait,
+            max_file_size=max_file_size,
+            date_from=date_from,
+            date_to=date_to,
+            limit=limit,
+            output=output,
+        )
+    )

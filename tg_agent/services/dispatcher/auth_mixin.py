@@ -1,0 +1,147 @@
+"""Auth command handlers for :class:`TelegramCommandDispatcher` (#1047).
+
+Domain: ``auth.*`` — phone-code send/resend/verify and account materialization.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from tg_agent.models import Account
+
+if TYPE_CHECKING:
+    from tg_agent.services.dispatcher._base import _DispatcherProtocol
+
+    _Base = _DispatcherProtocol
+else:
+    _Base = object
+
+
+class AuthCommandsMixin(_Base):
+    """``auth.*`` command handlers.
+
+    Relies on the facade for ``self._auth`` (TelegramAuth) and ``self._db``;
+    ``_handle_auth_verify_code`` chains into ``self._handle_accounts_connect``
+    which lives on the accounts side of the dispatcher.
+    """
+
+    async def _handle_auth_send_code(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self._auth is None or not self._auth.is_configured:
+            raise RuntimeError("auth_not_configured")
+        phone = str(payload["phone"]).strip()
+        result = await self._auth.send_code(phone)
+        return {"result": {"phone": phone, **result}}
+
+    async def _handle_auth_resend_code(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self._auth is None or not self._auth.is_configured:
+            raise RuntimeError("auth_not_configured")
+        phone = str(payload["phone"]).strip()
+        result = await self._auth.resend_code(phone)
+        return {"result": {"phone": phone, **result}}
+
+    async def _handle_auth_verify_code(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self._auth is None or not self._auth.is_configured:
+            raise RuntimeError("auth_not_configured")
+        phone = str(payload["phone"]).strip()
+        password_2fa = str(payload.get("password_2fa", "")).strip() or None
+        payload["password_2fa"] = ""
+        # Check before Telegram consumes the one-time code. Without a key the
+        # resulting authorized session could not be persisted for retry/use.
+        self._db.repos.accounts.require_session_encryption_key()
+        session_string = await self._auth.verify_code(
+            phone,
+            str(payload["code"]),
+            str(payload["phone_code_hash"]),
+            password_2fa,
+        )
+        existing = await self._db.get_account_summaries(active_only=False)
+        account = Account(
+            phone=phone,
+            session_string=session_string,
+            is_primary=not any(acc.phone == phone for acc in existing) and len(existing) == 0,
+            is_premium=False,
+        )
+        await self._db.add_account(account)
+        connect_result = await self._handle_accounts_connect({"phone": phone})
+        return {"result": {"phone": phone, **connect_result}, "payload_update": {**payload}}
+
+    async def _handle_auth_qr_start(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self._auth is None or not self._auth.is_configured:
+            raise RuntimeError("auth_not_configured")
+        # Fail fast: without the key a scan would succeed on Telegram but the
+        # resulting session could not be persisted — don't waste the scan.
+        self._db.repos.accounts.require_session_encryption_key()
+        result = await self._auth.qr_start()
+        return {"result": result, "payload_update": {**payload}}
+
+    async def _handle_auth_qr_status(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self._auth is None or not self._auth.is_configured:
+            raise RuntimeError("auth_not_configured")
+        qr_id = str(payload["qr_id"]).strip()
+        snapshot = self._auth.qr_status(qr_id)
+        if snapshot is None:
+            raise RuntimeError("qr_session_not_found")
+        if snapshot["state"] != "success":
+            return {"result": snapshot, "payload_update": {**payload}}
+        consumed = await self._auth.consume_qr_session(qr_id)
+        if consumed is None:
+            # A concurrent poll consumed it first — report the terminal state.
+            return {"result": {**snapshot, "state": "consumed"}, "payload_update": {**payload}}
+        try:
+            result = await self._materialize_qr_account(consumed)
+        except Exception:
+            # Materialization failed after the one-shot consume: without this
+            # the flow stays "consumed" and later polls send the user to
+            # /settings as if the account were connected (#1555 review).
+            self._auth.qr_fail(qr_id, "qr_materialization_failed")
+            raise
+        return {"result": result, "payload_update": {**payload}}
+
+    async def _handle_auth_qr_password(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self._auth is None or not self._auth.is_configured:
+            raise RuntimeError("auth_not_configured")
+        qr_id = str(payload["qr_id"]).strip()
+        # No strip: passwords may legitimately contain leading/trailing spaces.
+        password_2fa = str(payload.get("password_2fa", ""))
+        payload["password_2fa"] = ""
+        result = await self._auth.qr_password(qr_id, password_2fa)
+        if result.get("state") != "success":
+            return {"result": result, "payload_update": {**payload}}
+        consumed = await self._auth.consume_qr_session(qr_id)
+        if consumed is None:
+            return {"result": {**result, "state": "consumed"}, "payload_update": {**payload}}
+        try:
+            materialized = await self._materialize_qr_account(consumed)
+        except Exception:
+            self._auth.qr_fail(qr_id, "qr_materialization_failed")
+            raise
+        return {"result": materialized, "payload_update": {**payload}}
+
+    async def _materialize_qr_account(self, consumed: dict[str, Any]) -> dict[str, Any]:
+        """One-shot Account creation for a successful QR flow.
+
+        Same path as the tail of ``_handle_auth_verify_code``: require the
+        encryption key, insert the Account (first one becomes primary), connect
+        it through the pool. ``consumed`` carries the session_string — it never
+        reaches the command's persisted result_payload.
+        """
+        phone = str(consumed.get("phone") or "").strip()
+        # Telethon user.phone arrives bare (no leading +); normalize to the
+        # canonical stored form so an existing "+7999…" account isn't duplicated
+        # with a second pool client (same normalization as /auth/import-session).
+        if phone and not phone.startswith("+"):
+            phone = "+" + phone
+        session_string = str(consumed.get("session_string") or "")
+        if not phone or not session_string:
+            raise RuntimeError("qr_materialization_incomplete")
+        self._db.repos.accounts.require_session_encryption_key()
+        existing = await self._db.get_account_summaries(active_only=False)
+        account = Account(
+            phone=phone,
+            session_string=session_string,
+            is_primary=not any(acc.phone == phone for acc in existing) and len(existing) == 0,
+            is_premium=False,
+        )
+        await self._db.add_account(account)
+        connect_result = await self._handle_accounts_connect({"phone": phone})
+        return {"state": "success", "phone": phone, **connect_result}

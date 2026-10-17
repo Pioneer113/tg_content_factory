@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.database import Database
+from tg_agent.database import Database
 
 
 def _load_root_conftest():
@@ -292,5 +292,5 @@ def test_cli_init_patch_net_closes_leaked_database(cli_init_patch, net_witness, 
     database = Database(str(tmp_path / "leaked.db"), session_encryption_secret="test-session-encryption-key")
     asyncio.run(database.initialize())
     net_witness.append(database)
-    with cli_init_patch(database, "src.cli.runtime.init_db"):
+    with cli_init_patch(database, "tg_agent.cli.runtime.init_db"):
         pass  # deliberately never closed — the net must close it at teardown

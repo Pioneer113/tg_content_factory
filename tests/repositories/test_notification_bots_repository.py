@@ -6,7 +6,7 @@ from datetime import datetime
 
 import pytest
 
-from src.models import NotificationBot
+from tg_agent.models import NotificationBot
 
 
 @pytest.fixture

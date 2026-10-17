@@ -1,0 +1,165 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Literal
+
+from tg_agent.database import Database
+from tg_agent.database.bundles import ChannelBundle
+from tg_agent.models import Channel, CollectionTaskType
+
+if TYPE_CHECKING:
+    from tg_agent.collection_queue import CollectionQueue
+    from tg_agent.telegram.collector import Collector
+
+EnqueueResult = Literal["not_found", "filtered", "queued", "already_active"]
+
+
+@dataclass(slots=True)
+class BulkEnqueueResult:
+    queued_count: int
+    skipped_existing_count: int
+    total_candidates: int
+    skipped_backoff_count: int = 0
+
+
+class CollectionService:
+    def __init__(
+        self,
+        channels: ChannelBundle | Database,
+        collector: Collector | None,
+        collection_queue: CollectionQueue | None = None,
+    ):
+        """Wire the service to its channel store, collector and optional queue.
+
+        ``collector`` may be ``None`` for callers that only enqueue work — the
+        pure hand-off path (a CLI process deferring to a running worker) has no
+        Telegram connection to build one from. The stats and direct-collect
+        methods below do require it and raise if it is missing.
+        """
+        if isinstance(channels, Database):
+            channels = ChannelBundle.from_database(channels)
+        self._channels = channels
+        self._collector = collector
+        self._queue = collection_queue
+
+    async def _enqueue_channel(
+        self, channel: Channel, force: bool = False, full: bool = False
+    ) -> bool:
+        """Enqueue a channel for collection, atomically skipping duplicates.
+
+        Returns ``True`` if a new task was created, ``False`` if skipped.
+        """
+        if self._queue is not None:
+            task_id = await self._queue.enqueue(channel, force=force, full=full)
+            return task_id is not None
+        else:
+            payload = {"full": full}
+            if force:
+                payload["force"] = True
+            task_id = await self._channels.create_collection_task_if_not_active(
+                channel.channel_id,
+                channel.title,
+                channel_username=channel.username,
+                payload=payload,
+            )
+            return task_id is not None
+
+    async def enqueue_channel_by_pk(
+        self, pk: int, force: bool = False, full: bool = False
+    ) -> EnqueueResult:
+        channel = await self._channels.get_by_pk(pk)
+        if not channel:
+            return "not_found"
+        if channel.is_filtered and not force:
+            return "filtered"
+        created = await self._enqueue_channel(channel, force=force, full=full)
+        return "queued" if created else "already_active"
+
+    async def enqueue_all_channels(
+        self,
+        *,
+        resolve_backoff_remaining_sec: int = 0,
+    ) -> BulkEnqueueResult:
+        channels = await self._channels.list_channels(active_only=True, include_filtered=False)
+        queued_count = 0
+        skipped_existing_count = 0
+
+        for channel in channels:
+            created = await self._enqueue_channel(channel, force=True, full=False)
+            if created:
+                queued_count += 1
+            else:
+                skipped_existing_count += 1
+
+        return BulkEnqueueResult(
+            queued_count=queued_count,
+            skipped_existing_count=skipped_existing_count,
+            total_candidates=len(channels),
+            skipped_backoff_count=0,
+        )
+
+    async def cancel_task(self, task_id: int, note: str | None = None) -> bool:
+        """Cancel a pending/running collection task.
+
+        When the worker process is live (`self._queue is not None`) the call is
+        routes `channel_collect` through `CollectionQueue.cancel_task` so an
+        in-flight message collection gets interrupted immediately. Generic
+        tasks like `stats_all` run under `UnifiedDispatcher`, so they need a
+        direct DB cancellation plus a collector stop signal instead.
+
+        In web-mode (`self._queue is None`) we fall back to a DB-only status
+        flip — the worker will pick up the cancellation on its next fetch of
+        the task row.
+
+        Mirrors the `_enqueue_channel` fallback pattern so that /scheduler
+        routes do not 500 when `collection_queue` is absent (#457).
+        """
+        task = await self._channels.get_collection_task(task_id)
+        if task is None:
+            return False
+
+        if self._queue is not None and task.task_type == CollectionTaskType.CHANNEL_COLLECT:
+            return await self._queue.cancel_task(task_id, note=note)
+
+        cancelled = await self._channels.cancel_collection_task(task_id, note=note)
+        if cancelled and task.task_type == CollectionTaskType.STATS_ALL:
+            # Stats-only stop signal — must not abort unrelated in-flight channel
+            # collection that shares the collector (audit #835/6).
+            await self._require_collector().cancel_stats()
+        return cancelled
+
+    async def clear_pending_collect_tasks(self) -> int:
+        """Delete every PENDING channel-collect task.
+
+        With a live queue this also drains the in-memory asyncio.Queue and
+        cancels any Flood-Wait requeue timers. Without a queue (web-mode) we
+        just delete the DB rows — memory state lives only in the worker
+        process, which is not running anyway.
+        """
+        if self._queue is not None:
+            return await self._queue.clear_pending_tasks()
+        return await self._channels.delete_pending_channel_tasks()
+
+    def _require_collector(self) -> Collector:
+        """Return the collector, or explain why this call needs one.
+
+        Enqueue-only callers legitimately construct the service without a
+        collector; reaching a collecting method from there is a wiring bug, and
+        this turns it into a readable error instead of an ``AttributeError`` on
+        ``None``.
+        """
+        if self._collector is None:
+            raise RuntimeError(
+                "CollectionService was built without a Collector; "
+                "this operation needs a live Telegram connection"
+            )
+        return self._collector
+
+    async def collect_channel_stats(self, channel: Channel) -> None:
+        await self._require_collector().collect_channel_stats(channel)
+
+    async def collect_all_stats(self) -> None:
+        await self._require_collector().collect_all_stats()
+
+    async def collect_single_channel_full(self, channel: Channel) -> int:
+        return await self._require_collector().collect_single_channel(channel, full=True)

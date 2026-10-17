@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.database import Database
-from src.database.repositories.messages import MessageSearchPage
+from tg_agent.database import Database
+from tg_agent.database.repositories.messages import MessageSearchPage
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -24,7 +24,7 @@ def mock_db():
 
 
 def _build_sync_tools(mock_db, config=None, runtime_context=None):
-    from src.agent.tools.deepagents_sync import build_deepagents_tools
+    from tg_agent.agent.tools.deepagents_sync import build_deepagents_tools
 
     return {
         t.__name__: t
@@ -36,10 +36,10 @@ def _get_tool_handlers(mock_db, client_pool=None, config=None, **kwargs):
     """Build MCP tools and return their handlers keyed by name."""
     captured_tools = []
     with patch(
-        "src.agent.tools.create_sdk_mcp_server",
+        "tg_agent.agent.tools.create_sdk_mcp_server",
         side_effect=lambda **kw: captured_tools.extend(kw.get("tools", [])),
     ):
-        from src.agent.tools import make_mcp_server
+        from tg_agent.agent.tools import make_mcp_server
 
         make_mcp_server(mock_db, client_pool=client_pool, config=config, **kwargs)
     return {t.name: t.handler for t in captured_tools}
@@ -94,7 +94,7 @@ class TestDeepagentsSyncSemanticSearch:
     def test_error_on_missing_embedding_service(self, mock_db):
         tool_map = _build_sync_tools(mock_db)
         with patch(
-            "src.services.embedding_service.EmbeddingService",
+            "tg_agent.services.embedding_service.EmbeddingService",
             side_effect=ImportError("no embedding"),
         ):
             result = tool_map["semantic_search"]("query")
@@ -105,7 +105,7 @@ class TestDeepagentsSyncSemanticSearch:
         svc_mock = MagicMock()
         svc_mock.embed_query = AsyncMock(return_value=[0.1, 0.2])
         mock_db.search_semantic_messages = AsyncMock(return_value=([], 0))
-        with patch("src.services.embedding_service.EmbeddingService", return_value=svc_mock):
+        with patch("tg_agent.services.embedding_service.EmbeddingService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["semantic_search"]("query")
         assert "не найдены" in result
@@ -115,7 +115,7 @@ class TestDeepagentsSyncSemanticSearch:
         svc_mock.embed_query = AsyncMock(return_value=[0.1, 0.2])
         msg = SimpleNamespace(date="2026-01-01", channel_id=3, text="semantic content", topic_id=None)
         mock_db.search_semantic_messages = AsyncMock(return_value=([msg], 1))
-        with patch("src.services.embedding_service.EmbeddingService", return_value=svc_mock):
+        with patch("tg_agent.services.embedding_service.EmbeddingService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["semantic_search"]("query")
         assert "semantic content" in result
@@ -131,7 +131,7 @@ class TestDeepagentsSyncAddChannel:
     def test_success(self, mock_db):
         svc_mock = MagicMock()
         svc_mock.add_by_identifier = AsyncMock(return_value=SimpleNamespace(title="NewChan"))
-        with patch("src.services.channel_service.ChannelService", return_value=svc_mock):
+        with patch("tg_agent.services.channel_service.ChannelService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["add_channel"]("@newchan", confirm=True)
         assert "успешно добавлен" in result
@@ -139,13 +139,13 @@ class TestDeepagentsSyncAddChannel:
     def test_returns_none(self, mock_db):
         svc_mock = MagicMock()
         svc_mock.add_by_identifier = AsyncMock(return_value=None)
-        with patch("src.services.channel_service.ChannelService", return_value=svc_mock):
+        with patch("tg_agent.services.channel_service.ChannelService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["add_channel"]("@notexist", confirm=True)
         assert "не удалось добавить" in result
 
     def test_error(self, mock_db):
-        with patch("src.services.channel_service.ChannelService", side_effect=Exception("fail")):
+        with patch("tg_agent.services.channel_service.ChannelService", side_effect=Exception("fail")):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["add_channel"]("@err", confirm=True)
         assert "Ошибка" in result
@@ -156,7 +156,7 @@ class TestDeepagentsSyncDeleteChannel:
         svc_mock = MagicMock()
         svc_mock.delete = AsyncMock(return_value=None)
         mock_db.get_channel_by_pk = AsyncMock(return_value=SimpleNamespace(title="Channel 42"))
-        with patch("src.services.channel_service.ChannelService", return_value=svc_mock):
+        with patch("tg_agent.services.channel_service.ChannelService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["delete_channel"](42, confirm=True)
         assert "Channel 42" in result
@@ -164,7 +164,7 @@ class TestDeepagentsSyncDeleteChannel:
 
     def test_error(self, mock_db):
         mock_db.get_channel_by_pk = AsyncMock(return_value=SimpleNamespace(title="Channel 1"))
-        with patch("src.services.channel_service.ChannelService", side_effect=Exception("oops")):
+        with patch("tg_agent.services.channel_service.ChannelService", side_effect=Exception("oops")):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["delete_channel"](1, confirm=True)
         assert "Ошибка" in result
@@ -175,14 +175,14 @@ class TestDeepagentsSyncToggleChannel:
         svc_mock = MagicMock()
         svc_mock.toggle = AsyncMock(return_value=None)
         mock_db.get_channel_by_pk = AsyncMock(return_value=SimpleNamespace(title="Channel 7", is_active=False))
-        with patch("src.services.channel_service.ChannelService", return_value=svc_mock):
+        with patch("tg_agent.services.channel_service.ChannelService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["toggle_channel"](7)
         assert "Channel 7" in result
         assert "неактивен" in result
 
     def test_error(self, mock_db):
-        with patch("src.services.channel_service.ChannelService", side_effect=Exception("fail")):
+        with patch("tg_agent.services.channel_service.ChannelService", side_effect=Exception("fail")):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["toggle_channel"](1)
         assert "Ошибка" in result
@@ -197,7 +197,7 @@ class TestDeepagentsSyncGetPipelineDetail:
     def test_not_found(self, mock_db):
         svc_mock = MagicMock()
         svc_mock.get_detail = AsyncMock(return_value=None)
-        with patch("src.services.pipeline_service.PipelineService", return_value=svc_mock):
+        with patch("tg_agent.services.pipeline_service.PipelineService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_pipeline_detail"](99)
         assert "не найден" in result
@@ -206,14 +206,14 @@ class TestDeepagentsSyncGetPipelineDetail:
         p = SimpleNamespace(id=3, name="MyPipe", llm_model="gpt-4", is_active=True)
         svc_mock = MagicMock()
         svc_mock.get_detail = AsyncMock(return_value={"pipeline": p})
-        with patch("src.services.pipeline_service.PipelineService", return_value=svc_mock):
+        with patch("tg_agent.services.pipeline_service.PipelineService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_pipeline_detail"](3)
         assert "MyPipe" in result
         assert "gpt-4" in result
 
     def test_error(self, mock_db):
-        with patch("src.services.pipeline_service.PipelineService", side_effect=Exception("err")):
+        with patch("tg_agent.services.pipeline_service.PipelineService", side_effect=Exception("err")):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_pipeline_detail"](1)
         assert "Ошибка" in result
@@ -229,14 +229,14 @@ class TestDeepagentsSyncTogglePipeline:
         svc_mock = MagicMock()
         svc_mock.toggle = AsyncMock(return_value=True)
         svc_mock.get = AsyncMock(return_value=SimpleNamespace(name="Pipeline 5", is_active=False))
-        with patch("src.services.pipeline_service.PipelineService", return_value=svc_mock):
+        with patch("tg_agent.services.pipeline_service.PipelineService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["toggle_pipeline"](5)
         assert "Pipeline 5" in result
         assert "деактивирован" in result
 
     def test_error(self, mock_db):
-        with patch("src.services.pipeline_service.PipelineService", side_effect=Exception("x")):
+        with patch("tg_agent.services.pipeline_service.PipelineService", side_effect=Exception("x")):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["toggle_pipeline"](1)
         assert "Ошибка" in result
@@ -247,14 +247,14 @@ class TestDeepagentsSyncDeletePipeline:
         svc_mock = MagicMock()
         svc_mock.get = AsyncMock(return_value=SimpleNamespace(name="Pipeline 8"))
         svc_mock.delete = AsyncMock(return_value=None)
-        with patch("src.services.pipeline_service.PipelineService", return_value=svc_mock):
+        with patch("tg_agent.services.pipeline_service.PipelineService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["delete_pipeline"](8, confirm=True)
         assert "Pipeline 8" in result
         assert "удалён" in result
 
     def test_error(self, mock_db):
-        with patch("src.services.pipeline_service.PipelineService", side_effect=Exception("x")):
+        with patch("tg_agent.services.pipeline_service.PipelineService", side_effect=Exception("x")):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["delete_pipeline"](1)
         assert "Ошибка" in result
@@ -396,7 +396,7 @@ class TestDeepagentsSyncToggleSearchQuery:
         svc_mock = MagicMock()
         svc_mock.get = AsyncMock(return_value=SimpleNamespace(is_active=True))
         svc_mock.toggle = AsyncMock(return_value=None)
-        with patch("src.services.search_query_service.SearchQueryService", return_value=svc_mock):
+        with patch("tg_agent.services.search_query_service.SearchQueryService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["toggle_search_query"](sq_id=3)
         assert "id=3" in result
@@ -404,7 +404,7 @@ class TestDeepagentsSyncToggleSearchQuery:
 
     def test_error(self, mock_db):
         with patch(
-            "src.services.search_query_service.SearchQueryService", side_effect=Exception("x")
+            "tg_agent.services.search_query_service.SearchQueryService", side_effect=Exception("x")
         ):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["toggle_search_query"](sq_id=1)
@@ -415,7 +415,7 @@ class TestDeepagentsSyncDeleteSearchQuery:
     def test_success(self, mock_db):
         svc_mock = MagicMock()
         svc_mock.delete = AsyncMock(return_value=None)
-        with patch("src.services.search_query_service.SearchQueryService", return_value=svc_mock):
+        with patch("tg_agent.services.search_query_service.SearchQueryService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["delete_search_query"](sq_id=5, confirm=True)
         assert "id=5" in result
@@ -423,7 +423,7 @@ class TestDeepagentsSyncDeleteSearchQuery:
 
     def test_error(self, mock_db):
         with patch(
-            "src.services.search_query_service.SearchQueryService", side_effect=Exception("x")
+            "tg_agent.services.search_query_service.SearchQueryService", side_effect=Exception("x")
         ):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["delete_search_query"](sq_id=1, confirm=True)
@@ -434,7 +434,7 @@ class TestDeepagentsSyncRunSearchQuery:
     def test_success(self, mock_db):
         svc_mock = MagicMock()
         svc_mock.run_once = AsyncMock(return_value=7)
-        with patch("src.services.search_query_service.SearchQueryService", return_value=svc_mock):
+        with patch("tg_agent.services.search_query_service.SearchQueryService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["run_search_query"](sq_id=2)
         assert "id=2" in result
@@ -442,7 +442,7 @@ class TestDeepagentsSyncRunSearchQuery:
 
     def test_error(self, mock_db):
         with patch(
-            "src.services.search_query_service.SearchQueryService", side_effect=Exception("x")
+            "tg_agent.services.search_query_service.SearchQueryService", side_effect=Exception("x")
         ):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["run_search_query"](sq_id=1)
@@ -506,7 +506,7 @@ class TestDeepagentsSyncGetAnalyticsSummary:
             return_value={"total_generations": 10, "total_published": 5, "total_pending": 2, "total_rejected": 1}
         )
         with patch(
-            "src.services.content_analytics_service.ContentAnalyticsService", return_value=svc_mock
+            "tg_agent.services.content_analytics_service.ContentAnalyticsService", return_value=svc_mock
         ):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_analytics_summary"]()
@@ -515,7 +515,7 @@ class TestDeepagentsSyncGetAnalyticsSummary:
 
     def test_error(self, mock_db):
         with patch(
-            "src.services.content_analytics_service.ContentAnalyticsService",
+            "tg_agent.services.content_analytics_service.ContentAnalyticsService",
             side_effect=Exception("err"),
         ):
             tool_map = _build_sync_tools(mock_db)
@@ -528,7 +528,7 @@ class TestDeepagentsSyncGetPipelineStats:
         svc_mock = MagicMock()
         svc_mock.get_pipeline_stats = AsyncMock(return_value=[])
         with patch(
-            "src.services.content_analytics_service.ContentAnalyticsService", return_value=svc_mock
+            "tg_agent.services.content_analytics_service.ContentAnalyticsService", return_value=svc_mock
         ):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_pipeline_stats"](pipeline_id=0)
@@ -539,7 +539,7 @@ class TestDeepagentsSyncGetPipelineStats:
         svc_mock = MagicMock()
         svc_mock.get_pipeline_stats = AsyncMock(return_value=[stat])
         with patch(
-            "src.services.content_analytics_service.ContentAnalyticsService", return_value=svc_mock
+            "tg_agent.services.content_analytics_service.ContentAnalyticsService", return_value=svc_mock
         ):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_pipeline_stats"](pipeline_id=1)
@@ -548,7 +548,7 @@ class TestDeepagentsSyncGetPipelineStats:
 
     def test_error(self, mock_db):
         with patch(
-            "src.services.content_analytics_service.ContentAnalyticsService",
+            "tg_agent.services.content_analytics_service.ContentAnalyticsService",
             side_effect=Exception("err"),
         ):
             tool_map = _build_sync_tools(mock_db)
@@ -565,7 +565,7 @@ class TestDeepagentsSyncGetTrendingTopics:
     def test_empty(self, mock_db):
         svc_mock = MagicMock()
         svc_mock.get_trending_topics = AsyncMock(return_value=[])
-        with patch("src.services.trend_service.TrendService", return_value=svc_mock):
+        with patch("tg_agent.services.trend_service.TrendService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_trending_topics"](days=7)
         assert "не найдены" in result
@@ -574,14 +574,14 @@ class TestDeepagentsSyncGetTrendingTopics:
         topic = SimpleNamespace(keyword="crypto", count=50)
         svc_mock = MagicMock()
         svc_mock.get_trending_topics = AsyncMock(return_value=[topic])
-        with patch("src.services.trend_service.TrendService", return_value=svc_mock):
+        with patch("tg_agent.services.trend_service.TrendService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_trending_topics"](days=7)
         assert "crypto" in result
         assert "50" in result
 
     def test_error(self, mock_db):
-        with patch("src.services.trend_service.TrendService", side_effect=Exception("err")):
+        with patch("tg_agent.services.trend_service.TrendService", side_effect=Exception("err")):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_trending_topics"](days=7)
         assert "Ошибка" in result
@@ -591,7 +591,7 @@ class TestDeepagentsSyncGetTrendingChannels:
     def test_empty(self, mock_db):
         svc_mock = MagicMock()
         svc_mock.get_trending_channels = AsyncMock(return_value=[])
-        with patch("src.services.trend_service.TrendService", return_value=svc_mock):
+        with patch("tg_agent.services.trend_service.TrendService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_trending_channels"](days=7)
         assert "не найдены" in result
@@ -600,14 +600,14 @@ class TestDeepagentsSyncGetTrendingChannels:
         ch = SimpleNamespace(title="TechNews", message_count=100)
         svc_mock = MagicMock()
         svc_mock.get_trending_channels = AsyncMock(return_value=[ch])
-        with patch("src.services.trend_service.TrendService", return_value=svc_mock):
+        with patch("tg_agent.services.trend_service.TrendService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_trending_channels"](days=7)
         assert "TechNews" in result
         assert "100" in result
 
     def test_error(self, mock_db):
-        with patch("src.services.trend_service.TrendService", side_effect=Exception("err")):
+        with patch("tg_agent.services.trend_service.TrendService", side_effect=Exception("err")):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_trending_channels"](days=7)
         assert "Ошибка" in result
@@ -617,7 +617,7 @@ class TestDeepagentsSyncGetMessageVelocity:
     def test_empty(self, mock_db):
         svc_mock = MagicMock()
         svc_mock.get_message_velocity = AsyncMock(return_value=[])
-        with patch("src.services.trend_service.TrendService", return_value=svc_mock):
+        with patch("tg_agent.services.trend_service.TrendService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_message_velocity"](days=30)
         assert "не найдены" in result
@@ -626,14 +626,14 @@ class TestDeepagentsSyncGetMessageVelocity:
         v = SimpleNamespace(date="2026-01-01", count=42)
         svc_mock = MagicMock()
         svc_mock.get_message_velocity = AsyncMock(return_value=[v])
-        with patch("src.services.trend_service.TrendService", return_value=svc_mock):
+        with patch("tg_agent.services.trend_service.TrendService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_message_velocity"](days=30)
         assert "2026-01-01" in result
         assert "42" in result
 
     def test_error(self, mock_db):
-        with patch("src.services.trend_service.TrendService", side_effect=Exception("err")):
+        with patch("tg_agent.services.trend_service.TrendService", side_effect=Exception("err")):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_message_velocity"](days=30)
         assert "Ошибка" in result
@@ -648,7 +648,7 @@ class TestDeepagentsSyncGetPeakHours:
     def test_empty(self, mock_db):
         svc_mock = MagicMock()
         svc_mock.get_peak_hours = AsyncMock(return_value=[])
-        with patch("src.services.trend_service.TrendService", return_value=svc_mock):
+        with patch("tg_agent.services.trend_service.TrendService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_peak_hours"]()
         assert "не найдены" in result
@@ -657,14 +657,14 @@ class TestDeepagentsSyncGetPeakHours:
         h = SimpleNamespace(hour=14, count=200)
         svc_mock = MagicMock()
         svc_mock.get_peak_hours = AsyncMock(return_value=[h])
-        with patch("src.services.trend_service.TrendService", return_value=svc_mock):
+        with patch("tg_agent.services.trend_service.TrendService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_peak_hours"]()
         assert "14:00" in result
         assert "200" in result
 
     def test_error(self, mock_db):
-        with patch("src.services.trend_service.TrendService", side_effect=Exception("err")):
+        with patch("tg_agent.services.trend_service.TrendService", side_effect=Exception("err")):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_peak_hours"]()
         assert "Ошибка" in result
@@ -680,7 +680,7 @@ class TestDeepagentsSyncGetCalendar:
         svc_mock = MagicMock()
         svc_mock.get_upcoming = AsyncMock(return_value=[])
         with patch(
-            "src.services.content_calendar_service.ContentCalendarService", return_value=svc_mock
+            "tg_agent.services.content_calendar_service.ContentCalendarService", return_value=svc_mock
         ):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_calendar"]()
@@ -691,7 +691,7 @@ class TestDeepagentsSyncGetCalendar:
         svc_mock = MagicMock()
         svc_mock.get_upcoming = AsyncMock(return_value=[evt])
         with patch(
-            "src.services.content_calendar_service.ContentCalendarService", return_value=svc_mock
+            "tg_agent.services.content_calendar_service.ContentCalendarService", return_value=svc_mock
         ):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_calendar"]()
@@ -700,7 +700,7 @@ class TestDeepagentsSyncGetCalendar:
 
     def test_error(self, mock_db):
         with patch(
-            "src.services.content_calendar_service.ContentCalendarService",
+            "tg_agent.services.content_calendar_service.ContentCalendarService",
             side_effect=Exception("err"),
         ):
             tool_map = _build_sync_tools(mock_db)
@@ -718,20 +718,20 @@ class TestDeepagentsSyncGetDailyStats:
         svc_mock = MagicMock()
         svc_mock.get_daily_stats = AsyncMock(return_value=[])
         with patch(
-            "src.services.content_analytics_service.ContentAnalyticsService", return_value=svc_mock
+            "tg_agent.services.content_analytics_service.ContentAnalyticsService", return_value=svc_mock
         ):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_daily_stats"](days=30)
         assert "Нет данных" in result
 
     def test_with_stats(self, mock_db):
-        from src.services.content_analytics_service import DailyStats
+        from tg_agent.services.content_analytics_service import DailyStats
 
         row = DailyStats(date="2026-01-01", generations=5, publications=3, rejections=0)
         svc_mock = MagicMock()
         svc_mock.get_daily_stats = AsyncMock(return_value=[row])
         with patch(
-            "src.services.content_analytics_service.ContentAnalyticsService", return_value=svc_mock
+            "tg_agent.services.content_analytics_service.ContentAnalyticsService", return_value=svc_mock
         ):
             tool_map = _build_sync_tools(mock_db)
             result = tool_map["get_daily_stats"](days=30)
@@ -740,7 +740,7 @@ class TestDeepagentsSyncGetDailyStats:
 
     def test_error(self, mock_db):
         with patch(
-            "src.services.content_analytics_service.ContentAnalyticsService",
+            "tg_agent.services.content_analytics_service.ContentAnalyticsService",
             side_effect=Exception("err"),
         ):
             tool_map = _build_sync_tools(mock_db)
@@ -755,7 +755,7 @@ class TestDeepagentsSyncGetDailyStats:
 
 class TestDeepagentsSyncToggleSchedulerJob:
     def test_disable_job(self, mock_db):
-        from src.agent.runtime_context import AgentRuntimeContext
+        from tg_agent.agent.runtime_context import AgentRuntimeContext
 
         mgr_mock = MagicMock()
         mgr_mock.is_job_enabled = AsyncMock(return_value=True)
@@ -767,7 +767,7 @@ class TestDeepagentsSyncToggleSchedulerJob:
         assert "выключена" in result
 
     def test_enable_job(self, mock_db):
-        from src.agent.runtime_context import AgentRuntimeContext
+        from tg_agent.agent.runtime_context import AgentRuntimeContext
 
         mgr_mock = MagicMock()
         mgr_mock.is_job_enabled = AsyncMock(return_value=False)
@@ -855,7 +855,7 @@ class TestDeepagentsSyncGenerateImage:
         img_svc_mock.generate = AsyncMock(return_value="/generated/img.png")
         img_svc_mock.adapter_names = ["together"]
         with patch(
-            "src.services.image_generation_service.ImageGenerationService",
+            "tg_agent.services.image_generation_service.ImageGenerationService",
             return_value=img_svc_mock,
         ):
             tool_map = _build_sync_tools(mock_db)
@@ -870,7 +870,7 @@ class TestDeepagentsSyncGenerateImage:
         img_svc_mock.adapter_names = ["together"]
         img_svc_mock.last_failure = None
         with patch(
-            "src.services.image_generation_service.ImageGenerationService",
+            "tg_agent.services.image_generation_service.ImageGenerationService",
             return_value=img_svc_mock,
         ):
             tool_map = _build_sync_tools(mock_db)
@@ -883,7 +883,7 @@ class TestDeepagentsSyncGenerateImage:
         img_svc_mock.generate = AsyncMock(side_effect=Exception("gen fail"))
         img_svc_mock.adapter_names = ["together"]
         with patch(
-            "src.services.image_generation_service.ImageGenerationService",
+            "tg_agent.services.image_generation_service.ImageGenerationService",
             return_value=img_svc_mock,
         ):
             tool_map = _build_sync_tools(mock_db)
@@ -896,7 +896,7 @@ class TestDeepagentsSyncGenerateImage:
         img_svc_mock.generate = AsyncMock(return_value="/generated/codex.png")
         img_svc_mock.adapter_names = ["codex"]
         with patch(
-            "src.services.image_generation_service.ImageGenerationService",
+            "tg_agent.services.image_generation_service.ImageGenerationService",
             return_value=img_svc_mock,
         ):
             tool_map = _build_sync_tools(mock_db)
@@ -909,7 +909,7 @@ class TestDeepagentsSyncGenerateImage:
     async def test_codex_only_live_sync_uses_tool_specific_timeout(self, mock_db):
         import asyncio
 
-        from src.agent.runtime_context import AgentRuntimeContext
+        from tg_agent.agent.runtime_context import AgentRuntimeContext
 
         img_svc_mock = MagicMock()
         img_svc_mock.is_available = AsyncMock(return_value=True)
@@ -929,7 +929,7 @@ class TestDeepagentsSyncGenerateImage:
         runtime_context.sync_timeout_sec = 0.02
         runtime_context.tool_sync_timeout_sec = {"generate_image": 0.2}
         with patch(
-            "src.services.image_generation_service.ImageGenerationService",
+            "tg_agent.services.image_generation_service.ImageGenerationService",
             return_value=img_svc_mock,
         ):
             tool_map = _build_sync_tools(mock_db, runtime_context=runtime_context)
@@ -938,8 +938,8 @@ class TestDeepagentsSyncGenerateImage:
         assert "runtime_error" not in result
 
     def test_generate_image_runtime_error_uses_image_timeout_text(self):
-        from src.agent.runtime_context import AgentToolRuntimeError
-        from src.agent.tools.deepagents_sync import _tool_error_text
+        from tg_agent.agent.runtime_context import AgentToolRuntimeError
+        from tg_agent.agent.tools.deepagents_sync import _tool_error_text
 
         message = (
             "Генерация изображения заняла больше 240 секунд и была остановлена. "
@@ -966,7 +966,7 @@ class TestPipelinesToolEditPipeline:
 
     @pytest.mark.anyio
     async def test_not_found(self, mock_db):
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.get_detail = AsyncMock(return_value=None)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["edit_pipeline"]({"pipeline_id": 99, "confirm": True})
@@ -986,7 +986,7 @@ class TestPipelinesToolEditPipeline:
             "source_ids": [1],
             "targets": [],
         }
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.get_detail = AsyncMock(return_value=detail)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["edit_pipeline"](
@@ -1014,8 +1014,8 @@ class TestPipelinesToolEditPipeline:
             "source_ids": [1],
             "targets": [],
         }
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
-            with patch("src.services.pipeline_service.PipelineTargetRef"):
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
+            with patch("tg_agent.services.pipeline_service.PipelineTargetRef"):
                 mock_svc.return_value.get_detail = AsyncMock(return_value=detail)
                 mock_svc.return_value.update = AsyncMock(return_value=True)
                 handlers = _get_tool_handlers(mock_db)
@@ -1042,7 +1042,7 @@ class TestPipelinesToolEditPipeline:
             ab_auto_select=False,
         )
         detail = {"pipeline": p, "source_ids": [], "targets": []}
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.get_detail = AsyncMock(return_value=detail)
             mock_svc.return_value.update = AsyncMock(return_value=False)
             handlers = _get_tool_handlers(mock_db)
@@ -1051,7 +1051,7 @@ class TestPipelinesToolEditPipeline:
 
     @pytest.mark.anyio
     async def test_error(self, mock_db):
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.get_detail = AsyncMock(side_effect=Exception("db err"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["edit_pipeline"]({"pipeline_id": 1, "confirm": True})
@@ -1072,7 +1072,7 @@ class TestPipelinesToolRunPipeline:
 
     @pytest.mark.anyio
     async def test_not_found(self, mock_db):
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.get = AsyncMock(return_value=None)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["run_pipeline"]({"pipeline_id": 99})
@@ -1081,7 +1081,7 @@ class TestPipelinesToolRunPipeline:
     @pytest.mark.anyio
     async def test_inactive_pipeline(self, mock_db):
         p = SimpleNamespace(id=1, name="InactivePipe", is_active=False)
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.get = AsyncMock(return_value=p)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["run_pipeline"]({"pipeline_id": 1})
@@ -1091,10 +1091,10 @@ class TestPipelinesToolRunPipeline:
     async def test_success(self, mock_db):
         p = SimpleNamespace(id=1, name="ActivePipe", is_active=True)
         run = SimpleNamespace(id=10, generated_text="Generated content", moderation_status="pending")
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
-            with patch("src.search.engine.SearchEngine"):
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
+            with patch("tg_agent.search.engine.SearchEngine"):
                 with patch(
-                    "src.services.content_generation_service.ContentGenerationService"
+                    "tg_agent.services.content_generation_service.ContentGenerationService"
                 ) as mock_gen:
                     mock_svc.return_value.get = AsyncMock(return_value=p)
                     mock_gen.return_value.generate = AsyncMock(return_value=run)
@@ -1106,7 +1106,7 @@ class TestPipelinesToolRunPipeline:
 
     @pytest.mark.anyio
     async def test_error(self, mock_db):
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.get = AsyncMock(side_effect=Exception("db err"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["run_pipeline"]({"pipeline_id": 1})
@@ -1125,9 +1125,9 @@ class TestPipelinesToolGenerateDraft:
             "generated_text": "Draft text",
             "citations": [{"channel_title": "Chan", "message_id": 1, "date": "2026-01-01"}],
         }
-        with patch("src.search.engine.SearchEngine"):
-            with patch("src.services.generation_service.GenerationService") as mock_gen:
-                with patch("src.services.provider_service.RuntimeProviderRegistry") as mock_ps:
+        with patch("tg_agent.search.engine.SearchEngine"):
+            with patch("tg_agent.services.generation_service.GenerationService") as mock_gen:
+                with patch("tg_agent.services.provider_service.RuntimeProviderRegistry") as mock_ps:
                     mock_ps.return_value.get_provider_callable = MagicMock(return_value=None)
                     mock_gen.return_value.generate = AsyncMock(return_value=gen_result)
                     handlers = _get_tool_handlers(mock_db)
@@ -1140,14 +1140,14 @@ class TestPipelinesToolGenerateDraft:
     async def test_with_pipeline_id(self, mock_db):
         p = SimpleNamespace(id=1, name="P", prompt_template="Write about {topic}", llm_model="gpt-4")
         gen_result = {"generated_text": "Pipeline draft", "citations": []}
-        with patch("src.services.pipeline_service.PipelineService") as mock_ps:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_ps:
             mock_ps.return_value.get = AsyncMock(return_value=p)
             mock_ps.return_value.get_retrieval_scope = AsyncMock(
                 return_value=SimpleNamespace(query="P", channel_id=None)
             )
-            with patch("src.search.engine.SearchEngine"):
-                with patch("src.services.generation_service.GenerationService") as mock_gen:
-                    with patch("src.services.provider_service.RuntimeProviderRegistry") as mock_aps:
+            with patch("tg_agent.search.engine.SearchEngine"):
+                with patch("tg_agent.services.generation_service.GenerationService") as mock_gen:
+                    with patch("tg_agent.services.provider_service.RuntimeProviderRegistry") as mock_aps:
                         mock_aps.return_value.get_provider_callable = MagicMock(return_value=None)
                         mock_gen.return_value.generate = AsyncMock(return_value=gen_result)
                         handlers = _get_tool_handlers(mock_db)
@@ -1159,7 +1159,7 @@ class TestPipelinesToolGenerateDraft:
 
     @pytest.mark.anyio
     async def test_error(self, mock_db):
-        with patch("src.search.engine.SearchEngine", side_effect=Exception("search fail")):
+        with patch("tg_agent.search.engine.SearchEngine", side_effect=Exception("search fail")):
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["generate_draft"]({"query": "fail"})
         assert "Ошибка" in _text(result)
@@ -1199,7 +1199,7 @@ class TestPipelinesToolPublishPipelineRun:
         pool = MagicMock()
         run = SimpleNamespace(id=1, pipeline_id=5)
         mock_db.repos.generation_runs.get = AsyncMock(return_value=run)
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.get = AsyncMock(return_value=None)
             handlers = _get_tool_handlers(mock_db, client_pool=pool)
             result = await handlers["publish_pipeline_run"]({"run_id": 1, "confirm": True})
@@ -1212,8 +1212,8 @@ class TestPipelinesToolPublishPipelineRun:
         pipeline = SimpleNamespace(id=2, name="Pipe")
         pub_result = SimpleNamespace(success=True, error=None)
         mock_db.repos.generation_runs.get = AsyncMock(return_value=run)
-        with patch("src.services.pipeline_service.PipelineService") as mock_ps:
-            with patch("src.services.publish_service.PublishService") as mock_pub:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_ps:
+            with patch("tg_agent.services.publish_service.PublishService") as mock_pub:
                 mock_ps.return_value.get = AsyncMock(return_value=pipeline)
                 mock_pub.return_value.publish_run = AsyncMock(return_value=[pub_result])
                 handlers = _get_tool_handlers(mock_db, client_pool=pool)
@@ -1231,8 +1231,8 @@ class TestPipelinesToolPublishPipelineRun:
 class TestProviderConfigServiceLoadConfigs:
     @pytest.mark.anyio
     async def test_returns_empty_on_no_setting(self, db):
-        from src.config import AppConfig
-        from src.services.agent_provider_service import ProviderConfigService
+        from tg_agent.config import AppConfig
+        from tg_agent.services.agent_provider_service import ProviderConfigService
 
         config = AppConfig()
         svc = ProviderConfigService(db, config)
@@ -1241,8 +1241,8 @@ class TestProviderConfigServiceLoadConfigs:
 
     @pytest.mark.anyio
     async def test_returns_empty_on_invalid_json(self, db):
-        from src.config import AppConfig
-        from src.services.agent_provider_service import PROVIDER_SETTINGS_KEY, ProviderConfigService
+        from tg_agent.config import AppConfig
+        from tg_agent.services.agent_provider_service import PROVIDER_SETTINGS_KEY, ProviderConfigService
 
         config = AppConfig()
         svc = ProviderConfigService(db, config)
@@ -1252,8 +1252,8 @@ class TestProviderConfigServiceLoadConfigs:
 
     @pytest.mark.anyio
     async def test_returns_empty_on_non_list_json(self, db):
-        from src.config import AppConfig
-        from src.services.agent_provider_service import PROVIDER_SETTINGS_KEY, ProviderConfigService
+        from tg_agent.config import AppConfig
+        from tg_agent.services.agent_provider_service import PROVIDER_SETTINGS_KEY, ProviderConfigService
 
         config = AppConfig()
         svc = ProviderConfigService(db, config)
@@ -1263,8 +1263,8 @@ class TestProviderConfigServiceLoadConfigs:
 
     @pytest.mark.anyio
     async def test_skips_unknown_provider(self, db):
-        from src.config import AppConfig
-        from src.services.agent_provider_service import PROVIDER_SETTINGS_KEY, ProviderConfigService
+        from tg_agent.config import AppConfig
+        from tg_agent.services.agent_provider_service import PROVIDER_SETTINGS_KEY, ProviderConfigService
 
         config = AppConfig()
         svc = ProviderConfigService(db, config)
@@ -1275,8 +1275,8 @@ class TestProviderConfigServiceLoadConfigs:
 
     @pytest.mark.anyio
     async def test_save_requires_cipher(self, db):
-        from src.config import AppConfig
-        from src.services.agent_provider_service import ProviderConfigService
+        from tg_agent.config import AppConfig
+        from tg_agent.services.agent_provider_service import ProviderConfigService
 
         config = AppConfig()
         # No session_encryption_key → writes_enabled is False
@@ -1294,8 +1294,8 @@ class TestProviderConfigServiceLoadConfigs:
 class TestProviderConfigServiceLoadModelCache:
     @pytest.mark.anyio
     async def test_empty_on_no_setting(self, db):
-        from src.config import AppConfig
-        from src.services.agent_provider_service import ProviderConfigService
+        from tg_agent.config import AppConfig
+        from tg_agent.services.agent_provider_service import ProviderConfigService
 
         config = AppConfig()
         svc = ProviderConfigService(db, config)
@@ -1304,8 +1304,8 @@ class TestProviderConfigServiceLoadModelCache:
 
     @pytest.mark.anyio
     async def test_empty_on_invalid_json(self, db):
-        from src.config import AppConfig
-        from src.services.agent_provider_service import MODEL_CACHE_SETTINGS_KEY, ProviderConfigService
+        from tg_agent.config import AppConfig
+        from tg_agent.services.agent_provider_service import MODEL_CACHE_SETTINGS_KEY, ProviderConfigService
 
         config = AppConfig()
         svc = ProviderConfigService(db, config)
@@ -1315,8 +1315,8 @@ class TestProviderConfigServiceLoadModelCache:
 
     @pytest.mark.anyio
     async def test_empty_on_non_dict_json(self, db):
-        from src.config import AppConfig
-        from src.services.agent_provider_service import MODEL_CACHE_SETTINGS_KEY, ProviderConfigService
+        from tg_agent.config import AppConfig
+        from tg_agent.services.agent_provider_service import MODEL_CACHE_SETTINGS_KEY, ProviderConfigService
 
         config = AppConfig()
         svc = ProviderConfigService(db, config)
@@ -1326,8 +1326,8 @@ class TestProviderConfigServiceLoadModelCache:
 
     @pytest.mark.anyio
     async def test_save_and_load_model_cache(self, db):
-        from src.config import AppConfig
-        from src.services.agent_provider_service import ProviderConfigService, ProviderModelCacheEntry
+        from tg_agent.config import AppConfig
+        from tg_agent.services.agent_provider_service import ProviderConfigService, ProviderModelCacheEntry
 
         config = AppConfig()
         svc = ProviderConfigService(db, config)
@@ -1351,9 +1351,9 @@ class TestProviderConfigServiceLoadModelCache:
 class TestProviderConfigServiceBuildProviderViews:
     @pytest.mark.anyio
     async def test_builds_view_for_openai(self, db):
-        from src.agent.provider_registry import ProviderRuntimeConfig
-        from src.config import AppConfig
-        from src.services.agent_provider_service import ProviderConfigService, ProviderModelCacheEntry
+        from tg_agent.agent.provider_registry import ProviderRuntimeConfig
+        from tg_agent.config import AppConfig
+        from tg_agent.services.agent_provider_service import ProviderConfigService, ProviderModelCacheEntry
 
         config = AppConfig()
         svc = ProviderConfigService(db, config)
@@ -1381,9 +1381,9 @@ class TestProviderConfigServiceBuildProviderViews:
 
     @pytest.mark.anyio
     async def test_builds_view_with_empty_cache(self, db):
-        from src.agent.provider_registry import ProviderRuntimeConfig
-        from src.config import AppConfig
-        from src.services.agent_provider_service import ProviderConfigService
+        from tg_agent.agent.provider_registry import ProviderRuntimeConfig
+        from tg_agent.config import AppConfig
+        from tg_agent.services.agent_provider_service import ProviderConfigService
 
         config = AppConfig()
         svc = ProviderConfigService(db, config)
@@ -1405,9 +1405,9 @@ class TestProviderConfigServiceBuildProviderViews:
 
 class TestProviderConfigServiceValidateConfig:
     def test_missing_api_key_for_openai(self, db):
-        from src.agent.provider_registry import ProviderRuntimeConfig
-        from src.config import AppConfig
-        from src.services.agent_provider_service import ProviderConfigService
+        from tg_agent.agent.provider_registry import ProviderRuntimeConfig
+        from tg_agent.config import AppConfig
+        from tg_agent.services.agent_provider_service import ProviderConfigService
 
         config = AppConfig()
         svc = ProviderConfigService(db, config)
@@ -1422,9 +1422,9 @@ class TestProviderConfigServiceValidateConfig:
         assert error  # Should report missing api_key
 
     def test_valid_config_with_api_key(self, db):
-        from src.agent.provider_registry import ProviderRuntimeConfig
-        from src.config import AppConfig
-        from src.services.agent_provider_service import ProviderConfigService
+        from tg_agent.agent.provider_registry import ProviderRuntimeConfig
+        from tg_agent.config import AppConfig
+        from tg_agent.services.agent_provider_service import ProviderConfigService
 
         config = AppConfig()
         svc = ProviderConfigService(db, config)
@@ -1447,8 +1447,8 @@ class TestProviderConfigServiceValidateConfig:
 class TestProviderConfigServiceRefreshAllModels:
     @pytest.mark.anyio
     async def test_refresh_all_empty_configs(self, db, monkeypatch):
-        from src.config import AppConfig
-        from src.services.agent_provider_service import ProviderConfigService
+        from tg_agent.config import AppConfig
+        from tg_agent.services.agent_provider_service import ProviderConfigService
 
         config = AppConfig()
         svc = ProviderConfigService(db, config)
@@ -1462,9 +1462,9 @@ class TestProviderConfigServiceRefreshAllModels:
 
     @pytest.mark.anyio
     async def test_refresh_all_with_config(self, db, monkeypatch):
-        from src.agent.provider_registry import ProviderRuntimeConfig
-        from src.config import AppConfig
-        from src.services.agent_provider_service import ProviderConfigService
+        from tg_agent.agent.provider_registry import ProviderRuntimeConfig
+        from tg_agent.config import AppConfig
+        from tg_agent.services.agent_provider_service import ProviderConfigService
 
         config = AppConfig()
         svc = ProviderConfigService(db, config)
@@ -1491,7 +1491,7 @@ class TestProviderConfigServiceRefreshAllModels:
 
 class TestEmbedHistoryInPrompt:
     def test_basic_embedding(self):
-        from src.agent.manager import _embed_history_in_prompt
+        from tg_agent.agent.manager import _embed_history_in_prompt
 
         history = [
             {"role": "user", "content": "Hello"},
@@ -1503,13 +1503,13 @@ class TestEmbedHistoryInPrompt:
         assert "Current message" in result
 
     def test_empty_history(self):
-        from src.agent.manager import _embed_history_in_prompt
+        from tg_agent.agent.manager import _embed_history_in_prompt
 
         result = _embed_history_in_prompt([], "Prompt")
         assert "Prompt" in result
 
     def test_single_message_only(self):
-        from src.agent.manager import _embed_history_in_prompt
+        from tg_agent.agent.manager import _embed_history_in_prompt
 
         result = _embed_history_in_prompt([], "Solo message")
         assert "Solo message" in result
@@ -1523,8 +1523,8 @@ class TestEmbedHistoryInPrompt:
 
 class TestDeepagentsBackendProperties:
     def test_legacy_fallback_model_from_env(self, monkeypatch):
-        from src.agent.manager import DeepagentsBackend
-        from src.config import AppConfig
+        from tg_agent.agent.manager import DeepagentsBackend
+        from tg_agent.config import AppConfig
 
         monkeypatch.setenv("AGENT_FALLBACK_MODEL", "openai:gpt-4o")
         mock_db = MagicMock(spec=Database)
@@ -1533,8 +1533,8 @@ class TestDeepagentsBackendProperties:
         assert backend.legacy_fallback_model == "openai:gpt-4o"
 
     def test_legacy_fallback_model_from_config(self):
-        from src.agent.manager import DeepagentsBackend
-        from src.config import AppConfig
+        from tg_agent.agent.manager import DeepagentsBackend
+        from tg_agent.config import AppConfig
 
         mock_db = MagicMock(spec=Database)
         config = AppConfig()
@@ -1543,8 +1543,8 @@ class TestDeepagentsBackendProperties:
         assert backend.legacy_fallback_model == "groq:llama3"
 
     def test_configured_false_when_no_model(self, monkeypatch):
-        from src.agent.manager import DeepagentsBackend
-        from src.config import AppConfig
+        from tg_agent.agent.manager import DeepagentsBackend
+        from tg_agent.config import AppConfig
 
         monkeypatch.delenv("AGENT_FALLBACK_MODEL", raising=False)
         mock_db = MagicMock(spec=Database)
@@ -1554,8 +1554,8 @@ class TestDeepagentsBackendProperties:
         assert not backend.configured
 
     def test_configured_true_with_legacy_model(self, monkeypatch):
-        from src.agent.manager import DeepagentsBackend
-        from src.config import AppConfig
+        from tg_agent.agent.manager import DeepagentsBackend
+        from tg_agent.config import AppConfig
 
         monkeypatch.setenv("AGENT_FALLBACK_MODEL", "openai:gpt-4o")
         mock_db = MagicMock(spec=Database)
@@ -1564,8 +1564,8 @@ class TestDeepagentsBackendProperties:
         assert backend.configured
 
     def test_provider_from_model_with_colon(self):
-        from src.agent.manager import DeepagentsBackend
-        from src.config import AppConfig
+        from tg_agent.agent.manager import DeepagentsBackend
+        from tg_agent.config import AppConfig
 
         mock_db = MagicMock(spec=Database)
         config = AppConfig()
@@ -1573,8 +1573,8 @@ class TestDeepagentsBackendProperties:
         assert backend._provider_from_model("openai:gpt-4o") == "openai"
 
     def test_provider_from_model_without_colon(self):
-        from src.agent.manager import DeepagentsBackend
-        from src.config import AppConfig
+        from tg_agent.agent.manager import DeepagentsBackend
+        from tg_agent.config import AppConfig
 
         mock_db = MagicMock(spec=Database)
         config = AppConfig()
@@ -1582,8 +1582,8 @@ class TestDeepagentsBackendProperties:
         assert backend._provider_from_model("gpt-4o") is None
 
     def test_available_false_without_model(self, monkeypatch):
-        from src.agent.manager import DeepagentsBackend
-        from src.config import AppConfig
+        from tg_agent.agent.manager import DeepagentsBackend
+        from tg_agent.config import AppConfig
 
         monkeypatch.delenv("AGENT_FALLBACK_MODEL", raising=False)
         mock_db = MagicMock(spec=Database)
@@ -1594,8 +1594,8 @@ class TestDeepagentsBackendProperties:
         assert not backend.available
 
     def test_fallback_model_returns_last_used(self):
-        from src.agent.manager import DeepagentsBackend
-        from src.config import AppConfig
+        from tg_agent.agent.manager import DeepagentsBackend
+        from tg_agent.config import AppConfig
 
         mock_db = MagicMock(spec=Database)
         config = AppConfig()
@@ -1604,8 +1604,8 @@ class TestDeepagentsBackendProperties:
         assert backend.fallback_model == "openai:gpt-4-turbo"
 
     def test_fallback_provider_returns_last_used(self):
-        from src.agent.manager import DeepagentsBackend
-        from src.config import AppConfig
+        from tg_agent.agent.manager import DeepagentsBackend
+        from tg_agent.config import AppConfig
 
         mock_db = MagicMock(spec=Database)
         config = AppConfig()
@@ -1614,8 +1614,8 @@ class TestDeepagentsBackendProperties:
         assert backend.fallback_provider == "groq"
 
     def test_extract_result_text_dict_with_messages(self):
-        from src.agent.manager import DeepagentsBackend
-        from src.config import AppConfig
+        from tg_agent.agent.manager import DeepagentsBackend
+        from tg_agent.config import AppConfig
 
         mock_db = MagicMock(spec=Database)
         config = AppConfig()
@@ -1627,8 +1627,8 @@ class TestDeepagentsBackendProperties:
         assert "Hello from agent" in result
 
     def test_extract_result_text_non_dict(self):
-        from src.agent.manager import DeepagentsBackend
-        from src.config import AppConfig
+        from tg_agent.agent.manager import DeepagentsBackend
+        from tg_agent.config import AppConfig
 
         mock_db = MagicMock(spec=Database)
         config = AppConfig()
@@ -1637,8 +1637,8 @@ class TestDeepagentsBackendProperties:
         assert "plain string result" in result
 
     def test_extract_result_text_dict_no_messages(self):
-        from src.agent.manager import DeepagentsBackend
-        from src.config import AppConfig
+        from tg_agent.agent.manager import DeepagentsBackend
+        from tg_agent.config import AppConfig
 
         mock_db = MagicMock(spec=Database)
         config = AppConfig()
@@ -1655,7 +1655,7 @@ class TestDeepagentsBackendProperties:
 class TestAgentManagerCancelStream:
     @pytest.mark.anyio
     async def test_cancel_nonexistent_stream_returns_false(self, db):
-        from src.agent.manager import AgentManager
+        from tg_agent.agent.manager import AgentManager
 
         mgr = AgentManager(db)
         mgr.initialize()
@@ -1668,7 +1668,7 @@ class TestAgentManagerCancelStream:
     async def test_cancel_active_stream_returns_true(self, db):
         import asyncio
 
-        from src.agent.manager import AgentManager
+        from tg_agent.agent.manager import AgentManager
 
         mgr = AgentManager(db)
         mgr.initialize()
@@ -1694,9 +1694,9 @@ class TestAgentManagerCancelStream:
 
 class TestProviderConfigServiceCompatibility:
     def test_build_compatibility_payload_empty_models(self, db):
-        from src.agent.provider_registry import ProviderRuntimeConfig
-        from src.config import AppConfig
-        from src.services.agent_provider_service import ProviderConfigService, ProviderModelCacheEntry
+        from tg_agent.agent.provider_registry import ProviderRuntimeConfig
+        from tg_agent.config import AppConfig
+        from tg_agent.services.agent_provider_service import ProviderConfigService, ProviderModelCacheEntry
 
         config = AppConfig()
         svc = ProviderConfigService(db, config)
@@ -1718,8 +1718,8 @@ class TestProviderConfigServiceCompatibility:
     def test_is_compatibility_record_fresh(self, db):
         from datetime import UTC, datetime, timedelta
 
-        from src.config import AppConfig
-        from src.services.agent_provider_service import (
+        from tg_agent.config import AppConfig
+        from tg_agent.services.agent_provider_service import (
             ProviderConfigService,
             ProviderModelCompatibilityRecord,
         )
@@ -1741,8 +1741,8 @@ class TestProviderConfigServiceCompatibility:
         assert not svc.is_compatibility_record_fresh(old_record)
 
     def test_normalize_ollama_base_url(self, db):
-        from src.config import AppConfig
-        from src.services.agent_provider_service import ProviderConfigService
+        from tg_agent.config import AppConfig
+        from tg_agent.services.agent_provider_service import ProviderConfigService
 
         config = AppConfig()
         svc = ProviderConfigService(db, config)

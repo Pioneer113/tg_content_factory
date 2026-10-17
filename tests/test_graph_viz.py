@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.cli.graph_viz import _config_summary, render_ascii
-from src.models import PipelineEdge, PipelineGraph, PipelineNode, PipelineNodeType
+from tg_agent.cli.graph_viz import _config_summary, render_ascii
+from tg_agent.models import PipelineEdge, PipelineGraph, PipelineNode, PipelineNodeType
 
 # --- graph_viz tests ---
 
@@ -187,7 +187,7 @@ def test_config_summary_many_keys():
 
 
 def test_embedding_config_model_ref_with_colon():
-    from src.services.embedding_service import EmbeddingRuntimeConfig
+    from tg_agent.services.embedding_service import EmbeddingRuntimeConfig
 
     cfg = EmbeddingRuntimeConfig(
         provider="openai", model="openai:gpt-4", api_key="k", base_url="", batch_size=32,
@@ -196,7 +196,7 @@ def test_embedding_config_model_ref_with_colon():
 
 
 def test_embedding_config_model_ref_without_colon():
-    from src.services.embedding_service import EmbeddingRuntimeConfig
+    from tg_agent.services.embedding_service import EmbeddingRuntimeConfig
 
     cfg = EmbeddingRuntimeConfig(
         provider="openai", model="text-embedding-3-small", api_key="k", base_url="", batch_size=32,
@@ -205,7 +205,7 @@ def test_embedding_config_model_ref_without_colon():
 
 
 def test_embedding_service_init_with_db():
-    from src.services.embedding_service import EmbeddingService
+    from tg_agent.services.embedding_service import EmbeddingService
 
     db = MagicMock()
     svc = EmbeddingService(db)
@@ -213,7 +213,7 @@ def test_embedding_service_init_with_db():
 
 
 def test_embedding_service_init_with_search_bundle():
-    from src.services.embedding_service import EmbeddingService
+    from tg_agent.services.embedding_service import EmbeddingService
 
     bundle = MagicMock()
     svc = EmbeddingService(bundle)
@@ -221,7 +221,7 @@ def test_embedding_service_init_with_search_bundle():
 
 
 async def test_embedding_service_get_embeddings_no_vec_or_numpy():
-    from src.services.embedding_service import EmbeddingService
+    from tg_agent.services.embedding_service import EmbeddingService
 
     bundle = MagicMock()
     bundle.vec_available = False

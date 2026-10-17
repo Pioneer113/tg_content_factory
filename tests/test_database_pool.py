@@ -11,9 +11,9 @@ import time
 
 import pytest
 
-from src.database.connection import open_connection
-from src.database.pool import BufferedCursor, ReadConnectionPool, ReadPoolProxy
 from tests.helpers import wait_until
+from tg_agent.database.connection import open_connection
+from tg_agent.database.pool import BufferedCursor, ReadConnectionPool, ReadPoolProxy
 
 # A heavy pure-SQL query: a recursive CTE that SQLite evaluates in C, so it occupies
 # its connection's worker thread WITHOUT holding the Python GIL (a time.sleep UDF would

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from src.models import (
+from tg_agent.models import (
     ContentPipeline,
     PipelineGraph,
     PipelineNode,
     PipelineNodeType,
     PipelinePublishMode,
 )
-from src.web.pipelines.handlers import _apply_fetch_limit
+from tg_agent.web.pipelines.handlers import _apply_fetch_limit
 
 
 def _pipeline(graph: PipelineGraph | None = None) -> ContentPipeline:

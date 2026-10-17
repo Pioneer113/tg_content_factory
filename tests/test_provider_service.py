@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.services.provider_service import RuntimeProviderRegistry
+from tg_agent.services.provider_service import RuntimeProviderRegistry
 
 # === Default provider tests ===
 

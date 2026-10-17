@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.models import Channel
-from src.services.channel_service import ChannelService
+from tg_agent.models import Channel
+from tg_agent.services.channel_service import ChannelService
 
 
 def _make_channel(pk=1, channel_id=100, title="Test", is_active=True, username="testch"):

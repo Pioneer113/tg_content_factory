@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.models import Channel, CollectionTask, CollectionTaskStatus, SearchQuery
-from src.web.scheduler.context import format_task_result
+from tg_agent.models import Channel, CollectionTask, CollectionTaskStatus, SearchQuery
+from tg_agent.web.scheduler.context import format_task_result
 
 
 @pytest.fixture
@@ -115,7 +115,7 @@ async def test_legacy_scheduler_page_bookmark_redirects_to_jobs(client):
 @pytest.mark.anyio
 async def test_start_scheduler_redirect(client):
     """Test start scheduler redirects."""
-    with patch("src.web.routes.scheduler.deps.scheduler_service") as mock_svc:
+    with patch("tg_agent.web.routes.scheduler.deps.scheduler_service") as mock_svc:
         mock_svc.return_value.start = AsyncMock()
         resp = await client.post("/scheduler/start", follow_redirects=False)
         assert resp.status_code == 303
@@ -135,7 +135,7 @@ async def test_start_scheduler_shutting_down(client):
 @pytest.mark.anyio
 async def test_stop_scheduler_redirect(client):
     """Test stop scheduler redirects."""
-    with patch("src.web.routes.scheduler.deps.scheduler_service") as mock_svc:
+    with patch("tg_agent.web.routes.scheduler.deps.scheduler_service") as mock_svc:
         mock_svc.return_value.stop = AsyncMock()
         resp = await client.post("/scheduler/stop", follow_redirects=False)
         assert resp.status_code == 303
@@ -145,7 +145,7 @@ async def test_stop_scheduler_redirect(client):
 @pytest.mark.anyio
 async def test_trigger_collection_redirect(client):
     """Test trigger collection redirects."""
-    with patch("src.web.routes.scheduler.deps.scheduler_service") as mock_svc:
+    with patch("tg_agent.web.routes.scheduler.deps.scheduler_service") as mock_svc:
         mock_svc.return_value.trigger_collection = AsyncMock()
         resp = await client.post("/scheduler/trigger", follow_redirects=False)
         assert resp.status_code == 303
@@ -427,7 +427,7 @@ async def test_trigger_collection_calls_service(client):
     mock_service.enqueue_all_channels = AsyncMock(return_value=mock_result)
 
     with patch(
-        "src.web.routes.scheduler.deps.collection_service",
+        "tg_agent.web.routes.scheduler.deps.collection_service",
         return_value=mock_service,
     ):
         await client.post("/scheduler/trigger")

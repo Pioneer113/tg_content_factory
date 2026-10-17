@@ -57,11 +57,11 @@ export SESSION_ENCRYPTION_KEY="<один-и-тот-же-секрет>"
 === "CLI"
     ```bash
     # По id или по телефону (ровно один из флагов)
-    python -m src.main account export-session --id 3
-    python -m src.main account export-session --phone +71234567890
+    python -m tg_agent.main account export-session --id 3
+    python -m tg_agent.main account export-session --phone +71234567890
 
     # Машиночитаемый вывод {phone, session_string}
-    python -m src.main account export-session --id 3 --json
+    python -m tg_agent.main account export-session --id 3 --json
     ```
     Строка печатается в **stdout**; предупреждение «this session string grants
     full access to the account» — в **stderr**. Подтверждения не запрашивается —
@@ -90,13 +90,13 @@ export SESSION_ENCRYPTION_KEY="<один-и-тот-же-секрет>"
 === "CLI"
     ```bash
     # Предпочтительно: секрет со stdin (не попадает в argv / историю shell)
-    python -m src.main account import --phone +71234567890 --session-string-stdin
+    python -m tg_agent.main account import --phone +71234567890 --session-string-stdin
 
     # Либо строкой-аргументом (⚠️ попадёт в историю shell)
-    python -m src.main account import --phone +71234567890 --session-string "<...>"
+    python -m tg_agent.main account import --phone +71234567890 --session-string "<...>"
 
     # Перезаписать уже существующий аккаунт для этого телефона
-    python -m src.main account import --phone +71234567890 --session-string-stdin --force
+    python -m tg_agent.main account import --phone +71234567890 --session-string-stdin --force
     ```
     Импорт **валидирует** строку в telegram-слое (`auth_key`, `dc_id`,
     `server_address`, `port`) до записи; затем сохраняет через обычный путь

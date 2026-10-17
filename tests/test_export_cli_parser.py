@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from src.cli.typer_app import app
+from tg_agent.cli.typer_app import app
 
 runner = CliRunner()
 
@@ -14,8 +14,8 @@ runner = CliRunner()
 def test_export_telegram_parses_all_flags():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.export_cmd.telegram_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.export_cmd.telegram_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(
             app,
@@ -46,8 +46,8 @@ def test_export_telegram_parses_all_flags():
 def test_export_telegram_defaults():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.export_cmd.telegram_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.export_cmd.telegram_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["export", "telegram", "--channel-id", "1"])
     assert result.exit_code == 0

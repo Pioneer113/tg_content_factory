@@ -1,0 +1,935 @@
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+import re
+from collections import defaultdict
+from dataclasses import dataclass
+from typing import Any, Awaitable, Callable
+
+from tg_agent.agent.prompt_template import PromptTemplateError, validate_prompt_template
+from tg_agent.database import Database
+from tg_agent.database.bundles import PipelineBundle
+from tg_agent.models import (
+    ContentPipeline,
+    PipelineEdge,
+    PipelineGenerationBackend,
+    PipelineGraph,
+    PipelineNode,
+    PipelineNodeType,
+    PipelinePublishMode,
+    PipelineSource,
+    PipelineTarget,
+    PipelineTemplate,
+)
+from tg_agent.services.pipeline_filters import normalize_filter_config
+from tg_agent.services.pipeline_llm_requirements import get_dag_source_channel_ids, pipeline_needs_llm
+
+logger = logging.getLogger(__name__)
+
+
+def _group_by_pipeline(items: list) -> dict[int, list]:
+    """Group a list of source/target objects by their pipeline_id."""
+    result: dict[int, list] = {}
+    for item in items:
+        result.setdefault(item.pipeline_id, []).append(item)
+    return result
+
+
+def to_since_hours(value: int, unit: str) -> float:
+    """Convert since_value + since_unit to a float number of hours."""
+    if unit == "m":
+        return value / 60.0
+    if unit == "d":
+        return value * 24.0
+    return float(value)  # "h"
+
+
+@dataclass(frozen=True)
+class PipelineTargetRef:
+    phone: str
+    dialog_id: int
+
+
+def _coerce_target_ref(ref: Any) -> PipelineTargetRef | None:
+    """Normalise one exported target ref into a ``PipelineTargetRef``.
+
+    Exports and the CLI/agent surfaces disagree on shape: ``export_json`` emits
+    ``"phone|dialog_id"`` strings, while ``pipeline add --json-file`` builds
+    ``{"phone": ..., "dialog_id": ...}`` dicts. The old import path accepted only
+    the string form, so dict refs were silently dropped and the imported
+    pipeline ended up with zero targets (#1246). Accept both; return ``None`` for
+    anything unparseable so the caller can skip it.
+    """
+    if isinstance(ref, PipelineTargetRef):
+        return ref
+    if isinstance(ref, str):
+        if "|" not in ref:
+            return None
+        phone, _, dialog_id = ref.partition("|")
+        phone = phone.strip()
+        dialog_id = dialog_id.strip()
+        if not phone or not dialog_id:
+            return None
+        try:
+            return PipelineTargetRef(phone=phone, dialog_id=int(dialog_id))
+        except ValueError:
+            return None
+    if isinstance(ref, dict):
+        phone = str(ref.get("phone", "")).strip()
+        raw_dialog = ref.get("dialog_id")
+        if not phone or raw_dialog is None:
+            return None
+        try:
+            return PipelineTargetRef(phone=phone, dialog_id=int(raw_dialog))
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
+@dataclass(frozen=True)
+class PipelineRetrievalScope:
+    query: str
+    channel_id: int | None
+
+
+class PipelineScopeError(RuntimeError):
+    """Raised when a pipeline's source scope cannot be resolved.
+
+    Fail-closed for content isolation (#1077): a ``channel_id`` of ``None``
+    means UNSCOPED retrieval across ALL channels. The old code swallowed a
+    failed source lookup and returned ``channel_id=None``, silently widening a
+    single-source pipeline into a cross-channel search on a transient DB blip —
+    content could then be generated/published from channels outside the
+    configured sources (a trust-boundary breach). We therefore abort the run
+    instead of widening the scope.
+    """
+
+
+async def resolve_retrieval_scope(
+    pipeline: ContentPipeline,
+    list_sources: Callable[[int], Awaitable[list[Any]]] | None = None,
+) -> PipelineRetrievalScope:
+    """Return retrieval query and optional single-source scope for a pipeline.
+
+    Raises :class:`PipelineScopeError` if the source lookup fails — we must not
+    fall back to an unscoped (all-channels) retrieval on a transient failure
+    (#1077, fail-closed). A genuinely unscoped pipeline (no ``list_sources``, or
+    zero/multiple configured sources) still returns ``channel_id=None``; only an
+    *errored* lookup is rejected.
+    """
+    query = pipeline.name or ""
+    channel_id: int | None = None
+    if list_sources is None:
+        return PipelineRetrievalScope(query=query, channel_id=channel_id)
+    pipeline_id = pipeline.id
+    if pipeline_id is None:
+        raise PipelineScopeError("Could not resolve source scope for unsaved pipeline; aborting.")
+    try:
+        sources = await list_sources(pipeline_id)
+    except Exception as exc:
+        logger.error(
+            "Failed to load pipeline sources for %s; refusing to widen scope to all channels",
+            pipeline_id,
+            exc_info=True,
+        )
+        raise PipelineScopeError(
+            f"Could not resolve source scope for pipeline {pipeline_id}; "
+            "aborting to avoid cross-channel retrieval"
+        ) from exc
+    if len(sources) == 1:
+        channel_id = sources[0].channel_id
+    return PipelineRetrievalScope(query=query, channel_id=channel_id)
+
+
+class PipelineValidationError(ValueError):
+    """Raised when pipeline configuration is invalid."""
+
+
+class PipelineService:
+    def __init__(self, bundle: PipelineBundle | Database):
+        if isinstance(bundle, Database):
+            bundle = PipelineBundle.from_database(bundle)
+        self._bundle = bundle
+
+    @staticmethod
+    def _hydrate_runtime_refs(
+        pipeline: ContentPipeline,
+        sources: list[PipelineSource],
+        targets: list[PipelineTarget],
+    ) -> ContentPipeline:
+        """Backfill graph source/target refs from sidecar tables for runtime consistency."""
+        if pipeline.pipeline_json is None:
+            return pipeline
+
+        graph = pipeline.pipeline_json.model_copy(deep=True)
+        PipelineService._inject_runtime_refs(
+            graph,
+            [source.channel_id for source in sources],
+            [
+                PipelineTargetRef(phone=target.phone, dialog_id=target.dialog_id)
+                for target in targets
+                if target.phone
+            ],
+        )
+        return pipeline.model_copy(update={"pipeline_json": graph})
+
+    @staticmethod
+    def _effective_source_ids(
+        pipeline: ContentPipeline,
+        sources: list[PipelineSource],
+    ) -> list[int]:
+        """Return source IDs from the runtime graph for DAGs, sidecar rows for legacy pipelines."""
+        dag_source_ids = get_dag_source_channel_ids(pipeline)
+        if dag_source_ids is not None:
+            return dag_source_ids
+        return [source.channel_id for source in sources]
+
+    @staticmethod
+    def _source_titles(source_ids: list[int], channels_by_id: dict[int, Any]) -> list[str]:
+        titles: list[str] = []
+        for source_id in source_ids:
+            channel = channels_by_id.get(source_id)
+            titles.append(channel.title or str(source_id) if channel else str(source_id))
+        return titles
+
+    async def add(
+        self,
+        *,
+        name: str,
+        prompt_template: str,
+        source_channel_ids: list[int],
+        target_refs: list[PipelineTargetRef],
+        llm_model: str | None = None,
+        image_model: str | None = None,
+        publish_mode: PipelinePublishMode | str = PipelinePublishMode.MODERATED,
+        generation_backend: PipelineGenerationBackend | str = PipelineGenerationBackend.CHAIN,
+        generate_interval_minutes: int = 60,
+        is_active: bool = True,
+        ab_num_variants: int = 1,
+        ab_auto_select: bool = False,
+    ) -> int:
+        pipeline = await self._build_pipeline(
+            name=name,
+            prompt_template=prompt_template,
+            llm_model=llm_model,
+            image_model=image_model,
+            publish_mode=publish_mode,
+            generation_backend=generation_backend,
+            generate_interval_minutes=generate_interval_minutes,
+            is_active=is_active,
+            ab_num_variants=ab_num_variants,
+            ab_auto_select=ab_auto_select,
+        )
+        sources = await self._normalize_sources(source_channel_ids)
+        targets = await self._normalize_targets(target_refs)
+        return await self._bundle.add(pipeline, sources, targets)
+
+    async def update(
+        self,
+        pipeline_id: int,
+        *,
+        name: str,
+        prompt_template: str,
+        source_channel_ids: list[int],
+        target_refs: list[PipelineTargetRef],
+        llm_model: str | None = None,
+        image_model: str | None = None,
+        publish_mode: PipelinePublishMode | str = PipelinePublishMode.MODERATED,
+        generation_backend: PipelineGenerationBackend | str = PipelineGenerationBackend.CHAIN,
+        generate_interval_minutes: int = 60,
+        is_active: bool = True,
+        react_emoji: str | None = None,
+        filter_config: dict | None = None,
+        dag_source_channel_ids: list[int] | None = None,
+        account_phone: str | None = None,
+        ab_num_variants: int = 1,
+        ab_auto_select: bool = False,
+    ) -> bool:
+        existing = await self.get(pipeline_id)
+        existing_pipeline_json = existing.pipeline_json if existing else None
+        is_dag = existing_pipeline_json is not None
+
+        # Determine if the updated pipeline will need LLM based on new backend + existing pipeline_json
+        try:
+            probe_backend = PipelineGenerationBackend(generation_backend)
+        except ValueError:
+            probe_backend = PipelineGenerationBackend.CHAIN
+        probe = ContentPipeline(
+            name="x",
+            generation_backend=probe_backend,
+            generate_interval_minutes=generate_interval_minutes,
+            pipeline_json=existing_pipeline_json,
+            ab_num_variants=ab_num_variants,
+        )
+        skip_llm_validation = not pipeline_needs_llm(probe)
+        pipeline = await self._build_pipeline(
+            name=name,
+            prompt_template=prompt_template,
+            llm_model=llm_model,
+            image_model=image_model,
+            publish_mode=publish_mode,
+            generation_backend=generation_backend,
+            generate_interval_minutes=generate_interval_minutes,
+            is_active=is_active,
+            skip_llm_validation=skip_llm_validation,
+            account_phone=account_phone,
+            ab_num_variants=ab_num_variants,
+            ab_auto_select=ab_auto_select,
+        )
+
+        # Preserve existing pipeline_json and apply node-level config updates
+        updated_graph = existing_pipeline_json
+        if updated_graph is not None:
+            if dag_source_channel_ids is not None:
+                for node in updated_graph.nodes:
+                    if node.type == PipelineNodeType.SOURCE:
+                        node.config["channel_ids"] = dag_source_channel_ids
+            if react_emoji is not None:
+                emojis = [e for e in re.split(r"[,\s]+", react_emoji.strip()) if e]
+                for node in updated_graph.nodes:
+                    if node.type == PipelineNodeType.REACT:
+                        if len(emojis) > 1:
+                            node.config["emoji"] = emojis[0]
+                            node.config["random_emojis"] = emojis
+                        else:
+                            node.config["emoji"] = emojis[0] if emojis else "👍"
+                            node.config["random_emojis"] = []
+            if filter_config is not None:
+                normalized_filter = normalize_filter_config(filter_config)
+                for node in updated_graph.nodes:
+                    if node.type == PipelineNodeType.FILTER:
+                        node.config = normalized_filter
+        pipeline = pipeline.model_copy(update={"pipeline_json": updated_graph})
+
+        # For DAG pipelines, source/target are managed via pipeline_json nodes, not DB tables
+        if is_dag:
+            sources: list[int] = []
+            targets: list[PipelineTarget] = []
+        else:
+            sources = await self._normalize_sources(source_channel_ids)
+            targets = await self._normalize_targets(target_refs)
+        return await self._bundle.update(pipeline_id, pipeline, sources, targets)
+
+    async def list_pipelines(self, active_only: bool = False) -> list[ContentPipeline]:
+        pipelines = await self._bundle.get_all(active_only)
+        pipeline_ids = [
+            pipeline.id
+            for pipeline in pipelines
+            if pipeline.id is not None and pipeline.pipeline_json is not None
+        ]
+        if not pipeline_ids:
+            return pipelines
+
+        all_sources, all_targets = await asyncio.gather(
+            self._batch_sources(pipeline_ids),
+            self._batch_targets(pipeline_ids),
+        )
+        sources_by_pid = _group_by_pipeline(all_sources)
+        targets_by_pid = _group_by_pipeline(all_targets)
+        return [
+            self._hydrate_runtime_refs(
+                pipeline,
+                sources_by_pid.get(pipeline.id, []),
+                targets_by_pid.get(pipeline.id, []),
+            )
+            if pipeline.id is not None and pipeline.pipeline_json is not None else pipeline
+            for pipeline in pipelines
+        ]
+
+    async def get(self, pipeline_id: int) -> ContentPipeline | None:
+        pipeline = await self._bundle.get_by_id(pipeline_id)
+        if pipeline is None or pipeline.pipeline_json is None or pipeline.id is None:
+            return pipeline
+
+        sources, targets = await asyncio.gather(
+            self._bundle.list_sources(pipeline_id),
+            self._bundle.list_targets(pipeline_id),
+        )
+        return self._hydrate_runtime_refs(pipeline, sources, targets)
+
+    async def delete(self, pipeline_id: int) -> None:
+        await self._bundle.delete(pipeline_id)
+
+    async def toggle(self, pipeline_id: int) -> bool:
+        pipeline = await self._bundle.get_by_id(pipeline_id)
+        if pipeline is None:
+            return False
+        await self._bundle.set_active(pipeline_id, not pipeline.is_active)
+        return True
+
+    async def get_sources(self, pipeline_id: int) -> list[PipelineSource]:
+        return await self._bundle.list_sources(pipeline_id)
+
+    async def get_targets(self, pipeline_id: int) -> list[PipelineTarget]:
+        return await self._bundle.list_targets(pipeline_id)
+
+    async def get_detail(self, pipeline_id: int) -> dict | None:
+        pipeline = await self._bundle.get_by_id(pipeline_id)
+        if pipeline is None:
+            return None
+        sources, targets, channels = await asyncio.gather(
+            self._bundle.list_sources(pipeline_id),
+            self._bundle.list_targets(pipeline_id),
+            self._bundle.list_channels(include_filtered=True),
+        )
+        pipeline = self._hydrate_runtime_refs(pipeline, sources, targets)
+        channels_by_id = {channel.channel_id: channel for channel in channels}
+        source_ids = self._effective_source_ids(pipeline, sources)
+        return {
+            "pipeline": pipeline,
+            "sources": sources,
+            "targets": targets,
+            "source_ids": source_ids,
+            "target_refs": [f"{target.phone}|{target.dialog_id}" for target in targets],
+            "source_titles": self._source_titles(source_ids, channels_by_id),
+        }
+
+    async def get_with_relations(self, active_only: bool = False) -> list[dict]:
+        pipelines = await self._bundle.get_all(active_only)
+        if not pipelines:
+            return []
+        pipeline_ids = [p.id for p in pipelines if p.id is not None]
+        channels, all_sources, all_targets = await asyncio.gather(
+            self._bundle.list_channels(include_filtered=True),
+            self._batch_sources(pipeline_ids),
+            self._batch_targets(pipeline_ids),
+        )
+        channels_by_id = {channel.channel_id: channel for channel in channels}
+        sources_by_pid = _group_by_pipeline(all_sources)
+        targets_by_pid = _group_by_pipeline(all_targets)
+        results = []
+        for p in pipelines:
+            sources = sources_by_pid.get(p.id, []) if p.id is not None else []
+            targets = targets_by_pid.get(p.id, []) if p.id is not None else []
+            hydrated = self._hydrate_runtime_refs(p, sources, targets) if p.id is not None and p.pipeline_json else p
+            source_ids = self._effective_source_ids(hydrated, sources)
+            results.append({
+                "pipeline": hydrated,
+                "sources": sources,
+                "targets": targets,
+                "source_ids": source_ids,
+                "target_refs": [
+                    f"{t.phone}|{t.dialog_id}" for t in targets
+                ],
+                "source_titles": self._source_titles(source_ids, channels_by_id),
+            })
+        return results
+
+    async def list_cached_dialogs_by_phone(
+        self,
+        active_only: bool = False,
+    ) -> dict[str, list[dict]]:
+        accounts = await self._bundle.list_account_summaries(active_only=active_only)
+        dialogs = await asyncio.gather(
+            *[self._bundle.list_cached_dialogs(account.phone) for account in accounts]
+        )
+        return {account.phone: rows for account, rows in zip(accounts, dialogs, strict=False)}
+
+    async def _batch_sources(self, pipeline_ids: list[int]) -> list[PipelineSource]:
+        """Load sources for all given pipeline IDs in a single query."""
+        return await self._bundle.content_pipelines.batch_sources(pipeline_ids)
+
+    async def _batch_targets(self, pipeline_ids: list[int]) -> list[PipelineTarget]:
+        """Load targets for all given pipeline IDs in a single query."""
+        return await self._bundle.content_pipelines.batch_targets(pipeline_ids)
+
+    async def _build_pipeline(
+        self,
+        *,
+        name: str,
+        prompt_template: str,
+        llm_model: str | None,
+        image_model: str | None,
+        publish_mode: PipelinePublishMode | str,
+        generation_backend: PipelineGenerationBackend | str,
+        generate_interval_minutes: int,
+        is_active: bool,
+        last_generated_id: int = 0,
+        skip_llm_validation: bool = False,
+        account_phone: str | None = None,
+        ab_num_variants: int = 1,
+        ab_auto_select: bool = False,
+    ) -> ContentPipeline:
+        cleaned_name = name.strip()
+        if not cleaned_name:
+            raise PipelineValidationError("Название pipeline не может быть пустым.")
+        cleaned_template = prompt_template.strip()
+        if not skip_llm_validation:
+            if not cleaned_template:
+                raise PipelineValidationError("Шаблон промпта не может быть пустым.")
+            try:
+                validate_prompt_template(cleaned_template)
+            except PromptTemplateError as exc:
+                raise PipelineValidationError(str(exc)) from exc
+        try:
+            publish_mode_enum = PipelinePublishMode(publish_mode)
+            backend_enum = PipelineGenerationBackend(generation_backend)
+        except ValueError as exc:
+            raise PipelineValidationError("Указан неизвестный режим pipeline.") from exc
+        if generate_interval_minutes < 1:
+            raise PipelineValidationError("Интервал генерации должен быть не меньше 1 минуты.")
+        if ab_num_variants < 1:
+            raise PipelineValidationError("Число A/B-вариантов должно быть не меньше 1.")
+        return ContentPipeline(
+            name=cleaned_name,
+            prompt_template=cleaned_template,
+            llm_model=(llm_model or "").strip() or None,
+            image_model=(image_model or "").strip() or None,
+            publish_mode=publish_mode_enum,
+            generation_backend=backend_enum,
+            is_active=is_active,
+            last_generated_id=last_generated_id,
+            generate_interval_minutes=generate_interval_minutes,
+            account_phone=account_phone or None,
+            ab_num_variants=ab_num_variants,
+            ab_auto_select=ab_auto_select,
+        )
+
+    @staticmethod
+    def _inject_runtime_refs(
+        graph: PipelineGraph | None,
+        source_ids: list[int],
+        target_refs: list[PipelineTargetRef],
+    ) -> None:
+        """Backfill SOURCE.channel_ids / PUBLISH+FORWARD.targets from sidecar refs.
+
+        Only fills empty config fields — authors who hand-edited the graph to
+        set explicit channel_ids / targets on a node keep their override.
+        """
+        if graph is None:
+            return
+        if source_ids:
+            clean_ids: list[int] = sorted(set(source_ids))
+            for node in graph.nodes:
+                if node.type == PipelineNodeType.SOURCE and not node.config.get("channel_ids"):
+                    node.config["channel_ids"] = clean_ids
+        if target_refs:
+            seen: set[tuple[str, int]] = set()
+            target_dicts: list[dict] = []
+            for ref in target_refs:
+                key = (ref.phone, ref.dialog_id)
+                if key in seen:
+                    continue
+                seen.add(key)
+                target_dicts.append({"phone": ref.phone, "dialog_id": ref.dialog_id})
+            for node in graph.nodes:
+                if (
+                    node.type in (PipelineNodeType.PUBLISH, PipelineNodeType.FORWARD)
+                    and not node.config.get("targets")
+                ):
+                    node.config["targets"] = target_dicts
+
+    async def _normalize_sources(self, source_channel_ids: list[int]) -> list[int]:
+        cleaned = sorted({int(channel_id) for channel_id in source_channel_ids})
+        if not cleaned:
+            raise PipelineValidationError("Выберите хотя бы один источник.")
+        channels = await self._bundle.list_channels(include_filtered=True)
+        known_ids = {channel.channel_id for channel in channels}
+        missing = [channel_id for channel_id in cleaned if channel_id not in known_ids]
+        if missing:
+            missing_values = ", ".join(map(str, missing))
+            raise PipelineValidationError(f"Неизвестные source channels: {missing_values}")
+        return cleaned
+
+    # ------------------------------------------------------------------
+    # JSON import / export
+    # ------------------------------------------------------------------
+
+    async def export_json(self, pipeline_id: int) -> dict | None:
+        """Export a pipeline as a JSON-serialisable dict."""
+        detail = await self.get_detail(pipeline_id)
+        if detail is None:
+            return None
+        pipeline: ContentPipeline = detail["pipeline"]
+        data: dict[str, Any] = {
+            "name": pipeline.name,
+            "prompt_template": pipeline.prompt_template,
+            "llm_model": pipeline.llm_model,
+            "image_model": pipeline.image_model,
+            "publish_mode": pipeline.publish_mode.value,
+            "generation_backend": pipeline.generation_backend.value,
+            "generate_interval_minutes": pipeline.generate_interval_minutes,
+            "publish_times": pipeline.publish_times,
+            "refinement_steps": pipeline.refinement_steps,
+            "source_ids": detail["source_ids"],
+            "target_refs": detail["target_refs"],
+        }
+        if pipeline.pipeline_json:
+            data["pipeline_json"] = json.loads(pipeline.pipeline_json.to_json())
+        return data
+
+    async def import_json(
+        self,
+        data: dict | str,
+        *,
+        name_override: str | None = None,
+    ) -> int:
+        """Create a pipeline from a JSON export dict. Returns the new pipeline ID."""
+        if isinstance(data, str):
+            decoded = json.loads(data)
+            if not isinstance(decoded, dict):
+                raise PipelineValidationError("JSON export must be an object.")
+            payload: dict[str, Any] = decoded
+        else:
+            payload = data
+        name = name_override or payload.get("name", "Imported pipeline")
+        prompt_template = payload.get("prompt_template", "")
+        source_ids = [int(x) for x in payload.get("source_ids", [])]
+        target_refs_raw = payload.get("target_refs", [])
+        target_refs: list[PipelineTargetRef] = []
+        for ref in target_refs_raw:
+            coerced = _coerce_target_ref(ref)
+            if coerced is not None:
+                target_refs.append(coerced)
+
+        pipeline_json: PipelineGraph | None = None
+        if "pipeline_json" in payload:
+            try:
+                pipeline_json = PipelineGraph.from_json(payload["pipeline_json"])
+            except Exception:
+                logger.warning("import_json: failed to parse pipeline_json field, ignoring")
+
+        pipeline = await self._build_pipeline(
+            name=name,
+            prompt_template=prompt_template or ".",
+            llm_model=payload.get("llm_model"),
+            image_model=payload.get("image_model"),
+            publish_mode=payload.get("publish_mode", PipelinePublishMode.MODERATED),
+            generation_backend=payload.get("generation_backend", PipelineGenerationBackend.CHAIN),
+            generate_interval_minutes=int(payload.get("generate_interval_minutes", 60)),
+            # Honour an explicit is_active from the payload; default False so a
+            # plain export->import round-trip stays inactive (export_json never
+            # emits is_active). The CLI `--json-file` path passes is_active so a
+            # `pipeline add` without --inactive activates the pipeline (#1246).
+            is_active=bool(payload.get("is_active", False)),
+            account_phone=payload.get("account_phone"),
+        )
+        self._inject_runtime_refs(pipeline_json, source_ids, target_refs)
+        # Restore publish_times here (add() persists it) and refinement_steps after
+        # add() (not in the add() INSERT) so an export→import round-trip keeps both
+        # fields instead of resetting them to defaults (audit #837/4).
+        update: dict[str, Any] = {"pipeline_json": pipeline_json}
+        if payload.get("publish_times") is not None:
+            update["publish_times"] = payload["publish_times"]
+        pipeline = pipeline.model_copy(update=update)
+
+        # Imported pipelines may not include runtime data (source/target IDs valid in
+        # the target environment); allow empty and create as inactive for later config.
+        sources = await self._normalize_sources(source_ids) if source_ids else []
+        targets = await self._normalize_targets(target_refs) if target_refs else []
+
+        new_id = await self._bundle.add(pipeline, sources, targets)
+        refinement_steps = payload.get("refinement_steps")
+        if refinement_steps:
+            await self._bundle.content_pipelines.set_refinement_steps(new_id, refinement_steps)
+        return new_id
+
+    # ------------------------------------------------------------------
+    # Template operations
+    # ------------------------------------------------------------------
+
+    async def list_templates(self, category: str | None = None) -> list[PipelineTemplate]:
+        """List all available pipeline templates."""
+        if self._bundle.pipeline_templates is None:
+            return []
+        return await self._bundle.pipeline_templates.list_all(category)
+
+    async def create_from_template(
+        self,
+        template_id: int,
+        *,
+        name: str,
+        source_ids: list[int],
+        target_refs: list[PipelineTargetRef],
+        overrides: dict | None = None,
+    ) -> int:
+        """Create a new pipeline from a template. Returns pipeline ID."""
+        if self._bundle.pipeline_templates is None:
+            raise PipelineValidationError("Репозиторий шаблонов недоступен.")
+        tpl = await self._bundle.pipeline_templates.get_by_id(template_id)
+        if tpl is None:
+            raise PipelineValidationError(f"Шаблон id={template_id} не найден.")
+
+        graph = tpl.template_json
+        overrides = overrides or {}
+
+        # Extract legacy fields from the graph nodes for backward compat
+        prompt_template = overrides.get("prompt_template", "")
+        llm_model = overrides.get("llm_model")
+        image_model = overrides.get("image_model")
+        publish_mode = overrides.get("publish_mode", PipelinePublishMode.MODERATED)
+        generation_backend = overrides.get("generation_backend", PipelineGenerationBackend.CHAIN)
+        interval = int(overrides.get("generate_interval_minutes", 60))
+
+        # Try to extract prompt_template from llm_generate node if not provided
+        if not prompt_template:
+            for node in graph.nodes:
+                if node.type.value in ("llm_generate", "llm_refine"):
+                    prompt_template = node.config.get("prompt_template") or node.config.get("prompt", "")
+                    break
+        if not prompt_template:
+            prompt_template = name
+
+        pipeline = await self._build_pipeline(
+            name=name,
+            prompt_template=prompt_template,
+            llm_model=llm_model,
+            image_model=image_model,
+            publish_mode=publish_mode,
+            generation_backend=generation_backend,
+            generate_interval_minutes=interval,
+            is_active=False,
+        )
+        pipeline = pipeline.model_copy(update={"pipeline_json": graph})
+
+        self._inject_runtime_refs(graph, source_ids, target_refs)
+
+        # Templates are created inactive; sources/targets are optional at creation time
+        sources = await self._normalize_sources(source_ids) if source_ids else []
+        targets = await self._normalize_targets(target_refs) if target_refs else []
+        return await self._bundle.add(pipeline, sources, targets)
+
+    async def get_retrieval_scope(self, pipeline: ContentPipeline) -> PipelineRetrievalScope:
+        """Return the retrieval query and optional single-source channel scope for a pipeline."""
+        return await resolve_retrieval_scope(pipeline, self._bundle.list_sources)
+
+    async def edit_via_llm(
+        self,
+        pipeline_id: int,
+        instruction: str,
+        db: Database,
+        *,
+        config: Any | None = None,
+    ) -> dict:
+        """Edit a pipeline's JSON config via LLM instruction.
+
+        Returns {"ok": True, "pipeline_json": {...}} or {"ok": False, "error": "..."}.
+        """
+        pipeline = await self.get(pipeline_id)
+        if pipeline is None:
+            return {"ok": False, "error": f"Пайплайн id={pipeline_id} не найден."}
+
+        import json as _json
+
+        current_graph_json = (
+            pipeline.pipeline_json.to_json() if pipeline.pipeline_json
+            else _json.dumps({"nodes": [], "edges": []})
+        )
+
+        prompt = (
+            "You are a pipeline configuration assistant. "
+            "You receive the current pipeline JSON and a user instruction. "
+            "Return ONLY the updated pipeline JSON object (no explanations, no markdown fences). "
+            "Keep all existing nodes unless explicitly asked to remove them. "
+            "Valid node types: source, retrieve_context, llm_generate, llm_refine, "
+            "image_generate, publish, notify, filter, delay, react, forward, delete_message, "
+            "edit_message, "
+            "condition, search_query_trigger.\n\n"
+            f"Current pipeline JSON:\n{current_graph_json}\n\n"
+            f"Instruction: {instruction}\n\n"
+            "Return the updated JSON:"
+        )
+
+        try:
+            from tg_agent.services.provider_service import build_provider_service
+
+            provider_service = await build_provider_service(db, config)
+            provider_callable = provider_service.get_provider_callable(pipeline.llm_model)
+            result = await provider_callable(
+                prompt,
+                model=pipeline.llm_model or "",
+                max_tokens=4096,
+                temperature=0.2,
+            )
+            raw = result if isinstance(result, str) else (result.get("text") or result.get("generated_text") or "")
+            # Strip markdown fences if present
+            raw = raw.strip()
+            if raw.startswith("```"):
+                raw = raw.split("```", 2)[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+                raw = raw.split("```")[0].strip()
+            new_graph = PipelineGraph.from_json(raw)
+            # Save the updated graph
+            await db.repos.content_pipelines.set_pipeline_json(pipeline_id, new_graph)
+            return {"ok": True, "pipeline_json": _json.loads(new_graph.to_json())}
+        except Exception as exc:
+            logger.warning("edit_via_llm failed for pipeline_id=%s: %s", pipeline_id, exc, exc_info=True)
+            return {"ok": False, "error": str(exc)}
+
+    # ------------------------------------------------------------------
+    # Graph CRUD operations
+    # ------------------------------------------------------------------
+
+    async def get_graph(self, pipeline_id: int) -> PipelineGraph | None:
+        """Return the pipeline graph, or None for legacy pipelines."""
+        pipeline = await self.get(pipeline_id)
+        if pipeline is None:
+            return None
+        return pipeline.pipeline_json
+
+    async def add_node(self, pipeline_id: int, node: PipelineNode) -> bool:
+        """Add *node* to the pipeline's graph. Returns False if pipeline/graph not found or ID is a duplicate."""
+        graph = await self.get_graph(pipeline_id)
+        if graph is None:
+            return False
+        if any(n.id == node.id for n in graph.nodes):
+            return False
+        # Auto-assign position: place after the last node
+        if not node.position or (node.position.get("x") == 0 and node.position.get("y") == 0):
+            max_x = max((n.position.get("x", 0) for n in graph.nodes), default=0)
+            node = node.model_copy(update={"position": {"x": max_x + 200, "y": 0}})
+        graph.nodes.append(node)
+        await self._bundle.content_pipelines.set_pipeline_json(pipeline_id, graph)
+        return True
+
+    async def remove_node(self, pipeline_id: int, node_id: str) -> bool:
+        """Remove a node and all its edges. Returns False if not found."""
+        graph = await self.get_graph(pipeline_id)
+        if graph is None:
+            return False
+        original_len = len(graph.nodes)
+        graph.nodes = [n for n in graph.nodes if n.id != node_id]
+        if len(graph.nodes) == original_len:
+            return False  # node not found
+        # Remove edges referencing this node
+        graph.edges = [
+            e for e in graph.edges
+            if e.from_node != node_id and e.to_node != node_id
+        ]
+        await self._bundle.content_pipelines.set_pipeline_json(pipeline_id, graph)
+        return True
+
+    async def replace_node(self, pipeline_id: int, node_id: str, new_node: PipelineNode) -> bool:
+        """Replace a node in the pipeline's graph, preserving edges."""
+        graph = await self.get_graph(pipeline_id)
+        if graph is None:
+            return False
+        found = False
+        for _i, n in enumerate(graph.nodes):
+            if n.id == node_id:
+                found = True
+                break
+        if not found:
+            return False
+        # If the new node has a different ID, check for collisions first
+        if new_node.id != node_id:
+            if any(n.id == new_node.id for n in graph.nodes):
+                return False
+        # Perform the replacement
+        for i, n in enumerate(graph.nodes):
+            if n.id == node_id:
+                graph.nodes[i] = new_node
+                break
+        # If the new node has a different ID, update edges
+        if new_node.id != node_id:
+            for edge in graph.edges:
+                if edge.from_node == node_id:
+                    edge.from_node = new_node.id
+                if edge.to_node == node_id:
+                    edge.to_node = new_node.id
+        await self._bundle.content_pipelines.set_pipeline_json(pipeline_id, graph)
+        return True
+
+    @staticmethod
+    def _edge_creates_cycle(graph: PipelineGraph, from_node: str, to_node: str) -> bool:
+        """Return True if adding ``from_node -> to_node`` would create a cycle.
+
+        A new edge closes a cycle iff ``to_node`` can already reach ``from_node``
+        through the existing edges (or it is a self-loop). Reject such edges up
+        front so a cyclic graph never reaches the executor (#1077, defence in
+        depth — the executor also rejects cycles at run time)."""
+        if from_node == to_node:
+            return True
+        adj: dict[str, list[str]] = defaultdict(list)
+        for edge in graph.edges:
+            adj[edge.from_node].append(edge.to_node)
+        # DFS from to_node; if we reach from_node, the edge would close a loop.
+        stack = [to_node]
+        seen: set[str] = set()
+        while stack:
+            current = stack.pop()
+            if current == from_node:
+                return True
+            if current in seen:
+                continue
+            seen.add(current)
+            stack.extend(adj[current])
+        return False
+
+    async def add_edge(self, pipeline_id: int, from_node: str, to_node: str) -> bool:
+        """Add an edge to the pipeline's graph.
+
+        Returns False if pipeline/graph not found or endpoints don't exist.
+        Raises :class:`PipelineValidationError` if the edge would create a cycle
+        (#1077, fail-closed) — a cyclic graph cannot be executed safely.
+        """
+        graph = await self.get_graph(pipeline_id)
+        if graph is None:
+            return False
+        node_ids = {n.id for n in graph.nodes}
+        if from_node not in node_ids or to_node not in node_ids:
+            return False
+        # Idempotent: don't add duplicate edges
+        existing = {(e.from_node, e.to_node) for e in graph.edges}
+        if (from_node, to_node) not in existing:
+            if self._edge_creates_cycle(graph, from_node, to_node):
+                raise PipelineValidationError(
+                    f"Edge {from_node} -> {to_node} would create a cycle in the pipeline graph."
+                )
+            graph.edges.append(PipelineEdge.model_validate({"from": from_node, "to": to_node}))
+            await self._bundle.content_pipelines.set_pipeline_json(pipeline_id, graph)
+        return True
+
+    async def remove_edge(self, pipeline_id: int, from_node: str, to_node: str) -> bool:
+        """Remove an edge. Returns False if edge not found."""
+        graph = await self.get_graph(pipeline_id)
+        if graph is None:
+            return False
+        original_len = len(graph.edges)
+        graph.edges = [
+            e for e in graph.edges
+            if not (e.from_node == from_node and e.to_node == to_node)
+        ]
+        if len(graph.edges) == original_len:
+            return False
+        await self._bundle.content_pipelines.set_pipeline_json(pipeline_id, graph)
+        return True
+
+    async def _normalize_targets(
+        self,
+        target_refs: list[PipelineTargetRef],
+    ) -> list[PipelineTarget]:
+        if not target_refs:
+            raise PipelineValidationError("Выберите хотя бы одну цель публикации.")
+        accounts = await self._bundle.list_accounts()
+        known_phones = {account.phone for account in accounts}
+        result: list[PipelineTarget] = []
+        seen: set[tuple[str, int]] = set()
+        for ref in target_refs:
+            if ref.phone not in known_phones:
+                raise PipelineValidationError(f"Аккаунт {ref.phone} не найден.")
+            dialog = await self._bundle.get_cached_dialog(ref.phone, ref.dialog_id)
+            if dialog is None:
+                raise PipelineValidationError(
+                    f"Диалог {ref.dialog_id} для {ref.phone} не найден в кеше. "
+                    "Сначала откройте 'Диалоги' для этого аккаунта."
+                )
+            if str(dialog.get("channel_type") or "").strip() == "bot":
+                raise PipelineValidationError("Боты не поддерживаются как pipeline targets.")
+            key = (ref.phone, ref.dialog_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(
+                PipelineTarget(
+                    pipeline_id=0,
+                    phone=ref.phone,
+                    dialog_id=ref.dialog_id,
+                    title=dialog.get("title"),
+                    dialog_type=dialog.get("channel_type"),
+                )
+            )
+        return result

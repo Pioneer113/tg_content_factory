@@ -8,11 +8,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.config import AppConfig
-from src.database import Database
-from src.models import Account, Channel
 from tests.helpers import cli_add_channel as _add_channel
 from tests.helpers import cli_ns as _ns
+from tg_agent.config import AppConfig
+from tg_agent.database import Database
+from tg_agent.models import Account, Channel
 
 # ---------------------------------------------------------------------------
 # Helpers shared across CLI tests
@@ -35,7 +35,7 @@ def _fake_init_pool_no_clients():
     """Returns a fake_init_pool that yields a pool with no clients."""
 
     async def _inner(config, db):
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         pool = AsyncMock()
         pool.clients = {}
@@ -56,7 +56,7 @@ class TestCLIChannelList:
     @pytest.mark.aiosqlite_serial
     def test_list_empty(self, cli_env, capsys):
         """list with no channels prints 'No channels found.'"""
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="list"))
         assert "No channels found." in capsys.readouterr().out
@@ -65,7 +65,7 @@ class TestCLIChannelList:
     def test_list_with_channel(self, cli_env, capsys):
         """list with a channel shows table row."""
         _add_channel(cli_env, channel_id=300, title="ListCh")
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="list"))
         out = capsys.readouterr().out
@@ -76,7 +76,7 @@ class TestCLIChannelList:
         """list with a filtered channel shows filter flags."""
         pk = _add_channel(cli_env, channel_id=301, title="FilteredCh")
         asyncio.run(cli_env.set_channel_filtered(pk, True))
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="list"))
         out = capsys.readouterr().out
@@ -86,7 +86,7 @@ class TestCLIChannelList:
 class TestCLIChannelDeleteNotFound:
     @pytest.mark.aiosqlite_serial
     def test_delete_not_found(self, cli_env, capsys):
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="delete", identifier="99999"))
         assert "not found" in capsys.readouterr().out
@@ -97,8 +97,8 @@ class TestCLIChannelStats:
     def test_stats_no_clients(self, cli_env, capsys):
         """stats no longer opens a pool at all (#1569) — no-args asks for a target."""
         init_pool = AsyncMock()
-        with patch("src.cli.runtime.init_pool", init_pool):
-            from src.cli.commands.channel import run
+        with patch("tg_agent.cli.runtime.init_pool", init_pool):
+            from tg_agent.cli.commands.channel import run
 
             run(_ns(channel_action="stats", identifier=None, all=False))
         init_pool.assert_not_awaited()
@@ -112,12 +112,12 @@ class TestCLIChannelStats:
         fake_pool.disconnect_all = AsyncMock()
 
         async def _init_pool(config, db):
-            from src.telegram.auth import TelegramAuth
+            from tg_agent.telegram.auth import TelegramAuth
 
             return TelegramAuth(0, ""), fake_pool
 
-        with patch("src.cli.runtime.init_pool", side_effect=_init_pool):
-            from src.cli.commands.channel import run
+        with patch("tg_agent.cli.runtime.init_pool", side_effect=_init_pool):
+            from tg_agent.cli.commands.channel import run
 
             run(_ns(channel_action="stats", identifier=None, all=False))
         assert "Specify" in capsys.readouterr().out
@@ -128,8 +128,8 @@ class TestCLIChannelStats:
         _add_channel(cli_env, channel_id=305, title="AllStatsCh")
         init_pool = AsyncMock()
 
-        with patch("src.cli.runtime.init_pool", init_pool):
-            from src.cli.commands.channel import run
+        with patch("tg_agent.cli.runtime.init_pool", init_pool):
+            from tg_agent.cli.commands.channel import run
 
             run(_ns(channel_action="stats", identifier=None, all=True))
         init_pool.assert_not_awaited()
@@ -151,14 +151,14 @@ class TestCLIChannelStats:
         fake_collector = AsyncMock()
 
         async def _init_pool(config, db):
-            from src.telegram.auth import TelegramAuth
+            from tg_agent.telegram.auth import TelegramAuth
 
             return TelegramAuth(0, ""), fake_pool
 
-        with patch("src.cli.runtime.init_pool", side_effect=_init_pool), patch(
-            "src.cli.commands.channel.Collector", return_value=fake_collector
+        with patch("tg_agent.cli.runtime.init_pool", side_effect=_init_pool), patch(
+            "tg_agent.cli.commands.channel.Collector", return_value=fake_collector
         ):
-            from src.cli.commands.channel import run
+            from tg_agent.cli.commands.channel import run
 
             run(_ns(channel_action="stats", identifier="99999", all=False))
         assert "not found" in capsys.readouterr().out
@@ -169,8 +169,8 @@ class TestCLIChannelStats:
         pk = _add_channel(cli_env, channel_id=310, title="StatsCh")
         init_pool = AsyncMock()
 
-        with patch("src.cli.runtime.init_pool", init_pool):
-            from src.cli.commands.channel import run
+        with patch("tg_agent.cli.runtime.init_pool", init_pool):
+            from tg_agent.cli.commands.channel import run
 
             run(_ns(channel_action="stats", identifier=str(pk), all=False))
         init_pool.assert_not_awaited()
@@ -191,8 +191,8 @@ class TestCLIChannelStats:
         pk = _add_channel(cli_env, channel_id=311, title="StatsCh2")
         init_pool = AsyncMock()
 
-        with patch("src.cli.runtime.init_pool", init_pool):
-            from src.cli.commands.channel import run
+        with patch("tg_agent.cli.runtime.init_pool", init_pool):
+            from tg_agent.cli.commands.channel import run
 
             run(_ns(channel_action="stats", identifier=str(pk), all=False))
         init_pool.assert_not_awaited()
@@ -202,8 +202,8 @@ class TestCLIChannelStats:
 class TestCLIChannelRefreshTypes:
     @pytest.mark.aiosqlite_serial
     def test_refresh_types_no_clients(self, cli_env, caplog):
-        with patch("src.cli.runtime.init_pool", side_effect=_fake_init_pool_no_clients()):
-            from src.cli.commands.channel import run
+        with patch("tg_agent.cli.runtime.init_pool", side_effect=_fake_init_pool_no_clients()):
+            from tg_agent.cli.commands.channel import run
 
             run(_ns(channel_action="refresh-types"))
         assert "No connected accounts" in caplog.text
@@ -218,12 +218,12 @@ class TestCLIChannelRefreshTypes:
         fake_pool.release_client = AsyncMock()
 
         async def _init_pool(config, db):
-            from src.telegram.auth import TelegramAuth
+            from tg_agent.telegram.auth import TelegramAuth
 
             return TelegramAuth(0, ""), fake_pool
 
-        with patch("src.cli.runtime.init_pool", side_effect=_init_pool):
-            from src.cli.commands.channel import run
+        with patch("tg_agent.cli.runtime.init_pool", side_effect=_init_pool):
+            from tg_agent.cli.commands.channel import run
 
             run(_ns(channel_action="refresh-types"))
         out = capsys.readouterr().out
@@ -233,8 +233,8 @@ class TestCLIChannelRefreshTypes:
 class TestCLIChannelRefreshMeta:
     @pytest.mark.aiosqlite_serial
     def test_refresh_meta_no_clients(self, cli_env, caplog):
-        with patch("src.cli.runtime.init_pool", side_effect=_fake_init_pool_no_clients()):
-            from src.cli.commands.channel import run
+        with patch("tg_agent.cli.runtime.init_pool", side_effect=_fake_init_pool_no_clients()):
+            from tg_agent.cli.commands.channel import run
 
             run(_ns(channel_action="refresh-meta", all=False, identifier=None))
         assert "No connected accounts" in caplog.text
@@ -247,12 +247,12 @@ class TestCLIChannelRefreshMeta:
         fake_pool.disconnect_all = AsyncMock()
 
         async def _init_pool(config, db):
-            from src.telegram.auth import TelegramAuth
+            from tg_agent.telegram.auth import TelegramAuth
 
             return TelegramAuth(0, ""), fake_pool
 
-        with patch("src.cli.runtime.init_pool", side_effect=_init_pool):
-            from src.cli.commands.channel import run
+        with patch("tg_agent.cli.runtime.init_pool", side_effect=_init_pool):
+            from tg_agent.cli.commands.channel import run
 
             run(_ns(channel_action="refresh-meta", all=False, identifier=None))
         assert "Please provide" in capsys.readouterr().out
@@ -264,12 +264,12 @@ class TestCLIChannelRefreshMeta:
         fake_pool.disconnect_all = AsyncMock()
 
         async def _init_pool(config, db):
-            from src.telegram.auth import TelegramAuth
+            from tg_agent.telegram.auth import TelegramAuth
 
             return TelegramAuth(0, ""), fake_pool
 
-        with patch("src.cli.runtime.init_pool", side_effect=_init_pool):
-            from src.cli.commands.channel import run
+        with patch("tg_agent.cli.runtime.init_pool", side_effect=_init_pool):
+            from tg_agent.cli.commands.channel import run
 
             run(_ns(channel_action="refresh-meta", all=False, identifier="99999"))
         assert "not found" in capsys.readouterr().out
@@ -285,17 +285,17 @@ class TestCLIChannelRefreshMeta:
         )
 
         async def _init_pool(config, db):
-            from src.telegram.auth import TelegramAuth
+            from tg_agent.telegram.auth import TelegramAuth
 
             return TelegramAuth(0, ""), fake_pool
 
         # update_channel_full_meta is not on Database facade; patch it
-        with patch("src.cli.runtime.init_pool", side_effect=_init_pool), patch(
-            "src.database.facade.Database.update_channel_full_meta",
+        with patch("tg_agent.cli.runtime.init_pool", side_effect=_init_pool), patch(
+            "tg_agent.database.facade.Database.update_channel_full_meta",
             new=AsyncMock(),
             create=True,
         ):
-            from src.cli.commands.channel import run
+            from tg_agent.cli.commands.channel import run
 
             run(_ns(channel_action="refresh-meta", all=False, identifier=str(pk)))
         assert "OK: Updated MetaCh" in capsys.readouterr().out
@@ -311,17 +311,17 @@ class TestCLIChannelRefreshMeta:
         )
 
         async def _init_pool(config, db):
-            from src.telegram.auth import TelegramAuth
+            from tg_agent.telegram.auth import TelegramAuth
 
             return TelegramAuth(0, ""), fake_pool
 
         # update_channel_full_meta is not on Database facade; patch it
-        with patch("src.cli.runtime.init_pool", side_effect=_init_pool), patch(
-            "src.database.facade.Database.update_channel_full_meta",
+        with patch("tg_agent.cli.runtime.init_pool", side_effect=_init_pool), patch(
+            "tg_agent.database.facade.Database.update_channel_full_meta",
             new=AsyncMock(),
             create=True,
         ):
-            from src.cli.commands.channel import run
+            from tg_agent.cli.commands.channel import run
 
             run(_ns(channel_action="refresh-meta", all=True, identifier=None))
         out = capsys.readouterr().out
@@ -334,7 +334,7 @@ class TestCLIChannelRefreshMeta:
 
 
 def _make_pipeline_db(tmp_path, db_name="pipeline.db"):
-    from src.models import Account
+    from tg_agent.models import Account
 
     db_path = str(tmp_path / db_name)
     db = Database(db_path, session_encryption_secret="test-session-encryption-key")
@@ -368,8 +368,8 @@ class TestCLIPipelineRuns:
         asyncio.run(db.initialize())
         asyncio.run(db.close())
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(pipeline_action="runs", id=999, limit=10, status=None))
         assert "not found" in capsys.readouterr().out
@@ -377,8 +377,8 @@ class TestCLIPipelineRuns:
     def test_runs_empty(self, tmp_path, capsys):
         db_path = _make_pipeline_db(tmp_path, "runs_empty.db")
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             # First add a pipeline
             run(
@@ -397,8 +397,8 @@ class TestCLIPipelineRuns:
                 )
             )
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             # list to get id
             db = Database(db_path, session_encryption_secret="test-session-encryption-key")
@@ -415,8 +415,8 @@ class TestCLIPipelineRuns:
     def test_runs_with_status_filter(self, tmp_path, capsys):
         db_path = _make_pipeline_db(tmp_path, "runs_status.db")
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(
                 _ns(
@@ -445,8 +445,8 @@ class TestCLIPipelineRuns:
         finally:
             asyncio.run(db.close())
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(pipeline_action="runs", id=pid, limit=10, status="failed"))
         # status filter should show no runs (we only have completed)
@@ -460,8 +460,8 @@ class TestCLIPipelineEdit:
         asyncio.run(db.initialize())
         asyncio.run(db.close())
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(
                 _ns(
@@ -484,8 +484,8 @@ class TestCLIPipelineEdit:
     def test_edit_success(self, tmp_path, capsys):
         db_path = _make_pipeline_db(tmp_path, "edit_ok.db")
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(
                 _ns(
@@ -511,8 +511,8 @@ class TestCLIPipelineEdit:
         finally:
             asyncio.run(db.close())
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(
                 _ns(
@@ -540,8 +540,8 @@ class TestCLIPipelineRunAction:
         asyncio.run(db.initialize())
         asyncio.run(db.close())
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(
                 _ns(
@@ -564,8 +564,8 @@ class TestCLIPipelineRunShow:
         asyncio.run(db.initialize())
         asyncio.run(db.close())
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(pipeline_action="run-show", run_id=9999))
         assert "not found" in capsys.readouterr().out
@@ -578,8 +578,8 @@ class TestCLIPipelineApproveReject:
         asyncio.run(db.initialize())
         asyncio.run(db.close())
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(pipeline_action="approve", run_id=9999))
         assert "not found" in capsys.readouterr().out
@@ -590,8 +590,8 @@ class TestCLIPipelineApproveReject:
         asyncio.run(db.initialize())
         asyncio.run(db.close())
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(pipeline_action="reject", run_id=9999))
         assert "not found" in capsys.readouterr().out
@@ -604,8 +604,8 @@ class TestCLIPipelineQueue:
         asyncio.run(db.initialize())
         asyncio.run(db.close())
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(pipeline_action="queue", id=999, limit=10))
         assert "not found" in capsys.readouterr().out
@@ -618,8 +618,8 @@ class TestCLIPipelineBulkApproveReject:
         asyncio.run(db.initialize())
         asyncio.run(db.close())
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(pipeline_action="bulk-approve", run_ids=[]))
         assert "Bulk approved: 0/0" in capsys.readouterr().out
@@ -630,8 +630,8 @@ class TestCLIPipelineBulkApproveReject:
         asyncio.run(db.initialize())
         asyncio.run(db.close())
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(pipeline_action="bulk-reject", run_ids=[]))
         assert "Bulk rejected: 0/0" in capsys.readouterr().out
@@ -641,8 +641,8 @@ class TestCLIPipelineDelete:
     def test_delete(self, tmp_path, capsys):
         db_path = _make_pipeline_db(tmp_path, "delete_pipe.db")
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(
                 _ns(
@@ -668,8 +668,8 @@ class TestCLIPipelineDelete:
         finally:
             asyncio.run(db.close())
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(pipeline_action="delete", id=pid))
         assert "Deleted pipeline" in capsys.readouterr().out
@@ -682,8 +682,8 @@ class TestCLIPipelineToggle:
         asyncio.run(db.initialize())
         asyncio.run(db.close())
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(pipeline_action="toggle", id=999))
         assert "not found" in capsys.readouterr().out
@@ -691,7 +691,7 @@ class TestCLIPipelineToggle:
 
 class TestCLIPipelineHelpers:
     def test_parse_target_refs_valid(self):
-        from src.cli.commands.pipeline import _parse_target_refs
+        from tg_agent.cli.commands.pipeline import _parse_target_refs
 
         refs = _parse_target_refs(["+1|123", "+2|456"])
         assert len(refs) == 2
@@ -699,32 +699,32 @@ class TestCLIPipelineHelpers:
         assert refs[0].dialog_id == 123
 
     def test_parse_target_refs_no_separator(self):
-        from src.cli.commands.pipeline import _parse_target_refs
-        from src.services.pipeline_service import PipelineValidationError
+        from tg_agent.cli.commands.pipeline import _parse_target_refs
+        from tg_agent.services.pipeline_service import PipelineValidationError
 
         with pytest.raises(PipelineValidationError):
             _parse_target_refs(["no_separator"])
 
     def test_parse_target_refs_bad_id(self):
-        from src.cli.commands.pipeline import _parse_target_refs
-        from src.services.pipeline_service import PipelineValidationError
+        from tg_agent.cli.commands.pipeline import _parse_target_refs
+        from tg_agent.services.pipeline_service import PipelineValidationError
 
         with pytest.raises(PipelineValidationError):
             _parse_target_refs(["+1|notanumber"])
 
     def test_preview_text_empty(self):
-        from src.cli.commands.pipeline import _preview_text
+        from tg_agent.cli.commands.pipeline import _preview_text
 
         assert _preview_text(None) == "—"
         assert _preview_text("") == "—"
 
     def test_preview_text_short(self):
-        from src.cli.commands.pipeline import _preview_text
+        from tg_agent.cli.commands.pipeline import _preview_text
 
         assert _preview_text("hello") == "hello"
 
     def test_preview_text_long(self):
-        from src.cli.commands.pipeline import _preview_text
+        from tg_agent.cli.commands.pipeline import _preview_text
 
         long_str = "a " * 50
         result = _preview_text(long_str)
@@ -741,7 +741,7 @@ class TestCLITestRead:
     @pytest.mark.aiosqlite_serial
     def test_read_action_runs(self, cli_env, capsys):
         """test read action completes and prints summary."""
-        from src.cli.commands.test import run
+        from tg_agent.cli.commands.test import run
 
         run(_ns(test_action="read"))
         out = capsys.readouterr().out
@@ -753,7 +753,7 @@ class TestCLITestRead:
         """test read with data in DB."""
         asyncio.run(cli_env.add_account(Account(phone="+1", session_string="s")))
         _add_channel(cli_env, channel_id=500, title="TestReadCh")
-        from src.cli.commands.test import run
+        from tg_agent.cli.commands.test import run
 
         run(_ns(test_action="read"))
         out = capsys.readouterr().out
@@ -764,7 +764,7 @@ class TestCLITestWrite:
     @pytest.mark.aiosqlite_serial
     def test_write_action_runs(self, cli_env, capsys):
         """test write action completes and prints summary."""
-        from src.cli.commands.test import run
+        from tg_agent.cli.commands.test import run
 
         run(_ns(test_action="write"))
         out = capsys.readouterr().out
@@ -776,7 +776,7 @@ class TestCLITestAll:
     @pytest.mark.aiosqlite_serial
     def test_all_action_runs(self, cli_env, capsys):
         """test all runs both read and write sections."""
-        from src.cli.commands.test import run
+        from tg_agent.cli.commands.test import run
 
         run(_ns(test_action="all"))
         out = capsys.readouterr().out
@@ -787,7 +787,7 @@ class TestCLITestAll:
 
 class TestCLITestHelpers:
     def test_print_result_pass(self, capsys):
-        from src.cli.commands.test import CheckResult, Status, _print_result
+        from tg_agent.cli.commands.test import CheckResult, Status, _print_result
 
         _print_result(CheckResult("foo", Status.PASS, "detail"))
         out = capsys.readouterr().out
@@ -795,27 +795,27 @@ class TestCLITestHelpers:
         assert "foo" in out
 
     def test_print_result_fail(self, capsys):
-        from src.cli.commands.test import CheckResult, Status, _print_result
+        from tg_agent.cli.commands.test import CheckResult, Status, _print_result
 
         _print_result(CheckResult("bar", Status.FAIL, "oops"))
         out = capsys.readouterr().out
         assert "FAIL" in out
 
     def test_print_result_skip(self, capsys):
-        from src.cli.commands.test import CheckResult, Status, _print_result
+        from tg_agent.cli.commands.test import CheckResult, Status, _print_result
 
         _print_result(CheckResult("baz", Status.SKIP, "skipped"))
         out = capsys.readouterr().out
         assert "SKIP" in out
 
     def test_format_exception_with_detail(self):
-        from src.cli.commands.test import _format_exception
+        from tg_agent.cli.commands.test import _format_exception
 
         exc = ValueError("oops")
         assert _format_exception(exc) == "oops"
 
     def test_format_exception_empty_detail(self):
-        from src.cli.commands.test import _format_exception
+        from tg_agent.cli.commands.test import _format_exception
 
         class EmptyStrError(Exception):
             def __str__(self):
@@ -825,7 +825,7 @@ class TestCLITestHelpers:
         assert _format_exception(exc) == "EmptyStrError"
 
     def test_format_all_flooded_detail_no_retry(self):
-        from src.cli.commands.test import _format_all_flooded_detail
+        from tg_agent.cli.commands.test import _format_all_flooded_detail
 
         result = _format_all_flooded_detail(
             "base", retry_after_sec=None, next_available_at_utc=None
@@ -834,7 +834,7 @@ class TestCLITestHelpers:
         assert "retry" not in result
 
     def test_format_all_flooded_detail_with_retry(self):
-        from src.cli.commands.test import _format_all_flooded_detail
+        from tg_agent.cli.commands.test import _format_all_flooded_detail
 
         result = _format_all_flooded_detail(
             "base", retry_after_sec=30, next_available_at_utc=None
@@ -846,7 +846,7 @@ class TestCLITestHelpers:
 
         from telethon_floodgate import FloodWaitInfo
 
-        from src.cli.commands.test import _is_premium_flood
+        from tg_agent.cli.commands.test import _is_premium_flood
 
         _now = datetime.now(timezone.utc)
         info_premium = FloodWaitInfo(
@@ -874,7 +874,7 @@ class TestCLITestBenchmark:
         completed_ok.returncode = 0
 
         with patch("subprocess.run", return_value=completed_ok) as mock_run:
-            from src.cli.commands.test import run
+            from tg_agent.cli.commands.test import run
 
             run(_ns(test_action="benchmark"))
 
@@ -893,14 +893,14 @@ class TestCLITestBenchmark:
 @pytest.fixture
 async def _base_app_b3(tmp_path):
     """Standalone base_app equivalent for batch3 tests."""
-    from src.collection_queue import CollectionQueue
-    from src.models import Account
-    from src.scheduler.service import SchedulerManager
-    from src.search.ai_search import AISearchEngine
-    from src.search.engine import SearchEngine
-    from src.telegram.auth import TelegramAuth
-    from src.telegram.collector import Collector
-    from src.web.app import create_app
+    from tg_agent.collection_queue import CollectionQueue
+    from tg_agent.models import Account
+    from tg_agent.scheduler.service import SchedulerManager
+    from tg_agent.search.ai_search import AISearchEngine
+    from tg_agent.search.engine import SearchEngine
+    from tg_agent.telegram.auth import TelegramAuth
+    from tg_agent.telegram.collector import Collector
+    from tg_agent.web.app import create_app
 
     config = AppConfig()
     config.database.path = str(tmp_path / "batch3.db")
@@ -1030,13 +1030,13 @@ async def test_channels_refresh_meta_success(_route_client_b3):
 def _settings_patch():
     """Patch ProviderConfigService methods to avoid needing config."""
     with patch(
-        "src.web.settings.handlers.ProviderConfigService.load_provider_configs",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_provider_configs",
         AsyncMock(return_value=[]),
     ), patch(
-        "src.web.settings.handlers.ProviderConfigService.load_model_cache",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_model_cache",
         AsyncMock(return_value={}),
     ), patch(
-        "src.web.settings.handlers.ImageProviderService.load_provider_configs",
+        "tg_agent.web.settings.handlers.ImageProviderService.load_provider_configs",
         AsyncMock(return_value=[]),
     ):
         yield
@@ -1151,8 +1151,8 @@ async def test_settings_save_notification_account_empty_b3(_route_client_b3):
     """Saving empty notification phone clears it."""
     client = _route_client_b3
     with patch(
-        "src.web.settings.handlers.deps.get_notification_target_service"
-    ) as mock_svc, patch("src.web.settings.handlers.deps.get_notifier") as mock_notifier:
+        "tg_agent.web.settings.handlers.deps.get_notification_target_service"
+    ) as mock_svc, patch("tg_agent.web.settings.handlers.deps.get_notifier") as mock_notifier:
         mock_svc.return_value.set_configured_phone = AsyncMock()
         mock_notifier.return_value = None
         resp = await client.post(
@@ -1226,7 +1226,7 @@ class TestPhotoBuildFeedback:
         return SimpleNamespace(**kwargs)
 
     def test_photo_sent_no_items(self):
-        from src.web.photo_loader.handlers import build_feedback as _build_feedback
+        from tg_agent.web.photo_loader.handlers import build_feedback as _build_feedback
 
         result = _build_feedback("photo_sent", None, batches=[], items=[], auto_jobs=[])
         assert result is not None
@@ -1234,21 +1234,21 @@ class TestPhotoBuildFeedback:
         assert "Фото успешно отправлены" in result["body"]
 
     def test_photo_sent_with_target(self):
-        from src.web.photo_loader.handlers import build_feedback as _build_feedback
+        from tg_agent.web.photo_loader.handlers import build_feedback as _build_feedback
 
         item = self._make_item(target_title="My Channel", target_dialog_id=123)
         result = _build_feedback("photo_sent", None, batches=[], items=[item], auto_jobs=[])
         assert "My Channel" in result["body"]
 
     def test_photo_scheduled_no_items(self):
-        from src.web.photo_loader.handlers import build_feedback as _build_feedback
+        from tg_agent.web.photo_loader.handlers import build_feedback as _build_feedback
 
         result = _build_feedback("photo_scheduled", None, batches=[], items=[], auto_jobs=[])
         assert result["variant"] == "success"
         assert "Отложенная отправка создана" in result["body"]
 
     def test_photo_batch_created_with_batch(self):
-        from src.web.photo_loader.handlers import build_feedback as _build_feedback
+        from tg_agent.web.photo_loader.handlers import build_feedback as _build_feedback
 
         batch = self._make_item(target_title="Batch Target", target_dialog_id=456)
         result = _build_feedback(
@@ -1257,7 +1257,7 @@ class TestPhotoBuildFeedback:
         assert "Batch Target" in result["body"]
 
     def test_photo_auto_created_with_job(self):
-        from src.web.photo_loader.handlers import build_feedback as _build_feedback
+        from tg_agent.web.photo_loader.handlers import build_feedback as _build_feedback
 
         job = self._make_item(target_title="Auto Target", target_dialog_id=789)
         result = _build_feedback(
@@ -1266,13 +1266,13 @@ class TestPhotoBuildFeedback:
         assert "Auto Target" in result["body"]
 
     def test_error_photo_send_failed(self):
-        from src.web.photo_loader.handlers import build_feedback as _build_feedback
+        from tg_agent.web.photo_loader.handlers import build_feedback as _build_feedback
 
         result = _build_feedback(None, "photo_send_failed", batches=[], items=[], auto_jobs=[])
         assert result["variant"] == "error"
 
     def test_error_photo_target_required(self):
-        from src.web.photo_loader.handlers import build_feedback as _build_feedback
+        from tg_agent.web.photo_loader.handlers import build_feedback as _build_feedback
 
         result = _build_feedback(
             None, "photo_target_required", batches=[], items=[], auto_jobs=[]
@@ -1280,7 +1280,7 @@ class TestPhotoBuildFeedback:
         assert result["variant"] == "error"
 
     def test_error_photo_target_invalid(self):
-        from src.web.photo_loader.handlers import build_feedback as _build_feedback
+        from tg_agent.web.photo_loader.handlers import build_feedback as _build_feedback
 
         result = _build_feedback(
             None, "photo_target_invalid", batches=[], items=[], auto_jobs=[]
@@ -1288,7 +1288,7 @@ class TestPhotoBuildFeedback:
         assert result["variant"] == "error"
 
     def test_error_photo_schedule_failed(self):
-        from src.web.photo_loader.handlers import build_feedback as _build_feedback
+        from tg_agent.web.photo_loader.handlers import build_feedback as _build_feedback
 
         result = _build_feedback(
             None, "photo_schedule_failed", batches=[], items=[], auto_jobs=[]
@@ -1296,41 +1296,41 @@ class TestPhotoBuildFeedback:
         assert result["variant"] == "error"
 
     def test_error_photo_batch_failed(self):
-        from src.web.photo_loader.handlers import build_feedback as _build_feedback
+        from tg_agent.web.photo_loader.handlers import build_feedback as _build_feedback
 
         result = _build_feedback(None, "photo_batch_failed", batches=[], items=[], auto_jobs=[])
         assert result["variant"] == "error"
 
     def test_error_photo_auto_failed(self):
-        from src.web.photo_loader.handlers import build_feedback as _build_feedback
+        from tg_agent.web.photo_loader.handlers import build_feedback as _build_feedback
 
         result = _build_feedback(None, "photo_auto_failed", batches=[], items=[], auto_jobs=[])
         assert result["variant"] == "error"
 
     def test_no_msg_no_error_returns_none(self):
-        from src.web.photo_loader.handlers import build_feedback as _build_feedback
+        from tg_agent.web.photo_loader.handlers import build_feedback as _build_feedback
 
         result = _build_feedback(None, None, batches=[], items=[], auto_jobs=[])
         assert result is None
 
     def test_target_label_with_title(self):
-        from src.web.photo_loader.handlers import _target_label
+        from tg_agent.web.photo_loader.handlers import _target_label
 
         assert _target_label("My Channel", 123) == "My Channel"
 
     def test_target_label_with_id_only(self):
-        from src.web.photo_loader.handlers import _target_label
+        from tg_agent.web.photo_loader.handlers import _target_label
 
         assert _target_label(None, 123) == "123"
 
     def test_target_label_none(self):
-        from src.web.photo_loader.handlers import _target_label
+        from tg_agent.web.photo_loader.handlers import _target_label
 
         assert _target_label(None, None) is None
 
     def test_parse_schedule_at_naive(self):
         """_parse_schedule_at with naive datetime localises and converts to UTC."""
-        from src.web.photo_loader.forms import parse_schedule_at as _parse_schedule_at
+        from tg_agent.web.photo_loader.forms import parse_schedule_at as _parse_schedule_at
 
         result = _parse_schedule_at("2025-06-15T14:30:00")
         from datetime import timezone
@@ -1338,7 +1338,7 @@ class TestPhotoBuildFeedback:
         assert result.tzinfo == timezone.utc
 
     def test_parse_schedule_at_aware(self):
-        from src.web.photo_loader.forms import parse_schedule_at as _parse_schedule_at
+        from tg_agent.web.photo_loader.forms import parse_schedule_at as _parse_schedule_at
 
         result = _parse_schedule_at("2025-06-15T14:30:00+00:00")
         from datetime import timezone
@@ -1347,7 +1347,7 @@ class TestPhotoBuildFeedback:
 
     def test_parse_target_without_form_values(self):
         """_parse_target looks up title/type from dialogs when not in form."""
-        from src.web.photo_loader.forms import parse_target as _parse_target
+        from tg_agent.web.photo_loader.forms import parse_target as _parse_target
 
         dialogs = [{"channel_id": 99, "title": "Found Title", "channel_type": "channel"}]
         form = {"target_dialog_id": "99", "target_title": "", "target_type": ""}

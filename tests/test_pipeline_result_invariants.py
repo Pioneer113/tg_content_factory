@@ -12,8 +12,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.models import GenerationRun
-from src.services.pipeline_result import (
+from tg_agent.models import GenerationRun
+from tg_agent.services.pipeline_result import (
     RESULT_KIND_GENERATED_ITEMS,
     RESULT_KIND_PROCESSED_MESSAGES,
     get_action_counts,

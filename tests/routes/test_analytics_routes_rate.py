@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.services.provider_service import RuntimeProviderRegistry
+from tg_agent.services.provider_service import RuntimeProviderRegistry
 
 
 async def _seed_posts(db, channel_id: int, n: int = 3) -> None:

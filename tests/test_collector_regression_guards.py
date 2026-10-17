@@ -23,18 +23,18 @@ import pytest
 from telethon.errors import FloodWaitError
 from telethon_floodgate import FloodWaitInfo, HandledFloodWaitError
 
-from src.config import SchedulerConfig
-from src.models import Channel
-from src.telegram.collector import (
-    _ACQUIRE_RETRY,
-    Collector,
-    NoActiveCollectionClientsError,
-)
 from tests.helpers import (
     AsyncIterMessages,
     FakeTelethonClient,
     make_mock_message,
     make_mock_pool,
+)
+from tg_agent.config import SchedulerConfig
+from tg_agent.models import Channel
+from tg_agent.telegram.collector import (
+    _ACQUIRE_RETRY,
+    Collector,
+    NoActiveCollectionClientsError,
 )
 
 
@@ -391,7 +391,7 @@ async def test_acquire_waits_for_warming_then_uses_discovered_phone(db):
     pool.mark_dialogs_fetched("+7001")  # cache already warm for this phone
 
     collector = Collector(pool, db, SchedulerConfig())
-    with patch("src.telegram.collector_mixins.collection.adapt_transport_session", _identity_adapt):
+    with patch("tg_agent.telegram.collector_mixins.collection.adapt_transport_session", _identity_adapt):
         result = await collector._acquire_collection_client(channel, set())
 
     assert warmed["done"] is True
@@ -420,7 +420,7 @@ async def test_acquire_falls_back_to_available_when_phone_unknown_after_warm(db)
     pool.mark_dialogs_fetched("+7009")
 
     collector = Collector(pool, db, SchedulerConfig())
-    with patch("src.telegram.collector_mixins.collection.adapt_transport_session", _identity_adapt):
+    with patch("tg_agent.telegram.collector_mixins.collection.adapt_transport_session", _identity_adapt):
         result = await collector._acquire_collection_client(channel, set())
 
     pool.wait_for_warm.assert_awaited_once()
@@ -445,7 +445,7 @@ async def test_acquire_does_not_rewarm_already_warmed_phone(db):
     pool.mark_dialogs_fetched("+7000")  # already warm
 
     collector = Collector(pool, db, SchedulerConfig())
-    with patch("src.telegram.collector_mixins.collection.adapt_transport_session", _identity_adapt):
+    with patch("tg_agent.telegram.collector_mixins.collection.adapt_transport_session", _identity_adapt):
         result = await collector._acquire_collection_client(channel, set())
 
     assert result is not _ACQUIRE_RETRY
@@ -462,7 +462,7 @@ async def test_acquire_warms_cold_phone_exactly_once_and_marks_fetched(db):
     # "+7000" starts cold (not in _dialogs_fetched).
 
     collector = Collector(pool, db, SchedulerConfig())
-    with patch("src.telegram.collector_mixins.collection.adapt_transport_session", _identity_adapt):
+    with patch("tg_agent.telegram.collector_mixins.collection.adapt_transport_session", _identity_adapt):
         result = await collector._acquire_collection_client(channel, set())
 
     assert result is not _ACQUIRE_RETRY
@@ -492,7 +492,7 @@ async def test_acquire_flood_during_warm_retries_without_marking_fetched(db):
     pool.release_client = AsyncMock()
 
     collector = Collector(pool, db, SchedulerConfig())
-    with patch("src.telegram.collector_mixins.collection.adapt_transport_session", _identity_adapt):
+    with patch("tg_agent.telegram.collector_mixins.collection.adapt_transport_session", _identity_adapt):
         result = await collector._acquire_collection_client(channel, set())
 
     assert result is _ACQUIRE_RETRY
@@ -525,7 +525,7 @@ async def test_acquire_falls_back_when_preferred_phone_unavailable(db):
     pool.mark_dialogs_fetched("+7002")  # skip warming; isolate the acquisition branch
 
     collector = Collector(pool, db, SchedulerConfig())
-    with patch("src.telegram.collector_mixins.collection.adapt_transport_session", _identity_adapt):
+    with patch("tg_agent.telegram.collector_mixins.collection.adapt_transport_session", _identity_adapt):
         result = await collector._acquire_collection_client(channel, set())
 
     assert result is not _ACQUIRE_RETRY
@@ -559,7 +559,7 @@ async def test_acquire_raises_when_preferred_unavailable_and_no_fallback(db):
     )
 
     collector = Collector(pool, db, SchedulerConfig())
-    with patch("src.telegram.collector_mixins.collection.adapt_transport_session", _identity_adapt):
+    with patch("tg_agent.telegram.collector_mixins.collection.adapt_transport_session", _identity_adapt):
         with pytest.raises(NoActiveCollectionClientsError):
             await collector._acquire_collection_client(channel, set())
 
@@ -696,7 +696,7 @@ async def test_all_accounts_flooded_after_multiple_rotations_preserves_cursor(db
         pool, db, SchedulerConfig(delay_between_requests_sec=0, max_flood_wait_sec=10)
     )
 
-    from src.telegram.collector import AllCollectionClientsFloodedError
+    from tg_agent.telegram.collector import AllCollectionClientsFloodedError
 
     with pytest.raises(AllCollectionClientsFloodedError):
         await collector._collect_channel(stored)
@@ -735,7 +735,7 @@ async def test_transient_warm_dialog_flood_releases_phone_for_rotation(db):
     pool.release_client = AsyncMock()
 
     collector = Collector(pool, db, SchedulerConfig(delay_between_requests_sec=0))
-    with patch("src.telegram.collector_mixins.collection.adapt_transport_session", _identity_adapt):
+    with patch("tg_agent.telegram.collector_mixins.collection.adapt_transport_session", _identity_adapt):
         result = await collector._acquire_collection_client(channel, set())
 
     assert result is _ACQUIRE_RETRY

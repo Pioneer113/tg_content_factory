@@ -6,11 +6,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.config import SchedulerConfig
-from src.database import Database
-from src.models import CollectionTaskType, Message
-from src.services.translation_service import TranslationService
-from src.telegram.collector import Collector
+from tg_agent.config import SchedulerConfig
+from tg_agent.database import Database
+from tg_agent.models import CollectionTaskType, Message
+from tg_agent.services.translation_service import TranslationService
+from tg_agent.telegram.collector import Collector
 
 # ── 836#1: backfill returns rows considered + 'und' sentinel ──────────────────
 
@@ -167,7 +167,7 @@ def _translate_ctx(untranslated_first, remaining):
     from types import SimpleNamespace
     from unittest.mock import MagicMock
 
-    from src.services.task_handlers import TaskHandlerContext
+    from tg_agent.services.task_handlers import TaskHandlerContext
 
     tasks = MagicMock()
     tasks.update_collection_task = AsyncMock()
@@ -191,8 +191,8 @@ def _translate_ctx(untranslated_first, remaining):
 async def _run_handler(ctx, translate_results):
     from unittest.mock import patch
 
-    from src.models import CollectionTask, CollectionTaskStatus, CollectionTaskType, TranslateBatchTaskPayload
-    from src.services.task_handlers import TranslationTaskHandler
+    from tg_agent.models import CollectionTask, CollectionTaskStatus, CollectionTaskType, TranslateBatchTaskPayload
+    from tg_agent.services.task_handlers import TranslationTaskHandler
 
     provider_service = MagicMock()
     provider_service.get_provider_callable = MagicMock(return_value=object())
@@ -209,8 +209,8 @@ async def _run_handler(ctx, translate_results):
         payload=TranslateBatchTaskPayload(target_lang="en", last_processed_id=0),
     )
     with (
-        patch("src.services.provider_service.build_provider_service", AsyncMock(return_value=provider_service)),
-        patch("src.services.translation_service.TranslationService", return_value=svc),
+        patch("tg_agent.services.provider_service.build_provider_service", AsyncMock(return_value=provider_service)),
+        patch("tg_agent.services.translation_service.TranslationService", return_value=svc),
     ):
         await TranslationTaskHandler(ctx).handle_translate_batch(task)
 

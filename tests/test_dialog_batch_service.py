@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.models import DialogBatchOperation, DialogBatchStatus
-from src.services.dialog_batch_service import DialogBatchService
+from tg_agent.models import DialogBatchOperation, DialogBatchStatus
+from tg_agent.services.dialog_batch_service import DialogBatchService
 
 
 @pytest.mark.anyio

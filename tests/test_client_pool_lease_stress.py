@@ -11,18 +11,18 @@ import pytest
 _LEASE_OWNERSHIP_ALLOWLIST = {
     # These helpers deliberately return the borrowed result to a caller that
     # owns the finally/release boundary.
-    "src/telegram/pool_dialogs.py:_get_client",
-    "src/services/telegram_command_dispatcher.py:_get_client",
-    "src/services/telegram_actions.py:_client",
-    "src/agent/tools/_registry.py:resolve_entity",
-    "src/cli/commands/messages.py:messages_read_impl",
+    "tg_agent/telegram/pool_dialogs.py:_get_client",
+    "tg_agent/services/telegram_command_dispatcher.py:_get_client",
+    "tg_agent/services/telegram_actions.py:_client",
+    "tg_agent/agent/tools/_registry.py:resolve_entity",
+    "tg_agent/cli/commands/messages.py:messages_read_impl",
 }
 
 
 @pytest.mark.mutmut_skip
 def test_pool_acquisition_call_sites_have_an_explicit_release_owner():
     """New acquisition call sites must show their lease ownership in source."""
-    root = Path(__file__).parents[1] / "src"
+    root = Path(__file__).parents[1] / "tg_agent"
     violations: list[str] = []
     for path in root.rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))

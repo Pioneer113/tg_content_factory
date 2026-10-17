@@ -9,14 +9,14 @@ from typing import Any
 import httpx
 import pytest
 
-from src.agent.provider_registry import (
+from tg_agent.agent.provider_registry import (
     ZAI_CODING_BASE_URL,
     ZAI_GENERAL_BASE_URL,
     ProviderRuntimeConfig,
 )
-from src.config import AppConfig
-from src.services.agent_provider_service import ProviderConfigService as DbProviderConfigService
-from src.services.provider_service import RuntimeProviderRegistry as RuntimeProviderService
+from tg_agent.config import AppConfig
+from tg_agent.services.agent_provider_service import ProviderConfigService as DbProviderConfigService
+from tg_agent.services.provider_service import RuntimeProviderRegistry as RuntimeProviderService
 
 
 @dataclass
@@ -387,7 +387,7 @@ async def test_deepagents_chat_runs_real_init_chat_model_and_create_deep_agent(
     # create_deep_agent. The backend's _build_agent reads cfg, normalizes
     # the Z.AI base URL and selects model_provider="openai" — exactly the
     # production path that the #516 regression broke.
-    from src.agent.manager import DeepagentsBackend
+    from tg_agent.agent.manager import DeepagentsBackend
 
     backend = DeepagentsBackend(db, config)
     await backend.refresh_settings_cache()

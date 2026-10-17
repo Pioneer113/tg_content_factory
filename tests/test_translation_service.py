@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.models import Message
-from src.services.translation_service import TranslationService
+from tg_agent.models import Message
+from tg_agent.services.translation_service import TranslationService
 
 # ── detect_language ──────────────────────────────────────────────────
 

@@ -24,17 +24,17 @@ credentials, not logs.
 ## Architecture map
 
 ```
-entrypoints (src/cli, src/web, src/agent)   ← no telethon imports allowed here
+entrypoints (tg_agent/cli, tg_agent/web, tg_agent/agent)   ← no telethon imports allowed here
         ↓
-services + repositories (src/services, src/database)
+services + repositories (tg_agent/services, tg_agent/database)
         ↓
-telegram backends (src/telegram)            ← all raw Telethon lives here
+telegram backends (tg_agent/telegram)            ← all raw Telethon lives here
 ```
 
 - **Layering is enforced**, not conventional: `import-linter` (`.importlinter`)
   fails CI if an entrypoint imports `telethon` directly. Raw calls belong in
-  `src/telegram` behind `TelegramTransportSession` and the backend router.
-- **Client pool** (`src/telegram/client_pool.py` + `pool_lifecycle.py` /
+  `tg_agent/telegram` behind `TelegramTransportSession` and the backend router.
+- **Client pool** (`tg_agent/telegram/client_pool.py` + `pool_lifecycle.py` /
   `pool_dialogs.py` / `pool_flood.py`): per-account lifecycle, lease
   acquisition/release, flood-wait rotation. Read the module docstrings first —
   they document the invariants (lock order, pool↔DB ordering, lease teardown).
@@ -85,11 +85,11 @@ Advisory tools wired into CI: `bandit`, `pip-audit`. Optional: `mutmut`
 
 - skills and recipes (`skills/`), documentation (`docs/`)
 - individual CLI commands (the CLI is the contract — new capabilities land here)
-- web dashboard fixes (`src/web`, frozen but accepting bug fixes)
+- web dashboard fixes (`tg_agent/web`, frozen but accepting bug fixes)
 
 **Higher-bar core** — read first, then propose:
 
-- `src/telegram/` (pool, flood, watchdog) — invariants are documented in
+- `tg_agent/telegram/` (pool, flood, watchdog) — invariants are documented in
   module docstrings and issue references; changes here deserve an issue first
 
 ## PR expectations

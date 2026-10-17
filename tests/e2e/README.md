@@ -29,7 +29,7 @@ the deferred fragment loaded — that deeper check is tracked separately.
 
 ```bash
 # 1. Start the panel in one terminal (any password you like):
-python -m src.main serve --web-pass secret
+python -m tg_agent.main serve --web-pass secret
 
 # 2. In another terminal, walk every page and check the console:
 python -m tests.e2e.console_smoke --base-url http://localhost:8080 --web-pass secret
@@ -108,14 +108,14 @@ These are **local-only** — like the console smoke, they are NOT wired into CI.
 against a live server, reusing the console-smoke gate env:
 
 ```bash
-python -m src.main serve --web-pass secret          # in another terminal
+python -m tg_agent.main serve --web-pass secret          # in another terminal
 
 RUN_E2E_CONSOLE_SMOKE=1 E2E_BASE_URL=http://localhost:8080 WEB_PASS=secret \
     pytest tests/e2e/test_htmx_functional.py -m e2e
 ```
 
 For the full picture (incl. OOB collect + dashboard), seed a channel and an account
-into the configured DB first, e.g. via `python -m src.main channel add ...` and a
+into the configured DB first, e.g. via `python -m tg_agent.main channel add ...` and a
 connected account.
 
 - `htmx_functional.py` — the functional checks (specs, waits, OOB/swap logic).

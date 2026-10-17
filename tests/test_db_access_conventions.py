@@ -1,7 +1,7 @@
 """Structural guards for the database access boundary (#660).
 
 `db.repos.<repo>.<method>()` is the canonical low-level DB access path. The
-facade (`src/database/facade.py`) and bundles (`src/database/bundles.py`) expose
+facade (`tg_agent/database/facade.py`) and bundles (`tg_agent/database/bundles.py`) expose
 many mechanical pass-throughs that are kept as compatibility shims — but they
 must not grow. These ratchet tests fail when the pass-through surface increases,
 nudging new code toward `db.repos` (and focused services) instead.
@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-SRC_DIR = Path(__file__).resolve().parent.parent / "src"
+SRC_DIR = Path(__file__).resolve().parent.parent / "tg_agent"
 FACADE = SRC_DIR / "database" / "facade.py"
 BUNDLES = SRC_DIR / "database" / "bundles.py"
 

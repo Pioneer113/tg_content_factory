@@ -21,7 +21,7 @@ from telethon.tl.types import (
     PeerUser,
 )
 
-from src.search.transformers import TelegramMessageTransformer
+from tg_agent.search.transformers import TelegramMessageTransformer
 
 
 def test_media_type_none():

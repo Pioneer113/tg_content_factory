@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.services.pipeline_filters import filter_messages, match_message_filter
+from tg_agent.services.pipeline_filters import filter_messages, match_message_filter
 
 
 def _msg(**kwargs):
@@ -89,7 +89,7 @@ def test_pipeline_regex_rejects_pathological_input_without_hanging(pattern):
     program = """
 from types import SimpleNamespace
 import sys
-from src.services.pipeline_filters import match_message_filter
+from tg_agent.services.pipeline_filters import match_message_filter
 result = match_message_filter(SimpleNamespace(text="a" * 3000 + "!"), {"type": "regex", "pattern": sys.argv[1]})
 print(result)
 """
@@ -108,7 +108,7 @@ def test_regex_match_timeout_budget_rejects_instead_of_hanging(monkeypatch):
     # (the "$"-anchored tail forces full backtracking). With the per-search
     # budget exhausted the filter rejects instead of hanging — and raising
     # TimeoutError out of match_message_filter is a contract break.
-    import src.services.pipeline_filters as pf
+    import tg_agent.services.pipeline_filters as pf
 
     monkeypatch.setattr(pf, "_REGEX_MATCH_TIMEOUT_SECONDS", 0.0001)
     assert match_message_filter(_msg(text="a" * 45), _mf(regex="(a+)+$b")) is False

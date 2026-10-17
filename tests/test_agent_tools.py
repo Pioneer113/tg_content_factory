@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.database import Database
-from src.database.repositories.messages import MessageSearchPage
+from tg_agent.database import Database
+from tg_agent.database.repositories.messages import MessageSearchPage
 
 
 @pytest.fixture
@@ -27,10 +27,10 @@ def _get_tool_handlers(mock_db, client_pool=None, config=None, scheduler_manager
     captured_tools = []
 
     with patch(
-        "src.agent.tools.create_sdk_mcp_server",
+        "tg_agent.agent.tools.create_sdk_mcp_server",
         side_effect=lambda **kwargs: captured_tools.extend(kwargs.get("tools", [])),
     ):
-        from src.agent.tools import make_mcp_server
+        from tg_agent.agent.tools import make_mcp_server
 
         make_mcp_server(
             mock_db,
@@ -243,7 +243,7 @@ class TestSemanticSearchTool:
                 assert query == "semantic"
                 return [1.0, 0.0]
 
-        with patch("src.services.embedding_service.EmbeddingService", FakeEmbeddingService):
+        with patch("tg_agent.services.embedding_service.EmbeddingService", FakeEmbeddingService):
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["semantic_search"]({"query": "semantic", "limit": 5})
 
@@ -261,7 +261,7 @@ class TestSemanticSearchTool:
             async def embed_query(self, query):
                 raise RuntimeError("vec unavailable")
 
-        with patch("src.services.embedding_service.EmbeddingService", BrokenEmbeddingService):
+        with patch("tg_agent.services.embedding_service.EmbeddingService", BrokenEmbeddingService):
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["semantic_search"]({"query": "semantic", "limit": 5})
 
@@ -363,7 +363,7 @@ class TestGetChannelsTool:
 class TestListPipelinesTool:
     @pytest.mark.anyio
     async def test_empty(self, mock_db):
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.list_pipelines = AsyncMock(return_value=[])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["list_pipelines"]({"active_only": False})
@@ -381,7 +381,7 @@ class TestListPipelinesTool:
             schedule_cron="0 */6 * * *",
             generation_backend="chain",
         )
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.list_pipelines = AsyncMock(return_value=[pipeline])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["list_pipelines"]({})
@@ -487,7 +487,7 @@ class TestAnalyticsSummaryTool:
             "total_rejected": 5,
             "pipelines_count": 3,
         }
-        with patch("src.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
+        with patch("tg_agent.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
             mock_svc.return_value.get_summary = AsyncMock(return_value=summary)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_analytics_summary"]({})
@@ -510,7 +510,7 @@ class TestTrendingTopicsTool:
             SimpleNamespace(keyword="AI", count=100),
             SimpleNamespace(keyword="blockchain", count=50),
         ]
-        with patch("src.services.trend_service.TrendService") as mock_svc:
+        with patch("tg_agent.services.trend_service.TrendService") as mock_svc:
             mock_svc.return_value.get_trending_topics = AsyncMock(return_value=topics)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_trending_topics"]({"days": 7, "limit": 10})
@@ -521,7 +521,7 @@ class TestTrendingTopicsTool:
 
     @pytest.mark.anyio
     async def test_empty(self, mock_db):
-        with patch("src.services.trend_service.TrendService") as mock_svc:
+        with patch("tg_agent.services.trend_service.TrendService") as mock_svc:
             mock_svc.return_value.get_trending_topics = AsyncMock(return_value=[])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_trending_topics"]({})
@@ -546,7 +546,7 @@ class TestCalendarTool:
             created_at="2026-03-24",
             preview="Upcoming post content preview",
         )
-        with patch("src.services.content_calendar_service.ContentCalendarService") as mock_svc:
+        with patch("tg_agent.services.content_calendar_service.ContentCalendarService") as mock_svc:
             mock_svc.return_value.get_upcoming = AsyncMock(return_value=[event])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_calendar"]({"limit": 5})
@@ -557,7 +557,7 @@ class TestCalendarTool:
 
     @pytest.mark.anyio
     async def test_empty(self, mock_db):
-        with patch("src.services.content_calendar_service.ContentCalendarService") as mock_svc:
+        with patch("tg_agent.services.content_calendar_service.ContentCalendarService") as mock_svc:
             mock_svc.return_value.get_upcoming = AsyncMock(return_value=[])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_calendar"]({})
@@ -582,7 +582,7 @@ class TestPipelineStatsTool:
             pending_moderation=3,
             success_rate=0.75,
         )
-        with patch("src.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
+        with patch("tg_agent.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
             mock_svc.return_value.get_pipeline_stats = AsyncMock(return_value=[stat])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_pipeline_stats"]({"pipeline_id": 1})
@@ -634,7 +634,7 @@ class TestRunPipelineTool:
 
     @pytest.mark.anyio
     async def test_pipeline_not_found(self, mock_db):
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.get = AsyncMock(return_value=None)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["run_pipeline"]({"pipeline_id": 999})
@@ -644,7 +644,7 @@ class TestRunPipelineTool:
     @pytest.mark.anyio
     async def test_pipeline_inactive(self, mock_db):
         pipeline = SimpleNamespace(id=1, name="Inactive", is_active=False)
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.get = AsyncMock(return_value=pipeline)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["run_pipeline"]({"pipeline_id": 1})
@@ -661,7 +661,7 @@ class TestMakeMcpServer:
     """Tests for make_mcp_server factory function."""
 
     def test_creates_server_returns_dict(self, mock_db):
-        from src.agent.tools import make_mcp_server
+        from tg_agent.agent.tools import make_mcp_server
 
         server = make_mcp_server(mock_db)
         assert server is not None
@@ -669,7 +669,7 @@ class TestMakeMcpServer:
         assert server["name"] == "telegram_db"
 
     def test_server_has_instance(self, mock_db):
-        from src.agent.tools import make_mcp_server
+        from tg_agent.agent.tools import make_mcp_server
 
         server = make_mcp_server(mock_db)
         assert "instance" in server
@@ -692,10 +692,10 @@ class TestImageToolsDBProviders:
 
         with (
             patch(
-                "src.services.image_provider_service.ImageProviderService",
+                "tg_agent.services.image_provider_service.ImageProviderService",
             ) as mock_prov_svc,
             patch(
-                "src.services.image_generation_service.ImageGenerationService",
+                "tg_agent.services.image_generation_service.ImageGenerationService",
             ) as mock_img_svc,
         ):
             # Setup provider service mock
@@ -720,7 +720,7 @@ class TestImageToolsDBProviders:
     async def test_generate_image_falls_back_to_env(self, mock_db):
         """generate_image should fall back to env vars when no config provided."""
         with patch(
-            "src.services.image_generation_service.ImageGenerationService",
+            "tg_agent.services.image_generation_service.ImageGenerationService",
         ) as mock_img_svc:
             img_instance = mock_img_svc.return_value
             img_instance.is_available = AsyncMock(return_value=False)
@@ -740,10 +740,10 @@ class TestImageToolsDBProviders:
 
         with (
             patch(
-                "src.services.image_provider_service.ImageProviderService",
+                "tg_agent.services.image_provider_service.ImageProviderService",
             ) as mock_prov_svc,
             patch(
-                "src.services.image_generation_service.ImageGenerationService",
+                "tg_agent.services.image_generation_service.ImageGenerationService",
             ) as mock_img_svc,
         ):
             prov_instance = mock_prov_svc.return_value
@@ -774,14 +774,14 @@ class TestConfigPropagation:
         """EmbeddingService should receive config from make_mcp_server."""
         fake_config = SimpleNamespace()
 
-        with patch("src.services.embedding_service.EmbeddingService") as mock_cls:
+        with patch("tg_agent.services.embedding_service.EmbeddingService") as mock_cls:
             mock_cls.return_value = MagicMock()
             _get_tool_handlers(mock_db, config=fake_config)
             mock_cls.assert_called_once_with(mock_db, config=fake_config)
 
     async def test_embedding_service_none_config(self, mock_db):
         """EmbeddingService should receive config=None when no config provided."""
-        with patch("src.services.embedding_service.EmbeddingService") as mock_cls:
+        with patch("tg_agent.services.embedding_service.EmbeddingService") as mock_cls:
             mock_cls.return_value = MagicMock()
             _get_tool_handlers(mock_db)
             mock_cls.assert_called_once_with(mock_db, config=None)
@@ -791,11 +791,11 @@ class TestConfigPropagation:
         fake_config = SimpleNamespace()
 
         with (
-            patch("src.services.embedding_service.EmbeddingService") as mock_embed_cls,
-            patch("src.search.engine.SearchEngine") as mock_search_cls,
-            patch("src.services.content_generation_service.ContentGenerationService") as mock_gen_cls,
-            patch("src.services.pipeline_service.PipelineService") as mock_pipe_cls,
-            patch("src.services.image_generation_service.ImageGenerationService") as mock_img_cls,
+            patch("tg_agent.services.embedding_service.EmbeddingService") as mock_embed_cls,
+            patch("tg_agent.search.engine.SearchEngine") as mock_search_cls,
+            patch("tg_agent.services.content_generation_service.ContentGenerationService") as mock_gen_cls,
+            patch("tg_agent.services.pipeline_service.PipelineService") as mock_pipe_cls,
+            patch("tg_agent.services.image_generation_service.ImageGenerationService") as mock_img_cls,
         ):
             mock_embed_cls.return_value = MagicMock()
             mock_search_cls.return_value = MagicMock()
@@ -1182,7 +1182,7 @@ class TestGetSearchQueryStatsTool:
             SimpleNamespace(day="2025-01-02", count=25),
         ]
 
-        with patch("src.services.search_query_service.SearchQueryService") as mock_svc_cls:
+        with patch("tg_agent.services.search_query_service.SearchQueryService") as mock_svc_cls:
             mock_svc_cls.return_value.get_daily_stats = AsyncMock(return_value=fake_stats)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_search_query_stats"]({"sq_id": 1, "days": 7})
@@ -1200,7 +1200,7 @@ class TestGetSearchQueryStatsTool:
 
     @pytest.mark.anyio
     async def test_empty_stats(self, mock_db):
-        with patch("src.services.search_query_service.SearchQueryService") as mock_svc_cls:
+        with patch("tg_agent.services.search_query_service.SearchQueryService") as mock_svc_cls:
             mock_svc_cls.return_value.get_daily_stats = AsyncMock(return_value=[])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_search_query_stats"]({"sq_id": 99, "days": 30})
@@ -1243,7 +1243,7 @@ class TestNotificationDryRunTool:
         # via iter_messages_collected_since and matches with message_matches_query.
         from datetime import datetime, timezone
 
-        from src.models import Message, SearchQuery
+        from tg_agent.models import Message, SearchQuery
 
         mock_db.repos = MagicMock()
         completed_task = SimpleNamespace(
@@ -1295,7 +1295,7 @@ class TestListPhotoDialogsTool:
         ])
         mock_db.get_setting = AsyncMock(return_value=None)
 
-        with patch("src.services.channel_service.ChannelService") as mock_svc_cls:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc_cls:
             mock_svc_cls.return_value.get_my_dialogs = AsyncMock(return_value=[
                 {"channel_id": 100, "channel_type": "channel", "title": "My Channel"},
             ])
@@ -1332,7 +1332,7 @@ class TestRefreshPhotoDialogsTool:
         ])
         mock_db.get_setting = AsyncMock(return_value=None)
 
-        with patch("src.services.channel_service.ChannelService") as mock_svc_cls:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc_cls:
             mock_svc_cls.return_value.get_my_dialogs = AsyncMock(return_value=[
                 {"channel_id": 1, "title": "A"},
                 {"channel_id": 2, "title": "B"},

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.models import (
+from tg_agent.models import (
     CollectionTask,
     CollectionTaskStatus,
     CollectionTaskType,
@@ -18,7 +18,7 @@ from src.models import (
     StatsAllTaskPayload,
     TranslateBatchTaskPayload,
 )
-from src.services.unified_dispatcher import UnifiedDispatcher
+from tg_agent.services.unified_dispatcher import UnifiedDispatcher
 
 
 def _task(task_type, task_id=1, payload=None, status=CollectionTaskStatus.PENDING):
@@ -327,7 +327,7 @@ def _filter_analyze_db(auto_delete: str = "0"):
 
 
 def _filter_analyze_payload():
-    from src.models import FilterAnalyzeTaskPayload
+    from tg_agent.models import FilterAnalyzeTaskPayload
 
     return FilterAnalyzeTaskPayload()
 
@@ -357,10 +357,10 @@ async def test_filter_analyze_no_db():
 
 @pytest.mark.anyio
 async def test_filter_analyze_completes_and_applies_filters():
-    from src.filters.models import FilterReport
+    from tg_agent.filters.models import FilterReport
 
     d = _dispatcher(db=_filter_analyze_db())
-    with patch("src.services.task_handlers.filter_analyze.ChannelAnalyzer") as mock_analyzer:
+    with patch("tg_agent.services.task_handlers.filter_analyze.ChannelAnalyzer") as mock_analyzer:
         inst = mock_analyzer.return_value
         inst.analyze_all = AsyncMock(
             return_value=FilterReport(results=[], total_channels=10, filtered_count=2)
@@ -385,7 +385,7 @@ async def test_filter_analyze_timeout_marks_failed():
     async def _slow_analyze(*args, **kwargs):
         await aio.sleep(5.0)
 
-    with patch("src.services.task_handlers.filter_analyze.ChannelAnalyzer") as mock_analyzer:
+    with patch("tg_agent.services.task_handlers.filter_analyze.ChannelAnalyzer") as mock_analyzer:
         mock_analyzer.return_value.analyze_all = _slow_analyze
         await d._dispatch(_task(CollectionTaskType.FILTER_ANALYZE, payload=_filter_analyze_payload()))
 
@@ -397,7 +397,7 @@ async def test_filter_analyze_timeout_marks_failed():
 @pytest.mark.anyio
 async def test_filter_analyze_error_marks_failed():
     d = _dispatcher(db=_filter_analyze_db())
-    with patch("src.services.task_handlers.filter_analyze.ChannelAnalyzer") as mock_analyzer:
+    with patch("tg_agent.services.task_handlers.filter_analyze.ChannelAnalyzer") as mock_analyzer:
         mock_analyzer.return_value.analyze_all = AsyncMock(side_effect=RuntimeError("boom"))
         await d._dispatch(_task(CollectionTaskType.FILTER_ANALYZE, payload=_filter_analyze_payload()))
 
@@ -408,8 +408,8 @@ async def test_filter_analyze_error_marks_failed():
 
 @pytest.mark.anyio
 async def test_filter_analyze_auto_purge_when_setting_enabled():
-    from src.filters.models import ChannelFilterResult, FilterReport
-    from src.services.filter_deletion_service import PurgeResult
+    from tg_agent.filters.models import ChannelFilterResult, FilterReport
+    from tg_agent.services.filter_deletion_service import PurgeResult
 
     db = _filter_analyze_db(auto_delete="1")
     db.get_channels_with_counts = AsyncMock(
@@ -423,8 +423,8 @@ async def test_filter_analyze_auto_purge_when_setting_enabled():
         filtered_count=1,
     )
     with (
-        patch("src.services.task_handlers.filter_analyze.ChannelAnalyzer") as mock_analyzer,
-        patch("src.services.task_handlers.filter_analyze.FilterDeletionService") as mock_deletion,
+        patch("tg_agent.services.task_handlers.filter_analyze.ChannelAnalyzer") as mock_analyzer,
+        patch("tg_agent.services.task_handlers.filter_analyze.FilterDeletionService") as mock_deletion,
     ):
         inst = mock_analyzer.return_value
         inst.analyze_all = AsyncMock(return_value=report)
@@ -447,7 +447,7 @@ async def test_filter_analyze_slow_apply_filters_also_times_out():
     import asyncio as aio
     from types import SimpleNamespace
 
-    from src.filters.models import FilterReport
+    from tg_agent.filters.models import FilterReport
 
     cfg = SimpleNamespace(scheduler=SimpleNamespace(filter_analyze_timeout_sec=0.05))
     d = _dispatcher(db=_filter_analyze_db(), config=cfg)
@@ -455,7 +455,7 @@ async def test_filter_analyze_slow_apply_filters_also_times_out():
     async def _slow_apply(report):
         await aio.sleep(5.0)
 
-    with patch("src.services.task_handlers.filter_analyze.ChannelAnalyzer") as mock_analyzer:
+    with patch("tg_agent.services.task_handlers.filter_analyze.ChannelAnalyzer") as mock_analyzer:
         inst = mock_analyzer.return_value
         inst.analyze_all = AsyncMock(
             return_value=FilterReport(results=[], total_channels=1, filtered_count=0)
@@ -472,7 +472,7 @@ async def test_filter_analyze_slow_apply_filters_also_times_out():
 async def test_filter_analyze_cancelled_mid_analysis_skips_side_effects():
     """A task cancelled while analyze_all runs must not apply filters or purge
     (Codex review on #823)."""
-    from src.filters.models import FilterReport
+    from tg_agent.filters.models import FilterReport
 
     d = _dispatcher(db=_filter_analyze_db(auto_delete="1"))
     d._tasks.get_collection_task = AsyncMock(
@@ -483,7 +483,7 @@ async def test_filter_analyze_cancelled_mid_analysis_skips_side_effects():
         )
     )
 
-    with patch("src.services.task_handlers.filter_analyze.ChannelAnalyzer") as mock_analyzer:
+    with patch("tg_agent.services.task_handlers.filter_analyze.ChannelAnalyzer") as mock_analyzer:
         inst = mock_analyzer.return_value
         inst.analyze_all = AsyncMock(
             return_value=FilterReport(results=[], total_channels=5, filtered_count=2)
@@ -499,7 +499,7 @@ async def test_filter_analyze_cancelled_mid_analysis_skips_side_effects():
 async def test_filter_analyze_auto_purge_failure_completes_with_note():
     """Filters are applied even when auto-purge blows up — the task completes
     and the failure stays visible in the note (review on #823)."""
-    from src.filters.models import ChannelFilterResult, FilterReport
+    from tg_agent.filters.models import ChannelFilterResult, FilterReport
 
     db = _filter_analyze_db(auto_delete="1")
     db.get_channels_with_counts = AsyncMock(
@@ -513,8 +513,8 @@ async def test_filter_analyze_auto_purge_failure_completes_with_note():
         filtered_count=1,
     )
     with (
-        patch("src.services.task_handlers.filter_analyze.ChannelAnalyzer") as mock_analyzer,
-        patch("src.services.task_handlers.filter_analyze.FilterDeletionService") as mock_deletion,
+        patch("tg_agent.services.task_handlers.filter_analyze.ChannelAnalyzer") as mock_analyzer,
+        patch("tg_agent.services.task_handlers.filter_analyze.FilterDeletionService") as mock_deletion,
     ):
         inst = mock_analyzer.return_value
         inst.analyze_all = AsyncMock(return_value=report)
@@ -561,7 +561,7 @@ async def test_build_image_service_db_exception():
     mock_db = MagicMock()
     mock_config = MagicMock()
     d = _dispatcher(db=mock_db, config=mock_config)
-    with patch("src.services.image_provider_service.ImageProviderService", side_effect=Exception("nope")):
+    with patch("tg_agent.services.image_provider_service.ImageProviderService", side_effect=Exception("nope")):
         svc = await d._build_image_service()
         assert svc is not None
 
@@ -570,7 +570,7 @@ async def test_build_image_service_db_exception():
 
 
 def _make_pipeline_for_dispatcher(pipeline_id: int):
-    from src.models import ContentPipeline, PipelinePublishMode
+    from tg_agent.models import ContentPipeline, PipelinePublishMode
 
     return ContentPipeline(
         id=pipeline_id,
@@ -616,11 +616,11 @@ class TestPipelineRunHappyPathSemantics:
             return run
 
         monkeypatch.setattr(
-            "src.services.pipeline_service.PipelineService.get",
+            "tg_agent.services.pipeline_service.PipelineService.get",
             fake_get,
         )
         monkeypatch.setattr(
-            "src.services.content_generation_service.ContentGenerationService.generate",
+            "tg_agent.services.content_generation_service.ContentGenerationService.generate",
             fake_generate,
         )
         monkeypatch.setattr(
@@ -655,9 +655,9 @@ class TestPipelineRunHappyPathSemantics:
         async def fake_generate(self, *, pipeline, model, dry_run, since_hours):
             return run
 
-        monkeypatch.setattr("src.services.pipeline_service.PipelineService.get", fake_get)
+        monkeypatch.setattr("tg_agent.services.pipeline_service.PipelineService.get", fake_get)
         monkeypatch.setattr(
-            "src.services.content_generation_service.ContentGenerationService.generate",
+            "tg_agent.services.content_generation_service.ContentGenerationService.generate",
             fake_generate,
         )
         monkeypatch.setattr(
@@ -693,9 +693,9 @@ class TestPipelineRunHappyPathSemantics:
         async def fake_generate(self, *, pipeline, model, dry_run, since_hours):
             return run
 
-        monkeypatch.setattr("src.services.pipeline_service.PipelineService.get", fake_get)
+        monkeypatch.setattr("tg_agent.services.pipeline_service.PipelineService.get", fake_get)
         monkeypatch.setattr(
-            "src.services.content_generation_service.ContentGenerationService.generate",
+            "tg_agent.services.content_generation_service.ContentGenerationService.generate",
             fake_generate,
         )
         monkeypatch.setattr(
@@ -733,9 +733,9 @@ class TestPipelineRunHappyPathSemantics:
         async def fake_generate(self, *, pipeline, model, dry_run, since_hours):
             return run
 
-        monkeypatch.setattr("src.services.pipeline_service.PipelineService.get", fake_get)
+        monkeypatch.setattr("tg_agent.services.pipeline_service.PipelineService.get", fake_get)
         monkeypatch.setattr(
-            "src.services.content_generation_service.ContentGenerationService.generate",
+            "tg_agent.services.content_generation_service.ContentGenerationService.generate",
             fake_generate,
         )
         monkeypatch.setattr(

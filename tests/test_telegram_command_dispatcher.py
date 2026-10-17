@@ -12,10 +12,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from telethon_floodgate import FloodWaitInfo, HandledFloodWaitError
 
-from src.database import Database
-from src.models import Account, AccountSessionStatus, AccountSummary, TelegramCommand, TelegramCommandStatus
-from src.services import telegram_command_dispatcher as mod
-from src.services.telegram_command_dispatcher import TelegramCommandDispatcher, TelegramCommandRetryLaterError
+from tg_agent.database import Database
+from tg_agent.models import Account, AccountSessionStatus, AccountSummary, TelegramCommand, TelegramCommandStatus
+from tg_agent.services import telegram_command_dispatcher as mod
+from tg_agent.services.telegram_command_dispatcher import TelegramCommandDispatcher, TelegramCommandRetryLaterError
 
 
 def _download_media_path_checks(actual_path: str, expected_file: Path, expected_dir: Path) -> tuple[bool, bool]:
@@ -50,7 +50,7 @@ async def test_download_media_creates_output_dir(tmp_path, monkeypatch):
     await db.initialize()
     try:
         root = tmp_path / "app"
-        fake_dispatcher_py = root / "src" / "services" / "telegram_command_dispatcher.py"
+        fake_dispatcher_py = root / "tg_agent" / "services" / "telegram_command_dispatcher.py"
         fake_dispatcher_py.parent.mkdir(parents=True)
         fake_dispatcher_py.touch()
 
@@ -90,7 +90,7 @@ async def test_download_media_rejects_path_escape(tmp_path, monkeypatch):
     await db.initialize()
     try:
         root = tmp_path / "app"
-        fake_dispatcher_py = root / "src" / "services" / "telegram_command_dispatcher.py"
+        fake_dispatcher_py = root / "tg_agent" / "services" / "telegram_command_dispatcher.py"
         fake_dispatcher_py.parent.mkdir(parents=True)
         fake_dispatcher_py.touch()
         monkeypatch.setattr(mod, "__file__", str(fake_dispatcher_py))
@@ -156,7 +156,7 @@ async def test_accounts_connect_raises_for_unknown_phone(tmp_path):
 @pytest.mark.anyio
 async def test_notification_service_uses_config_prefixes(tmp_path):
     """dispatcher._notification_service must propagate bot prefixes from AppConfig."""
-    from src.config import AppConfig
+    from tg_agent.config import AppConfig
 
     db = Database(str(tmp_path / "test.db"), session_encryption_secret="test-session-encryption-key")
     await db.initialize()
@@ -326,7 +326,7 @@ async def test_auth_verify_code():
     auth.verify_code = AsyncMock(return_value="session123")
     db = _mock_db()
     pool = _mock_pool()
-    from src.models import Account
+    from tg_agent.models import Account
 
     db.get_accounts.return_value = [Account(id=1, phone="+1", session_string="session123")]
     pool.get_client_by_phone = AsyncMock(return_value=None)
@@ -413,7 +413,7 @@ async def test_collection_cancel_task_sets_cancel_event_of_running_task():
     # finishes — the same mechanic the web cancel route relies on.
     import asyncio
 
-    from src.collection_queue import CollectionQueue
+    from tg_agent.collection_queue import CollectionQueue
 
     channels = MagicMock()
     channels.cancel_collection_task = AsyncMock(return_value=True)
@@ -449,8 +449,8 @@ async def test_collection_clear_pending_drains_live_queue():
 async def test_collection_clear_pending_drains_real_queue_memory():
     # Acceptance #1568: clear-pending must empty the worker's in-memory queue
     # (and flood-wait requeues / known ids), not just delete DB rows.
-    from src.collection_queue import CollectionQueue
-    from src.models import Channel
+    from tg_agent.collection_queue import CollectionQueue
+    from tg_agent.models import Channel
 
     channels = MagicMock()
     channels.delete_pending_channel_tasks = AsyncMock(return_value=2)
@@ -864,7 +864,7 @@ def _patch_reaction_service(acquired_phone: str):
     Returns ``(patcher, send_reaction_mock)``; the patcher is already started and
     the caller must ``.stop()`` it when done.
     """
-    svc_patch = patch("src.services.dispatcher.dialogs_mixin.TelegramActionService")
+    svc_patch = patch("tg_agent.services.dispatcher.dialogs_mixin.TelegramActionService")
     svc_cls = svc_patch.start()
     send_reaction = AsyncMock(return_value=MagicMock(phone=acquired_phone))
     svc_cls.return_value.send_reaction = send_reaction
@@ -1193,14 +1193,14 @@ async def test_dialogs_read_history_prunes_expired_snapshots_on_write():
     would never reach) — cycle-review #1299 round 3."""
     from datetime import datetime, timezone
 
-    from src.models import DIALOGS_HISTORY_SNAPSHOT_TTL_SECONDS
+    from tg_agent.models import DIALOGS_HISTORY_SNAPSHOT_TTL_SECONDS
 
     db = _mock_db()
     db.repos.runtime_snapshots.prune_expired = AsyncMock(return_value=2)
     pool = _mock_pool()
     d = _dispatcher(db=db, pool=pool)
 
-    svc_patch = patch("src.services.dispatcher.dialogs_mixin.TelegramActionService")
+    svc_patch = patch("tg_agent.services.dispatcher.dialogs_mixin.TelegramActionService")
     svc_cls = svc_patch.start()
     try:
         message = MagicMock(
@@ -1255,7 +1255,7 @@ async def test_channels_collect_stats_not_found():
 
 
 async def test_channels_refresh_types():
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = _mock_db()
     pool = _mock_pool()
@@ -1267,7 +1267,7 @@ async def test_channels_refresh_types():
 
 
 async def test_channels_refresh_meta():
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = _mock_db()
     pool = _mock_pool()
@@ -1292,7 +1292,7 @@ async def test_channels_import_batch():
 
 
 async def test_channels_import_batch_existing():
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = _mock_db()
     pool = _mock_pool()
@@ -1312,7 +1312,7 @@ async def test_channels_import_batch_fail():
 
 
 async def test_accounts_toggle():
-    from src.models import Account
+    from tg_agent.models import Account
 
     db = _mock_db()
     pool = _mock_pool()
@@ -1388,7 +1388,7 @@ async def test_stop_no_task():
 
 
 async def test_run_loop_exception():
-    from src.models import TelegramCommand
+    from tg_agent.models import TelegramCommand
 
     db = _mock_db()
     pool = _mock_pool()
@@ -1408,7 +1408,7 @@ async def test_run_loop_exception():
     await d._run_loop()
     update_call = db.repos.telegram_commands.update_command.call_args
     assert update_call is not None
-    from src.models import TelegramCommandStatus
+    from tg_agent.models import TelegramCommandStatus
     assert update_call[1]["status"] == TelegramCommandStatus.FAILED
 
 
@@ -1488,7 +1488,7 @@ async def test_notifications_test():
     pool = _mock_pool()
     d = _dispatcher(db=db, pool=pool)
     with patch.object(mod, "Notifier") as mock_notifier, \
-         patch("src.database.bundles.NotificationBundle") as mock_bundle:
+         patch("tg_agent.database.bundles.NotificationBundle") as mock_bundle:
         mock_bundle.from_database.return_value = MagicMock()
         mock_instance = MagicMock()
         mock_instance.notify = AsyncMock(return_value=True)
@@ -1503,7 +1503,7 @@ async def test_notifications_test_custom_text():
     pool = _mock_pool()
     d = _dispatcher(db=db, pool=pool)
     with patch.object(mod, "Notifier") as mock_notifier, \
-         patch("src.database.bundles.NotificationBundle") as mock_bundle:
+         patch("tg_agent.database.bundles.NotificationBundle") as mock_bundle:
         mock_bundle.from_database.return_value = MagicMock()
         mock_instance = MagicMock()
         mock_instance.notify = AsyncMock(return_value=True)
@@ -1518,7 +1518,7 @@ async def test_notifications_test_failed():
     pool = _mock_pool()
     d = _dispatcher(db=db, pool=pool)
     with patch.object(mod, "Notifier") as mock_notifier, \
-         patch("src.database.bundles.NotificationBundle") as mock_bundle:
+         patch("tg_agent.database.bundles.NotificationBundle") as mock_bundle:
         mock_bundle.from_database.return_value = MagicMock()
         mock_instance = MagicMock()
         mock_instance.notify = AsyncMock(return_value=False)
@@ -1577,8 +1577,8 @@ async def test_photo_run_due():
 
 async def test_photo_run_due_dry_run_returns_plan_without_sending():
     """dry_run payload previews auto jobs, serializes them, and never runs the item path."""
-    from src.models import PhotoSendMode
-    from src.services.photo_auto_upload_service import PhotoAutoPreview
+    from tg_agent.models import PhotoSendMode
+    from tg_agent.services.photo_auto_upload_service import PhotoAutoPreview
 
     db = _mock_db()
     pool = _mock_pool()
@@ -1628,7 +1628,7 @@ async def test_moderation_publish_run_not_found():
 
 
 async def test_run_loop_success():
-    from src.models import TelegramCommand, TelegramCommandStatus
+    from tg_agent.models import TelegramCommand, TelegramCommandStatus
 
     db = _mock_db()
     pool = _mock_pool()
@@ -1653,7 +1653,7 @@ async def test_run_loop_success():
 
 
 async def test_run_loop_cancelled():
-    from src.models import TelegramCommand, TelegramCommandStatus
+    from tg_agent.models import TelegramCommand, TelegramCommandStatus
 
     db = _mock_db()
     pool = _mock_pool()
@@ -1691,8 +1691,8 @@ async def test_run_loop_cancelled():
 
 
 async def test_run_loop_success_update_busy_does_not_kill_loop():
-    from src.database import DatabaseBusyError
-    from src.models import TelegramCommand
+    from tg_agent.database import DatabaseBusyError
+    from tg_agent.models import TelegramCommand
 
     db = _mock_db()
     pool = _mock_pool()
@@ -1727,8 +1727,8 @@ async def test_run_loop_success_update_busy_does_not_kill_loop():
 
 
 async def test_run_loop_cancelled_reraises_when_update_busy():
-    from src.database import DatabaseBusyError
-    from src.models import TelegramCommand
+    from tg_agent.database import DatabaseBusyError
+    from tg_agent.models import TelegramCommand
 
     db = _mock_db()
     pool = _mock_pool()
@@ -1750,7 +1750,7 @@ async def test_run_loop_requeues_retry_later_with_contract():
     """RetryLaterError: command returns to PENDING with the handler's full
     retry contract — reason as error, result_payload, original payload and
     run_after preserved verbatim."""
-    from src.models import TelegramCommand, TelegramCommandStatus
+    from tg_agent.models import TelegramCommand, TelegramCommandStatus
 
     db = _mock_db()
     cmd = TelegramCommand(id=21, command_type="dialogs.cache_clear", payload={"k": "v"})
@@ -1786,7 +1786,7 @@ async def test_run_loop_requeues_retry_later_with_contract():
 async def test_run_loop_success_persists_unwrapped_result_and_payload_update():
     """Success path: flat dict is persisted whole (payload_update stripped),
     payload_update lands in payload, log_action is "succeeded"."""
-    from src.models import TelegramCommand, TelegramCommandStatus
+    from tg_agent.models import TelegramCommand, TelegramCommandStatus
 
     db = _mock_db()
     cmd = TelegramCommand(id=22, command_type="dialogs.cache_clear", payload={})
@@ -1814,7 +1814,7 @@ async def test_run_loop_success_persists_unwrapped_result_and_payload_update():
 
 async def test_run_loop_marks_failure_with_error_and_payload():
     """Generic dispatch failure: FAILED with str(exc), original payload kept."""
-    from src.models import TelegramCommand, TelegramCommandStatus
+    from tg_agent.models import TelegramCommand, TelegramCommandStatus
 
     db = _mock_db()
     cmd = TelegramCommand(id=23, command_type="dialogs.cache_clear", payload={"k": "v"})
@@ -1844,7 +1844,7 @@ async def test_run_loop_marks_failure_with_error_and_payload():
 
 
 def _busy_error():
-    from src.database import DatabaseBusyError
+    from tg_agent.database import DatabaseBusyError
 
     return DatabaseBusyError("Database is busy. Retry the request in a few seconds.")
 
@@ -2059,7 +2059,7 @@ async def test_dialogs_cache_clear_no_phone_clears_all():
 
 
 async def test_channels_refresh_types_unavailable():
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = _mock_db()
     pool = _mock_pool()
@@ -2075,7 +2075,7 @@ async def test_channels_refresh_types_unavailable():
 
 
 async def test_channels_refresh_types_suppressed_deactivation_is_not_reported():
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = _mock_db()
     pool = _mock_pool()
@@ -2095,7 +2095,7 @@ async def test_channels_refresh_types_suppressed_deactivation_is_not_reported():
 
 
 async def test_channels_refresh_types_resolve_none():
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = _mock_db()
     pool = _mock_pool()
@@ -2110,7 +2110,7 @@ async def test_channels_refresh_types_resolve_none():
 
 
 async def test_channels_refresh_types_resolve_exception():
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = _mock_db()
     pool = _mock_pool()
@@ -2125,7 +2125,7 @@ async def test_channels_refresh_types_resolve_exception():
 
 
 async def test_channels_refresh_types_no_username():
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = _mock_db()
     pool = _mock_pool()
@@ -2145,7 +2145,7 @@ async def test_channels_refresh_types_no_username():
 async def test_channels_refresh_types_passes_numeric_fallback():
     """#858 review: refresh-types resolves by @username but must pass the numeric
     channel_id as fallback so a stale username can't deactivate a live channel."""
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = _mock_db()
     pool = _mock_pool()
@@ -2163,7 +2163,7 @@ async def test_channels_refresh_types_passes_numeric_fallback():
 
 
 async def test_channels_refresh_types_null_type():
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = _mock_db()
     pool = _mock_pool()
@@ -2178,7 +2178,7 @@ async def test_channels_refresh_types_null_type():
 
 
 async def test_channels_refresh_meta_none():
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = _mock_db()
     pool = _mock_pool()
@@ -2194,7 +2194,7 @@ async def test_channels_refresh_meta_none():
 
 
 async def test_channels_refresh_meta_exception():
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = _mock_db()
     pool = _mock_pool()
@@ -2209,7 +2209,7 @@ async def test_channels_refresh_meta_exception():
 
 
 async def test_channels_collect_stats_ok():
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = _mock_db()
     ch = Channel(id=1, channel_id=-100, title="Test")
@@ -2226,7 +2226,7 @@ async def test_channels_collect_stats_ok():
 
 
 async def test_channels_collect_stats_empty():
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = _mock_db()
     ch = Channel(id=1, channel_id=-100, title="Test")
@@ -2545,7 +2545,7 @@ async def test_dialogs_broadcast_stats_with_period():
 
 
 async def test_accounts_connect_with_premium():
-    from src.models import Account
+    from tg_agent.models import Account
 
     db = _mock_db()
     pool = _mock_pool()
@@ -2569,7 +2569,7 @@ async def test_accounts_connect_with_premium():
 
 
 async def test_accounts_toggle_activate():
-    from src.models import Account
+    from tg_agent.models import Account
 
     db = _mock_db()
     pool = _mock_pool()
@@ -2584,7 +2584,7 @@ async def test_accounts_toggle_activate():
 
 
 async def test_accounts_toggle_deactivate_remove_failure():
-    from src.models import Account
+    from tg_agent.models import Account
 
     db = _mock_db()
     pool = _mock_pool()
@@ -2600,7 +2600,7 @@ async def test_accounts_toggle_deactivate_remove_failure():
 
 
 async def test_accounts_toggle_activate_add_failure():
-    from src.models import Account
+    from tg_agent.models import Account
 
     db = _mock_db()
     pool = _mock_pool()
@@ -2653,7 +2653,7 @@ async def test_moderation_publish_run_pipeline_not_found():
     run_mock = MagicMock()
     db.repos.generation_runs.get.return_value = run_mock
     d = _dispatcher(db=db, pool=pool)
-    with patch("src.services.pipeline_service.PipelineService") as mock_ps:
+    with patch("tg_agent.services.pipeline_service.PipelineService") as mock_ps:
         mock_ps.return_value.get = AsyncMock(return_value=None)
         with pytest.raises(RuntimeError, match="pipeline_invalid"):
             await d._handle_moderation_publish_run({"run_id": 1, "pipeline_id": 1})
@@ -2669,8 +2669,8 @@ async def test_moderation_publish_run_success():
     db.repos.generation_runs.get.return_value = run_mock
     pipeline_mock = MagicMock()
     d = _dispatcher(db=db, pool=pool)
-    with patch("src.services.pipeline_service.PipelineService") as mock_ps, \
-         patch("src.services.publish_service.PublishService") as mock_pubsvc:
+    with patch("tg_agent.services.pipeline_service.PipelineService") as mock_ps, \
+         patch("tg_agent.services.publish_service.PublishService") as mock_pubsvc:
         mock_ps.return_value.get = AsyncMock(return_value=pipeline_mock)
         pub_result = MagicMock(success=True)
         mock_pubsvc.return_value.publish_run = AsyncMock(return_value=[pub_result])
@@ -2689,8 +2689,8 @@ async def test_moderation_publish_run_publish_fails():
     db.repos.generation_runs.get.return_value = run_mock
     pipeline_mock = MagicMock()
     d = _dispatcher(db=db, pool=pool)
-    with patch("src.services.pipeline_service.PipelineService") as mock_ps, \
-         patch("src.services.publish_service.PublishService") as mock_pubsvc:
+    with patch("tg_agent.services.pipeline_service.PipelineService") as mock_ps, \
+         patch("tg_agent.services.publish_service.PublishService") as mock_pubsvc:
         mock_ps.return_value.get = AsyncMock(return_value=pipeline_mock)
         pub_result = MagicMock(success=False)
         mock_pubsvc.return_value.publish_run = AsyncMock(return_value=[pub_result])
@@ -2708,8 +2708,8 @@ async def test_moderation_publish_run_empty_results():
     db.repos.generation_runs.get.return_value = run_mock
     pipeline_mock = MagicMock()
     d = _dispatcher(db=db, pool=pool)
-    with patch("src.services.pipeline_service.PipelineService") as mock_ps, \
-         patch("src.services.publish_service.PublishService") as mock_pubsvc:
+    with patch("tg_agent.services.pipeline_service.PipelineService") as mock_ps, \
+         patch("tg_agent.services.publish_service.PublishService") as mock_pubsvc:
         mock_ps.return_value.get = AsyncMock(return_value=pipeline_mock)
         mock_pubsvc.return_value.publish_run = AsyncMock(return_value=[])
         with pytest.raises(RuntimeError, match="pipeline_run_failed"):
@@ -2738,7 +2738,7 @@ async def test_download_media_message_not_found(tmp_path, monkeypatch):
     await db.initialize()
     try:
         root = tmp_path / "app"
-        fake_dispatcher_py = root / "src" / "services" / "telegram_command_dispatcher.py"
+        fake_dispatcher_py = root / "tg_agent" / "services" / "telegram_command_dispatcher.py"
         fake_dispatcher_py.parent.mkdir(parents=True)
         fake_dispatcher_py.touch()
         monkeypatch.setattr(mod, "__file__", str(fake_dispatcher_py))
@@ -2774,7 +2774,7 @@ async def test_download_media_no_media(tmp_path, monkeypatch):
     await db.initialize()
     try:
         root = tmp_path / "app"
-        fake_dispatcher_py = root / "src" / "services" / "telegram_command_dispatcher.py"
+        fake_dispatcher_py = root / "tg_agent" / "services" / "telegram_command_dispatcher.py"
         fake_dispatcher_py.parent.mkdir(parents=True)
         fake_dispatcher_py.touch()
         monkeypatch.setattr(mod, "__file__", str(fake_dispatcher_py))
@@ -2823,7 +2823,7 @@ async def test_run_loop_sleeps_on_no_command():
 
     db.repos.telegram_commands.claim_next_command = claim_none_then_stop
 
-    with patch("src.services.telegram_command_dispatcher.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+    with patch("tg_agent.services.telegram_command_dispatcher.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
         await d._run_loop()
     # The loop runs twice (claim_count hits 2 and sets _stop_event); each None
     # claim triggers a sleep, so exactly 2 sleeps occur.
@@ -2862,8 +2862,8 @@ async def test_notification_target_service():
     db = _mock_db()
     pool = _mock_pool()
     d = _dispatcher(db=db, pool=pool)
-    with patch("src.services.telegram_command_dispatcher.NotificationTargetService") as mock_nts, \
-         patch("src.database.bundles.NotificationBundle") as mock_bundle:
+    with patch("tg_agent.services.telegram_command_dispatcher.NotificationTargetService") as mock_nts, \
+         patch("tg_agent.database.bundles.NotificationBundle") as mock_bundle:
         mock_bundle.from_database.return_value = MagicMock()
         d._notification_target_service()
         mock_nts.assert_called_once()
@@ -2904,7 +2904,7 @@ async def test_dialogs_edit_permissions_with_until_date():
 
 
 async def test_search_telegram_handler_routes_premium():
-    from src.models import Message, SearchResult
+    from tg_agent.models import Message, SearchResult
 
     engine = MagicMock()
     msg = Message(
@@ -2924,7 +2924,7 @@ async def test_search_telegram_handler_routes_premium():
 
 
 async def test_search_telegram_handler_routes_my_chats_and_channel():
-    from src.models import SearchResult
+    from tg_agent.models import SearchResult
 
     engine = MagicMock()
     engine.search_my_chats = AsyncMock(return_value=SearchResult(messages=[], total=0, query="q"))
@@ -2945,7 +2945,7 @@ async def test_search_telegram_handler_without_engine_raises():
 
 
 async def test_run_loop_logs_search_telegram_command_context(caplog):
-    from src.models import SearchResult
+    from tg_agent.models import SearchResult
 
     db = _mock_db()
     pool = _mock_pool()
@@ -2963,7 +2963,7 @@ async def test_run_loop_logs_search_telegram_command_context(caplog):
         return command
 
     db.repos.telegram_commands.claim_next_command = claim_once
-    caplog.set_level(logging.INFO, logger="src.services.telegram_command_dispatcher")
+    caplog.set_level(logging.INFO, logger="tg_agent.services.telegram_command_dispatcher")
 
     await dispatcher._run_loop()
 
@@ -3011,7 +3011,7 @@ async def test_run_loop_survives_busy_error_from_claim():
     dispatcher coroutine (regression: "Task exception was never retrieved").
     The loop must back off and continue claiming commands.
     """
-    from src.database import DatabaseBusyError
+    from tg_agent.database import DatabaseBusyError
 
     db = _mock_db()
     pool = _mock_pool()

@@ -14,12 +14,12 @@ async def test_cli_send_code_saves_hash_to_db(tmp_path):
     """account send-code saves phone_code_hash to DB under auth_pending:{phone}."""
     import json
 
-    from src.database import Database
+    from tg_agent.database import Database
 
     db = Database(str(tmp_path / "test.db"), session_encryption_secret="test-session-encryption-key")
     await db.initialize()
 
-    from src.telegram.auth import TelegramAuth
+    from tg_agent.telegram.auth import TelegramAuth
 
     auth = TelegramAuth(api_id=12345, api_hash="abc")
     from telethon.tl.types.auth import SentCodeTypeSms
@@ -35,7 +35,7 @@ async def test_cli_send_code_saves_hash_to_db(tmp_path):
     mock_client.session = MagicMock()
     mock_client.session.save = MagicMock(return_value="")
 
-    with patch("src.telegram.auth.TelegramClient", return_value=mock_client):
+    with patch("tg_agent.telegram.auth.TelegramClient", return_value=mock_client):
         info = await auth.send_code("+1234567890")
 
     await db.set_setting("auth_pending:+1234567890", json.dumps(info))
@@ -52,7 +52,7 @@ async def test_cli_send_code_saves_hash_to_db(tmp_path):
 @pytest.mark.anyio
 async def test_sign_in_fresh_success():
     """sign_in_fresh() passes session_str to StringSession and signs in."""
-    from src.telegram.auth import TelegramAuth
+    from tg_agent.telegram.auth import TelegramAuth
 
     auth = TelegramAuth(api_id=12345, api_hash="abc")
     mock_client = AsyncMock()
@@ -67,8 +67,8 @@ async def test_sign_in_fresh_success():
 
     mock_string_session = MagicMock()
 
-    with patch("src.telegram.auth.TelegramClient", side_effect=fake_client), \
-         patch("src.telegram.auth.StringSession", return_value=mock_string_session) as mock_ss:
+    with patch("tg_agent.telegram.auth.TelegramClient", side_effect=fake_client), \
+         patch("tg_agent.telegram.auth.StringSession", return_value=mock_string_session) as mock_ss:
         session = await auth.sign_in_fresh("+1234567890", "54321", "hash_abc", session_str="SAVED")
 
     assert session == "fresh_session_string"
@@ -84,13 +84,13 @@ async def test_sign_in_fresh_2fa_required():
     """sign_in_fresh raises ValueError('2FA') when SessionPasswordNeededError and no password given."""
     from telethon.errors import SessionPasswordNeededError
 
-    from src.telegram.auth import TelegramAuth
+    from tg_agent.telegram.auth import TelegramAuth
 
     auth = TelegramAuth(api_id=12345, api_hash="abc")
     mock_client = AsyncMock()
     mock_client.sign_in = AsyncMock(side_effect=SessionPasswordNeededError(request=None))
 
-    with patch("src.telegram.auth.TelegramClient", return_value=mock_client):
+    with patch("tg_agent.telegram.auth.TelegramClient", return_value=mock_client):
         with pytest.raises(ValueError, match="2FA"):
             await auth.sign_in_fresh("+1234567890", "54321", "hash_abc")
 
@@ -101,7 +101,7 @@ async def test_sign_in_fresh_2fa_with_password():
     """sign_in_fresh with password succeeds after SessionPasswordNeededError."""
     from telethon.errors import SessionPasswordNeededError
 
-    from src.telegram.auth import TelegramAuth
+    from tg_agent.telegram.auth import TelegramAuth
 
     auth = TelegramAuth(api_id=12345, api_hash="abc")
     mock_client = AsyncMock()
@@ -113,7 +113,7 @@ async def test_sign_in_fresh_2fa_with_password():
     mock_client.sign_in = AsyncMock(side_effect=sign_in_side)
     mock_client.session.save = MagicMock(return_value="session_2fa_ok")
 
-    with patch("src.telegram.auth.TelegramClient", return_value=mock_client):
+    with patch("tg_agent.telegram.auth.TelegramClient", return_value=mock_client):
         session = await auth.sign_in_fresh("+1234567890", "54321", "hash_abc", password_2fa="mypass")
 
     assert session == "session_2fa_ok"
@@ -125,7 +125,7 @@ def test_cli_verify_code_persists_account_before_pool_warmup(tmp_path, capsys):
     to the DB BEFORE warming the in-memory pool. If the pool warm-up fails afterwards,
     the session string is already safe; the inverse order would lose it permanently on
     the next restart (the pool is rebuilt from the DB)."""
-    from src.cli.commands import account as account_cmd
+    from tg_agent.cli.commands import account as account_cmd
 
     order: list[str] = []
 
@@ -136,7 +136,7 @@ def test_cli_verify_code_persists_account_before_pool_warmup(tmp_path, capsys):
     captured: dict = {}
 
     async def fake_init_db(_config_path):
-        from src.database import Database
+        from tg_agent.database import Database
 
         db = Database(str(tmp_path / "verify.db"), session_encryption_secret="test-session-encryption-key")
         await db.initialize()
@@ -209,7 +209,7 @@ def test_cli_verify_code_persists_account_before_pool_warmup(tmp_path, capsys):
 @pytest.mark.anyio
 async def test_sign_in_fresh_does_not_require_pending():
     """sign_in_fresh works without prior send_code in same process (no _pending check)."""
-    from src.telegram.auth import TelegramAuth
+    from tg_agent.telegram.auth import TelegramAuth
 
     auth = TelegramAuth(api_id=12345, api_hash="abc")
     assert "+1234567890" not in auth._pending
@@ -218,7 +218,7 @@ async def test_sign_in_fresh_does_not_require_pending():
     mock_client.sign_in = AsyncMock()
     mock_client.session.save = MagicMock(return_value="cross_process_session")
 
-    with patch("src.telegram.auth.TelegramClient", return_value=mock_client):
+    with patch("tg_agent.telegram.auth.TelegramClient", return_value=mock_client):
         session = await auth.sign_in_fresh("+1234567890", "54321", "hash_abc")
 
     assert session == "cross_process_session"

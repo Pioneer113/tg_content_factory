@@ -2,8 +2,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from src.models import ContentPipeline, PipelineGenerationBackend, PipelinePublishMode
-from src.services.content_analytics_service import ContentAnalyticsService
+from tg_agent.models import ContentPipeline, PipelineGenerationBackend, PipelinePublishMode
+from tg_agent.services.content_analytics_service import ContentAnalyticsService
 
 
 async def _create_pipeline(db, name: str) -> int:

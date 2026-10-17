@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.models import Account
-from src.security import SessionCipher
+from tg_agent.models import Account
+from tg_agent.security import SessionCipher
 
 
 @pytest.mark.anyio
@@ -346,7 +346,9 @@ async def test_account_info_json(route_client, base_app):
     _, db, _ = base_app
     accounts = await db.get_account_summaries(active_only=False)
     acc = accounts[0]
-    with patch("src.web.routes.accounts.get_live_account_info_text", AsyncMock(return_value="live ok")) as mock_live:
+    with patch(
+        "tg_agent.web.routes.accounts.get_live_account_info_text", AsyncMock(return_value="live ok")
+    ) as mock_live:
         resp = await route_client.get(f"/settings/{acc.id}/info")
     assert resp.status_code == 200
     data = resp.json()
@@ -365,7 +367,7 @@ async def test_account_info_json_without_live_runtime(route_client, base_app):
     _, db, _ = base_app
     accounts = await db.get_account_summaries(active_only=False)
     acc = accounts[0]
-    with patch("src.web.routes.accounts.deps.get_pool", side_effect=RuntimeError("missing pool")):
+    with patch("tg_agent.web.routes.accounts.deps.get_pool", side_effect=RuntimeError("missing pool")):
         resp = await route_client.get(f"/settings/{acc.id}/info")
 
     assert resp.status_code == 200

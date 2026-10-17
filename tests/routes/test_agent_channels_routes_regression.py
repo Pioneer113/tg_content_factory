@@ -26,7 +26,7 @@ async def db(base_app):
 
 
 # ============================================================================
-# src/web/routes/agent.py -- edge-case lines
+# tg_agent/web/routes/agent.py -- edge-case lines
 # ============================================================================
 
 
@@ -76,7 +76,7 @@ async def test_agent_chat_invalid_model(client, db):
 
 
 # ============================================================================
-# src/web/routes/channels.py -- tag + command endpoints
+# tg_agent/web/routes/channels.py -- tag + command endpoints
 # ============================================================================
 
 
@@ -114,7 +114,7 @@ async def test_channels_delete_tag(client, db):
 @pytest.mark.anyio
 async def test_channels_get_channel_tags(client, db):
     """Covers GET /channels/{pk}/tags."""
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     await db.add_channel(Channel(channel_id=9999, title="TagTest"))
     channels = await db.get_channels_with_counts()
@@ -129,7 +129,7 @@ async def test_channels_get_channel_tags(client, db):
 @pytest.mark.anyio
 async def test_channels_set_channel_tags(client, db):
     """Covers POST /channels/{pk}/tags."""
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     await db.add_channel(Channel(channel_id=8888, title="SetTags"))
     channels = await db.get_channels_with_counts()
@@ -147,7 +147,7 @@ async def test_channels_set_channel_tags(client, db):
 @pytest.mark.anyio
 async def test_channels_refresh_types(client, db):
     """Covers POST /channels/refresh-types."""
-    with patch("src.web.channels.handlers.deps.telegram_command_service") as mock_svc:
+    with patch("tg_agent.web.channels.handlers.deps.telegram_command_service") as mock_svc:
         mock_telegram_svc = MagicMock()
         mock_telegram_svc.enqueue = AsyncMock(return_value=42)
         mock_svc.return_value = mock_telegram_svc
@@ -160,7 +160,7 @@ async def test_channels_refresh_types(client, db):
 @pytest.mark.anyio
 async def test_channels_refresh_meta(client, db):
     """Covers POST /channels/refresh-meta."""
-    with patch("src.web.channels.handlers.deps.telegram_command_service") as mock_svc:
+    with patch("tg_agent.web.channels.handlers.deps.telegram_command_service") as mock_svc:
         mock_telegram_svc = MagicMock()
         mock_telegram_svc.enqueue = AsyncMock(return_value=43)
         mock_svc.return_value = mock_telegram_svc

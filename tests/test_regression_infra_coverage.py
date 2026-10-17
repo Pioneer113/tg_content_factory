@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.config import SchedulerConfig
-from src.database import Database
+from tg_agent.config import SchedulerConfig
+from tg_agent.database import Database
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -55,8 +55,8 @@ def _make_pool_with_clients(phones=None):
 
 class TestClientPoolCachedDialog:
     async def test_get_cached_dialog_found(self, db):
-        from src.telegram.auth import TelegramAuth
-        from src.telegram.client_pool import ClientPool, DialogCacheEntry
+        from tg_agent.telegram.auth import TelegramAuth
+        from tg_agent.telegram.client_pool import ClientPool, DialogCacheEntry
         auth = MagicMock(spec=TelegramAuth)
         pool = ClientPool(auth, db)
         pool._dialogs_cache[("phone", "full")] = DialogCacheEntry(
@@ -68,8 +68,8 @@ class TestClientPoolCachedDialog:
         assert result["title"] == "Test"
 
     async def test_get_cached_dialog_not_found(self, db):
-        from src.telegram.auth import TelegramAuth
-        from src.telegram.client_pool import ClientPool, DialogCacheEntry
+        from tg_agent.telegram.auth import TelegramAuth
+        from tg_agent.telegram.client_pool import ClientPool, DialogCacheEntry
         auth = MagicMock(spec=TelegramAuth)
         pool = ClientPool(auth, db)
         pool._dialogs_cache[("phone", "full")] = DialogCacheEntry(
@@ -80,8 +80,8 @@ class TestClientPoolCachedDialog:
         assert result is None
 
     async def test_get_cached_dialog_expired(self, db):
-        from src.telegram.auth import TelegramAuth
-        from src.telegram.client_pool import ClientPool, DialogCacheEntry
+        from tg_agent.telegram.auth import TelegramAuth
+        from tg_agent.telegram.client_pool import ClientPool, DialogCacheEntry
         auth = MagicMock(spec=TelegramAuth)
         pool = ClientPool(auth, db)
         pool._dialogs_cache[("phone", "full")] = DialogCacheEntry(
@@ -93,8 +93,8 @@ class TestClientPoolCachedDialog:
         assert ("phone", "full") not in pool._dialogs_cache
 
     async def test_get_dialogs_from_full_cache_filtered(self, db):
-        from src.telegram.auth import TelegramAuth
-        from src.telegram.client_pool import ClientPool, DialogCacheEntry
+        from tg_agent.telegram.auth import TelegramAuth
+        from tg_agent.telegram.client_pool import ClientPool, DialogCacheEntry
         auth = MagicMock(spec=TelegramAuth)
         pool = ClientPool(auth, db)
         pool._dialogs_cache[("phone", "full")] = DialogCacheEntry(
@@ -118,7 +118,7 @@ class TestClientPoolCachedDialog:
 
 class TestUnifiedDispatcherHandlers:
     async def test_start_recovers_tasks(self):
-        from src.services.unified_dispatcher import UnifiedDispatcher
+        from tg_agent.services.unified_dispatcher import UnifiedDispatcher
         db = _make_mock_db()
         tasks_repo = AsyncMock()
         tasks_repo.requeue_running_generic_tasks_on_startup = AsyncMock(return_value=2)
@@ -144,20 +144,20 @@ class TestUnifiedDispatcherHandlers:
 
 class TestSettingsRouteHelpers:
     async def test_require_agent_dev_mode_disabled(self, db):
-        from src.web.settings.handlers import _require_agent_dev_mode
+        from tg_agent.web.settings.handlers import _require_agent_dev_mode
 
         request = MagicMock()
         # Patch deps.get_db to return our real db
-        with patch("src.web.settings.handlers.deps.get_db", return_value=db):
+        with patch("tg_agent.web.settings.handlers.deps.get_db", return_value=db):
             await db.set_setting("agent_dev_mode_enabled", "0")
             result = await _require_agent_dev_mode(request)
             assert result is not None  # returns redirect
 
     async def test_require_agent_dev_mode_enabled(self, db):
-        from src.web.settings.handlers import _require_agent_dev_mode
+        from tg_agent.web.settings.handlers import _require_agent_dev_mode
 
         request = MagicMock()
-        with patch("src.web.settings.handlers.deps.get_db", return_value=db):
+        with patch("tg_agent.web.settings.handlers.deps.get_db", return_value=db):
             await db.set_setting("agent_dev_mode_enabled", "1")
             result = await _require_agent_dev_mode(request)
             assert result is None
@@ -172,7 +172,7 @@ class TestSettingsRouteHelpers:
 
 class TestCollectorStatsAvailability:
     async def test_get_stats_availability(self, db):
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
         pool = MagicMock()
         pool.get_stats_availability = AsyncMock(return_value=SimpleNamespace(state="ok"))
         config = SchedulerConfig()
@@ -207,7 +207,7 @@ class TestTelegramAuthCoverage:
 
     async def test_cleanup(self):
         """Lines 200-207: cleanup pending clients."""
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         auth = TelegramAuth(api_id=123, api_hash="abc")
         mock_client = MagicMock()
@@ -220,7 +220,7 @@ class TestTelegramAuthCoverage:
 
     async def test_cleanup_disconnect_error(self):
         """Lines 203-206: cleanup with disconnect error."""
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         auth = TelegramAuth(api_id=123, api_hash="abc")
         mock_client = MagicMock()
@@ -232,7 +232,7 @@ class TestTelegramAuthCoverage:
 
     async def test_disconnect_pending_client(self):
         """Lines 91-99: disconnect previous pending client."""
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         auth = TelegramAuth(api_id=123, api_hash="abc")
         mock_client = MagicMock()
@@ -245,7 +245,7 @@ class TestTelegramAuthCoverage:
 
     async def test_disconnect_pending_client_error(self):
         """Lines 98-99: disconnect error is swallowed."""
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         auth = TelegramAuth(api_id=123, api_hash="abc")
         mock_client = MagicMock()
@@ -257,7 +257,7 @@ class TestTelegramAuthCoverage:
 
     async def test_verify_code_hash_mismatch(self):
         """Lines 168-169: hash mismatch."""
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         auth = TelegramAuth(api_id=123, api_hash="abc")
         mock_client = MagicMock()
@@ -279,7 +279,7 @@ class TestCollectorCoverage:
         """Line 222: photo media type."""
         from telethon.tl.types import MessageMediaPhoto
 
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         msg = MagicMock()
         msg.media = MessageMediaPhoto(photo=MagicMock(), ttl_seconds=None)
@@ -288,7 +288,7 @@ class TestCollectorCoverage:
 
     def test_get_media_type_none(self):
         """Lines 219-220: no media."""
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         msg = MagicMock()
         msg.media = None
@@ -302,7 +302,7 @@ class TestCollectorCoverage:
         """Line 245: poll media type."""
         from telethon.tl.types import MessageMediaPoll
 
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         msg = MagicMock()
         msg.media = MessageMediaPoll(poll=MagicMock(), results=MagicMock())
@@ -319,7 +319,7 @@ class TestCollectorCoverage:
             MessageMediaDocument,
         )
 
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         doc = MagicMock()
         doc.attributes = [
@@ -340,7 +340,7 @@ class TestCollectorCoverage:
         """Lines 229-230: video."""
         from telethon.tl.types import DocumentAttributeVideo, MessageMediaDocument
 
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         doc = MagicMock()
         doc.attributes = [DocumentAttributeVideo(duration=10, w=640, h=480)]
@@ -353,7 +353,7 @@ class TestCollectorCoverage:
         """Lines 231-232: voice."""
         from telethon.tl.types import DocumentAttributeAudio, MessageMediaDocument
 
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         doc = MagicMock()
         attr = DocumentAttributeAudio(duration=5, voice=True)
@@ -369,7 +369,7 @@ class TestCollectorCoverage:
         """Line 235: plain document."""
         from telethon.tl.types import MessageMediaDocument
 
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         doc = MagicMock()
         doc.attributes = []
@@ -383,7 +383,7 @@ class TestCollectorCoverage:
         """Line 241: geo live."""
         from telethon.tl.types import MessageMediaGeoLive
 
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         msg = MagicMock()
         msg.media = MessageMediaGeoLive(geo=MagicMock(), period=600)
@@ -398,7 +398,7 @@ class TestWebSchedulerRoutesCoverage:
 
     def test_job_label_known(self):
         """Lines 23-32: job_label for known and pattern-based job ids."""
-        from src.web.routes.scheduler import _job_label
+        from tg_agent.web.routes.scheduler import _job_label
 
         assert _job_label("collect_all") == "Сбор всех каналов"
         assert "sq_" not in _job_label("sq_42")  # should show "Стат. запроса #42"
@@ -418,14 +418,14 @@ class TestWebPipelinesRoutesCoverage:
 
     def test_pipeline_redirect_with_error(self):
         """Test the redirect helper."""
-        from src.web.pipelines.responses import PipelineRedirect, pipeline_redirect_response
+        from tg_agent.web.pipelines.responses import PipelineRedirect, pipeline_redirect_response
 
         resp = pipeline_redirect_response(PipelineRedirect("test_msg"))
         assert resp.status_code == 303
         assert "msg=test_msg" in str(resp.headers.get("location", ""))
 
     def test_pipeline_redirect_with_error_flag(self):
-        from src.web.pipelines.responses import PipelineRedirect, pipeline_redirect_response
+        from tg_agent.web.pipelines.responses import PipelineRedirect, pipeline_redirect_response
 
         resp = pipeline_redirect_response(PipelineRedirect("err", error=True))
         assert "error=err" in str(resp.headers.get("location", ""))
@@ -454,7 +454,7 @@ class TestClientPoolDialogsCacheCoverage:
 
     def test_get_cached_dialogs_expired_full(self):
         """Lines 142-157: expired full cache for channels_only mode."""
-        from src.telegram.client_pool import ClientPool, DialogCacheEntry
+        from tg_agent.telegram.client_pool import ClientPool, DialogCacheEntry
 
         pool = MagicMock(spec=ClientPool)
         pool._dialogs_cache_ttl_sec = 300
@@ -483,7 +483,7 @@ class TestWebAccountsRoutesCoverage:
         """Lines 36-48: active flood wait status."""
         from datetime import timedelta
 
-        from src.models import Account
+        from tg_agent.models import Account
 
         now = datetime.now(timezone.utc)
         acc = Account(
@@ -505,8 +505,8 @@ class TestWebChannelCollectionCoverage:
 
     def test_bulk_enqueue_msg_empty(self):
         """Lines 53-57: bulk enqueue message mapping."""
-        from src.services.collection_service import BulkEnqueueResult
-        from src.web.routes.channel_collection import bulk_enqueue_msg
+        from tg_agent.services.collection_service import BulkEnqueueResult
+        from tg_agent.web.routes.channel_collection import bulk_enqueue_msg
 
         result = BulkEnqueueResult(
             queued_count=0,
@@ -516,8 +516,8 @@ class TestWebChannelCollectionCoverage:
         assert bulk_enqueue_msg(result) == "collect_all_empty"
 
     def test_bulk_enqueue_msg_queued(self):
-        from src.services.collection_service import BulkEnqueueResult
-        from src.web.routes.channel_collection import bulk_enqueue_msg
+        from tg_agent.services.collection_service import BulkEnqueueResult
+        from tg_agent.web.routes.channel_collection import bulk_enqueue_msg
 
         result = BulkEnqueueResult(
             queued_count=3,
@@ -527,8 +527,8 @@ class TestWebChannelCollectionCoverage:
         assert bulk_enqueue_msg(result) == "collect_all_queued"
 
     def test_bulk_enqueue_msg_noop(self):
-        from src.services.collection_service import BulkEnqueueResult
-        from src.web.routes.channel_collection import bulk_enqueue_msg
+        from tg_agent.services.collection_service import BulkEnqueueResult
+        from tg_agent.web.routes.channel_collection import bulk_enqueue_msg
 
         result = BulkEnqueueResult(
             queued_count=0,
@@ -548,7 +548,7 @@ class TestTelegramUtilsCoverage:
 
     def test_normalize_utc_naive(self):
         """Line 11: naive datetime converted to UTC."""
-        from src.telegram.utils import normalize_utc
+        from tg_agent.telegram.utils import normalize_utc
 
         naive = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc).replace(tzinfo=None)
         result = normalize_utc(naive)
@@ -565,7 +565,7 @@ class TestTelegramSearchCoverage:
 
     async def test_search_telegram_no_pool(self):
         """Lines 129-135: no pool configured."""
-        from src.search.telegram_search import TelegramSearch
+        from tg_agent.search.telegram_search import TelegramSearch
 
         persistence = MagicMock()
         svc = TelegramSearch(pool=None, persistence=persistence)
@@ -575,7 +575,7 @@ class TestTelegramSearchCoverage:
 
     async def test_search_my_chats_no_pool(self):
         """Lines 290-296: no pool for search_my_chats."""
-        from src.search.telegram_search import TelegramSearch
+        from tg_agent.search.telegram_search import TelegramSearch
 
         persistence = MagicMock()
         svc = TelegramSearch(pool=None, persistence=persistence)
@@ -584,7 +584,7 @@ class TestTelegramSearchCoverage:
 
     async def test_search_telegram_no_premium_client(self):
         """Lines 138-141: no premium client available."""
-        from src.search.telegram_search import TelegramSearch
+        from tg_agent.search.telegram_search import TelegramSearch
 
         persistence = MagicMock()
         pool = MagicMock()
@@ -596,7 +596,7 @@ class TestTelegramSearchCoverage:
 
     async def test_search_my_chats_no_client(self):
         """Lines 298-305: no available client for my_chats."""
-        from src.search.telegram_search import TelegramSearch
+        from tg_agent.search.telegram_search import TelegramSearch
 
         persistence = MagicMock()
         pool = MagicMock()
@@ -616,7 +616,7 @@ class TestPipelineServiceCoverage:
 
     async def test_toggle_not_found(self, db):
         """Line 199: toggle nonexistent pipeline."""
-        from src.services.pipeline_service import PipelineService
+        from tg_agent.services.pipeline_service import PipelineService
 
         svc = PipelineService(db)
         result = await svc.toggle(9999)
@@ -624,7 +624,7 @@ class TestPipelineServiceCoverage:
 
     async def test_update_invalid_publish_mode(self, db):
         """Lines 210-211: invalid publish_mode raises validation error."""
-        from src.services.pipeline_service import PipelineService, PipelineValidationError
+        from tg_agent.services.pipeline_service import PipelineService, PipelineValidationError
 
         svc = PipelineService(db)
         with pytest.raises(PipelineValidationError, match="неизвестный"):
@@ -648,7 +648,7 @@ class TestNotificationMatcherCoverage:
 
     async def test_match_and_notify_empty(self):
         """Line 25: empty messages or queries."""
-        from src.services.notification_matcher import NotificationMatcher
+        from tg_agent.services.notification_matcher import NotificationMatcher
 
         notifier = MagicMock()
         matcher = NotificationMatcher(notifier)
@@ -657,8 +657,8 @@ class TestNotificationMatcherCoverage:
 
     async def test_match_and_notify_no_text(self):
         """Lines 30-31: messages without text."""
-        from src.models import Message, SearchQuery
-        from src.services.notification_matcher import NotificationMatcher
+        from tg_agent.models import Message, SearchQuery
+        from tg_agent.services.notification_matcher import NotificationMatcher
 
         notifier = MagicMock()
         matcher = NotificationMatcher(notifier)
@@ -669,8 +669,8 @@ class TestNotificationMatcherCoverage:
 
     async def test_match_and_notify_max_length_filter(self):
         """Lines 33-34: max_length filter."""
-        from src.models import Message, SearchQuery
-        from src.services.notification_matcher import NotificationMatcher
+        from tg_agent.models import Message, SearchQuery
+        from tg_agent.services.notification_matcher import NotificationMatcher
 
         notifier = MagicMock()
         matcher = NotificationMatcher(notifier)
@@ -685,8 +685,8 @@ class TestNotificationMatcherCoverage:
 
     async def test_match_and_notify_exclude_pattern(self):
         """Lines 35-36: exclude patterns."""
-        from src.models import Message, SearchQuery
-        from src.services.notification_matcher import NotificationMatcher
+        from tg_agent.models import Message, SearchQuery
+        from tg_agent.services.notification_matcher import NotificationMatcher
 
         notifier = MagicMock()
         matcher = NotificationMatcher(notifier)
@@ -701,8 +701,8 @@ class TestNotificationMatcherCoverage:
 
     async def test_match_and_notify_plain_match(self):
         """Lines 45-51: plain text match with notification."""
-        from src.models import Message, SearchQuery
-        from src.services.notification_matcher import NotificationMatcher
+        from tg_agent.models import Message, SearchQuery
+        from tg_agent.services.notification_matcher import NotificationMatcher
 
         notifier = MagicMock()
         notifier.notify = AsyncMock()
@@ -752,7 +752,7 @@ class TestWebImagesRoutesCoverage:
 
     async def test_image_provider_list_basic(self):
         """Lines 29-56: test image provider helpers."""
-        from src.services.image_provider_service import IMAGE_PROVIDER_SPECS
+        from tg_agent.services.image_provider_service import IMAGE_PROVIDER_SPECS
 
         # Just verify the specs are accessible
         assert isinstance(IMAGE_PROVIDER_SPECS, dict)
@@ -768,7 +768,7 @@ class TestTelegramAuthBatch3:
 
     async def test_verify_code_success(self):
         """Lines 171-187: successful verification."""
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         auth = TelegramAuth(api_id=123, api_hash="abc")
         mock_client = MagicMock()
@@ -788,7 +788,7 @@ class TestTelegramAuthBatch3:
         """Lines 174-177: 2FA password needed."""
         from telethon.errors import SessionPasswordNeededError
 
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         auth = TelegramAuth(api_id=123, api_hash="abc")
         mock_client = MagicMock()
@@ -812,7 +812,7 @@ class TestTelegramAuthBatch3:
         """Lines 175-176: 2FA needed but no password."""
         from telethon.errors import SessionPasswordNeededError
 
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         auth = TelegramAuth(api_id=123, api_hash="abc")
         mock_client = MagicMock()
@@ -826,7 +826,7 @@ class TestTelegramAuthBatch3:
 
     async def test_verify_code_disconnect_error(self):
         """Lines 183-184: disconnect error during cleanup."""
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         auth = TelegramAuth(api_id=123, api_hash="abc")
         mock_client = MagicMock()
@@ -843,11 +843,11 @@ class TestTelegramAuthBatch3:
 
     async def test_send_code_error(self):
         """Lines 108-113: send_code error."""
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         auth = TelegramAuth(api_id=123, api_hash="abc")
 
-        with patch("src.telegram.auth.TelegramClient") as mock_tc:
+        with patch("tg_agent.telegram.auth.TelegramClient") as mock_tc:
             mock_client = MagicMock()
             mock_client.connect = AsyncMock()
             mock_client.send_code_request = AsyncMock(side_effect=RuntimeError("API error"))
@@ -860,11 +860,11 @@ class TestTelegramAuthBatch3:
 
     async def test_send_code_disconnect_error_during_cleanup(self):
         """Lines 111-112: disconnect error during send_code error handling."""
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         auth = TelegramAuth(api_id=123, api_hash="abc")
 
-        with patch("src.telegram.auth.TelegramClient") as mock_tc:
+        with patch("tg_agent.telegram.auth.TelegramClient") as mock_tc:
             mock_client = MagicMock()
             mock_client.connect = AsyncMock()
             mock_client.send_code_request = AsyncMock(side_effect=RuntimeError("API error"))
@@ -876,7 +876,7 @@ class TestTelegramAuthBatch3:
 
     async def test_resend_code(self):
         """Lines 129-154: resend code."""
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         auth = TelegramAuth(api_id=123, api_hash="abc")
         mock_client = MagicMock()
@@ -909,7 +909,7 @@ class TestCollectorBatch3:
 
     async def test_auto_delete_failure(self):
         """Lines 135-137: auto-delete failure."""
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         db = _make_mock_db()
         pool = _make_pool_with_clients()
@@ -932,7 +932,7 @@ class TestClientPoolBatch3:
 
     def test_get_cached_dialogs_channels_only_from_full(self):
         """Lines 142-155: derive channels_only from full cache."""
-        from src.telegram.client_pool import ClientPool, DialogCacheEntry
+        from tg_agent.telegram.client_pool import ClientPool, DialogCacheEntry
 
         pool = MagicMock(spec=ClientPool)
         pool._dialogs_cache_ttl_sec = 300
@@ -954,7 +954,7 @@ class TestClientPoolBatch3:
 
     async def test_get_cached_dialog_from_full(self):
         """Lines 166-175: get single dialog from full cache."""
-        from src.telegram.client_pool import ClientPool, DialogCacheEntry
+        from tg_agent.telegram.client_pool import ClientPool, DialogCacheEntry
 
         pool = MagicMock(spec=ClientPool)
         pool._dialogs_cache_ttl_sec = 300
@@ -976,7 +976,7 @@ class TestClientPoolBatch3:
 
     async def test_get_cached_dialog_expired(self):
         """Lines 173-175: expired full cache falls through to DB."""
-        from src.telegram.client_pool import ClientPool, DialogCacheEntry
+        from tg_agent.telegram.client_pool import ClientPool, DialogCacheEntry
 
         pool = MagicMock(spec=ClientPool)
         pool._dialogs_cache_ttl_sec = 300
@@ -995,7 +995,7 @@ class TestClientPoolBatch3:
 
     def test_store_cached_dialogs(self):
         """Lines 159-163: store dialogs in cache."""
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = MagicMock(spec=ClientPool)
         pool._dialogs_cache = {}
@@ -1014,15 +1014,15 @@ class TestWebRoutesExtraBatch3:
 
     def test_scheduler_job_label_photo(self):
         """Cover photo_due and photo_auto job labels."""
-        from src.web.routes.scheduler import _job_label
+        from tg_agent.web.routes.scheduler import _job_label
 
         assert _job_label("photo_due") == "Фото по расписанию"
         assert _job_label("photo_auto") == "Автозагрузка фото"
 
     def test_channel_collection_redirect_url(self):
         """Cover _collect_all_redirect_url."""
-        from src.services.collection_service import BulkEnqueueResult
-        from src.web.routes.channel_collection import _collect_all_redirect_url
+        from tg_agent.services.collection_service import BulkEnqueueResult
+        from tg_agent.web.routes.channel_collection import _collect_all_redirect_url
 
         result = BulkEnqueueResult(queued_count=1, skipped_existing_count=0, total_candidates=1)
         url = _collect_all_redirect_url(result)
@@ -1030,7 +1030,7 @@ class TestWebRoutesExtraBatch3:
 
     def test_pipeline_target_refs_parsing(self):
         """Cover _target_refs helper."""
-        from src.web.pipelines.forms import parse_target_refs as _target_refs
+        from tg_agent.web.pipelines.forms import parse_target_refs as _target_refs
 
         refs = _target_refs(["+1|123", "+2|456"])
         assert len(refs) == 2
@@ -1046,14 +1046,14 @@ class TestWebSessionCoverage:
 
     def test_verify_token_invalid_format(self):
         """Line 39: invalid token format (no dot)."""
-        from src.web.session import verify_session_token
+        from tg_agent.web.session import verify_session_token
 
         result = verify_session_token("no_dot_here", "secret")
         assert result is None
 
     def test_verify_token_invalid_signature(self):
         """Lines 42-43: invalid signature."""
-        from src.web.session import create_session_token, verify_session_token
+        from tg_agent.web.session import create_session_token, verify_session_token
 
         token = create_session_token("admin", "secret1")
         result = verify_session_token(token, "wrong_secret")
@@ -1064,7 +1064,7 @@ class TestWebSessionCoverage:
         # Create a token with TTL=0 (immediately expired)
         import json
 
-        from src.web.session import _b64url_encode, _signer, verify_session_token
+        from tg_agent.web.session import _b64url_encode, _signer, verify_session_token
 
         payload = json.dumps({"user": "admin", "exp": 0})
         payload_b64 = _b64url_encode(payload.encode())
@@ -1074,7 +1074,7 @@ class TestWebSessionCoverage:
 
     def test_verify_token_invalid_json(self):
         """Lines 46-47: invalid JSON payload."""
-        from src.web.session import _b64url_encode, _signer, verify_session_token
+        from tg_agent.web.session import _b64url_encode, _signer, verify_session_token
 
         payload_b64 = _b64url_encode(b"not_json{{{")
         token = _signer("secret").sign(payload_b64).decode()
@@ -1083,7 +1083,7 @@ class TestWebSessionCoverage:
 
     def test_b64url_decode_padding(self):
         """Line 20: padding in b64url decode."""
-        from src.web.session import _b64url_decode, _b64url_encode
+        from tg_agent.web.session import _b64url_decode, _b64url_encode
 
         data = b"hello"
         encoded = _b64url_encode(data)
@@ -1092,7 +1092,7 @@ class TestWebSessionCoverage:
 
     def test_create_and_verify_token(self):
         """Full round trip."""
-        from src.web.session import create_session_token, verify_session_token
+        from tg_agent.web.session import create_session_token, verify_session_token
 
         token = create_session_token("admin", "secret")
         user = verify_session_token(token, "secret")
@@ -1111,7 +1111,7 @@ class TestWebTemplateGlobalsCoverage:
         """Lines 31-45: template globals configuration."""
         from unittest.mock import MagicMock
 
-        from src.web.template_globals import configure_template_globals
+        from tg_agent.web.template_globals import configure_template_globals
 
         templates = MagicMock()
         templates.env = MagicMock()
@@ -1135,10 +1135,10 @@ class TestAccountLeasePoolCoverage:
 
     async def test_acquire_available_not_connected(self):
         """Line 33: phone not in connected_phones."""
-        from src.telegram.account_lease_pool import AccountLeasePool
+        from tg_agent.telegram.account_lease_pool import AccountLeasePool
 
         db = _make_mock_db()
-        from src.models import Account
+        from tg_agent.models import Account
 
         acc = Account(id=1, phone="+1", session_string="s", is_active=True)
         db.get_accounts = AsyncMock(return_value=[acc])
@@ -1148,10 +1148,10 @@ class TestAccountLeasePoolCoverage:
 
     async def test_acquire_available_shared(self):
         """Lines 43, 45: shared lease."""
-        from src.telegram.account_lease_pool import AccountLeasePool
+        from tg_agent.telegram.account_lease_pool import AccountLeasePool
 
         db = _make_mock_db()
-        from src.models import Account
+        from tg_agent.models import Account
 
         acc = Account(id=1, phone="+1", session_string="s", is_active=True)
         db.get_accounts = AsyncMock(return_value=[acc])
@@ -1165,10 +1165,10 @@ class TestAccountLeasePoolCoverage:
         """Lines 55-56: flood-waited phone."""
         from datetime import timedelta
 
-        from src.telegram.account_lease_pool import AccountLeasePool
+        from tg_agent.telegram.account_lease_pool import AccountLeasePool
 
         db = _make_mock_db()
-        from src.models import Account
+        from tg_agent.models import Account
 
         acc = Account(
             id=1, phone="+1", session_string="s",
@@ -1182,10 +1182,10 @@ class TestAccountLeasePoolCoverage:
 
     async def test_acquire_premium_all_in_use_shared(self):
         """Lines 86, 119: premium acquire shared + all_flooded."""
-        from src.telegram.account_lease_pool import AccountLeasePool
+        from tg_agent.telegram.account_lease_pool import AccountLeasePool
 
         db = _make_mock_db()
-        from src.models import Account
+        from tg_agent.models import Account
 
         acc = Account(id=1, phone="+1", session_string="s", is_active=True, is_premium=True)
         db.get_accounts = AsyncMock(return_value=[acc])
@@ -1199,10 +1199,10 @@ class TestAccountLeasePoolCoverage:
         """Lines 119, 124: all accounts flood-waited."""
         from datetime import timedelta
 
-        from src.telegram.account_lease_pool import AccountLeasePool
+        from tg_agent.telegram.account_lease_pool import AccountLeasePool
 
         db = _make_mock_db()
-        from src.models import Account
+        from tg_agent.models import Account
 
         acc = Account(
             id=1, phone="+1", session_string="s",
@@ -1223,7 +1223,7 @@ class TestBackendsCoverage:
 
     async def test_transport_session_edit_permissions(self):
         """Line 112: edit_permissions with until_date."""
-        from src.telegram.backends import TelegramTransportSession
+        from tg_agent.telegram.backends import TelegramTransportSession
 
         mock_client = MagicMock()
         mock_client.edit_permissions = AsyncMock(return_value="ok")
@@ -1233,7 +1233,7 @@ class TestBackendsCoverage:
 
     async def test_transport_session_fetch_full_chat(self):
         """Lines 268-270: fetch_full_chat."""
-        from src.telegram.backends import TelegramTransportSession
+        from tg_agent.telegram.backends import TelegramTransportSession
 
         mock_client = MagicMock()
         mock_client.__call__ = AsyncMock(return_value="ok")
@@ -1250,13 +1250,13 @@ class TestBackendsCoverage:
 
     async def test_backend_router_auto_fallback(self):
         """Lines 415-418: BackendRouter auto fallback to native."""
-        from src.telegram.backends import BackendRouter
+        from tg_agent.telegram.backends import BackendRouter
 
         primary = MagicMock()
         native = MagicMock()
         primary.acquire_client = AsyncMock(side_effect=RuntimeError("primary fail"))
 
-        from src.models import Account
+        from tg_agent.models import Account
 
         acc = Account(id=1, phone="+1", session_string="s")
         lease = MagicMock()
@@ -1268,14 +1268,14 @@ class TestBackendsCoverage:
 
     async def test_backend_router_telethon_cli_mode(self):
         """Lines 415-416: telethon_cli mode."""
-        from src.telegram.backends import BackendRouter
+        from tg_agent.telegram.backends import BackendRouter
 
         primary = MagicMock()
         native = MagicMock()
         lease = MagicMock()
         primary.acquire_client = AsyncMock(return_value=lease)
 
-        from src.models import Account
+        from tg_agent.models import Account
 
         acc = Account(id=1, phone="+1", session_string="s")
         router = BackendRouter(mode="telethon_cli", primary=primary, native=native)
@@ -1284,12 +1284,12 @@ class TestBackendsCoverage:
 
     async def test_backend_router_unknown_mode(self):
         """Line 418: unknown backend mode."""
-        from src.telegram.backends import BackendRouter
+        from tg_agent.telegram.backends import BackendRouter
 
         primary = MagicMock()
         native = MagicMock()
 
-        from src.models import Account
+        from tg_agent.models import Account
 
         acc = Account(id=1, phone="+1", session_string="s")
         router = BackendRouter(mode="unknown", primary=primary, native=native)
@@ -1298,7 +1298,7 @@ class TestBackendsCoverage:
 
     async def test_backend_router_release_direct(self):
         """Lines 421-422: release direct lease (no-op)."""
-        from src.telegram.backends import BackendClientLease, BackendRouter
+        from tg_agent.telegram.backends import BackendClientLease, BackendRouter
 
         primary = MagicMock()
         native = MagicMock()
@@ -1311,14 +1311,14 @@ class TestBackendsCoverage:
 
     async def test_abstract_backend_acquire(self):
         """Line 314: abstract acquire_client."""
-        from src.telegram.backends import TelegramBackend
+        from tg_agent.telegram.backends import TelegramBackend
 
         with pytest.raises(TypeError):
             TelegramBackend()
 
     async def test_backend_router_native_release(self):
         """Lines 372-373: native backend not authorized during acquire."""
-        from src.telegram.backends import BackendClientLease, BackendRouter
+        from tg_agent.telegram.backends import BackendClientLease, BackendRouter
 
         primary = MagicMock()
         native = MagicMock()
@@ -1343,7 +1343,7 @@ class TestSessionMaterializerCoverage:
         import importlib
         import uuid
 
-        import src.telegram.session_materializer as sm_module
+        import tg_agent.telegram.session_materializer as sm_module
 
         importlib.reload(sm_module)  # ensure clean module state
 
@@ -1367,7 +1367,7 @@ class TestSessionMaterializerCoverage:
         """Lines 54-59."""
         import os
 
-        from src.telegram.session_materializer import SessionMaterializer
+        from tg_agent.telegram.session_materializer import SessionMaterializer
 
         mat = SessionMaterializer(tmp_path / "sessions2")
         path = mat.ensure_empty_env_file()

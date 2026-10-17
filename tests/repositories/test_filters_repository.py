@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from src.database.repositories.channels import ChannelsRepository
-from src.database.repositories.filters import _has_cyrillic_udf
-from src.models import Channel
+from tg_agent.database.repositories.channels import ChannelsRepository
+from tg_agent.database.repositories.filters import _has_cyrillic_udf
+from tg_agent.models import Channel
 
 _INSERT_MSG = (
     "INSERT INTO messages (channel_id, message_id, text, date)" " VALUES (?, ?, ?, datetime('now'))"

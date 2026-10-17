@@ -5,10 +5,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.config import LLMConfig
-from src.database.repositories.messages import MessageSearchPage
-from src.models import Message
-from src.search.ai_search import AISearchEngine
+from tg_agent.config import LLMConfig
+from tg_agent.database.repositories.messages import MessageSearchPage
+from tg_agent.models import Message
+from tg_agent.search.ai_search import AISearchEngine
 
 
 class _FakeAIMessage:

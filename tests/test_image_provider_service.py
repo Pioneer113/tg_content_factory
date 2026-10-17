@@ -4,8 +4,8 @@ import logging
 
 import pytest
 
-from src.config import AppConfig
-from src.services.image_provider_service import (
+from tg_agent.config import AppConfig
+from tg_agent.services.image_provider_service import (
     ImageProviderConfig,
     ImageProviderService,
 )
@@ -79,7 +79,7 @@ async def test_save_preserves_encrypted_on_decrypt_failure(db, caplog):
 
     # Load with wrong key (simulates decrypt failure)
     svc2 = _make_service(db, encryption_key="wrong-key")
-    with caplog.at_level(logging.DEBUG, logger="src.services.image_provider_service"):
+    with caplog.at_level(logging.DEBUG, logger="tg_agent.services.image_provider_service"):
         loaded = await svc2.load_provider_configs()
     assert len(loaded) == 1
     assert loaded[0].api_key == ""  # decrypt failed
@@ -281,7 +281,7 @@ def test_every_spec_is_keyed_xor_keyless():
     This is the guardrail that keeps new providers declarative — a future
     addition must be a well-formed spec, not a bolt-on special case.
     """
-    from src.services.image_provider_service import IMAGE_PROVIDER_ORDER, IMAGE_PROVIDER_SPECS
+    from tg_agent.services.image_provider_service import IMAGE_PROVIDER_ORDER, IMAGE_PROVIDER_SPECS
 
     assert set(IMAGE_PROVIDER_SPECS) == set(IMAGE_PROVIDER_ORDER)
     for name, spec in IMAGE_PROVIDER_SPECS.items():
@@ -298,7 +298,7 @@ def test_every_spec_is_keyed_xor_keyless():
 
 
 def test_every_spec_has_fully_qualified_default_model():
-    from src.services.image_provider_service import IMAGE_PROVIDER_SPECS
+    from tg_agent.services.image_provider_service import IMAGE_PROVIDER_SPECS
 
     for name, spec in IMAGE_PROVIDER_SPECS.items():
         provider, sep, model_id = spec.default_model.partition(":")

@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.models import Account
-from src.telegram.account_lease_pool import AccountLease
-from src.telegram.client_pool import ClientPool
+from tg_agent.models import Account
+from tg_agent.telegram.account_lease_pool import AccountLease
+from tg_agent.telegram.client_pool import ClientPool
 
 
 def _bare_pool() -> ClientPool:
@@ -337,7 +337,7 @@ async def test_stats_taskgroup_unwraps_database_busy_error():
     dispatcher's `except DatabaseBusyError` requeue path still fires on a transient lock
     instead of the ExceptionGroup falling through to `except Exception` -> permanent FAILED.
     This asserts the unwrap contract the fix relies on."""
-    from src.database import DatabaseBusyError
+    from tg_agent.database import DatabaseBusyError
 
     async def _busy_worker():
         raise DatabaseBusyError("database is locked")

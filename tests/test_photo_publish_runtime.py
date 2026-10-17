@@ -7,9 +7,9 @@ import pytest
 from telethon.errors import FloodWaitError
 from telethon_floodgate import HandledFloodWaitError
 
-from src.models import PhotoSendMode
-from src.services.photo_publish_service import PhotoPublishService
 from tests.helpers import FakeCliTelethonClient
+from tg_agent.models import PhotoSendMode
+from tg_agent.services.photo_publish_service import PhotoPublishService
 
 
 @pytest.mark.anyio
@@ -86,7 +86,7 @@ async def test_photo_publish_service_does_not_wrap_dialog_resolver_with_short_ti
     real_pool_harness_factory,
     monkeypatch,
 ):
-    import src.services.photo_publish_service as photo_publish_module
+    import tg_agent.services.photo_publish_service as photo_publish_module
 
     harness = real_pool_harness_factory()
     await harness.add_account("+7000", session_string="photo-session", is_primary=True)

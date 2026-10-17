@@ -33,120 +33,120 @@ import pytest
 
 class TestReadChecks:
     async def test_check_get_stats_pass(self, db):
-        from src.cli.commands.test import _check_get_stats
+        from tg_agent.cli.commands.test import _check_get_stats
         result = await _check_get_stats(db)
         assert result.status.value == "PASS"
 
     async def test_check_get_stats_fail(self):
-        from src.cli.commands.test import _check_get_stats
+        from tg_agent.cli.commands.test import _check_get_stats
         mock_db = MagicMock()
         mock_db.get_stats = AsyncMock(side_effect=RuntimeError("boom"))
         result = await _check_get_stats(mock_db)
         assert result.status.value == "FAIL"
 
     async def test_check_account_list_pass(self, db):
-        from src.cli.commands.test import _check_account_list
+        from tg_agent.cli.commands.test import _check_account_list
         result = await _check_account_list(db)
         assert result.status.value == "PASS"
 
     async def test_check_account_list_fail(self):
-        from src.cli.commands.test import _check_account_list
+        from tg_agent.cli.commands.test import _check_account_list
         mock_db = MagicMock()
         mock_db.get_accounts = AsyncMock(side_effect=RuntimeError("boom"))
         result = await _check_account_list(mock_db)
         assert result.status.value == "FAIL"
 
     async def test_check_channel_list_pass(self, db):
-        from src.cli.commands.test import _check_channel_list
+        from tg_agent.cli.commands.test import _check_channel_list
         result = await _check_channel_list(db)
         assert result.status.value == "PASS"
 
     async def test_check_channel_list_fail(self):
-        from src.cli.commands.test import _check_channel_list
+        from tg_agent.cli.commands.test import _check_channel_list
         mock_db = MagicMock()
         mock_db.get_channels_with_counts = AsyncMock(side_effect=RuntimeError("boom"))
         result = await _check_channel_list(mock_db)
         assert result.status.value == "FAIL"
 
     async def test_check_notification_queries_none(self, db):
-        from src.cli.commands.test import _check_notification_queries
+        from tg_agent.cli.commands.test import _check_notification_queries
         result = await _check_notification_queries(db)
         assert result.status.value in ("SKIP", "PASS")
 
     async def test_check_notification_queries_fail(self):
-        from src.cli.commands.test import _check_notification_queries
+        from tg_agent.cli.commands.test import _check_notification_queries
         mock_db = MagicMock()
         mock_db.get_notification_queries = AsyncMock(side_effect=RuntimeError("boom"))
         result = await _check_notification_queries(mock_db)
         assert result.status.value == "FAIL"
 
     async def test_check_local_search(self, db):
-        from src.cli.commands.test import _check_local_search
+        from tg_agent.cli.commands.test import _check_local_search
         result = await _check_local_search(db)
         assert result.status.value == "PASS"
 
     async def test_check_local_search_fail(self):
-        from src.cli.commands.test import _check_local_search
+        from tg_agent.cli.commands.test import _check_local_search
         mock_db = MagicMock()
         mock_db.search_messages = AsyncMock(side_effect=RuntimeError("boom"))
         result = await _check_local_search(mock_db)
         assert result.status.value == "FAIL"
 
     async def test_check_collection_tasks(self, db):
-        from src.cli.commands.test import _check_collection_tasks
+        from tg_agent.cli.commands.test import _check_collection_tasks
         result = await _check_collection_tasks(db)
         assert result.status.value == "PASS"
 
     async def test_check_collection_tasks_fail(self):
-        from src.cli.commands.test import _check_collection_tasks
+        from tg_agent.cli.commands.test import _check_collection_tasks
         mock_db = MagicMock()
         mock_db.get_collection_tasks = AsyncMock(side_effect=RuntimeError("boom"))
         result = await _check_collection_tasks(mock_db)
         assert result.status.value == "FAIL"
 
     async def test_check_recent_searches_empty(self, db):
-        from src.cli.commands.test import _check_recent_searches
+        from tg_agent.cli.commands.test import _check_recent_searches
         result = await _check_recent_searches(db)
         assert result.status.value in ("SKIP", "PASS")
 
     async def test_check_recent_searches_fail(self):
-        from src.cli.commands.test import _check_recent_searches
+        from tg_agent.cli.commands.test import _check_recent_searches
         mock_db = MagicMock()
         mock_db.get_recent_searches = AsyncMock(side_effect=RuntimeError("boom"))
         result = await _check_recent_searches(mock_db)
         assert result.status.value == "FAIL"
 
     async def test_check_pipeline_list(self, db):
-        from src.cli.commands.test import _check_pipeline_list
+        from tg_agent.cli.commands.test import _check_pipeline_list
         result = await _check_pipeline_list(db)
         assert result.status.value == "PASS"
 
     async def test_check_pipeline_list_fail(self):
-        from src.cli.commands.test import _check_pipeline_list
+        from tg_agent.cli.commands.test import _check_pipeline_list
         mock_db = MagicMock()
         mock_db.repos.content_pipelines.get_all = AsyncMock(side_effect=RuntimeError("boom"))
         result = await _check_pipeline_list(mock_db)
         assert result.status.value == "FAIL"
 
     async def test_check_notification_bot(self, db):
-        from src.cli.commands.test import _check_notification_bot
+        from tg_agent.cli.commands.test import _check_notification_bot
         result = await _check_notification_bot(db)
         assert result.status.value == "PASS"
 
     async def test_check_notification_bot_fail(self):
-        from src.cli.commands.test import _check_notification_bot
+        from tg_agent.cli.commands.test import _check_notification_bot
         mock_db = MagicMock()
         mock_db.repos.notification_bots.count = AsyncMock(side_effect=RuntimeError("boom"))
         result = await _check_notification_bot(mock_db)
         assert result.status.value == "FAIL"
 
     async def test_check_photo_tasks(self, db):
-        from src.cli.commands.test import _check_photo_tasks
+        from tg_agent.cli.commands.test import _check_photo_tasks
         result = await _check_photo_tasks(db)
         assert result.status.value == "PASS"
 
     async def test_check_photo_tasks_fail(self):
-        from src.cli.commands.test import _check_photo_tasks
+        from tg_agent.cli.commands.test import _check_photo_tasks
         mock_db = MagicMock()
         mock_db.repos.photo_loader.list_batches = AsyncMock(side_effect=RuntimeError("boom"))
         result = await _check_photo_tasks(mock_db)
@@ -157,23 +157,23 @@ class TestReadChecks:
 
 class TestDisableFloodAutoSleep:
     async def test_with_clients(self):
-        from src.cli.commands.test import _disable_flood_auto_sleep
+        from tg_agent.cli.commands.test import _disable_flood_auto_sleep
         raw_client = SimpleNamespace(flood_sleep_threshold=30)
         session = SimpleNamespace(raw_client=raw_client)
         pool = SimpleNamespace(clients={"+1111": SimpleNamespace()})
-        with patch("src.cli.commands.test.adapt_transport_session", return_value=session):
+        with patch("tg_agent.cli.commands.test.adapt_transport_session", return_value=session):
             await _disable_flood_auto_sleep(pool)
         assert raw_client.flood_sleep_threshold == 0
 
     async def test_no_raw_client(self):
-        from src.cli.commands.test import _disable_flood_auto_sleep
+        from tg_agent.cli.commands.test import _disable_flood_auto_sleep
         session = SimpleNamespace(raw_client=None)
         pool = SimpleNamespace(clients={"+1111": SimpleNamespace()})
-        with patch("src.cli.commands.test.adapt_transport_session", return_value=session):
+        with patch("tg_agent.cli.commands.test.adapt_transport_session", return_value=session):
             await _disable_flood_auto_sleep(pool)
 
     async def test_no_clients(self):
-        from src.cli.commands.test import _disable_flood_auto_sleep
+        from tg_agent.cli.commands.test import _disable_flood_auto_sleep
         pool = SimpleNamespace(clients=None)
         await _disable_flood_auto_sleep(pool)
 
@@ -182,7 +182,7 @@ class TestDisableFloodAutoSleep:
 
 class TestSkipRemainingTgChecks:
     def test_adds_skip_results(self):
-        from src.cli.commands.test import _skip_remaining_tg_checks
+        from tg_agent.cli.commands.test import _skip_remaining_tg_checks
         results = []
         _skip_remaining_tg_checks(results, "reason", ["a", "b"])
         assert len(results) == 2
@@ -195,7 +195,7 @@ class TestGetLiveFloodAvailability:
     async def test_premium_flood(self):
         from telethon_floodgate import FloodWaitInfo
 
-        from src.cli.commands.test import _get_live_flood_availability
+        from tg_agent.cli.commands.test import _get_live_flood_availability
         info = FloodWaitInfo(
             operation="search_telegram", wait_seconds=10,
             next_available_at_utc=datetime.now(timezone.utc), detail="test",
@@ -211,7 +211,7 @@ class TestGetLiveFloodAvailability:
     async def test_non_premium_flood(self):
         from telethon_floodgate import FloodWaitInfo
 
-        from src.cli.commands.test import _get_live_flood_availability
+        from tg_agent.cli.commands.test import _get_live_flood_availability
         info = FloodWaitInfo(
             operation="get_entity", wait_seconds=10,
             next_available_at_utc=datetime.now(timezone.utc), detail="test",
@@ -224,7 +224,7 @@ class TestGetLiveFloodAvailability:
     async def test_no_getter(self):
         from telethon_floodgate import FloodWaitInfo
 
-        from src.cli.commands.test import _get_live_flood_availability
+        from tg_agent.cli.commands.test import _get_live_flood_availability
         info = FloodWaitInfo(
             operation="get_entity", wait_seconds=10,
             next_available_at_utc=datetime.now(timezone.utc), detail="test",
@@ -240,7 +240,7 @@ class TestDecideLiveFloodActionExtended:
     async def test_all_flooded_short_wait(self):
         from telethon_floodgate import FloodWaitInfo
 
-        from src.cli.commands.test import _decide_live_test_flood_action
+        from tg_agent.cli.commands.test import _decide_live_test_flood_action
         info = FloodWaitInfo(
             operation="get_entity", wait_seconds=5,
             next_available_at_utc=datetime.now(timezone.utc), detail="test",
@@ -256,7 +256,7 @@ class TestDecideLiveFloodActionExtended:
     async def test_all_flooded_long_wait(self):
         from telethon_floodgate import FloodWaitInfo
 
-        from src.cli.commands.test import _decide_live_test_flood_action
+        from tg_agent.cli.commands.test import _decide_live_test_flood_action
         info = FloodWaitInfo(
             operation="get_entity", wait_seconds=600,
             next_available_at_utc=datetime.now(timezone.utc), detail="test",
@@ -275,7 +275,7 @@ class TestHandleLiveFloodWait:
     async def test_rotate_action(self):
         from telethon_floodgate import FloodWaitInfo
 
-        from src.cli.commands.test import _handle_live_flood_wait
+        from tg_agent.cli.commands.test import _handle_live_flood_wait
         info = FloodWaitInfo(
             operation="get_entity", wait_seconds=10,
             next_available_at_utc=datetime.now(timezone.utc), detail="flood", phone="+1111",
@@ -287,7 +287,7 @@ class TestHandleLiveFloodWait:
     async def test_wait_retry_action(self):
         from telethon_floodgate import FloodWaitInfo
 
-        from src.cli.commands.test import _handle_live_flood_wait
+        from tg_agent.cli.commands.test import _handle_live_flood_wait
         info = FloodWaitInfo(
             operation="get_entity", wait_seconds=2,
             next_available_at_utc=datetime.now(timezone.utc), detail="flood", phone="+1111",
@@ -296,13 +296,13 @@ class TestHandleLiveFloodWait:
             state="all_flooded", retry_after_sec=1, next_available_at_utc=None,
         )
         pool = SimpleNamespace(get_stats_availability=AsyncMock(return_value=avail))
-        with patch("src.cli.commands.test.asyncio.sleep", new_callable=AsyncMock):
+        with patch("tg_agent.cli.commands.test.asyncio.sleep", new_callable=AsyncMock):
             await _handle_live_flood_wait(pool, "check", info)
 
     async def test_skip_action_raises(self):
         from telethon_floodgate import FloodWaitInfo
 
-        from src.cli.commands.test import TelegramLiveStepSkipError, _handle_live_flood_wait
+        from tg_agent.cli.commands.test import TelegramLiveStepSkipError, _handle_live_flood_wait
         info = FloodWaitInfo(
             operation="get_entity", wait_seconds=600,
             next_available_at_utc=datetime.now(timezone.utc), detail="flood", phone="+1111",
@@ -319,31 +319,31 @@ class TestHandleLiveFloodWait:
 
 class TestWaitForAvailableClientWindow:
     async def test_not_callable(self):
-        from src.cli.commands.test import _wait_for_available_client_window
+        from tg_agent.cli.commands.test import _wait_for_available_client_window
         pool = SimpleNamespace()
         result = await _wait_for_available_client_window(pool, "check")
         assert result == "No available client"
 
     async def test_not_all_flooded(self):
-        from src.cli.commands.test import _wait_for_available_client_window
+        from tg_agent.cli.commands.test import _wait_for_available_client_window
         avail = SimpleNamespace(state="available")
         pool = SimpleNamespace(get_stats_availability=AsyncMock(return_value=avail))
         result = await _wait_for_available_client_window(pool, "check")
         assert result is not None
 
     async def test_short_wait_returns_none(self):
-        from src.cli.commands.test import _wait_for_available_client_window
+        from tg_agent.cli.commands.test import _wait_for_available_client_window
         avail = SimpleNamespace(
             state="all_flooded", retry_after_sec=2,
             next_available_at_utc=datetime.now(timezone.utc),
         )
         pool = SimpleNamespace(get_stats_availability=AsyncMock(return_value=avail))
-        with patch("src.cli.commands.test.asyncio.sleep", new_callable=AsyncMock):
+        with patch("tg_agent.cli.commands.test.asyncio.sleep", new_callable=AsyncMock):
             result = await _wait_for_available_client_window(pool, "check")
         assert result is None
 
     async def test_long_wait_returns_detail(self):
-        from src.cli.commands.test import _wait_for_available_client_window
+        from tg_agent.cli.commands.test import _wait_for_available_client_window
         avail = SimpleNamespace(
             state="all_flooded", retry_after_sec=600, next_available_at_utc=None,
         )
@@ -353,7 +353,7 @@ class TestWaitForAvailableClientWindow:
         assert "flood" in result.lower()
 
     async def test_premium_mode(self):
-        from src.cli.commands.test import _wait_for_available_client_window
+        from tg_agent.cli.commands.test import _wait_for_available_client_window
         avail = SimpleNamespace(state="available")
         pool = SimpleNamespace(get_premium_stats_availability=AsyncMock(return_value=avail))
         result = await _wait_for_available_client_window(pool, "check", premium=True)
@@ -370,7 +370,7 @@ class TestWaitForAvailableClientWindow:
 class TestWriteChecks:
     async def test_run_write_checks_no_accounts(self, db, tmp_path):
         """_run_write_checks with empty DB — account_toggle should SKIP."""
-        from src.cli.commands.test import _run_write_checks
+        from tg_agent.cli.commands.test import _run_write_checks
 
         # Create a temp config pointing at our in-memory DB's path
         db_path = str(tmp_path / "test.db")
@@ -407,7 +407,7 @@ class TestWriteChecks:
             f.write(f"database:\n  path: {db_path}\n")
 
         # Patch _init_db_copy to return our test DB
-        from src.cli.commands.test import Status
+        from tg_agent.cli.commands.test import Status
         mock_db = MagicMock()
         mock_db.get_accounts = AsyncMock(return_value=[])
         mock_db.get_channels_with_counts = AsyncMock(return_value=[])
@@ -423,7 +423,7 @@ class TestWriteChecks:
         mock_db.close = AsyncMock()
         mock_db.set_channel_active = AsyncMock()
 
-        with patch("src.cli.commands.test._init_db_copy",
+        with patch("tg_agent.cli.commands.test._init_db_copy",
                     new_callable=AsyncMock,
                     return_value=(mock_db, db_path, {})):
             results = await _run_write_checks(config_path)
@@ -439,7 +439,7 @@ class TestWriteChecks:
         """_init_db_copy should raise when the DB file cannot be copied."""
         from unittest.mock import AsyncMock, patch
 
-        from src.cli.commands.test import _init_db_copy
+        from tg_agent.cli.commands.test import _init_db_copy
 
         mock_config = MagicMock()
         mock_db = MagicMock()
@@ -447,7 +447,7 @@ class TestWriteChecks:
         mock_db._session_encryption_secret = None
         mock_db.close = AsyncMock()
 
-        with patch("src.cli.runtime.init_db", new_callable=AsyncMock, return_value=(mock_config, mock_db)):
+        with patch("tg_agent.cli.runtime.init_db", new_callable=AsyncMock, return_value=(mock_config, mock_db)):
             with pytest.raises(sqlite3.Error):
                 await _init_db_copy("any_config.yaml")
 

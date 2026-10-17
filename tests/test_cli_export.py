@@ -5,8 +5,8 @@ import json
 
 import pytest
 
-from src.models import Message
 from tests.helpers import cli_ns as _ns
+from tg_agent.models import Message
 
 NOW = __import__("datetime").datetime(
     2025, 1, 1, 12, 0, 0, tzinfo=__import__("datetime").timezone.utc
@@ -23,7 +23,7 @@ def _add_message(db, channel_id=100, message_id=1, text="hello"):
 
 
 def _add_channel(db, channel_id=100, title="TestCh"):
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     return __import__("asyncio").run(
         db.add_channel(Channel(channel_id=channel_id, title=title))
@@ -34,7 +34,7 @@ def test_export_json(cli_env, capsys):
     _add_channel(cli_env, channel_id=100)
     _add_message(cli_env, channel_id=100, message_id=1, text="test message")
 
-    from src.cli.commands.export import run
+    from tg_agent.cli.commands.export import run
 
     run(_ns(export_action="json", limit=10, channel_id=None, output=None))
     out = capsys.readouterr().out
@@ -48,7 +48,7 @@ def test_export_csv(cli_env, capsys):
     _add_channel(cli_env, channel_id=100)
     _add_message(cli_env, channel_id=100, message_id=1, text="csv test")
 
-    from src.cli.commands.export import run
+    from tg_agent.cli.commands.export import run
 
     run(_ns(export_action="csv", limit=10, channel_id=None, output=None))
     out = capsys.readouterr().out
@@ -60,7 +60,7 @@ def test_export_rss(cli_env, capsys):
     _add_channel(cli_env, channel_id=100)
     _add_message(cli_env, channel_id=100, message_id=1, text="rss test content")
 
-    from src.cli.commands.export import run
+    from tg_agent.cli.commands.export import run
 
     run(_ns(export_action="rss", limit=10, channel_id=None, output=None))
     out = capsys.readouterr().out
@@ -75,7 +75,7 @@ def test_export_csv_neutralizes_formula_injection(cli_env, capsys):
     _add_channel(cli_env, channel_id=100)
     _add_message(cli_env, channel_id=100, message_id=1, text='=HYPERLINK("http://evil","x")')
 
-    from src.cli.commands.export import run
+    from tg_agent.cli.commands.export import run
 
     run(_ns(export_action="csv", limit=10, channel_id=None, output=None))
     out = capsys.readouterr().out
@@ -92,7 +92,7 @@ def test_export_rss_strips_xml_illegal_chars(cli_env, capsys):
     _add_channel(cli_env, channel_id=100)
     _add_message(cli_env, channel_id=100, message_id=1, text="bad\x01char in feed")
 
-    from src.cli.commands.export import run
+    from tg_agent.cli.commands.export import run
 
     run(_ns(export_action="rss", limit=10, channel_id=None, output=None))
     out = capsys.readouterr().out
@@ -101,7 +101,7 @@ def test_export_rss_strips_xml_illegal_chars(cli_env, capsys):
 
 
 def test_export_empty(cli_env, capsys):
-    from src.cli.commands.export import run
+    from tg_agent.cli.commands.export import run
 
     run(_ns(export_action="json", limit=10, channel_id=None, output=None))
     err = capsys.readouterr().err
@@ -113,7 +113,7 @@ def test_export_to_file(cli_env, tmp_path, capsys):
     _add_message(cli_env, channel_id=100, message_id=1, text="file test")
 
     output_path = str(tmp_path / "export.json")
-    from src.cli.commands.export import run
+    from tg_agent.cli.commands.export import run
 
     run(_ns(export_action="json", limit=10, channel_id=None, output=output_path))
     err = capsys.readouterr().err
@@ -130,7 +130,7 @@ def test_export_with_channel_filter(cli_env, capsys):
     _add_message(cli_env, channel_id=100, message_id=1, text="from 100")
     _add_message(cli_env, channel_id=200, message_id=2, text="from 200")
 
-    from src.cli.commands.export import run
+    from tg_agent.cli.commands.export import run
 
     run(_ns(export_action="json", limit=10, channel_id=100, output=None))
     out = capsys.readouterr().out

@@ -49,11 +49,11 @@ async def test_pipeline_generate_and_publish(pipeline_client, monkeypatch):
         return {"prompt": "", "generated_text": "INTEGRATION GENERATED", "citations": []}
 
     monkeypatch.setattr(
-        "src.services.generation_service.GenerationService.generate",
+        "tg_agent.services.generation_service.GenerationService.generate",
         fake_generate,
     )
     monkeypatch.setattr(
-        "src.services.provider_service.RuntimeProviderRegistry.has_providers",
+        "tg_agent.services.provider_service.RuntimeProviderRegistry.has_providers",
         lambda self: True,
     )
 
@@ -102,7 +102,7 @@ async def test_pipeline_generate_action_only_runs_graph(pipeline_client, monkeyp
     """
     from unittest.mock import AsyncMock, MagicMock
 
-    from src.models import (
+    from tg_agent.models import (
         ContentPipeline,
         PipelineEdge,
         PipelineGraph,
@@ -111,7 +111,7 @@ async def test_pipeline_generate_action_only_runs_graph(pipeline_client, monkeyp
         PipelinePublishMode,
         PipelineTarget,
     )
-    from src.services.pipeline_result import increment_action_count
+    from tg_agent.services.pipeline_result import increment_action_count
 
     app = pipeline_client._transport.app  # type: ignore
     db = app.state.db
@@ -159,7 +159,7 @@ async def test_pipeline_generate_action_only_runs_graph(pipeline_client, monkeyp
         return h
 
     monkeypatch.setattr(
-        "src.services.pipeline_executor.get_handler", fake_get_handler
+        "tg_agent.services.pipeline_executor.get_handler", fake_get_handler
     )
 
     resp = await pipeline_client.post(

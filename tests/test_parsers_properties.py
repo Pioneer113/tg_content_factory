@@ -5,7 +5,7 @@ from __future__ import annotations
 from hypothesis import given
 from hypothesis import strategies as st
 
-from src.parsers import (
+from tg_agent.parsers import (
     bare_channel_id,
     deduplicate_identifiers,
     extract_identifiers,

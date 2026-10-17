@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.filters.models import ChannelFilterResult
 from tests.agent_tools_helpers import _get_tool_handlers, _text
+from tg_agent.filters.models import ChannelFilterResult
 
 
 def _make_purge_result(purged=2, deleted=50, errors=None):
@@ -23,7 +23,7 @@ class TestAnalyzeFiltersTool:
         """Empty report returns appropriate message."""
         report = MagicMock()
         report.results = []
-        with patch("src.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
+        with patch("tg_agent.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
             mock_analyzer.return_value.analyze_all = AsyncMock(return_value=report)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["analyze_filters"]({})
@@ -40,7 +40,7 @@ class TestAnalyzeFiltersTool:
         )
         report = MagicMock()
         report.results = [r]
-        with patch("src.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
+        with patch("tg_agent.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
             mock_analyzer.return_value.analyze_all = AsyncMock(return_value=report)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["analyze_filters"]({})
@@ -64,7 +64,7 @@ class TestAnalyzeFiltersTool:
 
         report = MagicMock()
         report.results = [_make_result(i) for i in range(35)]
-        with patch("src.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
+        with patch("tg_agent.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
             mock_analyzer.return_value.analyze_all = AsyncMock(return_value=report)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["analyze_filters"]({})
@@ -78,7 +78,7 @@ class TestAnalyzeFiltersTool:
         ok = ChannelFilterResult(channel_id=1, title="GoodChan", is_filtered=False)
         report = MagicMock()
         report.results = [ok]
-        with patch("src.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
+        with patch("tg_agent.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
             mock_analyzer.return_value.analyze_all = AsyncMock(return_value=report)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["analyze_filters"]({})
@@ -88,7 +88,7 @@ class TestAnalyzeFiltersTool:
 
     @pytest.mark.anyio
     async def test_error_returns_text(self, mock_db):
-        with patch("src.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
+        with patch("tg_agent.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
             mock_analyzer.return_value.analyze_all = AsyncMock(side_effect=RuntimeError("DB fail"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["analyze_filters"]({})
@@ -105,7 +105,7 @@ class TestAnalyzeFiltersTool:
         """
         report = MagicMock()
         report.results = []
-        with patch("src.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
+        with patch("tg_agent.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
             mock_analyzer.return_value.analyze_all = AsyncMock(return_value=report)
             handlers = _get_tool_handlers(mock_db)
             await handlers["analyze_filters"]({"quick": "false"})
@@ -116,7 +116,7 @@ class TestAnalyzeFiltersTool:
         """quick="true" (string) must still enable the sampled fast path."""
         report = MagicMock()
         report.results = []
-        with patch("src.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
+        with patch("tg_agent.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
             mock_analyzer.return_value.analyze_all = AsyncMock(return_value=report)
             handlers = _get_tool_handlers(mock_db)
             await handlers["analyze_filters"]({"quick": "true"})
@@ -133,7 +133,7 @@ class TestApplyFiltersTool:
     @pytest.mark.anyio
     async def test_with_confirm_applies_and_returns_count(self, mock_db):
         report = MagicMock()
-        with patch("src.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
+        with patch("tg_agent.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
             inst = mock_analyzer.return_value
             inst.analyze_all = AsyncMock(return_value=report)
             inst.apply_filters = AsyncMock(return_value=3)
@@ -145,7 +145,7 @@ class TestApplyFiltersTool:
 
     @pytest.mark.anyio
     async def test_error_returns_text(self, mock_db):
-        with patch("src.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
+        with patch("tg_agent.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
             mock_analyzer.return_value.analyze_all = AsyncMock(side_effect=Exception("oops"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["apply_filters"]({"confirm": True})
@@ -161,7 +161,7 @@ class TestResetFiltersTool:
 
     @pytest.mark.anyio
     async def test_with_confirm_resets_and_returns_count(self, mock_db):
-        with patch("src.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
+        with patch("tg_agent.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
             mock_analyzer.return_value.reset_filters = AsyncMock(return_value=7)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["reset_filters"](
@@ -177,7 +177,7 @@ class TestResetFiltersTool:
     @pytest.mark.anyio
     async def test_owner_claim_without_confirmation_is_auto_and_journaled(self, mock_db):
         mock_db.repos.decisions.record = AsyncMock()
-        with patch("src.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
+        with patch("tg_agent.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
             mock_analyzer.return_value.reset_filters = AsyncMock(return_value=2)
             handlers = _get_tool_handlers(mock_db)
             await handlers["reset_filters"]({"on_behalf_of_user": True})
@@ -187,7 +187,7 @@ class TestResetFiltersTool:
 
     @pytest.mark.anyio
     async def test_error_returns_text(self, mock_db):
-        with patch("src.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
+        with patch("tg_agent.filters.analyzer.ChannelAnalyzer") as mock_analyzer:
             mock_analyzer.return_value.reset_filters = AsyncMock(side_effect=Exception("nope"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["reset_filters"]({"confirm": True})
@@ -279,7 +279,7 @@ class TestPurgeFilteredChannelsTool:
     @pytest.mark.anyio
     async def test_with_pks_and_confirm_purges_by_pks(self, mock_db):
         purge_result = _make_purge_result(purged=2, deleted=40)
-        with patch("src.services.filter_deletion_service.FilterDeletionService") as mock_svc:
+        with patch("tg_agent.services.filter_deletion_service.FilterDeletionService") as mock_svc:
             mock_svc.return_value.purge_channels_by_pks = AsyncMock(return_value=purge_result)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["purge_filtered_channels"]({"pks": "1,2", "confirm": True})
@@ -291,7 +291,7 @@ class TestPurgeFilteredChannelsTool:
     @pytest.mark.anyio
     async def test_empty_pks_and_confirm_purges_all(self, mock_db):
         purge_result = _make_purge_result(purged=5, deleted=200)
-        with patch("src.services.filter_deletion_service.FilterDeletionService") as mock_svc:
+        with patch("tg_agent.services.filter_deletion_service.FilterDeletionService") as mock_svc:
             mock_svc.return_value.purge_all_filtered = AsyncMock(return_value=purge_result)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["purge_filtered_channels"]({"pks": "", "confirm": True})
@@ -302,7 +302,7 @@ class TestPurgeFilteredChannelsTool:
 
     @pytest.mark.anyio
     async def test_error_returns_text(self, mock_db):
-        with patch("src.services.filter_deletion_service.FilterDeletionService") as mock_svc:
+        with patch("tg_agent.services.filter_deletion_service.FilterDeletionService") as mock_svc:
             mock_svc.return_value.purge_all_filtered = AsyncMock(side_effect=Exception("disk full"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["purge_filtered_channels"]({"confirm": True})
@@ -312,7 +312,7 @@ class TestPurgeFilteredChannelsTool:
     async def test_partial_failure_surfaces_errors(self, mock_db):
         """A partial purge failure must be reported to the agent, not hidden (#676 review)."""
         purge_result = _make_purge_result(purged=1, deleted=10, errors=["pk=2: DB error"])
-        with patch("src.services.filter_deletion_service.FilterDeletionService") as mock_svc:
+        with patch("tg_agent.services.filter_deletion_service.FilterDeletionService") as mock_svc:
             mock_svc.return_value.purge_channels_by_pks = AsyncMock(return_value=purge_result)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["purge_filtered_channels"]({"pks": "1,2", "confirm": True})
@@ -338,7 +338,7 @@ class TestHardDeleteChannelsTool:
     async def test_with_pks_and_confirm_deletes(self, mock_db):
         mock_db.get_setting = AsyncMock(return_value="1")  # agent_dev_mode_enabled
         del_result = _make_purge_result(purged=2, deleted=0)
-        with patch("src.services.filter_deletion_service.FilterDeletionService") as mock_svc:
+        with patch("tg_agent.services.filter_deletion_service.FilterDeletionService") as mock_svc:
             mock_svc.return_value.hard_delete_channels_by_pks = AsyncMock(return_value=del_result)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["hard_delete_channels"]({"pks": "3,4", "confirm": True})
@@ -350,7 +350,7 @@ class TestHardDeleteChannelsTool:
     @pytest.mark.anyio
     async def test_error_returns_text(self, mock_db):
         mock_db.get_setting = AsyncMock(return_value="1")  # agent_dev_mode_enabled
-        with patch("src.services.filter_deletion_service.FilterDeletionService") as mock_svc:
+        with patch("tg_agent.services.filter_deletion_service.FilterDeletionService") as mock_svc:
             mock_svc.return_value.hard_delete_channels_by_pks = AsyncMock(side_effect=Exception("err"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["hard_delete_channels"]({"pks": "1", "confirm": True})
@@ -360,7 +360,7 @@ class TestHardDeleteChannelsTool:
     async def test_dev_mode_off_rejects_hard_delete(self, db):
         """hard_delete is a dev-mode-only op (parity with CLI/web). With
         agent_dev_mode_enabled unset it must be refused before any deletion."""
-        from src.models import Channel
+        from tg_agent.models import Channel
 
         pk = await db.add_channel(Channel(channel_id=-1001, title="Doomed"))
         await db.set_channel_filtered(pk, True)
@@ -378,7 +378,7 @@ class TestHardDeleteChannelsTool:
         channel_service, so every call raised RuntimeError and was reported as
         'Ошибка удаления'. Uses the real service/DB — mocking the service (as
         the tests above do) is exactly what hid the bug."""
-        from src.models import Channel
+        from tg_agent.models import Channel
 
         pk = await db.add_channel(Channel(channel_id=-1001, title="Doomed"))
         await db.set_channel_filtered(pk, True)

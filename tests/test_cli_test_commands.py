@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.cli.commands.test import (
+from tg_agent.cli.commands.test import (
     BenchmarkStep,
     CheckResult,
     Status,
@@ -35,7 +35,7 @@ from src.cli.commands.test import (
     _run_benchmark_step,
     _skip_remaining_tg_checks,
 )
-from src.database.repositories.messages import MessageSearchPage
+from tg_agent.database.repositories.messages import MessageSearchPage
 
 # ---------------------------------------------------------------------------
 # Status enum

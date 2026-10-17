@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.models import Message
-from src.services.embedding_service import (
+from tg_agent.models import Message
+from tg_agent.services.embedding_service import (
     LAST_EMBEDDED_ID_SETTING,
     EmbeddingRuntimeConfig,
     EmbeddingService,

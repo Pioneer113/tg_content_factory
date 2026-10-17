@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from src.models import SearchQuery
+from tg_agent.models import SearchQuery
 
 
 def make_query(query: str = "test query", **kwargs) -> SearchQuery:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.services.error_recovery_service import (
+from tg_agent.services.error_recovery_service import (
     CircuitBreaker,
     CircuitBreakerConfig,
     ErrorCategory,
@@ -370,7 +370,7 @@ async def test_circuit_breaker_recovery_timeout_transition(monkeypatch):
     current_time = {"value": 100.0}
 
     monkeypatch.setattr(
-        "src.services.error_recovery_service.time.time",
+        "tg_agent.services.error_recovery_service.time.time",
         lambda: current_time["value"],
     )
 
@@ -393,7 +393,7 @@ async def test_circuit_breaker_half_open_failure_reopens(monkeypatch):
     current_time = {"value": 100.0}
 
     monkeypatch.setattr(
-        "src.services.error_recovery_service.time.time",
+        "tg_agent.services.error_recovery_service.time.time",
         lambda: current_time["value"],
     )
 
@@ -537,12 +537,12 @@ def test_guard_not_image_flags_image_module_even_without_name_marker():
     #mutation slice 4). The name/qualname marker path is covered elsewhere; this
     pins the module half of the OR — an or→and drift would let a renamed image
     closure slip into the retrying (billed) path."""
-    from src.services.error_recovery_service import ImageAdapterRetryError, guard_not_image
+    from tg_agent.services.error_recovery_service import ImageAdapterRetryError, guard_not_image
 
     async def call_model(prompt, model):
         return "url"
 
-    call_model.__module__ = "src.services.image_generation_service"
+    call_model.__module__ = "tg_agent.services.image_generation_service"
     call_model.__qualname__ = "SomeFactory.<locals>.inner"
 
     with pytest.raises(ImageAdapterRetryError):
@@ -553,12 +553,12 @@ def test_guard_not_image_all_llm_callables_from_provider_adapters():
     """A provider_adapters callable WITHOUT image markers must pass the guard:
     the inner and/or of the module check must not degrade to a blanket refuse
     (#mutation slice 4)."""
-    from src.services.error_recovery_service import guard_not_image
+    from tg_agent.services.error_recovery_service import guard_not_image
 
     async def complete_chat(prompt, model):
         return "text"
 
-    complete_chat.__module__ = "src.services.provider_adapters"
+    complete_chat.__module__ = "tg_agent.services.provider_adapters"
     complete_chat.__qualname__ = "build_llm_provider.<locals>.complete_chat"
 
     guard_not_image(complete_chat)  # must not raise

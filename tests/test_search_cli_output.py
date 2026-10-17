@@ -8,8 +8,8 @@ dialogs could not be re-resolved and added to collection.
 
 from datetime import datetime, timezone
 
-from src.cli.commands.search import _format_search_result_line
-from src.models import Message
+from tg_agent.cli.commands.search import _format_search_result_line
+from tg_agent.models import Message
 
 
 def _msg(

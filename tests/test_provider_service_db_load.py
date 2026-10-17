@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.services.provider_service import RuntimeProviderRegistry, build_provider_service
+from tg_agent.services.provider_service import RuntimeProviderRegistry, build_provider_service
 
 
 @pytest.fixture
@@ -41,7 +41,7 @@ async def test_load_db_providers_registers_openai(mock_db, mock_config):
     mock_cfg.plain_fields = {"base_url": ""}
 
     with patch(
-        "src.services.agent_provider_service.ProviderConfigService"
+        "tg_agent.services.agent_provider_service.ProviderConfigService"
     ) as mock_db_svc_cls:
         mock_db_svc = MagicMock()
         mock_db_svc.load_provider_configs = AsyncMock(return_value=[mock_cfg])
@@ -65,7 +65,7 @@ async def test_load_db_providers_skips_empty_secrets(mock_db, mock_config):
     mock_cfg.plain_fields = {}
 
     with patch(
-        "src.services.agent_provider_service.ProviderConfigService"
+        "tg_agent.services.agent_provider_service.ProviderConfigService"
     ) as mock_db_svc_cls:
         mock_db_svc = MagicMock()
         mock_db_svc.load_provider_configs = AsyncMock(return_value=[mock_cfg])
@@ -88,7 +88,7 @@ async def test_load_db_providers_skips_disabled(mock_db, mock_config):
     mock_cfg.plain_fields = {}
 
     with patch(
-        "src.services.agent_provider_service.ProviderConfigService"
+        "tg_agent.services.agent_provider_service.ProviderConfigService"
     ) as mock_db_svc_cls:
         mock_db_svc = MagicMock()
         mock_db_svc.load_provider_configs = AsyncMock(return_value=[mock_cfg])
@@ -110,7 +110,7 @@ async def test_load_db_providers_skips_duplicate(mock_db, mock_config):
     mock_cfg.plain_fields = {}
 
     with patch(
-        "src.services.agent_provider_service.ProviderConfigService"
+        "tg_agent.services.agent_provider_service.ProviderConfigService"
     ) as mock_db_svc_cls:
         mock_db_svc = MagicMock()
         mock_db_svc.load_provider_configs = AsyncMock(return_value=[mock_cfg])
@@ -134,7 +134,7 @@ async def test_reload_db_providers_clears_and_reloads(mock_db, mock_config):
     mock_cfg.plain_fields = {}
 
     with patch(
-        "src.services.agent_provider_service.ProviderConfigService"
+        "tg_agent.services.agent_provider_service.ProviderConfigService"
     ) as mock_db_svc_cls:
         mock_db_svc = MagicMock()
         mock_db_svc.load_provider_configs = AsyncMock(return_value=[mock_cfg])
@@ -155,7 +155,9 @@ async def test_reload_db_providers_clears_and_reloads(mock_db, mock_config):
 @pytest.mark.anyio
 async def test_build_provider_service_loads_db_providers(mock_db, mock_config):
     """Async helper should eagerly load DB-backed providers when config is available."""
-    with patch("src.services.provider_service.RuntimeProviderRegistry.load_db_providers", new=AsyncMock()) as mock_load:
+    with patch(
+        "tg_agent.services.provider_service.RuntimeProviderRegistry.load_db_providers", new=AsyncMock()
+    ) as mock_load:
         svc = await build_provider_service(mock_db, mock_config)
 
     assert isinstance(svc, RuntimeProviderRegistry)
@@ -172,7 +174,7 @@ async def test_load_db_providers_cohere_adapter(mock_db, mock_config):
     mock_cfg.plain_fields = {"base_url": ""}
 
     with patch(
-        "src.services.agent_provider_service.ProviderConfigService"
+        "tg_agent.services.agent_provider_service.ProviderConfigService"
     ) as mock_db_svc_cls:
         mock_db_svc = MagicMock()
         mock_db_svc.load_provider_configs = AsyncMock(return_value=[mock_cfg])
@@ -195,7 +197,7 @@ async def test_load_db_providers_ollama_adapter_with_key(mock_db, mock_config):
     mock_cfg.plain_fields = {"base_url": "http://localhost:11434"}
 
     with patch(
-        "src.services.agent_provider_service.ProviderConfigService"
+        "tg_agent.services.agent_provider_service.ProviderConfigService"
     ) as mock_db_svc_cls:
         mock_db_svc = MagicMock()
         mock_db_svc.load_provider_configs = AsyncMock(return_value=[mock_cfg])
@@ -218,7 +220,7 @@ async def test_load_db_providers_ollama_without_api_key(mock_db, mock_config):
     mock_cfg.plain_fields = {"base_url": "http://localhost:11434"}
 
     with patch(
-        "src.services.agent_provider_service.ProviderConfigService"
+        "tg_agent.services.agent_provider_service.ProviderConfigService"
     ) as mock_db_svc_cls:
         mock_db_svc = MagicMock()
         mock_db_svc.load_provider_configs = AsyncMock(return_value=[mock_cfg])
@@ -236,7 +238,7 @@ async def test_load_db_providers_ollama_without_api_key(mock_db, mock_config):
 async def test_load_db_providers_handles_exception(mock_db, mock_config):
     """Exception during load_provider_configs returns 0 gracefully."""
     with patch(
-        "src.services.agent_provider_service.ProviderConfigService"
+        "tg_agent.services.agent_provider_service.ProviderConfigService"
     ) as mock_db_svc_cls:
         mock_db_svc = MagicMock()
         mock_db_svc.load_provider_configs = AsyncMock(side_effect=Exception("DB error"))
@@ -332,7 +334,7 @@ async def test_get_provider_status_list_disabled(mock_db, mock_config):
     mock_cfg.last_validation_error = ""
 
     with patch(
-        "src.services.agent_provider_service.ProviderConfigService"
+        "tg_agent.services.agent_provider_service.ProviderConfigService"
     ) as mock_db_svc_cls:
         mock_db_svc = MagicMock()
         mock_db_svc.load_provider_configs = AsyncMock(return_value=[mock_cfg])
@@ -357,7 +359,7 @@ async def test_get_provider_status_list_invalid_secrets(mock_db, mock_config):
     mock_cfg.last_validation_error = "SESSION_ENCRYPTION_KEY is not configured"
 
     with patch(
-        "src.services.agent_provider_service.ProviderConfigService"
+        "tg_agent.services.agent_provider_service.ProviderConfigService"
     ) as mock_db_svc_cls:
         mock_db_svc = MagicMock()
         mock_db_svc.load_provider_configs = AsyncMock(return_value=[mock_cfg])
@@ -382,7 +384,7 @@ async def test_get_provider_status_list_no_adapter(mock_db, mock_config):
     mock_cfg.last_validation_error = ""
 
     with patch(
-        "src.services.agent_provider_service.ProviderConfigService"
+        "tg_agent.services.agent_provider_service.ProviderConfigService"
     ) as mock_db_svc_cls:
         mock_db_svc = MagicMock()
         mock_db_svc.load_provider_configs = AsyncMock(return_value=[mock_cfg])
@@ -407,7 +409,7 @@ async def test_get_provider_status_list_active(mock_db, mock_config):
     mock_cfg.last_validation_error = ""
 
     with patch(
-        "src.services.agent_provider_service.ProviderConfigService"
+        "tg_agent.services.agent_provider_service.ProviderConfigService"
     ) as mock_db_svc_cls:
         mock_db_svc = MagicMock()
         mock_db_svc.load_provider_configs = AsyncMock(return_value=[mock_cfg])

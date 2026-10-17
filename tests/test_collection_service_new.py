@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.models import Channel, CollectionTask, CollectionTaskStatus, CollectionTaskType
-from src.services.collection_service import CollectionService
+from tg_agent.models import Channel, CollectionTask, CollectionTaskStatus, CollectionTaskType
+from tg_agent.services.collection_service import CollectionService
 
 
 def _make_channel(pk=1, channel_id=100, title="Test", is_filtered=False):

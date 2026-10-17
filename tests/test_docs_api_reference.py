@@ -6,12 +6,12 @@ docstring для не-FastAPI поверхностей (сервисы, agent-to
 
   1. mkdocs.yml включает handler mkdocstrings и nav-секцию «API Reference»;
   2. reference-страницы существуют и ссылаются на ожидаемые модули через
-     `::: src.<module>` синтаксис;
+     `::: tg_agent.<module>` синтаксис;
   3. `mkdocs build` проходит без ошибок и реально рендерит ожидаемые символы
      (классы/функции) в собранный site/ — то есть autodoc-pipeline жив.
 
 Сборку (шаг 3) гоняем один раз в самом тяжёлом тесте: он помечен медленным и
-изолированным, потому что поднимает griffe-обход всего пакета src/.
+изолированным, потому что поднимает griffe-обход всего пакета tg_agent/.
 """
 
 from __future__ import annotations
@@ -33,9 +33,9 @@ _API_DIR = _ROOT / "docs" / "reference" / "api"
 # имел что показывать; конкретные имена — публичные точки входа, которые вряд ли
 # исчезнут без сознательного рефакторинга (и тогда тест справедливо упадёт).
 _EXPECTED_PAGES = {
-    "services.md": ["src.services.collection_service", "src.services.pipeline_service"],
-    "agent-tools-api.md": ["src.agent.tools.channels", "src.agent.tools.search"],
-    "cli-internals.md": ["src.cli.runtime", "src.cli.commands.channel"],
+    "services.md": ["tg_agent.services.collection_service", "tg_agent.services.pipeline_service"],
+    "agent-tools-api.md": ["tg_agent.agent.tools.channels", "tg_agent.agent.tools.search"],
+    "cli-internals.md": ["tg_agent.cli.runtime", "tg_agent.cli.commands.channel"],
 }
 
 # Anchor-id отрендеренных символов, которые griffe обязан вытащить из каждой из
@@ -44,9 +44,9 @@ _EXPECTED_PAGES = {
 # исходнике (напр. строка-ключ словаря), что доказывало бы не то. Эти три —
 # настоящие documented-символы (класс / module-level переменная).
 _EXPECTED_RENDERED_SYMBOLS = [
-    'id="src.services.collection_service.CollectionService"',
-    'id="src.services.pipeline_service.PipelineService"',
-    'id="src.agent.tools.channels.TOOL_GROUPS"',
+    'id="tg_agent.services.collection_service.CollectionService"',
+    'id="tg_agent.services.pipeline_service.PipelineService"',
+    'id="tg_agent.agent.tools.channels.TOOL_GROUPS"',
 ]
 
 
@@ -154,7 +154,7 @@ def test_mkdocs_build_renders_api_symbols(tmp_path: Path) -> None:
 
     --strict — критерий приёмки #1071: сборка обязана быть чистой от warning
     (битые ссылки, нерезолвленные autoref'ы). Дорогой тест: griffe обходит весь
-    пакет src/. Гоняем в изолированный site-dir внутри tmp_path, чтобы не трогать
+    пакет tg_agent/. Гоняем в изолированный site-dir внутри tmp_path, чтобы не трогать
     рабочую site/.
     """
     pytest.importorskip("mkdocstrings")

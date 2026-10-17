@@ -8,7 +8,7 @@ def test_collect_sample_first(run_cli, assert_cli_ok, live_channel):
     """`collect sample <channel_id> --limit 5` — read-only preview.
 
     Calls collector.sample_channel() against the real Telegram API without
-    writing anything to the DB (see src/cli/commands/collect.py:64-91).
+    writing anything to the DB (see tg_agent/cli/commands/collect.py:64-91).
     """
     _pk, channel_id = live_channel
     result = run_cli("collect", "sample", channel_id, "--limit", "5", timeout=120)

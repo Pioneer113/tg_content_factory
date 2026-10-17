@@ -9,9 +9,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.database.bundles import SearchBundle
-from src.models import Channel, Message
-from src.search.local_search import LocalSearch
+from tg_agent.database.bundles import SearchBundle
+from tg_agent.models import Channel, Message
+from tg_agent.search.local_search import LocalSearch
 
 pytestmark = [pytest.mark.anyio, pytest.mark.aiosqlite_serial]
 MESSAGE_DATE = datetime(2026, 10, 14, 12, tzinfo=timezone.utc)

@@ -7,7 +7,7 @@ declarations that live next to the tool definitions. These tests pin:
 1. the migration produced byte-identical mappings (golden snapshot; the
    snapshot file is a #245 migration guard — when a NEW tool is added later,
    regenerate it together with the TOOL_GROUPS entry);
-2. every ``@tool("name", …)`` declaration in src/agent/tools is classified,
+2. every ``@tool("name", …)`` declaration in tg_agent/agent/tools is classified,
    and no stale classification survives a tool's removal;
 3. group membership has no duplicates and matches the categories mapping.
 """
@@ -18,8 +18,8 @@ import json
 import re
 from pathlib import Path
 
-from src.agent.tools._categories import TOOL_MODULE_ORDER
-from src.agent.tools.permissions import (
+from tg_agent.agent.tools._categories import TOOL_MODULE_ORDER
+from tg_agent.agent.tools.permissions import (
     BUILTIN_TOOLS,
     MODULE_GROUPS,
     PHONE_BINDED_TOOLS,
@@ -27,7 +27,7 @@ from src.agent.tools.permissions import (
 )
 
 _SNAPSHOT_PATH = Path(__file__).parent / "data" / "tool_permissions_snapshot.json"
-_TOOLS_ROOT = Path(__file__).resolve().parent.parent / "src" / "agent" / "tools"
+_TOOLS_ROOT = Path(__file__).resolve().parent.parent / "tg_agent" / "agent" / "tools"
 
 _TOOL_DECL_RE = re.compile(r'@tool\(\s*\n?\s*"([a-zA-Z_]+)"')
 
@@ -56,7 +56,7 @@ def test_module_groups_preserve_registration_order():
 
 
 def test_every_declared_tool_is_classified():
-    """Every @tool("name", …) in src/agent/tools must appear in the derived
+    """Every @tool("name", …) in tg_agent/agent/tools must appear in the derived
     TOOL_CATEGORIES — otherwise the fail-closed ACL silently locks it out."""
     declared = _scan_declared_tool_names()
     missing = declared - set(TOOL_CATEGORIES)
@@ -121,7 +121,7 @@ def test_derived_mappings_are_immutable():
 
 def test_lazy_attributes_are_importable_directly():
     """PEP 562 module __getattr__ must serve the legacy attribute names."""
-    import src.agent.tools.permissions as permissions
+    import tg_agent.agent.tools.permissions as permissions
 
     assert permissions.TOOL_CATEGORIES
     assert permissions.MODULE_GROUPS

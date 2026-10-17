@@ -10,11 +10,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.config import AppConfig
-from src.database import Database
-from src.models import Account, Message
 from tests.helpers import cli_add_channel as _add_channel
 from tests.helpers import cli_ns as _ns
+from tg_agent.config import AppConfig
+from tg_agent.database import Database
+from tg_agent.models import Account, Message
 
 NOW = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 pytestmark = pytest.mark.aiosqlite_serial
@@ -28,11 +28,11 @@ def cli_env_with_pool(cli_env):
     fake_pool.disconnect_all = AsyncMock()
 
     async def fake_init_pool(config, db):
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         return TelegramAuth(0, ""), fake_pool
 
-    with patch("src.cli.runtime.init_pool", side_effect=fake_init_pool):
+    with patch("tg_agent.cli.runtime.init_pool", side_effect=fake_init_pool):
         yield cli_env
 
 
@@ -69,26 +69,26 @@ def _query_db(db, sql: str, params: tuple = ()) -> list[dict]:
 class TestCLIAccount:
     def test_toggle(self, cli_env, capsys):
         pk = _add_account(cli_env)
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         run(_ns(account_action="toggle", id=pk))
         assert "active=False" in capsys.readouterr().out
 
     def test_toggle_not_found(self, cli_env, capsys):
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         run(_ns(account_action="toggle", id=999))
         assert "not found" in capsys.readouterr().out
 
     def test_delete(self, cli_env, capsys):
         pk = _add_account(cli_env)
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         run(_ns(account_action="delete", id=pk))
         assert "Deleted" in capsys.readouterr().out
 
     def test_delete_not_found(self, cli_env, capsys):
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         run(_ns(account_action="delete", id=999))
         assert "not found" in capsys.readouterr().out
@@ -98,7 +98,7 @@ class TestCLIAccount:
         _add_account(cli_env, phone="+70001112234")
         _add_account(cli_env, phone="+70001112235")
         asyncio.run(cli_env.set_setting("notification_account_phone", "+70001112233"))
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         run(_ns(account_action="delete", id=pk, notify_to="+70001112235"))
         out = capsys.readouterr().out
@@ -113,7 +113,7 @@ class TestCLIAccount:
         pk = _add_account(cli_env, phone="+70001112233")
         _add_account(cli_env, phone="+70001112234")
         asyncio.run(cli_env.set_setting("notification_account_phone", "+70001112233"))
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         run(_ns(account_action="delete", id=pk))
         out = capsys.readouterr().out
@@ -130,7 +130,7 @@ class TestCLIAccount:
         _add_account(cli_env, phone="+70001112234")
         _add_account(cli_env, phone="+70001112235")
         asyncio.run(cli_env.set_setting("notification_account_phone", "+70001112233"))
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         with patch("sys.stdin") as stdin_mock:
             stdin_mock.isatty.return_value = False
@@ -147,7 +147,7 @@ class TestCLIAccount:
         pk = _add_account(cli_env, phone="+70001112233")
         _add_account(cli_env, phone="+70001112234")
         asyncio.run(cli_env.set_setting("notification_account_phone", "+70001112233"))
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         run(_ns(account_action="delete", id=pk, notify_to="+9999"))
         out = capsys.readouterr().out
@@ -165,7 +165,7 @@ class TestCLIAccount:
         _add_account(cli_env, phone="+70001112234")
         _add_account(cli_env, phone="+70001112235")
         asyncio.run(cli_env.set_setting("notification_account_phone", "+70001112233"))
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         with (
             patch("sys.stdin") as stdin_mock,
@@ -187,7 +187,7 @@ class TestCLIAccount:
         _add_account(cli_env, phone="+70001112234")
         _add_account(cli_env, phone="+70001112235")
         asyncio.run(cli_env.set_setting("notification_account_phone", "+70001112233"))
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         with (
             patch("sys.stdin") as stdin_mock,
@@ -205,7 +205,7 @@ class TestCLIAccount:
 
     def test_info_shows_live_account_profile(self, cli_env_with_pool, capsys):
         """account info: shows connected account profile diagnostics."""
-        from src.models import TelegramUserInfo
+        from tg_agent.models import TelegramUserInfo
 
         db = cli_env_with_pool
         phone = "+10009998877"
@@ -225,8 +225,8 @@ class TestCLIAccount:
             disconnect_all=AsyncMock(),
         )
         init_pool_mock = AsyncMock(return_value=(MagicMock(), fake_pool))
-        with patch("src.cli.runtime.init_pool", new=init_pool_mock):
-            from src.cli.commands.account import run
+        with patch("tg_agent.cli.runtime.init_pool", new=init_pool_mock):
+            from tg_agent.cli.commands.account import run
 
             run(_ns(account_action="info", phone=None))
 
@@ -238,7 +238,7 @@ class TestCLIAccount:
 
     def test_info_filter_by_phone(self, cli_env_with_pool, capsys):
         """account info --phone: only shows matching account."""
-        from src.models import TelegramUserInfo
+        from tg_agent.models import TelegramUserInfo
 
         db = cli_env_with_pool
         phone1 = "+10009998877"
@@ -257,8 +257,8 @@ class TestCLIAccount:
             disconnect_all=AsyncMock(),
         )
         init_pool_mock = AsyncMock(return_value=(MagicMock(), fake_pool))
-        with patch("src.cli.runtime.init_pool", new=init_pool_mock):
-            from src.cli.commands.account import run
+        with patch("tg_agent.cli.runtime.init_pool", new=init_pool_mock):
+            from tg_agent.cli.commands.account import run
 
             run(_ns(account_action="info", phone=phone1))
 
@@ -275,8 +275,8 @@ class TestCLIAccount:
             disconnect_all=AsyncMock(),
         )
         init_pool_mock = AsyncMock(return_value=(MagicMock(), fake_pool))
-        with patch("src.cli.runtime.init_pool", new=init_pool_mock):
-            from src.cli.commands.account import run
+        with patch("tg_agent.cli.runtime.init_pool", new=init_pool_mock):
+            from tg_agent.cli.commands.account import run
 
             run(_ns(account_action="info", phone=None))
 
@@ -292,8 +292,8 @@ class TestCLIAccount:
             disconnect_all=AsyncMock(),
         )
         init_pool_mock = AsyncMock(return_value=(MagicMock(), fake_pool))
-        with patch("src.cli.runtime.init_pool", new=init_pool_mock):
-            from src.cli.commands.account import run
+        with patch("tg_agent.cli.runtime.init_pool", new=init_pool_mock):
+            from tg_agent.cli.commands.account import run
 
             run(_ns(account_action="info", phone=None))
 
@@ -304,7 +304,7 @@ class TestCLIAccount:
 
     def test_flood_status_no_flood(self, cli_env, capsys):
         _add_account(cli_env, phone="+10001112233")
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         run(_ns(account_action="flood-status"))
         out = capsys.readouterr().out
@@ -319,7 +319,7 @@ class TestCLIAccount:
         _add_account(cli_env, phone=phone)
         until = datetime.now(timezone.utc) + timedelta(seconds=300)
         asyncio.run(cli_env.update_account_flood(phone, until))
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         run(_ns(account_action="flood-status"))
         out = capsys.readouterr().out
@@ -327,7 +327,7 @@ class TestCLIAccount:
         assert re.search(r"\d+s", out)
 
     def test_flood_status_no_accounts(self, cli_env, capsys):
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         run(_ns(account_action="flood-status"))
         assert "No accounts found." in capsys.readouterr().out
@@ -339,13 +339,13 @@ class TestCLIAccount:
         _add_account(cli_env, phone=phone)
         until = datetime.now(timezone.utc) + timedelta(seconds=120)
         asyncio.run(cli_env.update_account_flood(phone, until))
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         run(_ns(account_action="flood-clear", phone=phone))
         assert "cleared" in capsys.readouterr().out
 
     def test_flood_clear_not_found(self, cli_env, capsys):
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         run(_ns(account_action="flood-clear", phone="+19990000000"))
         assert "not found" in capsys.readouterr().out
@@ -359,20 +359,20 @@ class TestCLIAccount:
 class TestCLIChannelDB:
     def test_delete(self, cli_env, capsys):
         pk = _add_channel(cli_env, channel_id=200, title="DelCh")
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="delete", identifier=str(pk)))
         assert "Deleted" in capsys.readouterr().out
 
     def test_toggle(self, cli_env, capsys):
         pk = _add_channel(cli_env, channel_id=201, title="TogCh")
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="toggle", identifier=str(pk)))
         assert "active=" in capsys.readouterr().out
 
     def test_toggle_not_found(self, cli_env, capsys):
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="toggle", identifier="99999"))
         assert "not found" in capsys.readouterr().out
@@ -385,27 +385,27 @@ class TestCLIChannelDB:
 
 class TestCLIChannelPool:
     def test_add_no_clients(self, cli_env_with_pool, capsys, caplog):
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="add", identifier="@testchan"))
         assert "No connected accounts" in caplog.text
 
     def test_collect_not_found(self, cli_env_with_pool, capsys, caplog):
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="collect", identifier="99999"))
         # Pool has no clients → logs error
         assert "No connected accounts" in caplog.text
 
     def test_stats_no_args(self, cli_env_with_pool, capsys, caplog):
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="stats", identifier=None, all=False))
         # stats_impl no longer opens a pool (#1569) — it just asks for a target.
         assert "Specify a channel identifier or use --all" in capsys.readouterr().out
 
     def test_import_no_identifiers(self, cli_env_with_pool, capsys):
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="import", source=""))
         assert "No identifiers found" in capsys.readouterr().out
@@ -418,31 +418,31 @@ class TestCLIChannelPool:
 
 class TestCLIFilter:
     def test_analyze_empty(self, cli_env, capsys):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         run(_ns(filter_action="analyze"))
         assert "No channels found" in capsys.readouterr().out
 
     def test_apply_empty(self, cli_env, capsys):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         run(_ns(filter_action="apply"))
         assert "Applied filters: 0" in capsys.readouterr().out
 
     def test_reset(self, cli_env, capsys):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         run(_ns(filter_action="reset"))
         assert "All channel filters have been reset" in capsys.readouterr().out
 
     def test_precheck(self, cli_env, capsys):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         run(_ns(filter_action="precheck"))
         assert "Pre-filter applied" in capsys.readouterr().out
 
     def test_purge_no_filtered(self, cli_env, capsys):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         run(_ns(filter_action="purge", pks=None, yes=True))
         assert "No filtered channels affected." in capsys.readouterr().out
@@ -452,7 +452,7 @@ class TestCLIFilter:
         asyncio.run(cli_env.set_channel_filtered(ch_pk, True))
         _add_message(cli_env, channel_id=999, message_id=1, text="to be deleted")
 
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         run(_ns(filter_action="purge", pks=None, yes=True))
         out = capsys.readouterr().out
@@ -473,7 +473,7 @@ class TestCLIFilter:
         _add_message(cli_env, channel_id=990, message_id=1)
         _add_message(cli_env, channel_id=991, message_id=1)
 
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         run(_ns(filter_action="purge", pks=str(ch1_pk), yes=True))
         out = capsys.readouterr().out
@@ -487,7 +487,7 @@ class TestCLIFilter:
         assert rows[0]["cnt"] == 1  # ch2 messages untouched
 
     def test_hard_delete_requires_dev_mode(self, cli_env, capsys):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         run(_ns(filter_action="hard-delete", pks=None, yes=True))
         assert "dev" in capsys.readouterr().out.lower()
@@ -497,7 +497,7 @@ class TestCLIFilter:
         ch_pk = _add_channel(cli_env, channel_id=888, title="ToDelete")
         asyncio.run(cli_env.set_channel_filtered(ch_pk, True))
 
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         run(_ns(filter_action="hard-delete", pks=None, yes=True))
         out = capsys.readouterr().out
@@ -512,7 +512,7 @@ class TestCLIFilter:
         asyncio.run(cli_env.set_setting("agent_dev_mode_enabled", "1"))
         _add_channel(cli_env, channel_id=887, title="NotFiltered")
 
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         run(_ns(filter_action="hard-delete", pks=None, yes=True))
         assert "No filtered channels to delete." in capsys.readouterr().out
@@ -525,7 +525,7 @@ class TestCLIFilter:
 
 class TestCLISearch:
     def test_local_empty(self, cli_env, capsys):
-        from src.cli.commands.search import run
+        from tg_agent.cli.commands.search import run
 
         ns = _ns(
             query="nonexistent",
@@ -542,7 +542,7 @@ class TestCLISearch:
     def test_local_with_data(self, cli_env, capsys):
         _add_channel(cli_env, channel_id=300, title="SearchCh")
         _add_message(cli_env, channel_id=300, message_id=1, text="important message")
-        from src.cli.commands.search import run
+        from tg_agent.cli.commands.search import run
 
         ns = _ns(
             query="important",
@@ -566,8 +566,8 @@ class TestCLISearch:
         asyncio.run(cli_env.repos.messages.upsert_message_embeddings(emb))
         asyncio.run(cli_env.repos.messages.upsert_message_embedding_json(emb))
 
-        from src.cli.commands.search import run
-        from src.services.embedding_service import EmbeddingService
+        from tg_agent.cli.commands.search import run
+        from tg_agent.services.embedding_service import EmbeddingService
 
         monkeypatch.setattr(
             EmbeddingService,
@@ -595,8 +595,8 @@ class TestCLISearch:
         assert "Bitcoin outlook" in out
 
     def test_index_now(self, cli_env, monkeypatch, capsys):
-        from src.cli.commands.search import run
-        from src.services.embedding_service import EmbeddingService
+        from tg_agent.cli.commands.search import run
+        from tg_agent.services.embedding_service import EmbeddingService
 
         monkeypatch.setattr(
             EmbeddingService,
@@ -617,9 +617,9 @@ class TestCLIAgentDbProviders:
         cli_init_patch,
         capsys,
     ):
-        from src.agent.provider_registry import ProviderRuntimeConfig
-        from src.cli.commands.agent import run
-        from src.services.agent_provider_service import ProviderConfigService
+        from tg_agent.agent.provider_registry import ProviderRuntimeConfig
+        from tg_agent.cli.commands.agent import run
+        from tg_agent.services.agent_provider_service import ProviderConfigService
 
         config = AppConfig()
         config.security.session_encryption_key = "provider-secret"
@@ -649,7 +649,7 @@ class TestCLIAgentDbProviders:
         fake_agent = MagicMock(run=MagicMock(return_value="ok-from-db-provider"))
 
         with (
-            cli_init_patch(cli_env, "src.cli.runtime.init_db", config=config),
+            cli_init_patch(cli_env, "tg_agent.cli.runtime.init_db", config=config),
             patch("langchain.chat_models.init_chat_model", side_effect=fake_init_chat_model),
             patch("deepagents.create_deep_agent", return_value=fake_agent),
         ):
@@ -671,8 +671,8 @@ def _add_search_query(
     notify: bool = False,
     track_stats: bool = True,
 ) -> int:
-    from src.database.bundles import SearchQueryBundle
-    from src.services.search_query_service import SearchQueryService
+    from tg_agent.database.bundles import SearchQueryBundle
+    from tg_agent.services.search_query_service import SearchQueryService
 
     async def _add():
         svc = SearchQueryService(SearchQueryBundle.from_database(db))
@@ -707,26 +707,26 @@ def _sq_ns(**kwargs) -> argparse.Namespace:
 
 class TestCLISearchQuery:
     def test_add(self, cli_env, capsys):
-        from src.cli.commands.search_query import run
+        from tg_agent.cli.commands.search_query import run
 
         run(_sq_ns(search_query_action="add", query="new query"))
         assert "Added search query" in capsys.readouterr().out
 
     def test_add_with_fts_and_notify(self, cli_env, capsys):
-        from src.cli.commands.search_query import run
+        from tg_agent.cli.commands.search_query import run
 
         run(_sq_ns(search_query_action="add", query="foo OR bar", fts=True, notify=True))
         assert "Added search query" in capsys.readouterr().out
 
     def test_add_no_track_stats(self, cli_env, capsys):
-        from src.cli.commands.search_query import run
+        from tg_agent.cli.commands.search_query import run
 
         run(_sq_ns(search_query_action="add", query="test", track_stats=False))
         assert "Added search query" in capsys.readouterr().out
 
     def test_edit(self, cli_env, capsys):
         sq_id = _add_search_query(cli_env, query="original")
-        from src.cli.commands.search_query import run
+        from tg_agent.cli.commands.search_query import run
 
         run(
             _sq_ns(
@@ -746,27 +746,27 @@ class TestCLISearchQuery:
 
     def test_toggle(self, cli_env, capsys):
         sq_id = _add_search_query(cli_env, query="toggle_me")
-        from src.cli.commands.search_query import run
+        from tg_agent.cli.commands.search_query import run
 
         run(_sq_ns(search_query_action="toggle", id=sq_id))
         assert "Toggled search query" in capsys.readouterr().out
 
     def test_delete(self, cli_env, capsys):
         sq_id = _add_search_query(cli_env, query="to_delete")
-        from src.cli.commands.search_query import run
+        from tg_agent.cli.commands.search_query import run
 
         run(_sq_ns(search_query_action="delete", id=sq_id))
         assert "Deleted search query" in capsys.readouterr().out
 
     def test_stats_no_data(self, cli_env, capsys):
         sq_id = _add_search_query(cli_env, query="bitcoin")
-        from src.cli.commands.search_query import run
+        from tg_agent.cli.commands.search_query import run
 
         run(_sq_ns(search_query_action="stats", id=sq_id, days=30))
         assert "No stats found." in capsys.readouterr().out
 
     def test_stats_with_data(self, cli_env, capsys):
-        from src.database.bundles import SearchQueryBundle
+        from tg_agent.database.bundles import SearchQueryBundle
 
         sq_id = _add_search_query(cli_env, query="bitcoin")
 
@@ -776,7 +776,7 @@ class TestCLISearchQuery:
 
         asyncio.run(_record())
 
-        from src.cli.commands.search_query import run
+        from tg_agent.cli.commands.search_query import run
 
         run(_sq_ns(search_query_action="stats", id=sq_id, days=30))
         assert "42" in capsys.readouterr().out
@@ -789,13 +789,13 @@ class TestCLISearchQuery:
 
 class TestCLICollect:
     def test_no_clients(self, cli_env_with_pool, capsys, caplog):
-        from src.cli.commands.collect import run
+        from tg_agent.cli.commands.collect import run
 
         run(_ns(channel_id=None))
         assert "No connected accounts" in caplog.text
 
     def test_sample_no_clients(self, cli_env_with_pool, capsys, caplog):
-        from src.cli.commands.collect import run
+        from tg_agent.cli.commands.collect import run
 
         run(_ns(collect_action="sample", channel_id=-100123, limit=5))
         assert "No connected accounts" in caplog.text
@@ -804,7 +804,7 @@ class TestCLICollect:
         from datetime import datetime, timezone
         from unittest.mock import AsyncMock, patch
 
-        from src.cli.commands.collect import run
+        from tg_agent.cli.commands.collect import run
 
         fake_previews = [
             {
@@ -826,14 +826,14 @@ class TestCLICollect:
         fake_pool.disconnect_all = AsyncMock()
 
         async def fake_init_pool(config, db):
-            from src.telegram.auth import TelegramAuth
+            from tg_agent.telegram.auth import TelegramAuth
 
             return TelegramAuth(0, ""), fake_pool
 
         with (
-            patch("src.cli.runtime.init_pool", side_effect=fake_init_pool),
+            patch("tg_agent.cli.runtime.init_pool", side_effect=fake_init_pool),
             patch(
-                "src.telegram.collector.Collector.sample_channel",
+                "tg_agent.telegram.collector.Collector.sample_channel",
                 new=AsyncMock(return_value=fake_previews),
             ),
         ):
@@ -849,21 +849,21 @@ class TestCLICollect:
     def test_sample_no_messages(self, cli_env_with_pool, capsys):
         from unittest.mock import AsyncMock, patch
 
-        from src.cli.commands.collect import run
+        from tg_agent.cli.commands.collect import run
 
         fake_pool = AsyncMock()
         fake_pool.clients = {"dummy": object()}
         fake_pool.disconnect_all = AsyncMock()
 
         async def fake_init_pool(config, db):
-            from src.telegram.auth import TelegramAuth
+            from tg_agent.telegram.auth import TelegramAuth
 
             return TelegramAuth(0, ""), fake_pool
 
         with (
-            patch("src.cli.runtime.init_pool", side_effect=fake_init_pool),
+            patch("tg_agent.cli.runtime.init_pool", side_effect=fake_init_pool),
             patch(
-                "src.telegram.collector.Collector.sample_channel",
+                "tg_agent.telegram.collector.Collector.sample_channel",
                 new=AsyncMock(return_value=[]),
             ),
         ):
@@ -881,7 +881,7 @@ class TestCLICollect:
 class TestCLIScheduler:
     def test_trigger_hands_off_without_clients(self, cli_env_with_pool, capsys):
         """trigger enqueues the worker command; no connected accounts is fine (#1568)."""
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         run(_ns(scheduler_action="trigger"))
 
@@ -898,11 +898,11 @@ class TestCLIScheduler:
 
 class TestCLIServerControl:
     def test_stop_command(self, capsys):
-        from src.cli.commands.server_control import run_stop
-        from src.cli.process_control import StopOutcome, StopResult
+        from tg_agent.cli.commands.server_control import run_stop
+        from tg_agent.cli.process_control import StopOutcome, StopResult
 
         with patch(
-            "src.cli.commands.server_control.stop_server",
+            "tg_agent.cli.commands.server_control.stop_server",
             return_value=StopOutcome(
                 StopResult.STOPPED,
                 "Server stopped (PID 123).",
@@ -914,11 +914,11 @@ class TestCLIServerControl:
         assert "Server stopped" in out
 
     def test_stop_command_not_running_is_not_error(self, capsys):
-        from src.cli.commands.server_control import run_stop
-        from src.cli.process_control import StopOutcome, StopResult
+        from tg_agent.cli.commands.server_control import run_stop
+        from tg_agent.cli.process_control import StopOutcome, StopResult
 
         with patch(
-            "src.cli.commands.server_control.stop_server",
+            "tg_agent.cli.commands.server_control.stop_server",
             return_value=StopOutcome(
                 StopResult.NOT_RUNNING,
                 "Server is not running (no PID file: data/tg_search.pid).",
@@ -930,25 +930,25 @@ class TestCLIServerControl:
         assert "not running" in out
 
     def test_stop_command_exits_for_unmanaged_process(self):
-        from src.cli.commands.server_control import run_stop
-        from src.cli.process_control import StopOutcome, StopResult
+        from tg_agent.cli.commands.server_control import run_stop
+        from tg_agent.cli.process_control import StopOutcome, StopResult
 
         with patch(
-            "src.cli.commands.server_control.stop_server",
+            "tg_agent.cli.commands.server_control.stop_server",
             return_value=StopOutcome(
                 StopResult.UNMANAGED,
-                "PID 321 is not a managed src.main serve process.",
+                "PID 321 is not a managed tg_agent.main serve process.",
             ),
         ):
             with pytest.raises(SystemExit, match="1"):
                 run_stop(_ns(command="stop"))
 
     def test_stop_command_exits_for_timeout(self):
-        from src.cli.commands.server_control import run_stop
-        from src.cli.process_control import StopOutcome, StopResult
+        from tg_agent.cli.commands.server_control import run_stop
+        from tg_agent.cli.process_control import StopOutcome, StopResult
 
         with patch(
-            "src.cli.commands.server_control.stop_server",
+            "tg_agent.cli.commands.server_control.stop_server",
             return_value=StopOutcome(
                 StopResult.TIMEOUT,
                 "Timed out waiting for server PID 321 to stop.",
@@ -958,17 +958,17 @@ class TestCLIServerControl:
                 run_stop(_ns(command="stop"))
 
     def test_restart_command_starts_worker_after_stop(self, capsys):
-        from src.cli.commands.server_control import run_restart
-        from src.cli.process_control import StopOutcome, StopResult
+        from tg_agent.cli.commands.server_control import run_restart
+        from tg_agent.cli.process_control import StopOutcome, StopResult
 
         with patch(
-            "src.cli.commands.server_control.stop_server",
+            "tg_agent.cli.commands.server_control.stop_server",
             return_value=StopOutcome(
                 StopResult.STOPPED,
                 "Server stopped (PID 123).",
             ),
         ):
-            with patch("src.cli.commands.worker.serve_worker") as mock_worker:
+            with patch("tg_agent.cli.commands.worker.serve_worker") as mock_worker:
                 run_restart(_ns(command="restart"))
 
         out = capsys.readouterr().out
@@ -978,17 +978,17 @@ class TestCLIServerControl:
         mock_worker.assert_called_once_with("config.yaml")
 
     def test_restart_command_starts_worker_when_not_running(self, capsys):
-        from src.cli.commands.server_control import run_restart
-        from src.cli.process_control import StopOutcome, StopResult
+        from tg_agent.cli.commands.server_control import run_restart
+        from tg_agent.cli.process_control import StopOutcome, StopResult
 
         with patch(
-            "src.cli.commands.server_control.stop_server",
+            "tg_agent.cli.commands.server_control.stop_server",
             return_value=StopOutcome(
                 StopResult.NOT_RUNNING,
                 "Server is not running (no PID file: data/tg_search.pid).",
             ),
         ):
-            with patch("src.cli.commands.worker.serve_worker") as mock_worker:
+            with patch("tg_agent.cli.commands.worker.serve_worker") as mock_worker:
                 run_restart(_ns(command="restart"))
 
         out = capsys.readouterr().out
@@ -996,11 +996,11 @@ class TestCLIServerControl:
         mock_worker.assert_called_once_with("config.yaml")
 
     def test_restart_command_exits_for_timeout(self):
-        from src.cli.commands.server_control import run_restart
-        from src.cli.process_control import StopOutcome, StopResult
+        from tg_agent.cli.commands.server_control import run_restart
+        from tg_agent.cli.process_control import StopOutcome, StopResult
 
         with patch(
-            "src.cli.commands.server_control.stop_server",
+            "tg_agent.cli.commands.server_control.stop_server",
             return_value=StopOutcome(
                 StopResult.TIMEOUT,
                 "Timed out waiting for server PID 321 to stop.",
@@ -1010,22 +1010,22 @@ class TestCLIServerControl:
                 run_restart(_ns(command="restart", web_pass=None))
 
     def test_stop_command_exits_for_process_control_error(self):
-        from src.cli.commands.server_control import run_stop
-        from src.cli.process_control import ProcessControlError
+        from tg_agent.cli.commands.server_control import run_stop
+        from tg_agent.cli.process_control import ProcessControlError
 
         with patch(
-            "src.cli.commands.server_control.stop_server",
+            "tg_agent.cli.commands.server_control.stop_server",
             side_effect=ProcessControlError("broken pid file"),
         ):
             with pytest.raises(SystemExit, match="1"):
                 run_stop(_ns(command="stop"))
 
     def test_restart_command_exits_for_process_control_error(self):
-        from src.cli.commands.server_control import run_restart
-        from src.cli.process_control import ProcessControlError
+        from tg_agent.cli.commands.server_control import run_restart
+        from tg_agent.cli.process_control import ProcessControlError
 
         with patch(
-            "src.cli.commands.server_control.stop_server",
+            "tg_agent.cli.commands.server_control.stop_server",
             side_effect=ProcessControlError("broken pid file"),
         ):
             with pytest.raises(SystemExit, match="1"):
@@ -1036,16 +1036,16 @@ class TestCLIServerControl:
 
         from typer.testing import CliRunner
 
-        from src.cli.typer_app import app
+        from tg_agent.cli.typer_app import app
 
         runner = CliRunner()
 
-        with patch("src.cli.typer_commands.server_control_cmd.stop_web") as mock_stop:
+        with patch("tg_agent.cli.typer_commands.server_control_cmd.stop_web") as mock_stop:
             result = runner.invoke(app, ["stop"])
         assert result.exit_code == 0, result.output
         mock_stop.assert_called_once()
 
-        with patch("src.cli.typer_commands.server_control_cmd.restart_web") as mock_restart:
+        with patch("tg_agent.cli.typer_commands.server_control_cmd.restart_web") as mock_restart:
             result = runner.invoke(app, ["restart"])
         assert result.exit_code == 0, result.output
         mock_restart.assert_called_once()
@@ -1058,7 +1058,7 @@ class TestCLIServerControl:
 
 class TestCLITest:
     def test_read(self, cli_env, capsys):
-        from src.cli.commands.test import run
+        from tg_agent.cli.commands.test import run
 
         run(_ns(command="test", test_action="read"))
         out = capsys.readouterr().out
@@ -1066,14 +1066,14 @@ class TestCLITest:
         assert "db_init" in out
 
     def test_write(self, cli_env, capsys):
-        from src.cli.commands.test import run
+        from tg_agent.cli.commands.test import run
 
         run(_ns(command="test", test_action="write"))
         out = capsys.readouterr().out
         assert "Write Tests" in out
 
     def test_all(self, cli_env_with_pool, capsys):
-        from src.cli.commands.test import run
+        from tg_agent.cli.commands.test import run
 
         run(_ns(command="test", test_action="all"))
         out = capsys.readouterr().out
@@ -1086,19 +1086,19 @@ class TestCLITest:
 
         from typer.testing import CliRunner
 
-        from src.cli.typer_app import app
+        from tg_agent.cli.typer_app import app
 
         runner = CliRunner()
 
         for action in ("read", "all", "telegram", "benchmark"):
-            with patch("src.cli.typer_commands.test_cmd.run_impl") as mock_run:
+            with patch("tg_agent.cli.typer_commands.test_cmd.run_impl") as mock_run:
                 result = runner.invoke(app, ["test", action])
             assert result.exit_code == 0, result.output
             mock_run.assert_called_once()
             assert mock_run.call_args.args[1] == action
 
     def test_benchmark(self, capsys, monkeypatch):
-        from src.cli.commands import test as test_cmd
+        from tg_agent.cli.commands import test as test_cmd
 
         monkeypatch.setenv("RUN_CLI_REAL_TG_LIVE", "1")
         monkeypatch.setenv("CLI_REAL_TG_PHONE", "+70000000000")
@@ -1109,11 +1109,11 @@ class TestCLITest:
         completed = subprocess.CompletedProcess(args=["pytest"], returncode=0)
         with (
             patch(
-                "src.cli.commands.test.subprocess.run",
+                "tg_agent.cli.commands.test.subprocess.run",
                 side_effect=[completed, completed, completed],
             ) as run_mock,
             patch(
-                "src.cli.commands.test.time.perf_counter",
+                "tg_agent.cli.commands.test.time.perf_counter",
                 side_effect=[100.0, 112.0, 200.0, 206.0, 300.0, 304.0],
             ),
         ):
@@ -1138,13 +1138,13 @@ class TestCLITest:
         assert "ENV" not in env
 
     def test_benchmark_fails_on_failed_subprocess(self, capsys):
-        from src.cli.commands.test import run
+        from tg_agent.cli.commands.test import run
 
         failed = subprocess.CompletedProcess(args=["pytest"], returncode=2)
         with (
-            patch("src.cli.commands.test.subprocess.run", return_value=failed),
+            patch("tg_agent.cli.commands.test.subprocess.run", return_value=failed),
             patch(
-                "src.cli.commands.test.time.perf_counter",
+                "tg_agent.cli.commands.test.time.perf_counter",
                 side_effect=[10.0, 11.0],
             ),
             pytest.raises(SystemExit, match="2"),
@@ -1157,7 +1157,7 @@ class TestCLITest:
     def test_sqlite_backup_copy_includes_committed_wal_data(self, tmp_path):
         import sqlite3
 
-        from src.cli.commands.test import _backup_sqlite_db
+        from tg_agent.cli.commands.test import _backup_sqlite_db
 
         source_path = tmp_path / "source.db"
         target_path = tmp_path / "target.db"
@@ -1196,26 +1196,26 @@ def _save_agent_msg(db: Database, thread_id: int, role: str, content: str):
 
 class TestCLIAgent:
     def test_threads_empty(self, cli_env, capsys):
-        from src.cli.commands.agent import run
+        from tg_agent.cli.commands.agent import run
 
         run(_ns(agent_action="threads"))
         assert "Нет тредов" in capsys.readouterr().out
 
     def test_threads_with_data(self, cli_env, capsys):
         _create_thread(cli_env, "MyThread")
-        from src.cli.commands.agent import run
+        from tg_agent.cli.commands.agent import run
 
         run(_ns(agent_action="threads"))
         assert "MyThread" in capsys.readouterr().out
 
     def test_thread_create(self, cli_env, capsys):
-        from src.cli.commands.agent import run
+        from tg_agent.cli.commands.agent import run
 
         run(_ns(agent_action="thread-create", title="New Thread"))
         assert "Создан тред" in capsys.readouterr().out
 
     def test_thread_create_default_title(self, cli_env, capsys):
-        from src.cli.commands.agent import run
+        from tg_agent.cli.commands.agent import run
 
         run(_ns(agent_action="thread-create", title=None))
         out = capsys.readouterr().out
@@ -1224,14 +1224,14 @@ class TestCLIAgent:
 
     def test_thread_delete(self, cli_env, capsys):
         tid = _create_thread(cli_env)
-        from src.cli.commands.agent import run
+        from tg_agent.cli.commands.agent import run
 
         run(_ns(agent_action="thread-delete", thread_id=tid))
         assert "удалён" in capsys.readouterr().out
 
     def test_thread_rename(self, cli_env, capsys):
         tid = _create_thread(cli_env, "Old Title")
-        from src.cli.commands.agent import run
+        from tg_agent.cli.commands.agent import run
 
         run(_ns(agent_action="thread-rename", thread_id=tid, title="New Title"))
         out = capsys.readouterr().out
@@ -1240,7 +1240,7 @@ class TestCLIAgent:
 
     def test_thread_rename_truncates(self, cli_env, capsys):
         tid = _create_thread(cli_env)
-        from src.cli.commands.agent import run
+        from tg_agent.cli.commands.agent import run
 
         long_title = "A" * 200
         run(_ns(agent_action="thread-rename", thread_id=tid, title=long_title))
@@ -1252,7 +1252,7 @@ class TestCLIAgent:
 
     def test_messages_empty(self, cli_env, capsys):
         tid = _create_thread(cli_env)
-        from src.cli.commands.agent import run
+        from tg_agent.cli.commands.agent import run
 
         run(_ns(agent_action="messages", thread_id=tid, limit=None))
         assert "Нет сообщений" in capsys.readouterr().out
@@ -1261,7 +1261,7 @@ class TestCLIAgent:
         tid = _create_thread(cli_env)
         _save_agent_msg(cli_env, tid, "user", "Hello agent")
         _save_agent_msg(cli_env, tid, "assistant", "Hello human")
-        from src.cli.commands.agent import run
+        from tg_agent.cli.commands.agent import run
 
         run(_ns(agent_action="messages", thread_id=tid, limit=None))
         out = capsys.readouterr().out
@@ -1275,7 +1275,7 @@ class TestCLIAgent:
         _save_agent_msg(cli_env, tid, "user", "First message")
         _save_agent_msg(cli_env, tid, "assistant", "Second message")
         _save_agent_msg(cli_env, tid, "user", "Third message")
-        from src.cli.commands.agent import run
+        from tg_agent.cli.commands.agent import run
 
         run(_ns(agent_action="messages", thread_id=tid, limit=1))
         out = capsys.readouterr().out
@@ -1283,7 +1283,7 @@ class TestCLIAgent:
         assert "First message" not in out
 
     def test_context_thread_not_found(self, cli_env, capsys):
-        from src.cli.commands.agent import run
+        from tg_agent.cli.commands.agent import run
 
         run(
             _ns(
@@ -1301,7 +1301,7 @@ class TestCLIAgent:
         _add_channel(cli_env, channel_id=400, title="CtxChan")
         _add_message(cli_env, channel_id=400, message_id=1, text="context msg one")
         _add_message(cli_env, channel_id=400, message_id=2, text="context msg two")
-        from src.cli.commands.agent import run
+        from tg_agent.cli.commands.agent import run
 
         run(
             _ns(
@@ -1321,7 +1321,7 @@ class TestCLIAgent:
         _add_channel(cli_env, channel_id=401, title="TopicChan")
         # Add forum topic so name is resolved
         asyncio.run(cli_env.upsert_forum_topics(401, [{"id": 42, "title": "Обсуждение"}]))
-        from src.cli.commands.agent import run
+        from tg_agent.cli.commands.agent import run
 
         run(
             _ns(
@@ -1338,7 +1338,7 @@ class TestCLIAgent:
     def test_context_with_unknown_topic_id(self, cli_env, capsys):
         tid = _create_thread(cli_env)
         _add_channel(cli_env, channel_id=402, title="TopicChan2")
-        from src.cli.commands.agent import run
+        from tg_agent.cli.commands.agent import run
 
         run(
             _ns(
@@ -1358,7 +1358,7 @@ class TestCLIAgent:
 
         from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock
 
-        from src.cli.commands.agent import run
+        from tg_agent.cli.commands.agent import run
 
         monkeypatch.setenv("ANTHROPIC_API_KEY", "test-claude-key")
 
@@ -1374,7 +1374,7 @@ class TestCLIAgent:
             yield assistant_msg
             yield result_msg
 
-        with _patch("src.agent.backends.claude_sdk.query", mock_query):
+        with _patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             run(
                 _ns(
                     agent_action="chat",
@@ -1394,9 +1394,9 @@ class TestCLIAgent:
         cli_init_patch,
         capsys,
     ):
-        from src.agent.provider_registry import ProviderRuntimeConfig
-        from src.cli.commands.agent import run
-        from src.services.agent_provider_service import ProviderConfigService
+        from tg_agent.agent.provider_registry import ProviderRuntimeConfig
+        from tg_agent.cli.commands.agent import run
+        from tg_agent.services.agent_provider_service import ProviderConfigService
 
         config = AppConfig()
         config.security.session_encryption_key = "provider-secret"
@@ -1416,9 +1416,9 @@ class TestCLIAgent:
         )
 
         with (
-            cli_init_patch(cli_db, "src.cli.runtime.init_db", config=config),
+            cli_init_patch(cli_db, "tg_agent.cli.runtime.init_db", config=config),
             patch(
-                "src.agent.manager.DeepagentsBackend._build_agent",
+                "tg_agent.agent.manager.DeepagentsBackend._build_agent",
                 return_value=MagicMock(run=MagicMock(return_value="ok")),
             ),
         ):
@@ -1433,13 +1433,13 @@ class TestCLIAgent:
 
         from typer.testing import CliRunner
 
-        from src.cli.typer_app import app
+        from tg_agent.cli.typer_app import app
 
         runner = CliRunner()
 
         with (
-            patch("src.cli.typer_commands.agent_cmd.thread_rename_impl", new_callable=MagicMock) as mock_rename,
-            patch("src.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
+            patch("tg_agent.cli.typer_commands.agent_cmd.thread_rename_impl", new_callable=MagicMock) as mock_rename,
+            patch("tg_agent.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
         ):
             result = runner.invoke(app, ["agent", "thread-rename", "5", "New Name"])
         assert result.exit_code == 0, result.output
@@ -1447,8 +1447,8 @@ class TestCLIAgent:
         assert mock_rename.call_args.kwargs["title"] == "New Name"
 
         with (
-            patch("src.cli.typer_commands.agent_cmd.messages_impl", new_callable=MagicMock) as mock_messages,
-            patch("src.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
+            patch("tg_agent.cli.typer_commands.agent_cmd.messages_impl", new_callable=MagicMock) as mock_messages,
+            patch("tg_agent.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
         ):
             result = runner.invoke(app, ["agent", "messages", "3", "--limit", "10"])
         assert result.exit_code == 0, result.output
@@ -1456,8 +1456,8 @@ class TestCLIAgent:
         assert mock_messages.call_args.kwargs["limit"] == 10
 
         with (
-            patch("src.cli.typer_commands.agent_cmd.context_impl", new_callable=MagicMock) as mock_context,
-            patch("src.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
+            patch("tg_agent.cli.typer_commands.agent_cmd.context_impl", new_callable=MagicMock) as mock_context,
+            patch("tg_agent.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
         ):
             result = runner.invoke(
                 app, ["agent", "context", "7", "--channel-id", "100", "--topic-id", "42"]
@@ -1477,8 +1477,8 @@ class TestCLIAgent:
             (["agent", "chat"], None, None),
         ]:
             with (
-                patch("src.cli.typer_commands.agent_cmd.chat_impl", new_callable=MagicMock) as mock_chat,
-                patch("src.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
+                patch("tg_agent.cli.typer_commands.agent_cmd.chat_impl", new_callable=MagicMock) as mock_chat,
+                patch("tg_agent.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
             ):
                 result = runner.invoke(app, argv)
             assert result.exit_code == 0, result.output
@@ -1495,7 +1495,7 @@ class TestCLIAgent:
 class TestCLIDialogsTopics:
     def test_topics_from_pool(self, cli_env_with_pool, capsys):
         """Topics fetched from Telegram pool are displayed in a table."""
-        from src.cli.commands.dialogs import run
+        from tg_agent.cli.commands.dialogs import run
 
         fp = AsyncMock()
         fp.clients = {}
@@ -1518,11 +1518,11 @@ class TestCLIDialogsTopics:
         )
 
         async def fake_init_pool(config, db):
-            from src.telegram.auth import TelegramAuth
+            from tg_agent.telegram.auth import TelegramAuth
 
             return TelegramAuth(0, ""), fp
 
-        with patch("src.cli.runtime.init_pool", side_effect=fake_init_pool):
+        with patch("tg_agent.cli.runtime.init_pool", side_effect=fake_init_pool):
             run(_ns(dialogs_action="topics", channel_id=500, phone=None))
 
         out = capsys.readouterr().out
@@ -1533,7 +1533,7 @@ class TestCLIDialogsTopics:
 
     def test_topics_fallback_to_db(self, cli_env_with_pool, capsys):
         """When pool returns no topics, falls back to DB cache."""
-        from src.cli.commands.dialogs import run
+        from tg_agent.cli.commands.dialogs import run
 
         _add_channel(cli_env_with_pool, channel_id=501, title="ForumChan")
         asyncio.run(
@@ -1551,11 +1551,11 @@ class TestCLIDialogsTopics:
         fp.get_forum_topics = AsyncMock(return_value=[])  # pool returns nothing
 
         async def fake_init_pool(config, db):
-            from src.telegram.auth import TelegramAuth
+            from tg_agent.telegram.auth import TelegramAuth
 
             return TelegramAuth(0, ""), fp
 
-        with patch("src.cli.runtime.init_pool", side_effect=fake_init_pool):
+        with patch("tg_agent.cli.runtime.init_pool", side_effect=fake_init_pool):
             run(_ns(dialogs_action="topics", channel_id=501, phone=None))
 
         out = capsys.readouterr().out
@@ -1563,7 +1563,7 @@ class TestCLIDialogsTopics:
 
     def test_topics_not_forum(self, cli_env_with_pool, capsys):
         """Channel with no topics prints a descriptive message."""
-        from src.cli.commands.dialogs import run
+        from tg_agent.cli.commands.dialogs import run
 
         fp = AsyncMock()
         fp.clients = {}
@@ -1571,11 +1571,11 @@ class TestCLIDialogsTopics:
         fp.get_forum_topics = AsyncMock(return_value=[])
 
         async def fake_init_pool(config, db):
-            from src.telegram.auth import TelegramAuth
+            from tg_agent.telegram.auth import TelegramAuth
 
             return TelegramAuth(0, ""), fp
 
-        with patch("src.cli.runtime.init_pool", side_effect=fake_init_pool):
+        with patch("tg_agent.cli.runtime.init_pool", side_effect=fake_init_pool):
             run(_ns(dialogs_action="topics", channel_id=999, phone=None))
 
         out = capsys.readouterr().out
@@ -1587,14 +1587,14 @@ class TestCLIDialogsTopics:
 
         from typer.testing import CliRunner
 
-        from src.cli.typer_app import app
+        from tg_agent.cli.typer_app import app
 
         runner = CliRunner()
 
         mock_dispatch = MagicMock()
         with (
-            patch("src.cli.typer_commands.dialogs_cmd._dispatch", mock_dispatch),
-            patch("src.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
+            patch("tg_agent.cli.typer_commands.dialogs_cmd._dispatch", mock_dispatch),
+            patch("tg_agent.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
         ):
             result = runner.invoke(app, ["dialogs", "topics", "--channel-id", "123"])
         assert result.exit_code == 0, result.output
@@ -1605,8 +1605,8 @@ class TestCLIDialogsTopics:
 
         mock_dispatch = MagicMock()
         with (
-            patch("src.cli.typer_commands.dialogs_cmd._dispatch", mock_dispatch),
-            patch("src.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
+            patch("tg_agent.cli.typer_commands.dialogs_cmd._dispatch", mock_dispatch),
+            patch("tg_agent.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
         ):
             result = runner.invoke(
                 app, ["dialogs", "topics", "--channel-id", "456", "--phone", "+10001112233"]
@@ -1624,14 +1624,14 @@ class TestCLIParityParser:
 
         from typer.testing import CliRunner
 
-        from src.cli.typer_app import app
+        from tg_agent.cli.typer_app import app
 
         runner = CliRunner()
 
         # account add (no --code) → send-code path
         with (
-            patch("src.cli.typer_commands.account_cmd.send_code_impl", new_callable=MagicMock) as mock_send,
-            patch("src.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
+            patch("tg_agent.cli.typer_commands.account_cmd.send_code_impl", new_callable=MagicMock) as mock_send,
+            patch("tg_agent.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
         ):
             result = runner.invoke(app, ["account", "add", "--phone", "+1000"])
         assert result.exit_code == 0, result.output
@@ -1639,8 +1639,8 @@ class TestCLIParityParser:
 
         # account add (with --code) → verify-code path
         with (
-            patch("src.cli.typer_commands.account_cmd.verify_code_impl", new_callable=MagicMock) as mock_verify,
-            patch("src.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
+            patch("tg_agent.cli.typer_commands.account_cmd.verify_code_impl", new_callable=MagicMock) as mock_verify,
+            patch("tg_agent.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
         ):
             result = runner.invoke(app, ["account", "add", "--phone", "+1000", "--code", "12345"])
         assert result.exit_code == 0, result.output
@@ -1648,8 +1648,8 @@ class TestCLIParityParser:
 
         # search-query get <id>
         with (
-            patch("src.cli.typer_commands.search_query_cmd.get_impl", new_callable=MagicMock) as mock_get,
-            patch("src.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
+            patch("tg_agent.cli.typer_commands.search_query_cmd.get_impl", new_callable=MagicMock) as mock_get,
+            patch("tg_agent.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
         ):
             result = runner.invoke(app, ["search-query", "get", "7"])
         assert result.exit_code == 0, result.output
@@ -1658,8 +1658,8 @@ class TestCLIParityParser:
         # pipeline moderation-list / moderation-view dispatch via Namespace
         mock_dispatch = MagicMock()
         with (
-            patch("src.cli.typer_commands.pipeline_cmd._dispatch", mock_dispatch),
-            patch("src.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
+            patch("tg_agent.cli.typer_commands.pipeline_cmd._dispatch", mock_dispatch),
+            patch("tg_agent.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
         ):
             result = runner.invoke(
                 app, ["pipeline", "moderation-list", "--pipeline-id", "3", "--limit", "5"]
@@ -1672,8 +1672,8 @@ class TestCLIParityParser:
 
         mock_dispatch = MagicMock()
         with (
-            patch("src.cli.typer_commands.pipeline_cmd._dispatch", mock_dispatch),
-            patch("src.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
+            patch("tg_agent.cli.typer_commands.pipeline_cmd._dispatch", mock_dispatch),
+            patch("tg_agent.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
         ):
             result = runner.invoke(app, ["pipeline", "moderation-view", "9"])
         assert result.exit_code == 0, result.output
@@ -1683,8 +1683,8 @@ class TestCLIParityParser:
 
         # photo-loader items --batch-id
         with (
-            patch("src.cli.typer_commands.photo_loader_cmd.items_impl", new_callable=MagicMock) as mock_items,
-            patch("src.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
+            patch("tg_agent.cli.typer_commands.photo_loader_cmd.items_impl", new_callable=MagicMock) as mock_items,
+            patch("tg_agent.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
         ):
             result = runner.invoke(app, ["photo-loader", "items", "--batch-id", "4"])
         assert result.exit_code == 0, result.output
@@ -1693,8 +1693,8 @@ class TestCLIParityParser:
         # dialogs resolve @example --phone dispatches via Namespace
         mock_dispatch = MagicMock()
         with (
-            patch("src.cli.typer_commands.dialogs_cmd._dispatch", mock_dispatch),
-            patch("src.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
+            patch("tg_agent.cli.typer_commands.dialogs_cmd._dispatch", mock_dispatch),
+            patch("tg_agent.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
         ):
             result = runner.invoke(app, ["dialogs", "resolve", "@example", "--phone", "+1000"])
         assert result.exit_code == 0, result.output
@@ -1705,8 +1705,8 @@ class TestCLIParityParser:
 
         # image generated --limit
         with (
-            patch("src.cli.typer_commands.image_cmd.generated_impl", new_callable=MagicMock) as mock_generated,
-            patch("src.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
+            patch("tg_agent.cli.typer_commands.image_cmd.generated_impl", new_callable=MagicMock) as mock_generated,
+            patch("tg_agent.cli.typer_commands.run_async", side_effect=lambda coro: coro.close()),
         ):
             result = runner.invoke(app, ["image", "generated", "--limit", "3"])
         assert result.exit_code == 0, result.output

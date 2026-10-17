@@ -15,8 +15,8 @@ import inspect
 
 import pytest
 
-from src.cli.commands import dialogs as dialogs_cli
-from src.services.telegram_command_dispatcher import TelegramCommandDispatcher
+from tg_agent.cli.commands import dialogs as dialogs_cli
+from tg_agent.services.telegram_command_dispatcher import TelegramCommandDispatcher
 
 # command_type -> the set of payload keys the worker handler actually reads via
 # payload[...]/payload.get(...). Maintained by hand (there is no way to derive

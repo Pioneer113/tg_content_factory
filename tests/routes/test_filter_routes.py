@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.models import ChannelStats
-from src.services.filter_deletion_service import PurgeResult
 from tests.routes.conftest import _add_channel, _add_filtered_channel, _enable_dev_mode
+from tg_agent.models import ChannelStats
+from tg_agent.services.filter_deletion_service import PurgeResult
 
 
 @pytest.fixture
@@ -60,7 +60,7 @@ async def test_purge_selected_success(route_client, db):
     """Test purge selected channels."""
     pk = await _add_filtered_channel(db, channel_id=400, title="To Purge")
 
-    with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+    with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
         mock_svc.return_value.purge_channels_by_pks = AsyncMock(
             return_value=PurgeResult(purged_count=1)
         )
@@ -78,7 +78,7 @@ async def test_purge_selected_removes_messages(route_client, db):
     """Test purge selected removes messages from DB."""
     pk = await _add_filtered_channel(db, channel_id=500, title="Purge Messages")
 
-    with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+    with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
         mock_svc.return_value.purge_channels_by_pks = AsyncMock(
             return_value=PurgeResult(purged_count=1)
         )
@@ -98,7 +98,7 @@ async def test_purge_selected_partial_failure_surfaces_error(route_client, db):
     """A purge that records errors must report purge_partial, not success (#676)."""
     pk = await _add_filtered_channel(db, channel_id=600, title="Boom")
 
-    with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+    with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
         mock_svc.return_value.purge_channels_by_pks = AsyncMock(
             return_value=PurgeResult(skipped_count=1, errors=[f"pk={pk}: DB error"])
         )
@@ -116,8 +116,8 @@ async def test_purge_selected_partial_failure_surfaces_error(route_client, db):
 @pytest.mark.anyio
 async def test_purge_all_no_filtered(route_client):
     """Test purge all with no filtered channels."""
-    with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
-        from src.services.filter_deletion_service import PurgeResult
+    with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+        from tg_agent.services.filter_deletion_service import PurgeResult
         mock_svc.return_value.purge_all_filtered = AsyncMock(
             return_value=PurgeResult(purged_count=0)
         )
@@ -131,8 +131,8 @@ async def test_purge_all_success(route_client, db):
     """Test purge all filtered channels."""
     await _add_filtered_channel(db, channel_id=600, title="Purge All")
 
-    with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
-        from src.services.filter_deletion_service import PurgeResult
+    with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+        from tg_agent.services.filter_deletion_service import PurgeResult
         mock_svc.return_value.purge_all_filtered = AsyncMock(
             return_value=PurgeResult(purged_count=1)
         )
@@ -144,7 +144,7 @@ async def test_purge_all_success(route_client, db):
 @pytest.mark.anyio
 async def test_purge_all_partial_failure_surfaces_error(route_client, db):
     """purge-all with a real per-channel error must report purge_partial, not success (#676 review)."""
-    with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+    with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
         mock_svc.return_value.purge_all_filtered = AsyncMock(
             return_value=PurgeResult(purged_count=1, skipped_count=1, errors=["pk=2: DB error"])
         )
@@ -186,7 +186,7 @@ async def test_hard_delete_selected_partial_failure_reports_error(route_client, 
     pk1 = await _add_filtered_channel(db, channel_id=810, title="Sel OK")
     pk2 = await _add_filtered_channel(db, channel_id=811, title="Sel Skip")
     await _enable_dev_mode(db)
-    with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+    with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
         mock_svc.return_value.hard_delete_channels_by_pks = AsyncMock(
             return_value=PurgeResult(purged_count=1, skipped_count=1)
         )
@@ -209,8 +209,8 @@ async def test_hard_delete_success(route_client, db):
     pk = await _add_filtered_channel(db, channel_id=800, title="Hard Delete OK")
     await _enable_dev_mode(db)
 
-    with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
-        from src.services.filter_deletion_service import PurgeResult
+    with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+        from tg_agent.services.filter_deletion_service import PurgeResult
         mock_svc.return_value.hard_delete_channels_by_pks = AsyncMock(
             return_value=PurgeResult(purged_count=1)
         )
@@ -242,7 +242,7 @@ async def test_hard_delete_all_rejects_without_confirm_phrase(route_client, db):
     when dev mode is on — a direct POST without it must NOT delete."""
     pk = await _add_filtered_channel(db, channel_id=901, title="No Confirm")
     await _enable_dev_mode(db)
-    with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+    with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
         mock_svc.return_value.hard_delete_channels_by_pks = AsyncMock(
             return_value=PurgeResult(purged_count=1)
         )
@@ -263,7 +263,7 @@ async def test_hard_delete_all_rejects_wrong_confirm_phrase(route_client, db):
     """A non-matching confirm value must be rejected (no fuzzy match)."""
     pk = await _add_filtered_channel(db, channel_id=902, title="Wrong Confirm")
     await _enable_dev_mode(db)
-    with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+    with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
         mock_svc.return_value.hard_delete_channels_by_pks = AsyncMock(
             return_value=PurgeResult(purged_count=1)
         )
@@ -282,7 +282,7 @@ async def test_hard_delete_all_rejects_missing_confirm_pks(route_client, db):
     """confirm_pks is required: a request without it cannot reach the delete."""
     await _add_filtered_channel(db, channel_id=903, title="No PKs")
     await _enable_dev_mode(db)
-    with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+    with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
         mock_svc.return_value.hard_delete_channels_by_pks = AsyncMock(
             return_value=PurgeResult(purged_count=1)
         )
@@ -310,7 +310,7 @@ async def test_hard_delete_all_rejects_malformed_confirm_pks(route_client, db):
         ":1",            # empty pk
     ]
     for raw in cases:
-        with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+        with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
             mock_svc.return_value.hard_delete_channels_by_pks = AsyncMock(
                 return_value=PurgeResult(purged_count=1)
             )
@@ -337,7 +337,7 @@ async def test_hard_delete_all_rejects_duplicate_confirm_pks(route_client, db):
         f"{pk}:970,99:970",     # duplicate chid, different pk
     ]
     for raw in cases:
-        with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+        with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
             mock_svc.return_value.hard_delete_channels_by_pks = AsyncMock(
                 return_value=PurgeResult(purged_count=1)
             )
@@ -365,7 +365,7 @@ async def test_hard_delete_all_rejects_pk_with_wrong_channel_id(route_client, db
     """
     pk = await _add_filtered_channel(db, channel_id=975, title="Stable")
     await _enable_dev_mode(db)
-    with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+    with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
         mock_svc.return_value.hard_delete_channels_by_pks = AsyncMock(
             return_value=PurgeResult(purged_count=1)
         )
@@ -387,7 +387,7 @@ async def test_hard_delete_all_rejects_set_mismatch(route_client, db):
     """Stale page snapshots a different filtered set — bounce."""
     pk = await _add_filtered_channel(db, channel_id=920, title="OnlyMe")
     await _enable_dev_mode(db)
-    with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+    with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
         mock_svc.return_value.hard_delete_channels_by_pks = AsyncMock(
             return_value=PurgeResult(purged_count=1)
         )
@@ -418,7 +418,7 @@ async def test_hard_delete_all_rejects_same_count_stale_swap(route_client, db):
     await db.set_channel_filtered(a_pk, False)
     b_pk = await _add_filtered_channel(db, channel_id=941, title="ChB")
     await _enable_dev_mode(db)
-    with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+    with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
         mock_svc.return_value.hard_delete_channels_by_pks = AsyncMock(
             return_value=PurgeResult(purged_count=1)
         )
@@ -443,7 +443,7 @@ async def test_hard_delete_all_success_with_matching_snapshot(route_client, db):
     the delete, and the service is called with exactly the confirmed PKs."""
     pk = await _add_filtered_channel(db, channel_id=950, title="Will Delete")
     await _enable_dev_mode(db)
-    with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+    with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
         mock_svc.return_value.hard_delete_channels_by_pks = AsyncMock(
             return_value=PurgeResult(purged_count=1)
         )
@@ -470,7 +470,7 @@ async def test_hard_delete_all_rejects_empty_confirm(route_client, db):
     await _enable_dev_mode(db)
     cases = ["", "   ", "\t", "\n"]
     for raw in cases:
-        with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+        with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
             mock_svc.return_value.hard_delete_channels_by_pks = AsyncMock(
                 return_value=PurgeResult(purged_count=1)
             )
@@ -496,7 +496,7 @@ async def test_hard_delete_all_partial_failure_reports_error(route_client, db):
     pk1 = await _add_filtered_channel(db, channel_id=981, title="ChDelOK")
     pk2 = await _add_filtered_channel(db, channel_id=982, title="ChDelFail")
     await _enable_dev_mode(db)
-    with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+    with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
         # Service deleted pk1 but skipped pk2.
         mock_svc.return_value.hard_delete_channels_by_pks = AsyncMock(
             return_value=PurgeResult(purged_count=1, skipped_count=1)
@@ -524,7 +524,7 @@ async def test_hard_delete_all_purge_count_mismatch_reports_error(route_client, 
     the route still surfaces it as an error rather than a silent partial."""
     pk = await _add_filtered_channel(db, channel_id=983, title="Mismatch")
     await _enable_dev_mode(db)
-    with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+    with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
         # purged=0, skipped=0 — count mismatches expected (1).
         mock_svc.return_value.hard_delete_channels_by_pks = AsyncMock(
             return_value=PurgeResult(purged_count=0, skipped_count=0)
@@ -565,7 +565,7 @@ async def test_analyze_redirects(route_client):
 @pytest.mark.anyio
 async def test_analyze_ignores_with_stats_query(route_client):
     """Test analyze route no longer runs stats collection inline."""
-    with patch("src.web.filter.handlers.deps.collection_service") as mock_collection:
+    with patch("tg_agent.web.filter.handlers.deps.collection_service") as mock_collection:
         resp = await route_client.post("/channels/filter/analyze?with_stats=1", follow_redirects=False)
 
     assert resp.status_code == 303
@@ -575,7 +575,7 @@ async def test_analyze_ignores_with_stats_query(route_client):
 @pytest.mark.anyio
 async def test_analyze_returns_immediately_and_creates_task(route_client, db):
     """POST analyze enqueues a background task instead of running inline (#793)."""
-    with patch("src.web.filter.handlers.ChannelAnalyzer") as mock_analyzer:
+    with patch("tg_agent.web.filter.handlers.ChannelAnalyzer") as mock_analyzer:
         mock_analyzer.return_value.analyze_all = AsyncMock(
             side_effect=AssertionError("analysis must not run inline in the HTTP handler (#793)")
         )
@@ -591,7 +591,7 @@ async def test_analyze_returns_immediately_and_creates_task(route_client, db):
 @pytest.mark.anyio
 async def test_analyze_rejects_when_task_active(route_client, db):
     """A second POST while a filter-analyze task is pending/running is rejected (#793)."""
-    from src.models import FilterAnalyzeTaskPayload
+    from tg_agent.models import FilterAnalyzeTaskPayload
 
     await db.repos.tasks.create_filter_analyze_task(FilterAnalyzeTaskPayload())
 
@@ -605,7 +605,7 @@ async def test_analyze_rejects_when_task_active(route_client, db):
 async def test_create_filter_analyze_task_is_atomic(db):
     """INSERT ... WHERE NOT EXISTS: the second create returns None while a task
     is active — no check-then-create race window (review on #823)."""
-    from src.models import CollectionTaskStatus, FilterAnalyzeTaskPayload
+    from tg_agent.models import CollectionTaskStatus, FilterAnalyzeTaskPayload
 
     first = await db.repos.tasks.create_filter_analyze_task(FilterAnalyzeTaskPayload())
     assert first is not None
@@ -621,7 +621,7 @@ async def test_create_filter_analyze_task_is_atomic(db):
 @pytest.mark.anyio
 async def test_analyze_status_endpoint_reports_progress_and_result(route_client, db):
     """GET analyze/status reflects the latest filter-analyze task lifecycle (#793)."""
-    from src.models import CollectionTaskStatus, FilterAnalyzeTaskPayload
+    from tg_agent.models import CollectionTaskStatus, FilterAnalyzeTaskPayload
 
     resp = await route_client.get("/channels/filter/analyze/status")
     assert resp.status_code == 200
@@ -699,7 +699,7 @@ async def test_apply_missing_snapshot(route_client):
 @pytest.mark.anyio
 async def test_apply_with_snapshot(route_client):
     """Test apply filters with snapshot."""
-    with patch("src.web.filter.handlers.ChannelAnalyzer") as mock_analyzer:
+    with patch("tg_agent.web.filter.handlers.ChannelAnalyzer") as mock_analyzer:
         mock_instance = mock_analyzer.return_value
         mock_instance.apply_filters = AsyncMock(return_value=1)
         resp = await route_client.post(
@@ -714,7 +714,7 @@ async def test_apply_with_snapshot(route_client):
 @pytest.mark.anyio
 async def test_precheck_redirects(route_client):
     """Test precheck subscriber ratio redirects."""
-    with patch("src.web.filter.handlers.ChannelAnalyzer") as mock_analyzer:
+    with patch("tg_agent.web.filter.handlers.ChannelAnalyzer") as mock_analyzer:
         mock_instance = mock_analyzer.return_value
         mock_instance.precheck_subscriber_ratio = AsyncMock(return_value=5)
         resp = await route_client.post("/channels/filter/precheck", follow_redirects=False)
@@ -725,7 +725,7 @@ async def test_precheck_redirects(route_client):
 @pytest.mark.anyio
 async def test_reset_redirects(route_client):
     """Test reset filters redirects."""
-    with patch("src.web.filter.handlers.ChannelAnalyzer") as mock_analyzer:
+    with patch("tg_agent.web.filter.handlers.ChannelAnalyzer") as mock_analyzer:
         mock_instance = mock_analyzer.return_value
         mock_instance.reset_filters = AsyncMock()
         resp = await route_client.post("/channels/filter/reset", follow_redirects=False)
@@ -784,7 +784,7 @@ async def test_filter_toggle_success(route_client, db):
 @pytest.mark.anyio
 async def test_parse_snapshot_valid(route_client, db):
     """Test apply filters with valid snapshot parsing."""
-    with patch("src.web.filter.handlers.ChannelAnalyzer") as mock_analyzer:
+    with patch("tg_agent.web.filter.handlers.ChannelAnalyzer") as mock_analyzer:
         mock_instance = mock_analyzer.return_value
         mock_instance.apply_filters = AsyncMock(return_value=2)
         resp = await route_client.post(
@@ -802,7 +802,7 @@ async def test_parse_snapshot_valid(route_client, db):
 @pytest.mark.anyio
 async def test_parse_snapshot_dedupes_by_channel_id(route_client, db):
     """Test snapshot parsing dedupes by channel_id."""
-    with patch("src.web.filter.handlers.ChannelAnalyzer") as mock_analyzer:
+    with patch("tg_agent.web.filter.handlers.ChannelAnalyzer") as mock_analyzer:
         mock_instance = mock_analyzer.return_value
         mock_instance.apply_filters = AsyncMock(return_value=1)
         resp = await route_client.post(
@@ -819,7 +819,7 @@ async def test_parse_snapshot_dedupes_by_channel_id(route_client, db):
 @pytest.mark.anyio
 async def test_parse_snapshot_invalid_channel_id(route_client, db):
     """Test snapshot parsing with invalid channel_id."""
-    with patch("src.web.filter.handlers.ChannelAnalyzer") as mock_analyzer:
+    with patch("tg_agent.web.filter.handlers.ChannelAnalyzer") as mock_analyzer:
         mock_instance = mock_analyzer.return_value
         mock_instance.apply_filters = AsyncMock(return_value=0)
         resp = await route_client.post(
@@ -836,7 +836,7 @@ async def test_parse_snapshot_invalid_channel_id(route_client, db):
 @pytest.mark.anyio
 async def test_parse_snapshot_no_separator(route_client, db):
     """Test snapshot parsing without separator."""
-    with patch("src.web.filter.handlers.ChannelAnalyzer") as mock_analyzer:
+    with patch("tg_agent.web.filter.handlers.ChannelAnalyzer") as mock_analyzer:
         mock_instance = mock_analyzer.return_value
         mock_instance.apply_filters = AsyncMock(return_value=0)
         resp = await route_client.post(
@@ -853,7 +853,7 @@ async def test_parse_snapshot_no_separator(route_client, db):
 @pytest.mark.anyio
 async def test_parse_snapshot_invalid_flag(route_client, db):
     """Test snapshot parsing with invalid flag."""
-    with patch("src.web.filter.handlers.ChannelAnalyzer") as mock_analyzer:
+    with patch("tg_agent.web.filter.handlers.ChannelAnalyzer") as mock_analyzer:
         mock_instance = mock_analyzer.return_value
         mock_instance.apply_filters = AsyncMock(return_value=0)
         resp = await route_client.post(
@@ -874,7 +874,7 @@ async def test_analyze_with_auto_delete(route_client, db):
     await _add_filtered_channel(db, channel_id=3100, title="Auto Delete")
     await db.set_setting("auto_delete_filtered", "1")
 
-    with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+    with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
         resp = await route_client.post("/channels/filter/analyze", follow_redirects=False)
 
     assert resp.status_code == 303
@@ -888,7 +888,7 @@ async def test_purge_selected_with_multiple_pks(route_client, db):
     pk1 = await _add_filtered_channel(db, channel_id=3200, title="Purge 1")
     pk2 = await _add_filtered_channel(db, channel_id=3201, title="Purge 2")
 
-    with patch("src.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
+    with patch("tg_agent.web.filter.handlers.deps.filter_deletion_service") as mock_svc:
         mock_svc.return_value.purge_channels_by_pks = AsyncMock(
             return_value=PurgeResult(purged_count=2)
         )

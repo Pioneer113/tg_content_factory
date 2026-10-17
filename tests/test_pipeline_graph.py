@@ -3,16 +3,16 @@ from __future__ import annotations
 
 import pytest
 
-from src.models import (
+from tg_agent.models import (
     ContentPipeline,
     PipelineEdge,
     PipelineGraph,
     PipelineNode,
     PipelineNodeType,
 )
-from src.services.pipeline_executor import PipelineExecutor, _topological_sort
-from src.services.pipeline_nodes import NodeContext, get_handler
-from src.services.pipeline_nodes.handlers import (
+from tg_agent.services.pipeline_executor import PipelineExecutor, _topological_sort
+from tg_agent.services.pipeline_nodes import NodeContext, get_handler
+from tg_agent.services.pipeline_nodes.handlers import (
     ConditionHandler,
     DelayHandler,
     FilterHandler,
@@ -329,7 +329,7 @@ async def test_executor_returns_processed_message_result_for_action_only_pipelin
     pipeline = ContentPipeline(name="reaction", prompt_template=".", pipeline_json=graph)
     executor = PipelineExecutor()
 
-    monkeypatch.setattr("src.services.pipeline_executor.get_handler", lambda _node_type: FakeHandler())
+    monkeypatch.setattr("tg_agent.services.pipeline_executor.get_handler", lambda _node_type: FakeHandler())
 
     result = await executor.execute(pipeline, graph, {})
 
@@ -370,7 +370,7 @@ def test_get_handler_all_types():
 
 
 def test_builtin_templates_valid():
-    from src.services.pipeline_templates_builtin import get_builtin_templates
+    from tg_agent.services.pipeline_templates_builtin import get_builtin_templates
 
     templates = get_builtin_templates()
     assert len(templates) > 0

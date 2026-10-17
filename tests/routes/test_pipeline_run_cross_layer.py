@@ -14,7 +14,7 @@ from __future__ import annotations
 import pytest
 from bs4 import BeautifulSoup
 
-from src.models import (
+from tg_agent.models import (
     CollectionTaskStatus,
     CollectionTaskType,
     PipelineRunTaskPayload,

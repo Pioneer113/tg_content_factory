@@ -68,7 +68,7 @@ CLI inventory находится в `tests/cli_real_tg_integration/`.
 Fixture `cli_real_cli_env` запускает subprocess как:
 
 ```bash
-python -m src.main --config <real config.yaml> ...
+python -m tg_agent.main --config <real config.yaml> ...
 ```
 
 Источник live-состояния:
@@ -89,7 +89,7 @@ python -m src.main --config <real config.yaml> ...
   (`tg_api_id`/`tg_api_hash`), тем же fallback-порядком, что и продовый `init_pool`;
 - в DB есть active accounts с `session_string`;
 - хотя бы один active account проходит read-only readiness probe:
-  `python -m src.main --config <config.yaml> account info --phone <phone>`.
+  `python -m tg_agent.main --config <config.yaml> account info --phone <phone>`.
 
 Readiness probe ждет не просто `is_active=1`, а фактическое CLI-подключение к Telegram. По текущим live-логам
 успешное подключение занимает секунды, самый медленный нормальный auth/connect был около 26 секунд, поэтому default
@@ -156,7 +156,7 @@ flood-waited accounts.
 
 ## Coverage Contract
 
-`tests/test_real_telegram_policy.py` introspects the Typer application (`src.cli.typer_commands.app`, walked via `typer.main.get_command`) and requires every leaf command to be either:
+`tests/test_real_telegram_policy.py` introspects the Typer application (`tg_agent.cli.typer_commands.app`, walked via `typer.main.get_command`) and requires every leaf command to be either:
 
 - covered by a CLI inventory test; or
 - listed in `tests/cli_real_tg_integration/command_manifest.py` as manual/excluded with a reason.
@@ -168,7 +168,7 @@ The same policy test audits literal `run_cli(...)`, `run_cli_popen(...)`, and `c
 Default non-live development:
 
 ```bash
-python3 -m ruff check src/ tests/ conftest.py
+python3 -m ruff check tg_agent/ tests/ conftest.py
 python3 -m pytest tests/ -v -m "not aiosqlite_serial and not real_tg_safe and not real_tg_mutation_safe and not real_tg_manual and not real_provider_smoke" -n auto
 python3 -m pytest tests/ -v -m "aiosqlite_serial and not real_tg_safe and not real_tg_mutation_safe and not real_tg_manual and not real_provider_smoke"
 ```

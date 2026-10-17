@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.services.quality_scoring_service import QualityScore, QualityScoringService
+from tg_agent.services.quality_scoring_service import QualityScore, QualityScoringService
 
 # mutmut_skip is applied PER TEST below: only the tests that drive score_content
 # through the provider plumbing are excluded from mutation runs — the pure-logic
@@ -26,7 +26,7 @@ def offline_default_provider(monkeypatch):
     leaves the process (#1445 — 429/connection flakes in the full suite). ``env={}``
     is the deterministic keyless path these assertions were written against.
     """
-    import src.services.provider_service as provider_service_module
+    import tg_agent.services.provider_service as provider_service_module
 
     real_build = provider_service_module.build_provider_service
 
@@ -330,7 +330,7 @@ async def test_score_content_builds_provider_service_with_config(mock_db):
     )
     builder = AsyncMock(return_value=mock_registry)
 
-    with patch("src.services.provider_service.build_provider_service", builder):
+    with patch("tg_agent.services.provider_service.build_provider_service", builder):
         score = await service.score_content("text")
 
     builder.assert_awaited_once_with(mock_db, cfg)
@@ -361,7 +361,7 @@ def test_response_text_reads_langchain_message_text_property():
 
     from langchain_core.messages import AIMessage
 
-    from src.services.provider_service import RuntimeProviderRegistry
+    from tg_agent.services.provider_service import RuntimeProviderRegistry
 
     message = AIMessage(content="generated body")
 
@@ -384,6 +384,6 @@ def test_response_text_legacy_callable_fallback():
         def text(self) -> str:
             return "legacy body"
 
-    from src.services.provider_service import RuntimeProviderRegistry
+    from tg_agent.services.provider_service import RuntimeProviderRegistry
 
     assert RuntimeProviderRegistry._response_text(_LegacyMessage()) == "legacy body"

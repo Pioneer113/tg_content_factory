@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from src.utils.text_safety import csv_safe_cell, escape_xml_text, strip_xml_illegal
+from tg_agent.utils.text_safety import csv_safe_cell, escape_xml_text, strip_xml_illegal
 
 
 def test_strip_xml_illegal_removes_c0_control_bytes():

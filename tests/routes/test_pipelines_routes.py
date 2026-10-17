@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.models import Account, ContentPipeline, RuntimeSnapshot
+from tg_agent.models import Account, ContentPipeline, RuntimeSnapshot
 
 
 async def _quality_provider(**kwargs):
@@ -186,7 +186,7 @@ async def test_run_pipeline_not_found(client):
     """Test run pipeline with invalid ID."""
     from unittest.mock import patch
 
-    with patch("src.services.provider_service.RuntimeProviderRegistry.has_providers", return_value=True):
+    with patch("tg_agent.services.provider_service.RuntimeProviderRegistry.has_providers", return_value=True):
         resp = await client.post("/pipelines/999999/run", follow_redirects=False)
     assert resp.status_code == 303
     assert "error=pipeline_invalid" in resp.headers["location"]
@@ -199,12 +199,12 @@ async def test_run_pipeline_enqueues(client):
 
     await client.post("/pipelines/add", data=_ADD_DATA)
 
-    with patch("src.services.provider_service.RuntimeProviderRegistry.has_providers", return_value=True):
-        with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.services.provider_service.RuntimeProviderRegistry.has_providers", return_value=True):
+        with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
             mock_svc.return_value.get = AsyncMock(
                 return_value=MagicMock(id=1, is_active=True)
             )
-            with patch("src.web.pipelines.handlers.deps.get_task_enqueuer") as mock_enq:
+            with patch("tg_agent.web.pipelines.handlers.deps.get_task_enqueuer") as mock_enq:
                 mock_enq.return_value.enqueue_pipeline_run = AsyncMock()
                 resp = await client.post("/pipelines/1/run", follow_redirects=False)
                 assert resp.status_code == 303
@@ -226,7 +226,7 @@ async def test_run_pipeline_allowed_for_non_llm_dag_without_provider(client):
     """A DAG with only SOURCE→PUBLISH nodes runs without an LLM provider."""
     from unittest.mock import patch
 
-    from src.models import (
+    from tg_agent.models import (
         PipelineEdge,
         PipelineGraph,
         PipelineNode,
@@ -248,13 +248,13 @@ async def test_run_pipeline_allowed_for_non_llm_dag_without_provider(client):
     )
     # MagicMock's default mocks generation_backend; force it to the real CHAIN value
     # so pipeline_needs_llm short-circuits on pipeline_json inspection instead.
-    from src.models import PipelineGenerationBackend
+    from tg_agent.models import PipelineGenerationBackend
 
     non_llm_pipeline.generation_backend = PipelineGenerationBackend.CHAIN
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.get = AsyncMock(return_value=non_llm_pipeline)
-        with patch("src.web.pipelines.handlers.deps.get_task_enqueuer") as mock_enq:
+        with patch("tg_agent.web.pipelines.handlers.deps.get_task_enqueuer") as mock_enq:
             mock_enq.return_value.enqueue_pipeline_run = AsyncMock()
             resp = await client.post("/pipelines/1/run", follow_redirects=False)
             assert resp.status_code == 303
@@ -269,12 +269,12 @@ async def test_run_pipeline_failure(client):
 
     await client.post("/pipelines/add", data=_ADD_DATA)
 
-    with patch("src.services.provider_service.RuntimeProviderRegistry.has_providers", return_value=True):
-        with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.services.provider_service.RuntimeProviderRegistry.has_providers", return_value=True):
+        with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
             mock_svc.return_value.get = AsyncMock(
                 return_value=MagicMock(id=1, is_active=True)
             )
-            with patch("src.web.pipelines.handlers.deps.get_task_enqueuer") as mock_enq:
+            with patch("tg_agent.web.pipelines.handlers.deps.get_task_enqueuer") as mock_enq:
                 mock_enq.return_value.enqueue_pipeline_run = AsyncMock(
                     side_effect=Exception("Queue error")
                 )
@@ -340,7 +340,7 @@ async def test_generate_stream_success(client):
     app = client._transport.app  # type: ignore
     app.state.llm_provider_service = mock_provider_instance
 
-    with patch("src.services.generation_service.GenerationService") as mock_gen:
+    with patch("tg_agent.services.generation_service.GenerationService") as mock_gen:
         mock_instance = MagicMock()
         mock_instance.generate_stream = fake_stream
         mock_gen.return_value = mock_instance
@@ -407,7 +407,7 @@ async def test_generate_stream_scope_error_fails_closed(client):
     widen a single-source pipeline to all channels."""
     from unittest.mock import patch
 
-    from src.services.pipeline_service import PipelineScopeError
+    from tg_agent.services.pipeline_service import PipelineScopeError
 
     await client.post("/pipelines/add", data=_ADD_DATA)
 
@@ -422,7 +422,7 @@ async def test_generate_stream_scope_error_fails_closed(client):
         raise PipelineScopeError("source lookup failed")
 
     with patch(
-        "src.services.pipeline_service.PipelineService.get_retrieval_scope",
+        "tg_agent.services.pipeline_service.PipelineService.get_retrieval_scope",
         side_effect=boom,
     ):
         resp = await client.get("/pipelines/1/generate-stream", follow_redirects=False)
@@ -449,7 +449,7 @@ async def test_generate_pipeline_success(client):
     app = client._transport.app  # type: ignore
     app.state.llm_provider_service = mock_provider_instance
 
-    with patch("src.services.content_generation_service.GenerationService") as mock_gen:
+    with patch("tg_agent.services.content_generation_service.GenerationService") as mock_gen:
         mock_instance = MagicMock()
         mock_instance.generate = AsyncMock(
             return_value={"generated_text": "Test output", "citations": []}
@@ -477,7 +477,7 @@ async def test_generate_pipeline_failure(client):
     app = client._transport.app  # type: ignore
     app.state.llm_provider_service = mock_provider_instance
 
-    with patch("src.services.content_generation_service.GenerationService") as mock_gen:
+    with patch("tg_agent.services.content_generation_service.GenerationService") as mock_gen:
         mock_instance = MagicMock()
         mock_instance.generate = AsyncMock(side_effect=Exception("Generation error"))
         mock_gen.return_value = mock_instance
@@ -497,7 +497,7 @@ async def test_generate_pipeline_error_render_hides_llm_fields_for_non_llm(clien
     stay hidden instead of defaulting to shown."""
     from unittest.mock import patch
 
-    from src.models import (
+    from tg_agent.models import (
         PipelineEdge,
         PipelineGenerationBackend,
         PipelineGraph,
@@ -521,10 +521,10 @@ async def test_generate_pipeline_error_render_hides_llm_fields_for_non_llm(clien
     )
     non_llm_pipeline.generation_backend = PipelineGenerationBackend.CHAIN
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.get = AsyncMock(return_value=non_llm_pipeline)
         with patch(
-            "src.services.content_generation_service.ContentGenerationService"
+            "tg_agent.services.content_generation_service.ContentGenerationService"
         ) as mock_gen:
             mock_gen.return_value.generate = AsyncMock(side_effect=Exception("boom"))
             resp = await client.post(
@@ -671,7 +671,7 @@ async def test_list_pipeline_runs_json(client):
 async def test_pipeline_run_and_queue_reads_do_not_hydrate_pipeline_service(client):
     await client.post("/pipelines/add", data=_ADD_DATA)
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service", side_effect=AssertionError("hydrated")):
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service", side_effect=AssertionError("hydrated")):
         runs_resp = await client.get("/pipelines/1/runs")
         queue_resp = await client.get("/pipelines/1/queue")
 
@@ -754,8 +754,8 @@ async def test_pipeline_queue_json(client):
 
 def test_target_refs_missing_separator():
     """Test _target_refs with missing separator."""
-    from src.services.pipeline_service import PipelineValidationError
-    from src.web.pipelines.forms import parse_target_refs as _target_refs
+    from tg_agent.services.pipeline_service import PipelineValidationError
+    from tg_agent.web.pipelines.forms import parse_target_refs as _target_refs
 
     try:
         _target_refs(["invalid_format"])
@@ -766,8 +766,8 @@ def test_target_refs_missing_separator():
 
 def test_target_refs_invalid_dialog_id():
     """Test _target_refs with invalid dialog_id."""
-    from src.services.pipeline_service import PipelineValidationError
-    from src.web.pipelines.forms import parse_target_refs as _target_refs
+    from tg_agent.services.pipeline_service import PipelineValidationError
+    from tg_agent.web.pipelines.forms import parse_target_refs as _target_refs
 
     try:
         _target_refs(["+1234567890|not_a_number"])
@@ -778,7 +778,7 @@ def test_target_refs_invalid_dialog_id():
 
 def test_target_refs_success():
     """Test _target_refs with valid input."""
-    from src.web.pipelines.forms import parse_target_refs as _target_refs
+    from tg_agent.web.pipelines.forms import parse_target_refs as _target_refs
 
     refs = _target_refs(["+1234567890|100", "+0987654321|200"])
     assert len(refs) == 2
@@ -901,7 +901,7 @@ async def test_auto_select_pipeline_variant_uses_quality_score(client):
     await db.repos.generation_runs.save_result(run_id, "base")
     await db.repos.generation_runs.set_variants(run_id, ["base", "winner", "mid"])
 
-    from src.services.quality_scoring_service import QualityScore
+    from tg_agent.services.quality_scoring_service import QualityScore
 
     def _score_for(text):
         value = {"base": 0.2, "winner": 0.95, "mid": 0.5}.get(text, 0.0)
@@ -918,7 +918,7 @@ async def test_auto_select_pipeline_variant_uses_quality_score(client):
         )
 
     with patch(
-        "src.services.quality_scoring_service.QualityScoringService.score_and_check",
+        "tg_agent.services.quality_scoring_service.QualityScoringService.score_and_check",
         new=AsyncMock(side_effect=lambda text, *a, **k: _score_for(text)),
     ):
         resp = await client.post(

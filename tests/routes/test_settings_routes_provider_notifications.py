@@ -29,10 +29,10 @@ async def test_settings_page_flood_wait_naive_tz(route_client, db):
         await db.update_account_flood(acc.phone, future_naive)
 
     with patch(
-        "src.web.settings.handlers.ProviderConfigService.load_provider_configs",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_provider_configs",
         AsyncMock(return_value=[]),
     ), patch(
-        "src.web.settings.handlers.ProviderConfigService.load_model_cache",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_model_cache",
         AsyncMock(return_value={}),
     ):
         resp = await route_client.get("/settings/")
@@ -48,10 +48,10 @@ async def test_settings_page_expired_flood_cleared(route_client, db):
         await db.update_account_flood(acc.phone, past)
 
     with patch(
-        "src.web.settings.handlers.ProviderConfigService.load_provider_configs",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_provider_configs",
         AsyncMock(return_value=[]),
     ), patch(
-        "src.web.settings.handlers.ProviderConfigService.load_model_cache",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_model_cache",
         AsyncMock(return_value={}),
     ):
         resp = await route_client.get("/settings/")
@@ -71,14 +71,14 @@ async def test_settings_page_inactive_account(route_client, db):
         await db.repos.accounts.set_account_active(acc.id, False)
 
     # Re-add an active account so the page can load
-    from src.models import Account
+    from tg_agent.models import Account
     await db.add_account(Account(phone="+15555555555", session_string="test2"))
 
     with patch(
-        "src.web.settings.handlers.ProviderConfigService.load_provider_configs",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_provider_configs",
         AsyncMock(return_value=[]),
     ), patch(
-        "src.web.settings.handlers.ProviderConfigService.load_model_cache",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_model_cache",
         AsyncMock(return_value={}),
     ):
         resp = await route_client.get("/settings/")
@@ -89,13 +89,13 @@ async def test_settings_page_inactive_account(route_client, db):
 async def test_settings_page_notification_bot_error(route_client, db):
     """Test settings page renders without inline notification bot fetch."""
     with patch(
-        "src.web.settings.handlers.ProviderConfigService.load_provider_configs",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_provider_configs",
         AsyncMock(return_value=[]),
     ), patch(
-        "src.web.settings.handlers.ProviderConfigService.load_model_cache",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_model_cache",
         AsyncMock(return_value={}),
     ), patch(
-        "src.web.settings.handlers.deps.get_notification_target_service"
+        "tg_agent.web.settings.handlers.deps.get_notification_target_service"
     ) as mock_target_svc:
         mock_target_svc.return_value.describe_target = AsyncMock(
             return_value=MagicMock(state="available", configured_phone="+1234567890")
@@ -204,7 +204,7 @@ async def test_save_semantic_search_no_api_key_field(route_client, db):
 @pytest.mark.anyio
 async def test_run_semantic_index_unavailable(route_client, db):
     """Test running semantic index when not available (line 624)."""
-    with patch("src.web.settings.handlers.deps.get_search_engine") as mock_se:
+    with patch("tg_agent.web.settings.handlers.deps.get_search_engine") as mock_se:
         mock_se.return_value.semantic_available = False
         resp = await route_client.post(
             "/settings/semantic-index",
@@ -219,10 +219,10 @@ async def test_run_semantic_index_unavailable(route_client, db):
 async def test_run_semantic_index_with_reset_flag(route_client, db):
     """Test semantic index with reset flag (line 628)."""
     with patch(
-        "src.web.settings.handlers.EmbeddingService.index_pending_messages",
+        "tg_agent.web.settings.handlers.EmbeddingService.index_pending_messages",
         AsyncMock(return_value=0),
     ), patch(
-        "src.web.settings.handlers.deps.get_search_engine"
+        "tg_agent.web.settings.handlers.deps.get_search_engine"
     ) as mock_se:
         se = mock_se.return_value
         se.semantic_available = True
@@ -349,7 +349,7 @@ async def test_save_agent_claude_override_no_credentials(route_client, db, caplo
         os.environ.pop("ANTHROPIC_API_KEY", None)
         os.environ.pop("CLAUDE_CODE_OAUTH_TOKEN", None)
 
-        with caplog.at_level(logging.WARNING, logger="src.web.routes.settings"):
+        with caplog.at_level(logging.WARNING, logger="tg_agent.web.routes.settings"):
             resp = await route_client.post(
                 "/settings/save-agent",
                 data={
@@ -399,9 +399,9 @@ async def test_add_agent_provider_invalid_name(route_client, db):
     await db.set_setting("agent_dev_mode_enabled", "1")
 
     with patch(
-        "src.web.settings.handlers.ProviderConfigService"
+        "tg_agent.web.settings.handlers.ProviderConfigService"
     ) as mock_service_cls, patch(
-        "src.web.settings.handlers.deepagents_provider_spec"
+        "tg_agent.web.settings.handlers.deepagents_provider_spec"
     ) as mock_spec:
         mock_service = MagicMock()
         mock_service.writes_enabled = True
@@ -423,9 +423,9 @@ async def test_add_agent_provider_already_exists(route_client, db):
     await db.set_setting("agent_dev_mode_enabled", "1")
 
     with patch(
-        "src.web.settings.handlers.ProviderConfigService"
+        "tg_agent.web.settings.handlers.ProviderConfigService"
     ) as mock_service_cls, patch(
-        "src.web.settings.handlers.deepagents_provider_spec"
+        "tg_agent.web.settings.handlers.deepagents_provider_spec"
     ) as mock_spec:
         mock_service = MagicMock()
         mock_service.writes_enabled = True
@@ -454,9 +454,9 @@ async def test_add_agent_provider_refreshes_manager(route_client, db):
     route_client._transport_app.state.agent_manager = mock_manager
 
     with patch(
-        "src.web.settings.handlers.ProviderConfigService"
+        "tg_agent.web.settings.handlers.ProviderConfigService"
     ) as mock_service_cls, patch(
-        "src.web.settings.handlers.deepagents_provider_spec"
+        "tg_agent.web.settings.handlers.deepagents_provider_spec"
     ) as mock_spec:
         mock_service = MagicMock()
         mock_service.writes_enabled = True
@@ -484,7 +484,7 @@ async def test_save_agent_providers_dev_mode_required(route_client, db):
     await db.set_setting("agent_dev_mode_enabled", "0")
 
     with patch(
-        "src.web.settings.handlers.ProviderConfigService"
+        "tg_agent.web.settings.handlers.ProviderConfigService"
     ) as mock_service_cls:
         mock_service = MagicMock()
         mock_service.writes_enabled = True
@@ -509,11 +509,11 @@ async def test_save_agent_providers_probes_enabled(route_client, db):
     cfg.provider = "openai"
 
     with patch(
-        "src.web.settings.handlers.ProviderConfigService"
+        "tg_agent.web.settings.handlers.ProviderConfigService"
     ) as mock_service_cls, patch(
-        "src.web.settings.handlers.deps.get_agent_manager"
+        "tg_agent.web.settings.handlers.deps.get_agent_manager"
     ) as mock_get_mgr, patch(
-        "src.web.settings.handlers._probe_provider_config",
+        "tg_agent.web.settings.handlers._probe_provider_config",
         AsyncMock(return_value=MagicMock()),
     ):
         mock_service = MagicMock()
@@ -546,7 +546,7 @@ async def test_delete_agent_provider_dev_mode_required(route_client, db):
     await db.set_setting("agent_dev_mode_enabled", "0")
 
     with patch(
-        "src.web.settings.handlers.ProviderConfigService"
+        "tg_agent.web.settings.handlers.ProviderConfigService"
     ) as mock_service_cls:
         mock_service = MagicMock()
         mock_service.writes_enabled = True
@@ -572,7 +572,7 @@ async def test_delete_agent_provider_refreshes_manager(route_client, db):
     route_client._transport_app.state.agent_manager = mock_manager
 
     with patch(
-        "src.web.settings.handlers.ProviderConfigService"
+        "tg_agent.web.settings.handlers.ProviderConfigService"
     ) as mock_service_cls:
         mock_service = MagicMock()
         mock_service.writes_enabled = True
@@ -600,7 +600,7 @@ async def test_refresh_agent_provider_dev_mode_required_json(route_client, db):
     await db.set_setting("agent_dev_mode_enabled", "0")
 
     with patch(
-        "src.web.settings.handlers.ProviderConfigService"
+        "tg_agent.web.settings.handlers.ProviderConfigService"
     ) as mock_service_cls:
         mock_service = MagicMock()
         mock_service.writes_enabled = True
@@ -619,9 +619,9 @@ async def test_refresh_agent_provider_unknown(route_client, db):
     await db.set_setting("agent_dev_mode_enabled", "1")
 
     with patch(
-        "src.web.settings.handlers.ProviderConfigService"
+        "tg_agent.web.settings.handlers.ProviderConfigService"
     ) as mock_service_cls, patch(
-        "src.web.settings.handlers.deepagents_provider_spec"
+        "tg_agent.web.settings.handlers.deepagents_provider_spec"
     ) as mock_spec:
         mock_service = MagicMock()
         mock_service.writes_enabled = True
@@ -644,9 +644,9 @@ async def test_probe_agent_provider_unknown(route_client, db):
     await db.set_setting("agent_dev_mode_enabled", "1")
 
     with patch(
-        "src.web.settings.handlers.ProviderConfigService"
+        "tg_agent.web.settings.handlers.ProviderConfigService"
     ) as mock_service_cls, patch(
-        "src.web.settings.handlers.deepagents_provider_spec"
+        "tg_agent.web.settings.handlers.deepagents_provider_spec"
     ) as mock_spec:
         mock_service = MagicMock()
         mock_service.writes_enabled = True
@@ -666,9 +666,9 @@ async def test_probe_agent_provider_validation_blocked(route_client, db):
     await db.set_setting("agent_dev_mode_enabled", "1")
 
     with patch(
-        "src.web.settings.handlers.ProviderConfigService"
+        "tg_agent.web.settings.handlers.ProviderConfigService"
     ) as mock_service_cls, patch(
-        "src.web.settings.handlers.deepagents_provider_spec"
+        "tg_agent.web.settings.handlers.deepagents_provider_spec"
     ) as mock_spec:
         mock_service = MagicMock()
         mock_service.writes_enabled = True
@@ -696,7 +696,7 @@ async def test_probe_agent_provider_success(route_client, db):
     """Test probe provider with successful probe (lines 929-960)."""
     await db.set_setting("agent_dev_mode_enabled", "1")
 
-    from src.services.agent_provider_service import ProviderModelCompatibilityRecord
+    from tg_agent.services.agent_provider_service import ProviderModelCompatibilityRecord
 
     record = ProviderModelCompatibilityRecord(
         model="gpt-4",
@@ -707,11 +707,11 @@ async def test_probe_agent_provider_success(route_client, db):
     )
 
     with patch(
-        "src.web.settings.handlers.ProviderConfigService"
+        "tg_agent.web.settings.handlers.ProviderConfigService"
     ) as mock_service_cls, patch(
-        "src.web.settings.handlers.deepagents_provider_spec"
+        "tg_agent.web.settings.handlers.deepagents_provider_spec"
     ) as mock_spec, patch(
-        "src.web.settings.handlers._probe_provider_config",
+        "tg_agent.web.settings.handlers._probe_provider_config",
         AsyncMock(return_value=record),
     ):
         mock_service = MagicMock()
@@ -778,11 +778,11 @@ async def test_save_notification_account_with_notifier(route_client, db):
     mock_notifier.invalidate_me_cache = MagicMock()
 
     with patch(
-        "src.web.settings.handlers.deps.get_notification_target_service"
+        "tg_agent.web.settings.handlers.deps.get_notification_target_service"
     ) as mock_svc, patch(
-        "src.web.settings.handlers.deps.get_notifier"
+        "tg_agent.web.settings.handlers.deps.get_notifier"
     ) as mock_get_notifier, patch(
-        "src.web.settings.handlers.deps.telegram_command_service"
+        "tg_agent.web.settings.handlers.deps.telegram_command_service"
     ) as mock_cmd_svc:
         mock_svc.return_value.set_configured_phone = AsyncMock()
         mock_get_notifier.return_value = mock_notifier
@@ -805,9 +805,9 @@ async def test_save_notification_account_with_notifier(route_client, db):
 async def test_save_notification_account_empty_phone(route_client, db):
     """Test save notification account with empty phone clears setting."""
     with patch(
-        "src.web.settings.handlers.deps.get_notification_target_service"
+        "tg_agent.web.settings.handlers.deps.get_notification_target_service"
     ) as mock_svc, patch(
-        "src.web.settings.handlers.deps.get_notifier"
+        "tg_agent.web.settings.handlers.deps.get_notifier"
     ) as mock_get_notifier:
         mock_svc.return_value.set_configured_phone = AsyncMock()
         mock_get_notifier.return_value = None
@@ -978,7 +978,7 @@ async def test_test_notification_notify_fails(route_client, db):
 async def test_test_notification_custom_text_in_payload(route_client, db):
     """Custom text from the form is forwarded to the queued command (#563)."""
     with patch(
-        "src.web.settings.handlers.deps.telegram_command_service"
+        "tg_agent.web.settings.handlers.deps.telegram_command_service"
     ) as mock_svc_factory:
         svc = MagicMock()
         svc.enqueue = AsyncMock(return_value=123)
@@ -1000,7 +1000,7 @@ async def test_test_notification_custom_text_in_payload(route_client, db):
 async def test_test_notification_blank_text_omits_payload(route_client, db):
     """Blank text yields an empty payload so the dispatcher uses its default (#563)."""
     with patch(
-        "src.web.settings.handlers.deps.telegram_command_service"
+        "tg_agent.web.settings.handlers.deps.telegram_command_service"
     ) as mock_svc_factory:
         svc = MagicMock()
         svc.enqueue = AsyncMock(return_value=123)
@@ -1024,9 +1024,9 @@ async def test_test_notification_blank_text_omits_payload(route_client, db):
 async def test_add_image_provider_invalid(route_client, db):
     """Test add image provider with invalid name (lines 1204-1207)."""
     with patch(
-        "src.web.settings.handlers.ImageProviderService"
+        "tg_agent.web.settings.handlers.ImageProviderService"
     ) as mock_service_cls, patch(
-        "src.web.settings.handlers.image_provider_spec"
+        "tg_agent.web.settings.handlers.image_provider_spec"
     ) as mock_spec:
         mock_service = MagicMock()
         mock_service.writes_enabled = True
@@ -1046,9 +1046,9 @@ async def test_add_image_provider_invalid(route_client, db):
 async def test_add_image_provider_already_exists(route_client, db):
     """Test add image provider when it already exists (lines 1208-1209)."""
     with patch(
-        "src.web.settings.handlers.ImageProviderService"
+        "tg_agent.web.settings.handlers.ImageProviderService"
     ) as mock_service_cls, patch(
-        "src.web.settings.handlers.image_provider_spec"
+        "tg_agent.web.settings.handlers.image_provider_spec"
     ) as mock_spec:
         mock_service = MagicMock()
         mock_service.writes_enabled = True
@@ -1071,9 +1071,9 @@ async def test_add_image_provider_already_exists(route_client, db):
 async def test_save_image_providers_missing_key(route_client, db):
     """Test save image providers with missing API key (lines 1226-1233)."""
     with patch(
-        "src.web.settings.handlers.ImageProviderService"
+        "tg_agent.web.settings.handlers.ImageProviderService"
     ) as mock_service_cls, patch(
-        "src.web.settings.handlers.image_provider_spec"
+        "tg_agent.web.settings.handlers.image_provider_spec"
     ) as mock_spec:
         mock_service = MagicMock()
         mock_service.writes_enabled = True
@@ -1105,7 +1105,7 @@ async def test_save_image_providers_missing_key(route_client, db):
 async def test_save_image_providers_success(route_client, db):
     """Test save image providers success (lines 1236-1239)."""
     with patch(
-        "src.web.settings.handlers.ImageProviderService"
+        "tg_agent.web.settings.handlers.ImageProviderService"
     ) as mock_service_cls:
         mock_service = MagicMock()
         mock_service.writes_enabled = True
@@ -1129,7 +1129,7 @@ async def test_save_image_providers_success(route_client, db):
 async def test_delete_image_provider(route_client, db):
     """Test delete image provider (lines 1246-1250)."""
     with patch(
-        "src.web.settings.handlers.ImageProviderService"
+        "tg_agent.web.settings.handlers.ImageProviderService"
     ) as mock_service_cls:
         mock_service = MagicMock()
         mock_service.writes_enabled = True
@@ -1212,13 +1212,13 @@ async def test_settings_page_reload_llm_providers_failure(route_client, db, capl
     route_client._transport_app.state.llm_provider_service = mock_llm_svc
 
     with patch(
-        "src.web.settings.handlers.ProviderConfigService.load_provider_configs",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_provider_configs",
         AsyncMock(return_value=[]),
     ), patch(
-        "src.web.settings.handlers.ProviderConfigService.load_model_cache",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_model_cache",
         AsyncMock(return_value={}),
     ), caplog.at_level(
-        logging.WARNING, logger="src.web.routes.settings"
+        logging.WARNING, logger="tg_agent.web.routes.settings"
     ):
         resp = await route_client.get("/settings/")
         assert resp.status_code == 200

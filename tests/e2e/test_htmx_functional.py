@@ -3,7 +3,7 @@
 These assert HTMX **functionality** (lazyload containers actually fill, the /rate
 swap produces a verdict fragment, collect buttons OOB-swap both desktop+mobile),
 not just the absence of console errors that ``test_console_smoke.py`` covers. They
-need a live web server (``python -m src.main serve``) plus the Playwright Chromium
+need a live web server (``python -m tg_agent.main serve``) plus the Playwright Chromium
 build (``playwright install --with-deps chromium``), so they are skipped by default.
 Enable them with::
 

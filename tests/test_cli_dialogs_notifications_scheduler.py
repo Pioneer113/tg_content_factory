@@ -10,9 +10,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.config import AppConfig
-from src.database import Database
-from src.models import Account, Channel, CollectionTaskStatus, NotificationBot
+from tg_agent.config import AppConfig
+from tg_agent.database import Database
+from tg_agent.models import Account, Channel, CollectionTaskStatus, NotificationBot
 
 pytestmark = pytest.mark.aiosqlite_serial
 
@@ -26,11 +26,11 @@ def cli_env_with_pool(cli_env):
     fake_pool.get_resolve_username_backoff_remaining_sec = MagicMock(return_value=0)
 
     async def fake_init_pool(config, db):
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         return TelegramAuth(0, ""), fake_pool
 
-    with patch("src.cli.runtime.init_pool", side_effect=fake_init_pool):
+    with patch("tg_agent.cli.runtime.init_pool", side_effect=fake_init_pool):
         yield cli_env, fake_pool
 
 
@@ -54,7 +54,7 @@ class TestMyTelegramCommand:
         cli_env, fake_pool = cli_env_with_pool
         fake_pool.clients = {}
 
-        from src.cli.commands.dialogs import run
+        from tg_agent.cli.commands.dialogs import run
 
         run(_ns(dialogs_action="list", phone=None))
         out = capsys.readouterr().out
@@ -65,7 +65,7 @@ class TestMyTelegramCommand:
         cli_env, fake_pool = cli_env_with_pool
         fake_pool.clients = {"+70001112233": AsyncMock()}
 
-        from src.cli.commands.dialogs import run
+        from tg_agent.cli.commands.dialogs import run
 
         run(_ns(dialogs_action="list", phone="+70009999999"))
         out = capsys.readouterr().out
@@ -76,7 +76,7 @@ class TestMyTelegramCommand:
         cli_env, fake_pool = cli_env_with_pool
         fake_pool.clients = {"+70001112233": AsyncMock()}
 
-        from src.services.channel_service import ChannelService
+        from tg_agent.services.channel_service import ChannelService
 
         mock_dialogs = [
             {
@@ -96,7 +96,7 @@ class TestMyTelegramCommand:
         with patch.object(
             ChannelService, "get_my_dialogs", new_callable=AsyncMock, return_value=mock_dialogs
         ):
-            from src.cli.commands.dialogs import run
+            from tg_agent.cli.commands.dialogs import run
 
             run(_ns(dialogs_action="list", phone="+70001112233"))
 
@@ -111,12 +111,12 @@ class TestMyTelegramCommand:
         cli_env, fake_pool = cli_env_with_pool
         fake_pool.clients = {"+70001112233": AsyncMock()}
 
-        from src.services.channel_service import ChannelService
+        from tg_agent.services.channel_service import ChannelService
 
         with patch.object(
             ChannelService, "get_my_dialogs", new_callable=AsyncMock, return_value=[]
         ):
-            from src.cli.commands.dialogs import run
+            from tg_agent.cli.commands.dialogs import run
 
             run(_ns(dialogs_action="list", phone="+70001112233"))
 
@@ -131,12 +131,12 @@ class TestMyTelegramCommand:
             "+70002223344": AsyncMock(),
         }
 
-        from src.services.channel_service import ChannelService
+        from tg_agent.services.channel_service import ChannelService
 
         with patch.object(
             ChannelService, "get_my_dialogs", new_callable=AsyncMock, return_value=[]
         ) as mock_get:
-            from src.cli.commands.dialogs import run
+            from tg_agent.cli.commands.dialogs import run
 
             run(_ns(dialogs_action="list", phone=None))
 
@@ -148,7 +148,7 @@ class TestMyTelegramCommand:
         cli_env, fake_pool = cli_env_with_pool
         fake_pool.clients = {}
 
-        from src.cli.commands.dialogs import run
+        from tg_agent.cli.commands.dialogs import run
 
         run(_ns(dialogs_action="leave", phone=None, dialog_ids=["-100123"], yes=True))
         out = capsys.readouterr().out
@@ -159,7 +159,7 @@ class TestMyTelegramCommand:
         cli_env, fake_pool = cli_env_with_pool
         fake_pool.clients = {"+10001112233": AsyncMock()}
 
-        from src.cli.commands.dialogs import run
+        from tg_agent.cli.commands.dialogs import run
 
         run(_ns(dialogs_action="leave", phone="+10009999999", dialog_ids=["-100123"], yes=True))
         out = capsys.readouterr().out
@@ -170,12 +170,12 @@ class TestMyTelegramCommand:
         cli_env, fake_pool = cli_env_with_pool
         fake_pool.clients = {"+10001112233": AsyncMock()}
 
-        from src.services.channel_service import ChannelService
+        from tg_agent.services.channel_service import ChannelService
 
         with patch.object(
             ChannelService, "get_my_dialogs", new_callable=AsyncMock, return_value=[]
         ):
-            from src.cli.commands.dialogs import run
+            from tg_agent.cli.commands.dialogs import run
 
             run(
                 _ns(
@@ -195,7 +195,7 @@ class TestMyTelegramCommand:
         cli_env, fake_pool = cli_env_with_pool
         fake_pool.clients = {"+10001112233": AsyncMock()}
 
-        from src.services.channel_service import ChannelService
+        from tg_agent.services.channel_service import ChannelService
 
         dialogs_info = [
             {
@@ -212,7 +212,7 @@ class TestMyTelegramCommand:
                 ChannelService, "get_my_dialogs", new_callable=AsyncMock, return_value=dialogs_info
             ),
         ):
-            from src.cli.commands.dialogs import run
+            from tg_agent.cli.commands.dialogs import run
 
             run(
                 _ns(
@@ -232,13 +232,13 @@ class TestMyTelegramCommand:
         cli_env, fake_pool = cli_env_with_pool
         fake_pool.clients = {"+10001112233": AsyncMock()}
 
-        from src.services.channel_service import ChannelService
+        from tg_agent.services.channel_service import ChannelService
         fake_pool.leave_channels = AsyncMock(return_value={-100111: True, -100222: False})
 
         with (
             patch.object(ChannelService, "get_my_dialogs", new_callable=AsyncMock, return_value=[]),
         ):
-            from src.cli.commands.dialogs import run
+            from tg_agent.cli.commands.dialogs import run
 
             run(
                 _ns(
@@ -258,7 +258,7 @@ class TestMyTelegramCommand:
         cli_env, fake_pool = cli_env_with_pool
         fake_pool.clients = {"+10001112233": AsyncMock()}
 
-        from src.services.channel_service import ChannelService
+        from tg_agent.services.channel_service import ChannelService
 
         dialogs_info = [
             {
@@ -275,7 +275,7 @@ class TestMyTelegramCommand:
             ),
             patch("builtins.input", return_value="n"),
         ):
-            from src.cli.commands.dialogs import run
+            from tg_agent.cli.commands.dialogs import run
 
             run(
                 _ns(
@@ -294,7 +294,7 @@ class TestMyTelegramCommand:
         cli_env, fake_pool = cli_env_with_pool
         fake_pool.clients = {"+10001112233": AsyncMock()}
 
-        from src.services.channel_service import ChannelService
+        from tg_agent.services.channel_service import ChannelService
 
         dialogs_info = [
             {
@@ -312,7 +312,7 @@ class TestMyTelegramCommand:
             ),
             patch("builtins.input", return_value="y"),
         ):
-            from src.cli.commands.dialogs import run
+            from tg_agent.cli.commands.dialogs import run
 
             run(
                 _ns(
@@ -334,13 +334,13 @@ class TestMyTelegramCommand:
             "+10002223344": AsyncMock(),
         }
 
-        from src.services.channel_service import ChannelService
+        from tg_agent.services.channel_service import ChannelService
         fake_pool.leave_channels = AsyncMock(return_value={-100123456: True})
 
         with (
             patch.object(ChannelService, "get_my_dialogs", new_callable=AsyncMock, return_value=[]),
         ):
-            from src.cli.commands.dialogs import run
+            from tg_agent.cli.commands.dialogs import run
 
             run(_ns(dialogs_action="leave", phone=None, dialog_ids=["-100123456"], yes=True))
 
@@ -356,13 +356,13 @@ class TestMyTelegramCommand:
         cli_env, fake_pool = cli_env_with_pool
         fake_pool.clients = {"+10001112233": AsyncMock()}
 
-        from src.services.channel_service import ChannelService
+        from tg_agent.services.channel_service import ChannelService
         fake_pool.leave_channels = AsyncMock(return_value={123456: True})
 
         with (
             patch.object(ChannelService, "get_my_dialogs", new_callable=AsyncMock, return_value=[]),
         ):
-            from src.cli.commands.dialogs import run
+            from tg_agent.cli.commands.dialogs import run
 
             run(
                 _ns(
@@ -382,7 +382,7 @@ class TestMyTelegramCommand:
         fake_pool.invalidate_dialogs_cache = MagicMock()
         fake_pool._dialogs_cache = {}
 
-        from src.cli.commands.dialogs import run
+        from tg_agent.cli.commands.dialogs import run
 
         run(_ns(dialogs_action="cache-clear", phone=None))
         out = capsys.readouterr().out
@@ -395,7 +395,7 @@ class TestMyTelegramCommand:
         fake_pool.invalidate_dialogs_cache = MagicMock()
         fake_pool._dialogs_cache = {}
 
-        from src.cli.commands.dialogs import run
+        from tg_agent.cli.commands.dialogs import run
 
         run(_ns(dialogs_action="cache-clear", phone="+10001112233"))
         out = capsys.readouterr().out
@@ -408,7 +408,7 @@ class TestMyTelegramCommand:
         fake_pool._dialogs_cache = {}
         fake_pool._dialogs_cache_ttl_sec = 60.0
 
-        from src.cli.commands.dialogs import run
+        from tg_agent.cli.commands.dialogs import run
 
         run(_ns(dialogs_action="cache-status"))
         out = capsys.readouterr().out
@@ -436,7 +436,7 @@ class TestMyTelegramCommand:
         ]
         asyncio.run(db.repos.dialog_cache.replace_dialogs("+10001112233", dialogs))
 
-        from src.cli.commands.dialogs import run
+        from tg_agent.cli.commands.dialogs import run
 
         run(_ns(dialogs_action="cache-status"))
         out = capsys.readouterr().out
@@ -457,8 +457,8 @@ class TestNotificationCommand:
         cli_env, fake_pool = cli_env_with_pool
         fake_pool.clients = {"+70001112233": AsyncMock()}
 
-        from src.models import NotificationBot
-        from src.services.notification_service import NotificationService
+        from tg_agent.models import NotificationBot
+        from tg_agent.services.notification_service import NotificationService
 
         mock_bot = NotificationBot(
             tg_user_id=123,
@@ -471,7 +471,7 @@ class TestNotificationCommand:
         with patch.object(
             NotificationService, "setup_bot", new_callable=AsyncMock, return_value=mock_bot
         ):
-            from src.cli.commands.notification import run
+            from tg_agent.cli.commands.notification import run
 
             run(_ns(notification_action="setup"))
 
@@ -487,12 +487,12 @@ class TestNotificationCommand:
         )
         fake_pool.clients = {"+70001112233": AsyncMock()}
 
-        from src.services.notification_service import NotificationService
+        from tg_agent.services.notification_service import NotificationService
 
         with patch.object(
             NotificationService, "get_status", new_callable=AsyncMock, return_value=None
         ):
-            from src.cli.commands.notification import run
+            from tg_agent.cli.commands.notification import run
 
             run(_ns(notification_action="status"))
 
@@ -507,7 +507,7 @@ class TestNotificationCommand:
         )
         fake_pool.clients = {"+70001112233": AsyncMock()}
 
-        from src.services.notification_service import NotificationService
+        from tg_agent.services.notification_service import NotificationService
 
         mock_bot = NotificationBot(
             tg_user_id=123,
@@ -520,7 +520,7 @@ class TestNotificationCommand:
         with patch.object(
             NotificationService, "get_status", new_callable=AsyncMock, return_value=mock_bot
         ):
-            from src.cli.commands.notification import run
+            from tg_agent.cli.commands.notification import run
 
             run(_ns(notification_action="status"))
 
@@ -533,10 +533,10 @@ class TestNotificationCommand:
         cli_env, fake_pool = cli_env_with_pool
         fake_pool.clients = {"+70001112233": AsyncMock()}
 
-        from src.services.notification_service import NotificationService
+        from tg_agent.services.notification_service import NotificationService
 
         with patch.object(NotificationService, "teardown_bot", new_callable=AsyncMock):
-            from src.cli.commands.notification import run
+            from tg_agent.cli.commands.notification import run
 
             run(_ns(notification_action="delete"))
 
@@ -557,7 +557,7 @@ class TestSchedulerCommand:
         the autostart setting, enqueues reconcile and exits."""
         cli_env, fake_pool = cli_env_with_pool
 
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         run(_ns(scheduler_action="start"))
 
@@ -645,7 +645,7 @@ def _sched_count_pending_tasks(db_path: str) -> int:
         conn.close()
 
 
-_SCHED_INIT_DB_TARGET = "src.cli.commands.scheduler.runtime.init_db"
+_SCHED_INIT_DB_TARGET = "tg_agent.cli.commands.scheduler.runtime.init_db"
 
 
 @pytest.fixture
@@ -660,11 +660,11 @@ def sched_pool_patch():
     fake_pool.disconnect_all = AsyncMock()
 
     async def fake_init_pool(config, db):
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         return TelegramAuth(0, ""), fake_pool
 
-    with patch("src.cli.runtime.init_pool", side_effect=fake_init_pool):
+    with patch("tg_agent.cli.runtime.init_pool", side_effect=fake_init_pool):
         yield fake_pool
 
 
@@ -683,7 +683,7 @@ def _sched_run_with_db(db_path: str, cli_init_patch, ns):
     asyncio.run(db.initialize())
     try:
         with cli_init_patch(db, _SCHED_INIT_DB_TARGET, fresh_database=True):
-            from src.cli.commands.scheduler import run
+            from tg_agent.cli.commands.scheduler import run
 
             run(ns)
     finally:
@@ -944,7 +944,7 @@ class TestSchedulerCommandRW:
         finally:
             asyncio.run(seed.close())
 
-        with patch("src.cli.runtime.init_pool", side_effect=_explode):
+        with patch("tg_agent.cli.runtime.init_pool", side_effect=_explode):
             for ns in (
                 _ns(scheduler_action="task-cancel", task_id=task_id),
                 _ns(scheduler_action="clear-pending"),
@@ -970,9 +970,9 @@ class TestServeCommand:
 
     def test_serve_exits_without_password(self, capsys):
         """Test serve exits when no password is configured."""
-        from src.cli.commands.serve import run
+        from tg_agent.cli.commands.serve import run
 
-        with patch("src.cli.commands.serve.load_config") as mock_load:
+        with patch("tg_agent.cli.commands.serve.load_config") as mock_load:
             config = AppConfig()
             config.web.password = ""
             mock_load.return_value = config
@@ -982,15 +982,15 @@ class TestServeCommand:
 
     def test_serve_uses_web_pass_arg(self):
         """Test serve uses web_pass from command line."""
-        from src.cli.commands.serve import run
+        from tg_agent.cli.commands.serve import run
 
         with (
-            patch("src.cli.commands.serve.load_config") as mock_load,
-            patch("src.cli.commands.serve.create_app") as mock_create,
-            patch("src.cli.commands.serve.pid_file_path") as mock_pid_path,
-            patch("src.cli.commands.serve.register_current_process"),
-            patch("src.cli.commands.serve.unregister_current_process"),
-            patch("src.cli.commands.serve.uvicorn.run") as mock_uvicorn,
+            patch("tg_agent.cli.commands.serve.load_config") as mock_load,
+            patch("tg_agent.cli.commands.serve.create_app") as mock_create,
+            patch("tg_agent.cli.commands.serve.pid_file_path") as mock_pid_path,
+            patch("tg_agent.cli.commands.serve.register_current_process"),
+            patch("tg_agent.cli.commands.serve.unregister_current_process"),
+            patch("tg_agent.cli.commands.serve.uvicorn.run") as mock_uvicorn,
         ):
 
             config = AppConfig()
@@ -1007,15 +1007,15 @@ class TestServeCommand:
 
     def test_serve_registers_and_unregisters_pid(self):
         """Test serve registers and unregisters PID file."""
-        from src.cli.commands.serve import run
+        from tg_agent.cli.commands.serve import run
 
         with (
-            patch("src.cli.commands.serve.load_config") as mock_load,
-            patch("src.cli.commands.serve.create_app") as mock_create,
-            patch("src.cli.commands.serve.pid_file_path") as mock_pid_path,
-            patch("src.cli.commands.serve.register_current_process") as mock_register,
-            patch("src.cli.commands.serve.unregister_current_process") as mock_unregister,
-            patch("src.cli.commands.serve.uvicorn.run"),
+            patch("tg_agent.cli.commands.serve.load_config") as mock_load,
+            patch("tg_agent.cli.commands.serve.create_app") as mock_create,
+            patch("tg_agent.cli.commands.serve.pid_file_path") as mock_pid_path,
+            patch("tg_agent.cli.commands.serve.register_current_process") as mock_register,
+            patch("tg_agent.cli.commands.serve.unregister_current_process") as mock_unregister,
+            patch("tg_agent.cli.commands.serve.uvicorn.run"),
         ):
 
             config = AppConfig()
@@ -1031,13 +1031,13 @@ class TestServeCommand:
 
     def test_serve_exits_on_pid_registration_error(self, caplog):
         """Test serve exits when PID registration fails."""
-        from src.cli.commands.serve import run
+        from tg_agent.cli.commands.serve import run
 
         with (
-            patch("src.cli.commands.serve.load_config") as mock_load,
-            patch("src.cli.commands.serve.create_app"),
-            patch("src.cli.commands.serve.pid_file_path") as mock_pid_path,
-            patch("src.cli.commands.serve.register_current_process") as mock_register,
+            patch("tg_agent.cli.commands.serve.load_config") as mock_load,
+            patch("tg_agent.cli.commands.serve.create_app"),
+            patch("tg_agent.cli.commands.serve.pid_file_path") as mock_pid_path,
+            patch("tg_agent.cli.commands.serve.register_current_process") as mock_register,
         ):
 
             config = AppConfig()
@@ -1063,7 +1063,7 @@ class TestCollectCommand:
         cli_env, fake_pool = cli_env_with_pool
         fake_pool.clients = {}
 
-        from src.cli.commands.collect import run
+        from tg_agent.cli.commands.collect import run
 
         run(_ns(channel_id=None, full=False))
         assert "No connected accounts" in caplog.text
@@ -1073,7 +1073,7 @@ class TestCollectCommand:
         cli_env, fake_pool = cli_env_with_pool
         fake_pool.clients = {"+70001112233": AsyncMock()}
 
-        from src.cli.commands.collect import run
+        from tg_agent.cli.commands.collect import run
 
         run(_ns(channel_id=None, full=False))
 
@@ -1088,14 +1088,14 @@ class TestCollectCommand:
         # Add a channel to collect
         _add_channel(cli_env, channel_id=100, title="Test Channel")
 
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         mock_stats = {"collected": 10, "errors": 0}
 
         with patch.object(
             Collector, "collect_single_channel", new_callable=AsyncMock, return_value=mock_stats
         ) as mock_collect:
-            from src.cli.commands.collect import run
+            from tg_agent.cli.commands.collect import run
 
             run(_ns(channel_id=100, full=False))
 
@@ -1113,14 +1113,14 @@ class TestCollectCommand:
         # Add a channel
         _add_channel(cli_env, channel_id=100, title="Test Channel")
 
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         mock_count = 100
 
         with patch.object(
             Collector, "collect_single_channel", new_callable=AsyncMock, return_value=mock_count
         ) as mock_collect:
-            from src.cli.commands.collect import run
+            from tg_agent.cli.commands.collect import run
 
             # Pass channel_id as int since argparse may convert it
             run(_ns(channel_id=100, full=True))
@@ -1138,7 +1138,7 @@ class TestCollectCommand:
         """Username resolve backoff should print a CLI message, not a traceback."""
         from datetime import datetime, timedelta, timezone
 
-        from src.telegram.collector import Collector, UsernameResolveFloodWaitDeferredError
+        from tg_agent.telegram.collector import Collector, UsernameResolveFloodWaitDeferredError
 
         cli_env, fake_pool = cli_env_with_pool
         fake_pool.clients = {"+70001112233": AsyncMock()}
@@ -1149,7 +1149,7 @@ class TestCollectCommand:
             next_available_at=datetime.now(timezone.utc) + timedelta(seconds=60),
         )
         with patch.object(Collector, "collect_single_channel", new_callable=AsyncMock, side_effect=exc):
-            from src.cli.commands.collect import run
+            from tg_agent.cli.commands.collect import run
 
             run(_ns(channel_id=100, full=True))
 
@@ -1159,7 +1159,7 @@ class TestCollectCommand:
 
 
     def test_collect_single_channel_username_rate_limited(self, cli_env_with_pool, capsys):
-        from src.telegram.collector import Collector, UsernameResolveRateLimitedError
+        from tg_agent.telegram.collector import Collector, UsernameResolveRateLimitedError
 
         cli_env, fake_pool = cli_env_with_pool
         fake_pool.clients = {"+70001112233": AsyncMock()}
@@ -1167,7 +1167,7 @@ class TestCollectCommand:
 
         exc = UsernameResolveRateLimitedError("+7001", 28)
         with patch.object(Collector, "collect_single_channel", new_callable=AsyncMock, side_effect=exc):
-            from src.cli.commands.collect import run
+            from tg_agent.cli.commands.collect import run
 
             run(_ns(channel_id=101, full=True))
 
@@ -1180,7 +1180,7 @@ class TestCollectCommand:
         retry deadline, not dump a traceback."""
         from datetime import datetime, timedelta, timezone
 
-        from src.telegram.collector import AllCollectionClientsFloodedError, Collector
+        from tg_agent.telegram.collector import AllCollectionClientsFloodedError, Collector
 
         cli_env, fake_pool = cli_env_with_pool
         fake_pool.clients = {"+70001112233": AsyncMock()}
@@ -1189,7 +1189,7 @@ class TestCollectCommand:
         next_at = datetime.now(timezone.utc) + timedelta(seconds=120)
         exc = AllCollectionClientsFloodedError(120, next_at)
         with patch.object(Collector, "collect_single_channel", new_callable=AsyncMock, side_effect=exc):
-            from src.cli.commands.collect import run
+            from tg_agent.cli.commands.collect import run
 
             run(_ns(channel_id=102, full=False))
 
@@ -1209,7 +1209,7 @@ class TestCollectCommand:
             side_effect=lambda phone=None: 600 if phone == "+7001" else 0
         )
 
-        from src.cli.commands.collect import run
+        from tg_agent.cli.commands.collect import run
 
         run(_ns(channel_id=None, full=False))
 
@@ -1223,7 +1223,7 @@ class TestCollectCommand:
         cli_env, fake_pool = cli_env_with_pool
         fake_pool.clients = {"+7001": AsyncMock()}
 
-        from src.cli.commands.collect import run
+        from tg_agent.cli.commands.collect import run
 
         run(_ns(channel_id=None, full=False))
 

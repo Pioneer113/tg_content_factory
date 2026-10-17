@@ -16,12 +16,12 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.cli.commands.filter import _build_deletion_service, _parse_pks, _print_result
-from src.cli.commands.messages import _print_live_messages, _print_messages
-from src.cli.commands.search_query import _chat_filter_warning
-from src.database.repositories.messages import MessageSearchPage
-from src.models import Account, Channel, Message, SearchQuery, SearchQueryDailyStat
 from tests.helpers import AsyncIterMessages, cli_ns
+from tg_agent.cli.commands.filter import _build_deletion_service, _parse_pks, _print_result
+from tg_agent.cli.commands.messages import _print_live_messages, _print_messages
+from tg_agent.cli.commands.search_query import _chat_filter_warning
+from tg_agent.database.repositories.messages import MessageSearchPage
+from tg_agent.models import Account, Channel, Message, SearchQuery, SearchQueryDailyStat
 
 # ---------------------------------------------------------------------------
 # Helper: make runtime.init_db return an awaitable that yields (config, db)
@@ -378,14 +378,14 @@ class TestBuildDeletionService:
 
 class TestAccountList:
     def test_no_accounts(self, cli_env, capsys):
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         run(cli_ns(account_action="list"))
         out = capsys.readouterr().out
         assert "No accounts found." in out
 
     def test_with_accounts(self, cli_env, capsys):
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         acc = Account(phone="+1234567890", session_string="sess1", is_primary=True)
         asyncio.run(cli_env.add_account(acc))
@@ -395,7 +395,7 @@ class TestAccountList:
         assert "Yes" in out  # Primary
 
     def test_with_inactive_account(self, cli_env, capsys):
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         acc = Account(
             phone="+9999999999", session_string="sess2",
@@ -409,14 +409,14 @@ class TestAccountList:
 
 class TestAccountToggle:
     def test_toggle_not_found(self, cli_env, capsys):
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         run(cli_ns(account_action="toggle", id=9999))
         out = capsys.readouterr().out
         assert "not found" in out
 
     def test_toggle_deactivates(self, cli_env, capsys):
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         acc = Account(phone="+1111111111", session_string="sess3", is_active=True)
         asyncio.run(cli_env.add_account(acc))
@@ -429,7 +429,7 @@ class TestAccountToggle:
 
 class TestAccountDelete:
     def test_delete_account(self, cli_env, capsys):
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         acc = Account(phone="+2222222222", session_string="sess4")
         asyncio.run(cli_env.add_account(acc))
@@ -442,14 +442,14 @@ class TestAccountDelete:
 
 class TestAccountFloodStatus:
     def test_no_accounts(self, cli_env, capsys):
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         run(cli_ns(account_action="flood-status"))
         out = capsys.readouterr().out
         assert "No accounts found." in out
 
     def test_account_no_flood(self, cli_env, capsys):
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         acc = Account(phone="+3333333333", session_string="sess5")
         asyncio.run(cli_env.add_account(acc))
@@ -460,14 +460,14 @@ class TestAccountFloodStatus:
 
 class TestAccountFloodClear:
     def test_account_not_found(self, cli_env, capsys):
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         run(cli_ns(account_action="flood-clear", phone="+0000000000"))
         out = capsys.readouterr().out
         assert "not found" in out
 
     def test_clear_flood(self, cli_env, capsys):
-        from src.cli.commands.account import run
+        from tg_agent.cli.commands.account import run
 
         acc = Account(
             phone="+7777777777", session_string="sess9",
@@ -550,7 +550,7 @@ class TestSchedulerClamping:
 
 class TestSchedulerStatus:
     def test_status_shows_config(self, capsys):
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         db = MagicMock()
         db.get_setting = AsyncMock(side_effect=lambda k: "1" if k == "scheduler_autostart" else None)
@@ -572,8 +572,8 @@ class TestSchedulerStatus:
         pool.clients = {"+1": MagicMock()}
         pool.disconnect_all = AsyncMock()
 
-        with patch("src.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
-             patch("src.cli.commands.scheduler.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
+        with patch("tg_agent.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
+             patch("tg_agent.cli.commands.scheduler.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
             run(cli_ns(scheduler_action="status"))
 
         out = capsys.readouterr().out
@@ -585,7 +585,7 @@ class TestSchedulerStatus:
 
 class TestSchedulerStop:
     def test_stop_disables_autostart(self, capsys):
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         db = MagicMock()
         db.set_setting = AsyncMock()
@@ -599,8 +599,8 @@ class TestSchedulerStop:
         pool.clients = {"+1": MagicMock()}
         pool.disconnect_all = AsyncMock()
 
-        with patch("src.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
-             patch("src.cli.commands.scheduler.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
+        with patch("tg_agent.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
+             patch("tg_agent.cli.commands.scheduler.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
             run(cli_ns(scheduler_action="stop"))
 
         out = capsys.readouterr().out
@@ -610,7 +610,7 @@ class TestSchedulerStop:
 
 class TestSchedulerJobToggle:
     def test_toggle_enables_job(self, capsys):
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         db = MagicMock()
         db.repos = MagicMock()
@@ -626,8 +626,8 @@ class TestSchedulerJobToggle:
         pool.clients = {"+1": MagicMock()}
         pool.disconnect_all = AsyncMock()
 
-        with patch("src.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
-             patch("src.cli.commands.scheduler.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
+        with patch("tg_agent.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
+             patch("tg_agent.cli.commands.scheduler.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
             run(cli_ns(scheduler_action="job-toggle", job_id="my_job"))
 
         out = capsys.readouterr().out
@@ -635,7 +635,7 @@ class TestSchedulerJobToggle:
         db.repos.settings.set_setting.assert_awaited_once_with("scheduler_job_disabled:my_job", "0")
 
     def test_toggle_disables_job(self, capsys):
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         db = MagicMock()
         db.repos = MagicMock()
@@ -651,8 +651,8 @@ class TestSchedulerJobToggle:
         pool.clients = {"+1": MagicMock()}
         pool.disconnect_all = AsyncMock()
 
-        with patch("src.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
-             patch("src.cli.commands.scheduler.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
+        with patch("tg_agent.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
+             patch("tg_agent.cli.commands.scheduler.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
             run(cli_ns(scheduler_action="job-toggle", job_id="test_job"))
 
         out = capsys.readouterr().out
@@ -661,7 +661,7 @@ class TestSchedulerJobToggle:
 
 class TestSchedulerSetInterval:
     def test_set_interval_collect_all(self, capsys):
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         db = MagicMock()
         db.repos = MagicMock()
@@ -676,8 +676,8 @@ class TestSchedulerSetInterval:
         pool.clients = {"+1": MagicMock()}
         pool.disconnect_all = AsyncMock()
 
-        with patch("src.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
-             patch("src.cli.commands.scheduler.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
+        with patch("tg_agent.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
+             patch("tg_agent.cli.commands.scheduler.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
             run(cli_ns(scheduler_action="set-interval", job_id="collect_all", minutes=30))
 
         out = capsys.readouterr().out
@@ -686,7 +686,7 @@ class TestSchedulerSetInterval:
 
     def test_set_interval_sq_job_updates_record(self, capsys):
         """sq_ interval must update the search_queries record, not a dead key (audit #835/9)."""
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         db = MagicMock()
         db.repos = MagicMock()
@@ -700,7 +700,7 @@ class TestSchedulerSetInterval:
         db.close = AsyncMock()
 
         config = MagicMock()
-        with patch("src.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))):
+        with patch("tg_agent.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))):
             run(cli_ns(scheduler_action="set-interval", job_id="sq_5", minutes=60))
 
         out = capsys.readouterr().out
@@ -710,7 +710,7 @@ class TestSchedulerSetInterval:
 
     def test_set_interval_unknown_job_is_rejected(self, capsys):
         """An unrecognized job_id must not silently write a dead settings key (audit #835/9)."""
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         db = MagicMock()
         db.repos = MagicMock()
@@ -718,7 +718,7 @@ class TestSchedulerSetInterval:
         db.close = AsyncMock()
 
         config = MagicMock()
-        with patch("src.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))):
+        with patch("tg_agent.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))):
             run(cli_ns(scheduler_action="set-interval", job_id="custom_job", minutes=60))
 
         out = capsys.readouterr().out
@@ -726,7 +726,7 @@ class TestSchedulerSetInterval:
         db.repos.settings.set_setting.assert_not_awaited()
 
     def test_set_interval_clamped(self, capsys):
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         db = MagicMock()
         db.repos = MagicMock()
@@ -741,8 +741,8 @@ class TestSchedulerSetInterval:
         pool.clients = {"+1": MagicMock()}
         pool.disconnect_all = AsyncMock()
 
-        with patch("src.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
-             patch("src.cli.commands.scheduler.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
+        with patch("tg_agent.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
+             patch("tg_agent.cli.commands.scheduler.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
             run(cli_ns(scheduler_action="set-interval", job_id="collect_all", minutes=0))
 
         out = capsys.readouterr().out
@@ -753,7 +753,7 @@ class TestSchedulerQueuePauseResume:
     def test_queue_pause_enqueues_collection_pause_command(self, capsys):
         """Pausing from the CLI must signal the running worker, not just write a
         setting it reads only at startup (audit #835/5)."""
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         db = MagicMock()
         db.set_setting = AsyncMock()
@@ -762,8 +762,8 @@ class TestSchedulerQueuePauseResume:
         svc = MagicMock()
         svc.enqueue = AsyncMock(return_value=1)
 
-        with patch("src.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
-             patch("src.services.telegram_command_service.TelegramCommandService", return_value=svc):
+        with patch("tg_agent.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
+             patch("tg_agent.services.telegram_command_service.TelegramCommandService", return_value=svc):
             run(cli_ns(scheduler_action="queue-pause"))
 
         db.set_setting.assert_awaited_with("collection_queue_paused", "1")
@@ -771,7 +771,7 @@ class TestSchedulerQueuePauseResume:
         assert svc.enqueue.await_args.args[0] == "collection.pause"
 
     def test_queue_resume_enqueues_collection_resume_command(self, capsys):
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         db = MagicMock()
         db.set_setting = AsyncMock()
@@ -780,8 +780,8 @@ class TestSchedulerQueuePauseResume:
         svc = MagicMock()
         svc.enqueue = AsyncMock(return_value=1)
 
-        with patch("src.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
-             patch("src.services.telegram_command_service.TelegramCommandService", return_value=svc):
+        with patch("tg_agent.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
+             patch("tg_agent.services.telegram_command_service.TelegramCommandService", return_value=svc):
             run(cli_ns(scheduler_action="queue-resume"))
 
         db.set_setting.assert_awaited_with("collection_queue_paused", "0")
@@ -791,7 +791,7 @@ class TestSchedulerQueuePauseResume:
 
 class TestSchedulerTaskCancel:
     def test_cancel_success(self, capsys):
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         db = MagicMock()
         db.repos = MagicMock()
@@ -805,8 +805,8 @@ class TestSchedulerTaskCancel:
         pool.clients = {"+1": MagicMock()}
         pool.disconnect_all = AsyncMock()
 
-        with patch("src.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
-             patch("src.cli.commands.scheduler.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
+        with patch("tg_agent.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
+             patch("tg_agent.cli.commands.scheduler.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
             run(cli_ns(scheduler_action="task-cancel", task_id=42))
 
         out = capsys.readouterr().out
@@ -814,7 +814,7 @@ class TestSchedulerTaskCancel:
         assert "#7" in out
 
     def test_cancel_not_found(self, capsys):
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         db = MagicMock()
         db.repos = MagicMock()
@@ -826,8 +826,8 @@ class TestSchedulerTaskCancel:
         pool.clients = {"+1": MagicMock()}
         pool.disconnect_all = AsyncMock()
 
-        with patch("src.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
-             patch("src.cli.commands.scheduler.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
+        with patch("tg_agent.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
+             patch("tg_agent.cli.commands.scheduler.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
             run(cli_ns(scheduler_action="task-cancel", task_id=99))
 
         out = capsys.readouterr().out
@@ -836,7 +836,7 @@ class TestSchedulerTaskCancel:
 
 class TestSchedulerClearPending:
     def test_clear_pending(self, capsys):
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         db = MagicMock()
         db.repos = MagicMock()
@@ -850,8 +850,8 @@ class TestSchedulerClearPending:
         pool.clients = {"+1": MagicMock()}
         pool.disconnect_all = AsyncMock()
 
-        with patch("src.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
-             patch("src.cli.commands.scheduler.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
+        with patch("tg_agent.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
+             patch("tg_agent.cli.commands.scheduler.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
             run(cli_ns(scheduler_action="clear-pending"))
 
         out = capsys.readouterr().out
@@ -863,7 +863,7 @@ class TestSchedulerNoAccounts:
     def test_status_works_without_accounts(self, capsys):
         """`scheduler status` is a DB-only read: it must print the config even
         when no Telegram account is connected (it no longer inits the pool)."""
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         db = MagicMock()
         db.close = AsyncMock()
@@ -877,8 +877,8 @@ class TestSchedulerNoAccounts:
         async def _no_pool(config, db):
             raise AssertionError("init_pool must not be called for `scheduler status`")
 
-        with patch("src.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
-             patch("src.cli.commands.scheduler.runtime.init_pool", side_effect=_no_pool):
+        with patch("tg_agent.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
+             patch("tg_agent.cli.commands.scheduler.runtime.init_pool", side_effect=_no_pool):
             run(cli_ns(scheduler_action="status"))
 
         out = capsys.readouterr().out
@@ -893,20 +893,20 @@ class TestSchedulerNoAccounts:
 
 class TestFilterToggle:
     def test_toggle_not_found(self, capsys):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         db = MagicMock()
         db.get_channel_by_pk = AsyncMock(return_value=None)
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))):
+        with patch("tg_agent.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))):
             run(cli_ns(filter_action="toggle", pk=999))
 
         out = capsys.readouterr().out
         assert "not found" in out
 
     def test_toggle_marks_filtered(self, capsys):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         ch = Channel(id=1, channel_id=100, title="TestCh", is_filtered=False)
         db = MagicMock()
@@ -914,7 +914,7 @@ class TestFilterToggle:
         db.set_channel_filtered = AsyncMock()
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))):
+        with patch("tg_agent.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))):
             run(cli_ns(filter_action="toggle", pk=1))
 
         out = capsys.readouterr().out
@@ -924,7 +924,7 @@ class TestFilterToggle:
         )
 
     def test_toggle_marks_unfiltered(self, capsys):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         ch = Channel(id=1, channel_id=100, title="TestCh", is_filtered=True)
         db = MagicMock()
@@ -932,7 +932,7 @@ class TestFilterToggle:
         db.set_channel_filtered = AsyncMock()
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))):
+        with patch("tg_agent.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))):
             run(cli_ns(filter_action="toggle", pk=1))
 
         out = capsys.readouterr().out
@@ -944,7 +944,7 @@ class TestFilterToggle:
 
 class TestFilterReset:
     def test_reset(self, capsys):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         analyzer = MagicMock()
         analyzer.reset_filters = AsyncMock()
@@ -952,8 +952,8 @@ class TestFilterReset:
         db = MagicMock()
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))), \
-             patch("src.cli.commands.filter.ChannelAnalyzer", return_value=analyzer):
+        with patch("tg_agent.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.filter.ChannelAnalyzer", return_value=analyzer):
             run(cli_ns(filter_action="reset"))
 
         out = capsys.readouterr().out
@@ -963,7 +963,7 @@ class TestFilterReset:
 
 class TestFilterPrecheck:
     def test_precheck(self, capsys):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         analyzer = MagicMock()
         analyzer.precheck_subscriber_ratio = AsyncMock(return_value=7)
@@ -971,8 +971,8 @@ class TestFilterPrecheck:
         db = MagicMock()
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))), \
-             patch("src.cli.commands.filter.ChannelAnalyzer", return_value=analyzer):
+        with patch("tg_agent.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.filter.ChannelAnalyzer", return_value=analyzer):
             run(cli_ns(filter_action="precheck"))
 
         out = capsys.readouterr().out
@@ -981,12 +981,12 @@ class TestFilterPrecheck:
 
 class TestFilterNoAction:
     def test_no_action_prints_usage(self, capsys):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         db = MagicMock()
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))):
+        with patch("tg_agent.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))):
             run(cli_ns(filter_action=None))
 
         out = capsys.readouterr().out
@@ -995,8 +995,8 @@ class TestFilterNoAction:
 
 class TestFilterPurge:
     def test_purge_with_pks(self, capsys):
-        from src.cli.commands.filter import run
-        from src.services.filter_deletion_service import PurgeResult
+        from tg_agent.cli.commands.filter import run
+        from tg_agent.services.filter_deletion_service import PurgeResult
 
         result = PurgeResult(purged_count=2, purged_titles=["A", "B"], skipped_count=0)
         svc = MagicMock()
@@ -1005,8 +1005,8 @@ class TestFilterPurge:
         db = MagicMock()
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))), \
-             patch("src.cli.commands.filter._build_deletion_service", return_value=svc):
+        with patch("tg_agent.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.filter._build_deletion_service", return_value=svc):
             run(cli_ns(filter_action="purge", pks="1,2", yes=True))
 
         out = capsys.readouterr().out
@@ -1014,20 +1014,20 @@ class TestFilterPurge:
         svc.purge_channels_by_pks.assert_awaited_once_with([1, 2])
 
     def test_purge_invalid_pks(self, capsys):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         db = MagicMock()
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))):
+        with patch("tg_agent.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))):
             run(cli_ns(filter_action="purge", pks="abc"))
 
         out = capsys.readouterr().out
         assert "No valid PKs" in out
 
     def test_purge_all_filtered(self, capsys):
-        from src.cli.commands.filter import run
-        from src.services.filter_deletion_service import PurgeResult
+        from tg_agent.cli.commands.filter import run
+        from tg_agent.services.filter_deletion_service import PurgeResult
 
         result = PurgeResult(purged_count=3, purged_titles=["X", "Y", "Z"], skipped_count=1)
         svc = MagicMock()
@@ -1036,8 +1036,8 @@ class TestFilterPurge:
         db = MagicMock()
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))), \
-             patch("src.cli.commands.filter._build_deletion_service", return_value=svc):
+        with patch("tg_agent.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.filter._build_deletion_service", return_value=svc):
             run(cli_ns(filter_action="purge", yes=True))
 
         out = capsys.readouterr().out
@@ -1047,20 +1047,20 @@ class TestFilterPurge:
 
 class TestFilterHardDelete:
     def test_hard_delete_dev_mode_disabled(self, capsys):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         db = MagicMock()
         db.get_setting = AsyncMock(return_value="0")
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))):
+        with patch("tg_agent.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))):
             run(cli_ns(filter_action="hard-delete"))
 
         out = capsys.readouterr().out
         assert "developer mode" in out
 
     def test_hard_delete_no_filtered(self, capsys):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         db = MagicMock()
         db.get_setting = AsyncMock(return_value="1")
@@ -1069,20 +1069,20 @@ class TestFilterHardDelete:
         ])
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))):
+        with patch("tg_agent.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))):
             run(cli_ns(filter_action="hard-delete", yes=False))
 
         out = capsys.readouterr().out
         assert "No filtered channels" in out
 
     def test_hard_delete_with_pks_no_confirm(self, capsys):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         db = MagicMock()
         db.get_setting = AsyncMock(return_value="1")
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))), \
+        with patch("tg_agent.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))), \
              patch("builtins.input", return_value="NO"):
             run(cli_ns(filter_action="hard-delete", pks="1,2", yes=False))
 
@@ -1090,8 +1090,8 @@ class TestFilterHardDelete:
         assert "Aborted" in out
 
     def test_hard_delete_with_pks_confirmed(self, capsys):
-        from src.cli.commands.filter import run
-        from src.services.filter_deletion_service import PurgeResult
+        from tg_agent.cli.commands.filter import run
+        from tg_agent.services.filter_deletion_service import PurgeResult
 
         result = PurgeResult(purged_count=2, purged_titles=["A", "B"], skipped_count=0)
         svc = MagicMock()
@@ -1101,8 +1101,8 @@ class TestFilterHardDelete:
         db.get_setting = AsyncMock(return_value="1")
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))), \
-             patch("src.cli.commands.filter._build_deletion_service", return_value=svc):
+        with patch("tg_agent.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.filter._build_deletion_service", return_value=svc):
             run(cli_ns(filter_action="hard-delete", pks="1,2", yes=True))
 
         out = capsys.readouterr().out
@@ -1111,7 +1111,7 @@ class TestFilterHardDelete:
 
 class TestFilterPurgeMessages:
     def test_purge_messages_no_confirm(self, capsys):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         db = MagicMock()
         db.get_channels = AsyncMock(return_value=[
@@ -1119,7 +1119,7 @@ class TestFilterPurgeMessages:
         ])
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))), \
+        with patch("tg_agent.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))), \
              patch("builtins.input", return_value="n"):
             run(cli_ns(filter_action="purge-messages", channel_id=100, yes=False))
 
@@ -1127,7 +1127,7 @@ class TestFilterPurgeMessages:
         assert "Aborted" in out
 
     def test_purge_messages_confirmed(self, capsys):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         db = MagicMock()
         db.get_channels = AsyncMock(return_value=[
@@ -1136,7 +1136,7 @@ class TestFilterPurgeMessages:
         db.delete_messages_for_channel = AsyncMock(return_value=42)
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))):
+        with patch("tg_agent.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))):
             run(cli_ns(filter_action="purge-messages", channel_id=100, yes=True))
 
         out = capsys.readouterr().out
@@ -1144,14 +1144,14 @@ class TestFilterPurgeMessages:
         assert "TestCh" in out
 
     def test_purge_messages_channel_not_in_db(self, capsys):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         db = MagicMock()
         db.get_channels = AsyncMock(return_value=[])
         db.delete_messages_for_channel = AsyncMock(return_value=0)
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))):
+        with patch("tg_agent.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))):
             run(cli_ns(filter_action="purge-messages", channel_id=999, yes=True))
 
         out = capsys.readouterr().out
@@ -1165,8 +1165,8 @@ class TestFilterPurgeMessages:
 
 class TestFilterAnalyze:
     def test_analyze_no_channels(self, capsys):
-        from src.cli.commands.filter import run
-        from src.filters.models import FilterReport
+        from tg_agent.cli.commands.filter import run
+        from tg_agent.filters.models import FilterReport
 
         report = FilterReport(results=[], total_channels=0, filtered_count=0)
         analyzer = MagicMock()
@@ -1176,16 +1176,16 @@ class TestFilterAnalyze:
         db = MagicMock()
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))), \
-             patch("src.cli.commands.filter.ChannelAnalyzer", return_value=analyzer):
+        with patch("tg_agent.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.filter.ChannelAnalyzer", return_value=analyzer):
             run(cli_ns(filter_action="analyze"))
 
         out = capsys.readouterr().out
         assert "No channels found." in out
 
     def test_analyze_with_channels(self, capsys):
-        from src.cli.commands.filter import run
-        from src.filters.models import ChannelFilterResult, FilterReport
+        from tg_agent.cli.commands.filter import run
+        from tg_agent.filters.models import ChannelFilterResult, FilterReport
 
         result_item = ChannelFilterResult(
             channel_id=100,
@@ -1209,8 +1209,8 @@ class TestFilterAnalyze:
         db = MagicMock()
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))), \
-             patch("src.cli.commands.filter.ChannelAnalyzer", return_value=analyzer):
+        with patch("tg_agent.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.filter.ChannelAnalyzer", return_value=analyzer):
             run(cli_ns(filter_action="analyze"))
 
         out = capsys.readouterr().out
@@ -1220,8 +1220,8 @@ class TestFilterAnalyze:
         assert "Flagged: 1" in out
 
     def test_apply(self, capsys):
-        from src.cli.commands.filter import run
-        from src.filters.models import FilterReport
+        from tg_agent.cli.commands.filter import run
+        from tg_agent.filters.models import FilterReport
 
         report = FilterReport(results=[], total_channels=5, filtered_count=3)
         analyzer = MagicMock()
@@ -1231,8 +1231,8 @@ class TestFilterAnalyze:
         db = MagicMock()
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))), \
-             patch("src.cli.commands.filter.ChannelAnalyzer", return_value=analyzer):
+        with patch("tg_agent.cli.commands.filter.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.filter.ChannelAnalyzer", return_value=analyzer):
             run(cli_ns(filter_action="apply"))
 
         out = capsys.readouterr().out
@@ -1246,7 +1246,7 @@ class TestFilterAnalyze:
 
 class TestCollectNoAccounts:
     def test_collect_no_accounts(self, capsys):
-        from src.cli.commands.collect import run
+        from tg_agent.cli.commands.collect import run
 
         db = MagicMock()
         db.close = AsyncMock()
@@ -1256,14 +1256,14 @@ class TestCollectNoAccounts:
         pool.clients = {}
         pool.disconnect_all = AsyncMock()
 
-        with patch("src.cli.commands.collect.runtime.init_db", side_effect=_make_coro((config, db))), \
-             patch("src.cli.commands.collect.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
+        with patch("tg_agent.cli.commands.collect.runtime.init_db", side_effect=_make_coro((config, db))), \
+             patch("tg_agent.cli.commands.collect.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
             run(cli_ns(channel_id=None))
 
 
 class TestCollectChannelNotFound:
     def test_collect_channel_not_found(self, capsys):
-        from src.cli.commands.collect import run
+        from tg_agent.cli.commands.collect import run
 
         db = MagicMock()
         db.get_channels = AsyncMock(return_value=[])
@@ -1275,8 +1275,8 @@ class TestCollectChannelNotFound:
         pool.clients = {"+1": MagicMock()}
         pool.disconnect_all = AsyncMock()
 
-        with patch("src.cli.commands.collect.runtime.init_db", side_effect=_make_coro((config, db))), \
-             patch("src.cli.commands.collect.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
+        with patch("tg_agent.cli.commands.collect.runtime.init_db", side_effect=_make_coro((config, db))), \
+             patch("tg_agent.cli.commands.collect.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
             run(cli_ns(channel_id=99999))
 
         out = capsys.readouterr().out
@@ -1285,7 +1285,7 @@ class TestCollectChannelNotFound:
 
 class TestCollectFilteredChannel:
     def test_collect_filtered_channel_skipped(self, capsys):
-        from src.cli.commands.collect import run
+        from tg_agent.cli.commands.collect import run
 
         ch = Channel(id=1, channel_id=100, title="FilteredCh", is_filtered=True)
         db = MagicMock()
@@ -1298,8 +1298,8 @@ class TestCollectFilteredChannel:
         pool.clients = {"+1": MagicMock()}
         pool.disconnect_all = AsyncMock()
 
-        with patch("src.cli.commands.collect.runtime.init_db", side_effect=_make_coro((config, db))), \
-             patch("src.cli.commands.collect.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
+        with patch("tg_agent.cli.commands.collect.runtime.init_db", side_effect=_make_coro((config, db))), \
+             patch("tg_agent.cli.commands.collect.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
             run(cli_ns(channel_id=100))
 
         out = capsys.readouterr().out
@@ -1308,8 +1308,8 @@ class TestCollectFilteredChannel:
 
 class TestCollectEnqueueAll:
     def test_enqueue_all(self, capsys):
-        from src.cli.commands.collect import run
-        from src.services.collection_service import BulkEnqueueResult
+        from tg_agent.cli.commands.collect import run
+        from tg_agent.services.collection_service import BulkEnqueueResult
 
         result = BulkEnqueueResult(queued_count=5, skipped_existing_count=2, total_candidates=7)
 
@@ -1322,12 +1322,12 @@ class TestCollectEnqueueAll:
         pool.clients = {"+1": MagicMock()}
         pool.disconnect_all = AsyncMock()
 
-        with patch("src.cli.commands.collect.runtime.init_db", side_effect=_make_coro((config, db))), \
-             patch("src.cli.commands.collect.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))), \
-             patch("src.cli.commands.collect.Collector"), \
-             patch("src.cli.commands.collect.CollectionService"), \
-             patch("src.cli.commands.collect.TaskEnqueuer") as mock_enq_cls, \
-             patch("src.cli.commands.collect.ChannelBundle"):
+        with patch("tg_agent.cli.commands.collect.runtime.init_db", side_effect=_make_coro((config, db))), \
+             patch("tg_agent.cli.commands.collect.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))), \
+             patch("tg_agent.cli.commands.collect.Collector"), \
+             patch("tg_agent.cli.commands.collect.CollectionService"), \
+             patch("tg_agent.cli.commands.collect.TaskEnqueuer") as mock_enq_cls, \
+             patch("tg_agent.cli.commands.collect.ChannelBundle"):
 
             mock_enq = MagicMock()
             mock_enq.enqueue_all_channels = AsyncMock(return_value=result)
@@ -1348,7 +1348,7 @@ class TestCollectEnqueueAll:
 
 class TestSearchQueryList:
     def test_list_empty(self, capsys):
-        from src.cli.commands.search_query import run
+        from tg_agent.cli.commands.search_query import run
 
         db = MagicMock()
         db.close = AsyncMock()
@@ -1357,9 +1357,9 @@ class TestSearchQueryList:
         svc_instance.get_with_stats = AsyncMock(return_value=[])
         bundle = MagicMock()
 
-        with patch("src.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
-             patch("src.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
-             patch("src.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
+        with patch("tg_agent.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
             mock_bundle_cls.from_database.return_value = bundle
             run(cli_ns(search_query_action="list"))
 
@@ -1367,7 +1367,7 @@ class TestSearchQueryList:
         assert "No search queries found." in out
 
     def test_list_with_items(self, capsys):
-        from src.cli.commands.search_query import run
+        from tg_agent.cli.commands.search_query import run
 
         db = MagicMock()
         db.close = AsyncMock()
@@ -1379,9 +1379,9 @@ class TestSearchQueryList:
         ])
         bundle = MagicMock()
 
-        with patch("src.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
-             patch("src.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
-             patch("src.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
+        with patch("tg_agent.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
             mock_bundle_cls.from_database.return_value = bundle
             run(cli_ns(search_query_action="list"))
 
@@ -1393,7 +1393,7 @@ class TestSearchQueryList:
 
 class TestSearchQueryAdd:
     def test_add(self, capsys):
-        from src.cli.commands.search_query import run
+        from tg_agent.cli.commands.search_query import run
 
         db = MagicMock()
         db.close = AsyncMock()
@@ -1402,9 +1402,9 @@ class TestSearchQueryAdd:
         svc_instance.add = AsyncMock(return_value=42)
         bundle = MagicMock()
 
-        with patch("src.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
-             patch("src.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
-             patch("src.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
+        with patch("tg_agent.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
             mock_bundle_cls.from_database.return_value = bundle
             run(cli_ns(
                 search_query_action="add",
@@ -1423,7 +1423,7 @@ class TestSearchQueryAdd:
         assert "hello world" in out
 
     def test_add_with_exclude_patterns(self, capsys):
-        from src.cli.commands.search_query import run
+        from tg_agent.cli.commands.search_query import run
 
         db = MagicMock()
         db.close = AsyncMock()
@@ -1432,9 +1432,9 @@ class TestSearchQueryAdd:
         svc_instance.add = AsyncMock(return_value=7)
         bundle = MagicMock()
 
-        with patch("src.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
-             patch("src.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
-             patch("src.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
+        with patch("tg_agent.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
             mock_bundle_cls.from_database.return_value = bundle
             run(cli_ns(
                 search_query_action="add",
@@ -1455,7 +1455,7 @@ class TestSearchQueryAdd:
 
 class TestSearchQueryDelete:
     def test_delete(self, capsys):
-        from src.cli.commands.search_query import run
+        from tg_agent.cli.commands.search_query import run
 
         db = MagicMock()
         db.close = AsyncMock()
@@ -1464,9 +1464,9 @@ class TestSearchQueryDelete:
         svc_instance.delete = AsyncMock()
         bundle = MagicMock()
 
-        with patch("src.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
-             patch("src.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
-             patch("src.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
+        with patch("tg_agent.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
             mock_bundle_cls.from_database.return_value = bundle
             run(cli_ns(search_query_action="delete", id=5))
 
@@ -1477,7 +1477,7 @@ class TestSearchQueryDelete:
 
 class TestSearchQueryToggle:
     def test_toggle(self, capsys):
-        from src.cli.commands.search_query import run
+        from tg_agent.cli.commands.search_query import run
 
         db = MagicMock()
         db.close = AsyncMock()
@@ -1486,9 +1486,9 @@ class TestSearchQueryToggle:
         svc_instance.toggle = AsyncMock()
         bundle = MagicMock()
 
-        with patch("src.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
-             patch("src.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
-             patch("src.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
+        with patch("tg_agent.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
             mock_bundle_cls.from_database.return_value = bundle
             run(cli_ns(search_query_action="toggle", id=10))
 
@@ -1498,7 +1498,7 @@ class TestSearchQueryToggle:
 
 class TestSearchQueryRun:
     def test_run(self, capsys):
-        from src.cli.commands.search_query import run
+        from tg_agent.cli.commands.search_query import run
 
         db = MagicMock()
         db.close = AsyncMock()
@@ -1507,9 +1507,9 @@ class TestSearchQueryRun:
         svc_instance.run_once = AsyncMock(return_value=8)
         bundle = MagicMock()
 
-        with patch("src.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
-             patch("src.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
-             patch("src.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
+        with patch("tg_agent.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
             mock_bundle_cls.from_database.return_value = bundle
             run(cli_ns(search_query_action="run", id=3))
 
@@ -1519,7 +1519,7 @@ class TestSearchQueryRun:
 
 class TestSearchQueryEdit:
     def test_edit_not_found(self, capsys):
-        from src.cli.commands.search_query import run
+        from tg_agent.cli.commands.search_query import run
 
         db = MagicMock()
         db.close = AsyncMock()
@@ -1529,9 +1529,9 @@ class TestSearchQueryEdit:
         svc_instance.update = AsyncMock()
         bundle = MagicMock()
 
-        with patch("src.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
-             patch("src.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
-             patch("src.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
+        with patch("tg_agent.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
             mock_bundle_cls.from_database.return_value = bundle
             run(cli_ns(search_query_action="edit", id=999, query=None, interval=None,
                        regex=None, fts=None, notify=None, track_stats=None,
@@ -1541,7 +1541,7 @@ class TestSearchQueryEdit:
         assert "not found" in out
 
     def test_edit_updates_fields(self, capsys):
-        from src.cli.commands.search_query import run
+        from tg_agent.cli.commands.search_query import run
 
         db = MagicMock()
         db.close = AsyncMock()
@@ -1557,9 +1557,9 @@ class TestSearchQueryEdit:
         svc_instance.update = AsyncMock()
         bundle = MagicMock()
 
-        with patch("src.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
-             patch("src.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
-             patch("src.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
+        with patch("tg_agent.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
             mock_bundle_cls.from_database.return_value = bundle
             run(cli_ns(search_query_action="edit", id=1, query="new query", interval=30,
                        regex=None, fts=None, notify=None, track_stats=None,
@@ -1576,7 +1576,7 @@ class TestSearchQueryEdit:
 
 class TestSearchQueryStats:
     def test_stats_no_data(self, capsys):
-        from src.cli.commands.search_query import run
+        from tg_agent.cli.commands.search_query import run
 
         db = MagicMock()
         db.close = AsyncMock()
@@ -1585,9 +1585,9 @@ class TestSearchQueryStats:
         svc_instance.get_daily_stats = AsyncMock(return_value=[])
         bundle = MagicMock()
 
-        with patch("src.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
-             patch("src.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
-             patch("src.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
+        with patch("tg_agent.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
             mock_bundle_cls.from_database.return_value = bundle
             run(cli_ns(search_query_action="stats", id=1, days=7))
 
@@ -1595,7 +1595,7 @@ class TestSearchQueryStats:
         assert "No stats found." in out
 
     def test_stats_with_data(self, capsys):
-        from src.cli.commands.search_query import run
+        from tg_agent.cli.commands.search_query import run
 
         db = MagicMock()
         db.close = AsyncMock()
@@ -1608,9 +1608,9 @@ class TestSearchQueryStats:
         svc_instance.get_daily_stats = AsyncMock(return_value=stats)
         bundle = MagicMock()
 
-        with patch("src.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
-             patch("src.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
-             patch("src.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
+        with patch("tg_agent.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
             mock_bundle_cls.from_database.return_value = bundle
             run(cli_ns(search_query_action="stats", id=1, days=7))
 
@@ -1630,12 +1630,12 @@ class TestSearchQueryStats:
 
 class TestMessagesReadDbMode:
     def test_include_reaction_users_requires_live_mode(self, capsys):
-        from src.cli.commands.messages import run
+        from tg_agent.cli.commands.messages import run
 
         db = MagicMock()
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.messages.runtime.init_db", side_effect=_make_coro((MagicMock(), db))):
+        with patch("tg_agent.cli.commands.messages.runtime.init_db", side_effect=_make_coro((MagicMock(), db))):
             run(cli_ns(
                 messages_action="read",
                 identifier="testch",
@@ -1656,13 +1656,13 @@ class TestMessagesReadDbMode:
         db.get_channels.assert_not_called()
 
     def test_channel_not_found(self, capsys):
-        from src.cli.commands.messages import run
+        from tg_agent.cli.commands.messages import run
 
         db = MagicMock()
         db.get_channels = AsyncMock(return_value=[])
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.messages.runtime.init_db", side_effect=_make_coro((MagicMock(), db))):
+        with patch("tg_agent.cli.commands.messages.runtime.init_db", side_effect=_make_coro((MagicMock(), db))):
             run(cli_ns(
                 messages_action="read",
                 identifier="nonexistent",
@@ -1680,7 +1680,7 @@ class TestMessagesReadDbMode:
         assert "not found" in out
 
     def test_no_messages_found(self, capsys):
-        from src.cli.commands.messages import run
+        from tg_agent.cli.commands.messages import run
 
         ch = Channel(id=1, channel_id=100, title="TestCh", username="testch")
         db = MagicMock()
@@ -1688,7 +1688,7 @@ class TestMessagesReadDbMode:
         db.search_messages = AsyncMock(return_value=MessageSearchPage(messages=[], total=0))
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.messages.runtime.init_db", side_effect=_make_coro((MagicMock(), db))):
+        with patch("tg_agent.cli.commands.messages.runtime.init_db", side_effect=_make_coro((MagicMock(), db))):
             run(cli_ns(
                 messages_action="read",
                 identifier="testch",
@@ -1706,7 +1706,7 @@ class TestMessagesReadDbMode:
         assert "No messages found." in out
 
     def test_read_messages_text_format(self, capsys):
-        from src.cli.commands.messages import run
+        from tg_agent.cli.commands.messages import run
 
         ch = Channel(id=1, channel_id=100, title="TestCh", username="testch")
         msg = Message(
@@ -1719,7 +1719,7 @@ class TestMessagesReadDbMode:
         db.search_messages = AsyncMock(return_value=MessageSearchPage(messages=[msg], total=1))
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.messages.runtime.init_db", side_effect=_make_coro((MagicMock(), db))):
+        with patch("tg_agent.cli.commands.messages.runtime.init_db", side_effect=_make_coro((MagicMock(), db))):
             run(cli_ns(
                 messages_action="read",
                 identifier="testch",
@@ -1737,7 +1737,7 @@ class TestMessagesReadDbMode:
         assert "Test message content" in out
 
     def test_read_messages_json_format(self, capsys):
-        from src.cli.commands.messages import run
+        from tg_agent.cli.commands.messages import run
 
         ch = Channel(id=1, channel_id=100, title="TestCh", username="testch")
         msg = Message(
@@ -1750,7 +1750,7 @@ class TestMessagesReadDbMode:
         db.search_messages = AsyncMock(return_value=MessageSearchPage(messages=[msg], total=1))
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.messages.runtime.init_db", side_effect=_make_coro((MagicMock(), db))):
+        with patch("tg_agent.cli.commands.messages.runtime.init_db", side_effect=_make_coro((MagicMock(), db))):
             run(cli_ns(
                 messages_action="read",
                 identifier="testch",
@@ -1769,7 +1769,7 @@ class TestMessagesReadDbMode:
 
     def test_read_messages_by_pk(self, capsys):
         """Test reading messages by numeric pk resolves correctly."""
-        from src.cli.commands.messages import run
+        from tg_agent.cli.commands.messages import run
 
         ch = Channel(id=5, channel_id=200, title="ById")
         msg = Message(
@@ -1782,7 +1782,7 @@ class TestMessagesReadDbMode:
         db.search_messages = AsyncMock(return_value=MessageSearchPage(messages=[msg], total=1))
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.messages.runtime.init_db", side_effect=_make_coro((MagicMock(), db))):
+        with patch("tg_agent.cli.commands.messages.runtime.init_db", side_effect=_make_coro((MagicMock(), db))):
             run(cli_ns(
                 messages_action="read",
                 identifier="5",
@@ -1802,7 +1802,7 @@ class TestMessagesReadDbMode:
 
 class TestMessagesReadLiveMode:
     def test_read_live_with_reaction_users(self, capsys):
-        from src.cli.commands.messages import run
+        from tg_agent.cli.commands.messages import run
 
         reactions = SimpleNamespace(
             results=[
@@ -1848,8 +1848,8 @@ class TestMessagesReadLiveMode:
         db = MagicMock()
         db.close = AsyncMock()
 
-        with patch("src.cli.commands.messages.runtime.init_db", side_effect=_make_coro((MagicMock(), db))), \
-             patch("src.cli.commands.messages.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
+        with patch("tg_agent.cli.commands.messages.runtime.init_db", side_effect=_make_coro((MagicMock(), db))), \
+             patch("tg_agent.cli.commands.messages.runtime.init_pool", side_effect=_make_coro((MagicMock(), pool))):
             run(cli_ns(
                 messages_action="read",
                 identifier="@test",
@@ -1884,7 +1884,7 @@ async def test_chat_filter_warning_logs_on_validator_error(caplog):
     svc = MagicMock()
     svc.validate_chat_filter = MagicMock(side_effect=RuntimeError("validator boom"))
 
-    with caplog.at_level(logging.WARNING, logger="src.cli.commands.search_query"):
+    with caplog.at_level(logging.WARNING, logger="tg_agent.cli.commands.search_query"):
         result = await _chat_filter_warning(svc, "@somechat")
 
     # Behaviour unchanged for the caller (empty warning text)...

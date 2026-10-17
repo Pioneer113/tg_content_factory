@@ -367,7 +367,7 @@ class TestClearFloodStatusTool:
 
 
 def _avail_account(phone, *, is_active=True, flood_wait_until=None, session_status=None):
-    from src.models import AccountSessionStatus
+    from tg_agent.models import AccountSessionStatus
 
     return SimpleNamespace(
         phone=phone,
@@ -402,7 +402,7 @@ class TestGetAccountAvailabilityTool:
 
     @pytest.mark.anyio
     async def test_session_unavailable_reports_interactive_login(self, mock_db):
-        from src.models import AccountSessionStatus
+        from tg_agent.models import AccountSessionStatus
 
         acc = _avail_account(
             "+8613000000000", session_status=AccountSessionStatus.DECRYPT_FAILED

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.services.s3_store import S3Store
+from tg_agent.services.s3_store import S3Store
 
 
 def test_from_env_configured(monkeypatch):
@@ -80,7 +80,7 @@ def test_unique_key_distinct_for_same_basename():
     """Regression (#862 review): two sources with the same basename must produce DISTINCT
     S3 keys, otherwise a later upload overwrites an earlier object that a presigned URL still
     points at (cross-run image overwrite/exposure). Extension is preserved."""
-    from src.services.s3_store import _unique_key
+    from tg_agent.services.s3_store import _unique_key
 
     k1 = _unique_key("/a/output.png")
     k2 = _unique_key("/b/output.png")
@@ -185,7 +185,7 @@ async def test_upload_url_mirrors_to_s3():
 @pytest.mark.anyio
 async def test_upload_url_rejects_oversize_content_length():
     """A Content-Length over the cap is rejected up front — body is never read into RAM."""
-    from src.services.s3_store import MAX_MIRROR_BYTES
+    from tg_agent.services.s3_store import MAX_MIRROR_BYTES
 
     mock_s3, mock_client = _mock_s3_modules()
     resp = _FakeResp(b"x", content_length=str(MAX_MIRROR_BYTES + 1))
@@ -201,7 +201,7 @@ async def test_upload_url_rejects_oversize_content_length():
 async def test_upload_url_rejects_oversize_body_despite_lying_header():
     """A missing/understated Content-Length cannot bypass the cap — the streaming read
     still aborts once the body exceeds MAX_MIRROR_BYTES."""
-    from src.services.s3_store import MAX_MIRROR_BYTES
+    from tg_agent.services.s3_store import MAX_MIRROR_BYTES
 
     mock_s3, mock_client = _mock_s3_modules()
     oversized = b"a" * (MAX_MIRROR_BYTES + 1024)
@@ -268,7 +268,7 @@ async def test_refresh_presigned_url_falls_back_on_error():
 
 @pytest.mark.anyio
 async def test_refresh_s3_url_noop_when_not_configured(monkeypatch):
-    from src.services.s3_store import refresh_s3_url
+    from tg_agent.services.s3_store import refresh_s3_url
 
     for var in ("S3_ENDPOINT", "S3_BUCKET", "S3_ACCESS_KEY", "S3_SECRET_KEY"):
         monkeypatch.setenv(var, "")
@@ -279,7 +279,7 @@ async def test_refresh_s3_url_noop_when_not_configured(monkeypatch):
 
 @pytest.mark.anyio
 async def test_refresh_s3_url_resigns_when_configured(monkeypatch):
-    from src.services.s3_store import refresh_s3_url
+    from tg_agent.services.s3_store import refresh_s3_url
 
     monkeypatch.setenv("S3_ENDPOINT", "https://s3.example.com")
     monkeypatch.setenv("S3_BUCKET", "bucket")

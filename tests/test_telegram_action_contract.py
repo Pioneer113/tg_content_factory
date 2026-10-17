@@ -5,35 +5,35 @@ import ast
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from src.agent.tools import build_agent_tool_registry
-from src.services.telegram_action_inventory import TELEGRAM_ACTION_INVENTORY
+from tg_agent.agent.tools import build_agent_tool_registry
+from tg_agent.services.telegram_action_inventory import TELEGRAM_ACTION_INVENTORY
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 RAW_TELETHON_ALLOWED = {
-    Path("src/telegram/backends.py"),
-    Path("src/telegram/auth.py"),
+    Path("tg_agent/telegram/backends.py"),
+    Path("tg_agent/telegram/auth.py"),
 }
 
 ENTRYPOINT_ROOTS = (
-    Path("src/cli"),
-    Path("src/web"),
-    Path("src/agent/tools"),
-    Path("src/services/pipeline_nodes"),
+    Path("tg_agent/cli"),
+    Path("tg_agent/web"),
+    Path("tg_agent/agent/tools"),
+    Path("tg_agent/services/pipeline_nodes"),
 )
 ENTRYPOINT_FILES = {
-    Path("src/services/telegram_command_dispatcher.py"),
+    Path("tg_agent/services/telegram_command_dispatcher.py"),
     # Per-domain dispatcher mixins (#1047) must keep delegating Telegram actions
     # through TelegramActionService, same as the facade they were split out of.
-    Path("src/services/dispatcher/dialogs_mixin.py"),
-    Path("src/services/dispatcher/channels_mixin.py"),
-    Path("src/services/dispatcher/accounts_mixin.py"),
-    Path("src/services/dispatcher/auth_mixin.py"),
-    Path("src/services/dispatcher/scheduler_mixin.py"),
-    Path("src/services/dispatcher/notifications_mixin.py"),
-    Path("src/services/dispatcher/photo_mixin.py"),
-    Path("src/services/dispatcher/search_mixin.py"),
-    Path("src/services/dispatcher/moderation_mixin.py"),
+    Path("tg_agent/services/dispatcher/dialogs_mixin.py"),
+    Path("tg_agent/services/dispatcher/channels_mixin.py"),
+    Path("tg_agent/services/dispatcher/accounts_mixin.py"),
+    Path("tg_agent/services/dispatcher/auth_mixin.py"),
+    Path("tg_agent/services/dispatcher/scheduler_mixin.py"),
+    Path("tg_agent/services/dispatcher/notifications_mixin.py"),
+    Path("tg_agent/services/dispatcher/photo_mixin.py"),
+    Path("tg_agent/services/dispatcher/search_mixin.py"),
+    Path("tg_agent/services/dispatcher/moderation_mixin.py"),
 }
 ENTRYPOINT_FORBIDDEN_ACTION_CALLS = {
     "send_message",
@@ -104,7 +104,7 @@ def _is_telegram_action_service_receiver(node: ast.AST) -> bool:
 
 def test_raw_telethon_function_imports_stay_in_backend_allowlist():
     offenders: list[str] = []
-    for path in sorted((PROJECT_ROOT / "src").rglob("*.py")):
+    for path in sorted((PROJECT_ROOT / "tg_agent").rglob("*.py")):
         relative = path.relative_to(PROJECT_ROOT)
         if relative in RAW_TELETHON_ALLOWED:
             continue
@@ -121,7 +121,7 @@ def test_raw_telethon_function_imports_stay_in_backend_allowlist():
 
 def test_raw_telethon_request_constructors_stay_in_backend_allowlist():
     offenders: list[str] = []
-    for path in sorted((PROJECT_ROOT / "src").rglob("*.py")):
+    for path in sorted((PROJECT_ROOT / "tg_agent").rglob("*.py")):
         relative = path.relative_to(PROJECT_ROOT)
         if relative in RAW_TELETHON_ALLOWED:
             continue
@@ -136,7 +136,7 @@ def test_raw_telethon_request_constructors_stay_in_backend_allowlist():
 
 def test_entrypoints_delegate_telegram_actions_to_service_contract():
     offenders: list[str] = []
-    for path in sorted((PROJECT_ROOT / "src").rglob("*.py")):
+    for path in sorted((PROJECT_ROOT / "tg_agent").rglob("*.py")):
         relative = path.relative_to(PROJECT_ROOT)
         if not _is_entrypoint_path(relative):
             continue

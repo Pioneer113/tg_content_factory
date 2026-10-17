@@ -1,6 +1,6 @@
 import pytest
 
-from src.models import PipelineGraph, PipelineTemplate
+from tg_agent.models import PipelineGraph, PipelineTemplate
 
 
 @pytest.fixture

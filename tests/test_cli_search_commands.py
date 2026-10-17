@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.cli.commands.search import run
 from tests.helpers import cli_ns, fake_asyncio_run, make_cli_config, make_cli_db
+from tg_agent.cli.commands.search import run
 
 
 def _args(**overrides):
@@ -32,8 +32,8 @@ def test_index_now(capsys):
     config = make_cli_config()
     mock_es = MagicMock()
     mock_es.index_pending_messages = AsyncMock(return_value=42)
-    with patch("src.cli.commands.search.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.search.EmbeddingService", return_value=mock_es), \
+    with patch("tg_agent.cli.commands.search.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.search.EmbeddingService", return_value=mock_es), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(index_now=True, reset_index=False, query=""))
     assert "42" in capsys.readouterr().out
@@ -44,8 +44,8 @@ def test_index_now_with_reset(capsys):
     config = make_cli_config()
     mock_es = MagicMock()
     mock_es.index_pending_messages = AsyncMock(return_value=10)
-    with patch("src.cli.commands.search.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.search.EmbeddingService", return_value=mock_es), \
+    with patch("tg_agent.cli.commands.search.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.search.EmbeddingService", return_value=mock_es), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(index_now=True, reset_index=True, query=""))
     db.repos.messages.reset_embeddings_index.assert_called_once()
@@ -59,7 +59,7 @@ def test_index_now_with_reset(capsys):
 def test_no_query():
     db = make_cli_db()
     config = make_cli_config()
-    with patch("src.cli.commands.search.runtime.init_db", AsyncMock(return_value=(config, db))), \
+    with patch("tg_agent.cli.commands.search.runtime.init_db", AsyncMock(return_value=(config, db))), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(index_now=False, query=""))
 
@@ -76,8 +76,8 @@ def test_local_search_with_results(capsys):
     result = MagicMock(total=1, query="test", messages=[msg])
     mock_engine = MagicMock()
     mock_engine.search_local = AsyncMock(return_value=result)
-    with patch("src.cli.commands.search.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.search.SearchEngine", return_value=mock_engine), \
+    with patch("tg_agent.cli.commands.search.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.search.SearchEngine", return_value=mock_engine), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(mode="local"))
     out = capsys.readouterr().out
@@ -96,8 +96,8 @@ def test_telegram_search_no_clients():
     pool = MagicMock()
     pool.clients = {}
     pool.disconnect_all = AsyncMock()
-    with patch("src.cli.commands.search.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.search.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
+    with patch("tg_agent.cli.commands.search.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.search.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(mode="telegram"))
 
@@ -110,9 +110,9 @@ def test_telegram_search_with_results(capsys):
     result = MagicMock(total=1, query="test", messages=[msg])
     mock_engine = MagicMock()
     mock_engine.search_telegram = AsyncMock(return_value=result)
-    with patch("src.cli.commands.search.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.search.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
-         patch("src.cli.commands.search.SearchEngine", return_value=mock_engine), \
+    with patch("tg_agent.cli.commands.search.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.search.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
+         patch("tg_agent.cli.commands.search.SearchEngine", return_value=mock_engine), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(mode="telegram"))
     assert "TG result" in capsys.readouterr().out
@@ -129,8 +129,8 @@ def test_semantic_search(capsys):
     result = MagicMock(total=0, query="test", messages=[])
     mock_engine = MagicMock()
     mock_engine.search_semantic = AsyncMock(return_value=result)
-    with patch("src.cli.commands.search.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.search.SearchEngine", return_value=mock_engine), \
+    with patch("tg_agent.cli.commands.search.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.search.SearchEngine", return_value=mock_engine), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(mode="semantic", min_length=10, max_length=500))
     assert "Found 0" in capsys.readouterr().out
@@ -147,8 +147,8 @@ def test_hybrid_search(capsys):
     result = MagicMock(total=0, query="test", messages=[])
     mock_engine = MagicMock()
     mock_engine.search_hybrid = AsyncMock(return_value=result)
-    with patch("src.cli.commands.search.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.search.SearchEngine", return_value=mock_engine), \
+    with patch("tg_agent.cli.commands.search.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.search.SearchEngine", return_value=mock_engine), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(mode="hybrid", fts=True, min_length=0, max_length=0))
     assert "Found 0" in capsys.readouterr().out
@@ -166,9 +166,9 @@ def test_my_chats_search(capsys):
     result = MagicMock(total=0, query="test", messages=[])
     mock_engine = MagicMock()
     mock_engine.search_my_chats = AsyncMock(return_value=result)
-    with patch("src.cli.commands.search.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.search.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
-         patch("src.cli.commands.search.SearchEngine", return_value=mock_engine), \
+    with patch("tg_agent.cli.commands.search.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.search.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
+         patch("tg_agent.cli.commands.search.SearchEngine", return_value=mock_engine), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(mode="my_chats"))
     assert "Found 0" in capsys.readouterr().out
@@ -186,9 +186,9 @@ def test_channel_search(capsys):
     result = MagicMock(total=0, query="test", messages=[])
     mock_engine = MagicMock()
     mock_engine.search_in_channel = AsyncMock(return_value=result)
-    with patch("src.cli.commands.search.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.search.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
-         patch("src.cli.commands.search.SearchEngine", return_value=mock_engine), \
+    with patch("tg_agent.cli.commands.search.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.search.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
+         patch("tg_agent.cli.commands.search.SearchEngine", return_value=mock_engine), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(mode="channel", channel_id=100))
     assert "Found 0" in capsys.readouterr().out

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from src.filters.analyzer import ChannelAnalyzer
-from src.filters.criteria import AUTHOR_CONTENT_TAG, VALID_FLAGS, WHITELIST_FLAG, contains_cyrillic
-from src.filters.models import ChannelFilterResult, FilterReport
+from tg_agent.filters.analyzer import ChannelAnalyzer
+from tg_agent.filters.criteria import AUTHOR_CONTENT_TAG, VALID_FLAGS, WHITELIST_FLAG, contains_cyrillic
+from tg_agent.filters.models import ChannelFilterResult, FilterReport
 
 
 async def _insert_channel(
@@ -341,7 +341,7 @@ class TestAnalyzeAllQuickMode:
         assert any(r.uniqueness_pct is not None for r in quick.results)
 
     async def test_analyze_all_quick_parallel_path_skips_cross_dupe(self, tmp_path):
-        from src.database import Database
+        from tg_agent.database import Database
 
         file_db = Database(str(tmp_path / "quick.db"))
         await file_db.initialize()
@@ -428,7 +428,7 @@ class TestAnalyzeAllQuickSampling:
         assert "non_cyrillic" not in quick_801.flags
 
     async def test_quick_default_sample_size_is_300(self, db, raw_db):
-        from src.filters.criteria import DEFAULT_QUICK_SAMPLE_SIZE
+        from tg_agent.filters.criteria import DEFAULT_QUICK_SAMPLE_SIZE
 
         assert DEFAULT_QUICK_SAMPLE_SIZE == 300
         # With <300 messages the default window covers the whole history, so the
@@ -479,7 +479,7 @@ class TestAnalyzeAllQuickSampling:
         assert sampled_map[804] == (5, 5)
 
     async def test_quick_sampling_parallel_path(self, tmp_path):
-        from src.database import Database
+        from tg_agent.database import Database
 
         file_db = Database(str(tmp_path / "quick_sample.db"))
         await file_db.initialize()
@@ -1137,7 +1137,7 @@ class TestApplyFiltersKeepTag:
         await raw_db.commit()
 
     async def test_keep_tag_escrow_blocks_autofilter(self, db, raw_db):
-        from src.filters.criteria import KEEP_TAG
+        from tg_agent.filters.criteria import KEEP_TAG
 
         # 900: keep-канал со спам-username — флаг ставится меткой, сбор не блокирует.
         await _insert_channel(raw_db, 900, username="S0IMD1EDUAW")
@@ -1172,7 +1172,7 @@ class TestApplyFiltersKeepTag:
         assert "suspicious_username" in flags_900
 
     async def test_keep_tag_channel_without_flags_gets_no_flags(self, db, raw_db):
-        from src.filters.criteria import KEEP_TAG
+        from tg_agent.filters.criteria import KEEP_TAG
 
         # Чистый keep-канал: эскроу не должен вешать флаги из воздуха.
         await _insert_channel(raw_db, 910)
@@ -1189,7 +1189,7 @@ class TestApplyFiltersKeepTag:
         is_filtered, filter_flags = await cur.fetchone()
         assert is_filtered == 0
         # Эскроу не вешает блокирующих флагов: только метки (тут — non_cyrillic).
-        from src.filters.criteria import LABEL_ONLY_FLAGS
+        from tg_agent.filters.criteria import LABEL_ONLY_FLAGS
 
         assert set((filter_flags or "").split(",")) - {""} <= LABEL_ONLY_FLAGS
 
@@ -1213,7 +1213,7 @@ class TestApplyFiltersLabelOnly:
     каналов — apply сохраняет флаги независимо от решения блокировать."""
 
     async def test_label_only_flag_survives_apply(self, db, raw_db):
-        from src.filters.criteria import LABEL_ONLY_FLAGS
+        from tg_agent.filters.criteria import LABEL_ONLY_FLAGS
 
         await _insert_channel(raw_db, 920)
         await _insert_messages(raw_db, 920, _ENGLISH_TEXTS)
@@ -1239,7 +1239,7 @@ class TestApplyFiltersLabelOnly:
         assert flags <= set(LABEL_ONLY_FLAGS)
 
     async def test_label_only_apply_idempotent(self, db, raw_db):
-        from src.filters.criteria import LABEL_ONLY_FLAGS
+        from tg_agent.filters.criteria import LABEL_ONLY_FLAGS
 
         await _insert_channel(raw_db, 921)
         await _insert_messages(raw_db, 921, _ENGLISH_TEXTS)
@@ -1304,7 +1304,7 @@ class TestPrecheckKeepTag:
     """#1516: precheck_subscriber_ratio соблюдает контракт keep-тега."""
 
     async def test_precheck_skips_keep_channel(self, db, raw_db):
-        from src.filters.criteria import KEEP_TAG
+        from tg_agent.filters.criteria import KEEP_TAG
 
         # Repro #1516: broadcast-канал с keep, 1 подписчик, 3 сообщения.
         await _insert_channel(raw_db, 930)
@@ -1330,7 +1330,7 @@ class TestPrecheckKeepTag:
         assert "low_subscriber_ratio" in rows[931][1]
 
     async def test_precheck_min_subs_skips_keep_channel(self, db, raw_db):
-        from src.filters.criteria import KEEP_TAG
+        from tg_agent.filters.criteria import KEEP_TAG
 
         await _insert_channel(raw_db, 932)
         await _insert_messages(raw_db, 932, ["msg 1", "msg 2", "msg 3"])
@@ -1626,7 +1626,7 @@ class TestApplyWhitelist:
         assert rows[5023] == (1, "manual")
 
     async def test_keep_tag_trusted(self, db, raw_db):
-        from src.filters.criteria import KEEP_TAG
+        from tg_agent.filters.criteria import KEEP_TAG
 
         await _insert_channel(raw_db, 5031)
         await raw_db.execute(

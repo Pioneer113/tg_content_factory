@@ -13,14 +13,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from src.models import (
+from tg_agent.models import (
     CollectionTask,
     CollectionTaskStatus,
     CollectionTaskType,
     GenerationRun,
     PipelineRunTaskPayload,
 )
-from src.services.pipeline_result import (
+from tg_agent.services.pipeline_result import (
     RESULT_KIND_GENERATED_ITEMS,
     RESULT_KIND_PROCESSED_MESSAGES,
 )

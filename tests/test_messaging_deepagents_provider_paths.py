@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.database import Database
+from tg_agent.database import Database
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -27,10 +27,10 @@ def _get_tool_handlers(mock_db, client_pool=None, config=None, **kwargs):
     """Build MCP tools and return their handlers keyed by name."""
     captured_tools = []
     with patch(
-        "src.agent.tools.create_sdk_mcp_server",
+        "tg_agent.agent.tools.create_sdk_mcp_server",
         side_effect=lambda **kw: captured_tools.extend(kw.get("tools", [])),
     ):
-        from src.agent.tools import make_mcp_server
+        from tg_agent.agent.tools import make_mcp_server
 
         make_mcp_server(mock_db, client_pool=client_pool, config=config, **kwargs)
     return {t.name: t.handler for t in captured_tools}
@@ -59,7 +59,7 @@ def _make_pool_with_client():
 
 
 def _build_sync_tools(mock_db, config=None, client_pool=None):
-    from src.agent.tools.deepagents_sync import build_deepagents_tools
+    from tg_agent.agent.tools.deepagents_sync import build_deepagents_tools
 
     return {t.__name__: t for t in build_deepagents_tools(mock_db, client_pool=client_pool, config=config)}
 
@@ -763,8 +763,8 @@ class TestDeepagentsSyncSettings:
 
 class TestBuildPromptStatsOnly:
     def _make_manager(self, mock_db):
-        from src.agent.manager import AgentManager
-        from src.config import AppConfig
+        from tg_agent.agent.manager import AgentManager
+        from tg_agent.config import AppConfig
 
         config = AppConfig()
         return AgentManager(mock_db, config=config)
@@ -812,8 +812,8 @@ class TestBuildPromptStatsOnly:
 
 class TestExtractResultText:
     def _make_backend(self):
-        from src.agent.manager import DeepagentsBackend
-        from src.config import AppConfig
+        from tg_agent.agent.manager import DeepagentsBackend
+        from tg_agent.config import AppConfig
 
         db = MagicMock(spec=Database)
         return DeepagentsBackend(db, AppConfig())
@@ -861,8 +861,8 @@ class TestExtractResultText:
 
 class TestDeepagentsBackendProperties:
     def _make_backend(self, config=None):
-        from src.agent.manager import DeepagentsBackend
-        from src.config import AppConfig
+        from tg_agent.agent.manager import DeepagentsBackend
+        from tg_agent.config import AppConfig
 
         db = MagicMock(spec=Database)
         return DeepagentsBackend(db, config or AppConfig())
@@ -932,8 +932,8 @@ class TestDeepagentsBackendProperties:
 
 class TestProviderConfigService:
     def _make_service(self):
-        from src.config import AppConfig
-        from src.services.agent_provider_service import ProviderConfigService
+        from tg_agent.config import AppConfig
+        from tg_agent.services.agent_provider_service import ProviderConfigService
 
         db = MagicMock(spec=Database)
         db.get_setting = AsyncMock(return_value=None)
@@ -941,7 +941,7 @@ class TestProviderConfigService:
         return ProviderConfigService(db, AppConfig()), db
 
     def _make_cfg(self, provider="openai", model="gpt-4o", **kwargs):
-        from src.agent.provider_registry import ProviderRuntimeConfig
+        from tg_agent.agent.provider_registry import ProviderRuntimeConfig
 
         return ProviderRuntimeConfig(
             provider=provider,
@@ -988,7 +988,7 @@ class TestProviderConfigService:
 
     def test_validate_provider_config_unknown_provider(self):
         svc, _ = self._make_service()
-        from src.agent.provider_registry import ProviderRuntimeConfig
+        from tg_agent.agent.provider_registry import ProviderRuntimeConfig
 
         cfg = ProviderRuntimeConfig(
             provider="unknown_xyz",
@@ -1003,7 +1003,7 @@ class TestProviderConfigService:
 
     def test_validate_provider_config_missing_required_secret(self):
         svc, _ = self._make_service()
-        from src.agent.provider_registry import ProviderRuntimeConfig
+        from tg_agent.agent.provider_registry import ProviderRuntimeConfig
 
         cfg = ProviderRuntimeConfig(
             provider="openai",
@@ -1018,7 +1018,7 @@ class TestProviderConfigService:
 
     def test_validate_provider_config_missing_model(self):
         svc, _ = self._make_service()
-        from src.agent.provider_registry import ProviderRuntimeConfig
+        from tg_agent.agent.provider_registry import ProviderRuntimeConfig
 
         cfg = ProviderRuntimeConfig(
             provider="openai",
@@ -1052,14 +1052,14 @@ class TestProviderConfigService:
         assert svc.config_fingerprint(cfg1) != svc.config_fingerprint(cfg2)
 
     def test_is_compatibility_record_fresh_no_tested_at(self):
-        from src.services.agent_provider_service import ProviderModelCompatibilityRecord
+        from tg_agent.services.agent_provider_service import ProviderModelCompatibilityRecord
 
         svc, _ = self._make_service()
         record = ProviderModelCompatibilityRecord(model="gpt-4o", status="supported", tested_at="")
         assert not svc.is_compatibility_record_fresh(record)
 
     def test_is_compatibility_record_fresh_recent(self):
-        from src.services.agent_provider_service import ProviderModelCompatibilityRecord
+        from tg_agent.services.agent_provider_service import ProviderModelCompatibilityRecord
 
         svc, _ = self._make_service()
         tested_at = datetime.now(UTC).isoformat()
@@ -1067,7 +1067,7 @@ class TestProviderConfigService:
         assert svc.is_compatibility_record_fresh(record)
 
     def test_is_compatibility_record_fresh_old(self):
-        from src.services.agent_provider_service import ProviderModelCompatibilityRecord
+        from tg_agent.services.agent_provider_service import ProviderModelCompatibilityRecord
 
         svc, _ = self._make_service()
         old = (datetime.now(UTC) - timedelta(hours=48)).isoformat()
@@ -1075,14 +1075,14 @@ class TestProviderConfigService:
         assert not svc.is_compatibility_record_fresh(record)
 
     def test_is_compatibility_record_fresh_invalid_date(self):
-        from src.services.agent_provider_service import ProviderModelCompatibilityRecord
+        from tg_agent.services.agent_provider_service import ProviderModelCompatibilityRecord
 
         svc, _ = self._make_service()
         record = ProviderModelCompatibilityRecord(model="m", status="s", tested_at="not-a-date")
         assert not svc.is_compatibility_record_fresh(record)
 
     def test_is_compatibility_record_fresh_no_tz(self):
-        from src.services.agent_provider_service import ProviderModelCompatibilityRecord
+        from tg_agent.services.agent_provider_service import ProviderModelCompatibilityRecord
 
         svc, _ = self._make_service()
         naive_dt = datetime.now(UTC).replace(tzinfo=None).isoformat()
@@ -1092,7 +1092,7 @@ class TestProviderConfigService:
         assert isinstance(result, bool)
 
     def test_compatibility_warning_no_record(self):
-        from src.services.agent_provider_service import ProviderModelCacheEntry
+        from tg_agent.services.agent_provider_service import ProviderModelCacheEntry
 
         svc, _ = self._make_service()
         cfg = self._make_cfg()
@@ -1101,7 +1101,7 @@ class TestProviderConfigService:
         assert "не проверялась" in warning.lower() or "не подтверждена" in warning.lower()
 
     def test_compatibility_warning_unknown_status(self):
-        from src.services.agent_provider_service import ProviderModelCacheEntry, ProviderModelCompatibilityRecord
+        from tg_agent.services.agent_provider_service import ProviderModelCacheEntry, ProviderModelCompatibilityRecord
 
         svc, _ = self._make_service()
         cfg = self._make_cfg()
@@ -1121,7 +1121,7 @@ class TestProviderConfigService:
         assert "probe incomplete" in warning or "не подтверждена" in warning
 
     def test_compatibility_warning_supported_fresh(self):
-        from src.services.agent_provider_service import ProviderModelCacheEntry, ProviderModelCompatibilityRecord
+        from tg_agent.services.agent_provider_service import ProviderModelCacheEntry, ProviderModelCompatibilityRecord
 
         svc, _ = self._make_service()
         cfg = self._make_cfg()
@@ -1140,7 +1140,7 @@ class TestProviderConfigService:
         assert warning == ""
 
     def test_compatibility_warning_supported_stale(self):
-        from src.services.agent_provider_service import ProviderModelCacheEntry, ProviderModelCompatibilityRecord
+        from tg_agent.services.agent_provider_service import ProviderModelCacheEntry, ProviderModelCompatibilityRecord
 
         svc, _ = self._make_service()
         cfg = self._make_cfg()
@@ -1160,7 +1160,7 @@ class TestProviderConfigService:
         assert "устарел" in warning.lower()
 
     def test_compatibility_error_no_record(self):
-        from src.services.agent_provider_service import ProviderModelCacheEntry
+        from tg_agent.services.agent_provider_service import ProviderModelCacheEntry
 
         svc, _ = self._make_service()
         cfg = self._make_cfg()
@@ -1169,7 +1169,7 @@ class TestProviderConfigService:
         assert error == ""
 
     def test_compatibility_error_unsupported(self):
-        from src.services.agent_provider_service import ProviderModelCacheEntry, ProviderModelCompatibilityRecord
+        from tg_agent.services.agent_provider_service import ProviderModelCacheEntry, ProviderModelCompatibilityRecord
 
         svc, _ = self._make_service()
         cfg = self._make_cfg()
@@ -1219,7 +1219,7 @@ class TestProviderConfigService:
         assert views == []
 
     def test_build_provider_views_with_config(self):
-        from src.services.agent_provider_service import ProviderModelCacheEntry
+        from tg_agent.services.agent_provider_service import ProviderModelCacheEntry
 
         svc, _ = self._make_service()
         cfg = self._make_cfg(provider="openai", model="gpt-4o")
@@ -1236,7 +1236,7 @@ class TestProviderConfigService:
 
     def test_build_provider_views_selected_model_not_in_list(self):
         """Selected model not in cache models — should be prepended."""
-        from src.services.agent_provider_service import ProviderModelCacheEntry
+        from tg_agent.services.agent_provider_service import ProviderModelCacheEntry
 
         svc, _ = self._make_service()
         cfg = self._make_cfg(provider="openai", model="gpt-custom-model")
@@ -1250,7 +1250,7 @@ class TestProviderConfigService:
 
     @pytest.mark.anyio
     async def test_save_and_load_model_cache(self):
-        from src.services.agent_provider_service import ProviderModelCacheEntry
+        from tg_agent.services.agent_provider_service import ProviderModelCacheEntry
 
         svc, db = self._make_service()
         saved_json: list[str] = []
@@ -1284,7 +1284,7 @@ class TestProviderConfigService:
         assert record is None
 
     def test_get_compatibility_record_missing_fingerprint(self):
-        from src.services.agent_provider_service import ProviderModelCacheEntry
+        from tg_agent.services.agent_provider_service import ProviderModelCacheEntry
 
         svc, _ = self._make_service()
         cfg = self._make_cfg()

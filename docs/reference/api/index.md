@@ -5,11 +5,11 @@
 **не-FastAPI поверхности**, которые не попадают в FastAPI `/docs`
 (см. [parity-матрицу](../parity.md)):
 
-- **[Services](services.md)** — сервисный слой (`src/services/`): оркестрация
+- **[Services](services.md)** — сервисный слой (`tg_agent/services/`): оркестрация
   сбора, пайплайнов, генерации контента, изображений, уведомлений, провайдеров.
 - **[Agent Tools](agent-tools-api.md)** — инструменты AI-агента
-  (`src/agent/tools/`): каналы, поиск, пайплайны, изображения и др.
-- **[CLI Internals](cli-internals.md)** — внутренности CLI (`src/cli/`):
+  (`tg_agent/agent/tools/`): каналы, поиск, пайплайны, изображения и др.
+- **[CLI Internals](cli-internals.md)** — внутренности CLI (`tg_agent/cli/`):
   runtime-обвязка и обработчики команд.
 
 !!! note "Покрытие docstring"

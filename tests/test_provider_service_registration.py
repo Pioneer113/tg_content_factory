@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.services.provider_service import RuntimeProviderRegistry
+from tg_agent.services.provider_service import RuntimeProviderRegistry
 
 
 def _make_service(**env_vars):
@@ -107,7 +107,7 @@ async def test_build_provider_status_list():
     mock_cfg.last_validation_error = ""
 
     # The method creates a new APS internally, so we need to mock at module level
-    with patch("src.services.agent_provider_service.ProviderConfigService") as mock_aps:
+    with patch("tg_agent.services.agent_provider_service.ProviderConfigService") as mock_aps:
         mock_instance = MagicMock()
         mock_instance.load_provider_configs = AsyncMock(return_value=[mock_cfg])
         mock_aps.return_value = mock_instance

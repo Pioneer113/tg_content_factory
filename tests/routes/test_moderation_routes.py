@@ -8,14 +8,14 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.database import Database
-from src.models import (
+from tg_agent.database import Database
+from tg_agent.models import (
     ContentPipeline,
     PipelineGenerationBackend,
     PipelinePublishMode,
     PipelineTarget,
 )
-from src.services.publish_service import PublishResult
+from tg_agent.services.publish_service import PublishResult
 
 
 @pytest.fixture
@@ -107,7 +107,7 @@ async def test_publish_run_rejects_unapproved_run(client, monkeypatch):
             await fake_publish(run, pipeline)
             return [PublishResult(success=True, message_id=777)]
 
-    monkeypatch.setattr("src.web.routes.moderation.PublishService", FakePublishService)
+    monkeypatch.setattr("tg_agent.web.routes.moderation.PublishService", FakePublishService)
 
     resp = await client.post(f"/moderation/{run_id}/publish", follow_redirects=False)
     assert resp.status_code == 303

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.models import Channel
+from tg_agent.models import Channel
 
 
 async def test_channel_active_origin_guard(channels_repo):

@@ -12,7 +12,7 @@ async def test_images_page(route_client, monkeypatch):
     mock_svc = MagicMock()
     mock_svc.adapter_names = ["test_provider"]
     monkeypatch.setattr(
-        "src.web.images.handlers._get_image_service",
+        "tg_agent.web.images.handlers._get_image_service",
         AsyncMock(return_value=mock_svc),
     )
     resp = await route_client.get("/images/")
@@ -34,7 +34,7 @@ async def test_generate_no_providers(route_client, monkeypatch):
     mock_svc = MagicMock()
     mock_svc.is_available = AsyncMock(return_value=False)
     monkeypatch.setattr(
-        "src.web.images.handlers._get_image_service",
+        "tg_agent.web.images.handlers._get_image_service",
         AsyncMock(return_value=mock_svc),
     )
     resp = await route_client.post("/images/generate", data={"prompt": "a cat"})
@@ -49,7 +49,7 @@ async def test_generate_success(route_client, monkeypatch):
     mock_svc.is_available = AsyncMock(return_value=True)
     mock_svc.generate = AsyncMock(return_value="https://img.example.com/1.png")
     monkeypatch.setattr(
-        "src.web.images.handlers._get_image_service",
+        "tg_agent.web.images.handlers._get_image_service",
         AsyncMock(return_value=mock_svc),
     )
     resp = await route_client.post("/images/generate", data={"prompt": "a cat", "model": "test:model"})
@@ -66,7 +66,7 @@ async def test_generate_file_path_mapped_to_data_image_url(route_client, monkeyp
     mock_svc.is_available = AsyncMock(return_value=True)
     mock_svc.generate = AsyncMock(return_value="data/image/abc123.png")
     monkeypatch.setattr(
-        "src.web.images.handlers._get_image_service",
+        "tg_agent.web.images.handlers._get_image_service",
         AsyncMock(return_value=mock_svc),
     )
     resp = await route_client.post("/images/generate", data={"prompt": "a cat", "model": "openai:gpt-image-1"})
@@ -77,7 +77,7 @@ async def test_generate_file_path_mapped_to_data_image_url(route_client, monkeyp
 
 
 def test_to_image_url_passthrough_and_mapping():
-    from src.web.images.handlers import _to_image_url
+    from tg_agent.web.images.handlers import _to_image_url
 
     assert _to_image_url("https://s3.example.com/x.png") == "https://s3.example.com/x.png"
     assert _to_image_url("http://cdn/x.png") == "http://cdn/x.png"
@@ -92,7 +92,7 @@ async def test_generate_failure(route_client, monkeypatch):
     mock_svc.generate = AsyncMock(return_value=None)
     mock_svc.last_failure = None
     monkeypatch.setattr(
-        "src.web.images.handlers._get_image_service",
+        "tg_agent.web.images.handlers._get_image_service",
         AsyncMock(return_value=mock_svc),
     )
     resp = await route_client.post("/images/generate", data={"prompt": "a cat"})
@@ -104,7 +104,7 @@ async def test_generate_failure(route_client, monkeypatch):
 
 @pytest.mark.anyio
 async def test_generate_timeout_failure(route_client, monkeypatch):
-    from src.services.image_generation_service import ImageGenerationFailure
+    from tg_agent.services.image_generation_service import ImageGenerationFailure
 
     mock_svc = MagicMock()
     mock_svc.is_available = AsyncMock(return_value=True)
@@ -113,7 +113,7 @@ async def test_generate_timeout_failure(route_client, monkeypatch):
         kind="timeout", provider="together", model="together:flux", message="timed out"
     )
     monkeypatch.setattr(
-        "src.web.images.handlers._get_image_service",
+        "tg_agent.web.images.handlers._get_image_service",
         AsyncMock(return_value=mock_svc),
     )
     resp = await route_client.post("/images/generate", data={"prompt": "a cat"})
@@ -135,11 +135,11 @@ async def test_search_models_no_provider(route_client, monkeypatch):
 @pytest.mark.anyio
 async def test_search_models_success(route_client, monkeypatch):
     monkeypatch.setattr(
-        "src.web.images.handlers._get_provider_api_key",
+        "tg_agent.web.images.handlers._get_provider_api_key",
         AsyncMock(return_value="fake-key"),
     )
     mock_models = [{"id": "model-1", "name": "Test Model"}]
-    with patch("src.web.images.handlers.ImageGenerationService") as mock_cls:
+    with patch("tg_agent.web.images.handlers.ImageGenerationService") as mock_cls:
         instance = MagicMock()
         instance.search_models = AsyncMock(return_value=mock_models)
         mock_cls.return_value = instance
@@ -155,10 +155,10 @@ async def test_search_models_success(route_client, monkeypatch):
 async def test_search_models_refresh_param_passed_through(route_client, monkeypatch):
     """?refresh=1 must reach ImageGenerationService.search_models(refresh=True)."""
     monkeypatch.setattr(
-        "src.web.images.handlers._get_provider_api_key",
+        "tg_agent.web.images.handlers._get_provider_api_key",
         AsyncMock(return_value="fake-key"),
     )
-    with patch("src.web.images.handlers.ImageGenerationService") as mock_cls:
+    with patch("tg_agent.web.images.handlers.ImageGenerationService") as mock_cls:
         instance = MagicMock()
         instance.search_models = AsyncMock(return_value=[])
         mock_cls.return_value = instance
@@ -177,7 +177,7 @@ async def test_search_models_refresh_param_passed_through(route_client, monkeypa
 async def test_search_models_no_api_key(route_client, monkeypatch):
     """Test search models when no API key is found."""
     monkeypatch.setattr(
-        "src.web.images.handlers._get_provider_api_key",
+        "tg_agent.web.images.handlers._get_provider_api_key",
         AsyncMock(return_value=""),
     )
     resp = await route_client.get("/images/models/search?provider=unknown&q=test")
@@ -189,7 +189,7 @@ async def test_search_models_no_api_key(route_client, monkeypatch):
 @pytest.mark.anyio
 async def test_images_page_with_db_error(route_client, monkeypatch):
     """Test images page when DB provider loading fails."""
-    with patch("src.services.image_provider_service.ImageProviderService", side_effect=Exception("DB error")):
+    with patch("tg_agent.services.image_provider_service.ImageProviderService", side_effect=Exception("DB error")):
         resp = await route_client.get("/images/")
     assert resp.status_code == 200
 
@@ -201,7 +201,7 @@ async def test_generate_with_model(route_client, monkeypatch):
     mock_svc.is_available = AsyncMock(return_value=True)
     mock_svc.generate = AsyncMock(return_value="https://img.example.com/2.png")
     monkeypatch.setattr(
-        "src.web.images.handlers._get_image_service",
+        "tg_agent.web.images.handlers._get_image_service",
         AsyncMock(return_value=mock_svc),
     )
     resp = await route_client.post("/images/generate", data={"prompt": "a dog", "model": "test:model"})
@@ -218,9 +218,9 @@ async def test_get_provider_api_key_from_db_config(monkeypatch):
     mock_svc = MagicMock()
     mock_svc.load_provider_configs = AsyncMock(return_value=[mock_config])
 
-    from src.web.images.handlers import _get_provider_api_key
+    from tg_agent.web.images.handlers import _get_provider_api_key
 
-    with patch("src.services.image_provider_service.ImageProviderService", return_value=mock_svc):
+    with patch("tg_agent.services.image_provider_service.ImageProviderService", return_value=mock_svc):
         result = await _get_provider_api_key(MagicMock(), "together")
     assert result == "db-key-123"
 
@@ -232,7 +232,7 @@ async def test_get_provider_api_key_env_fallback(monkeypatch):
     mock_svc = MagicMock()
     mock_svc.load_provider_configs = AsyncMock(return_value=[mock_config])
 
-    from src.services.image_provider_service import IMAGE_PROVIDER_SPECS
+    from tg_agent.services.image_provider_service import IMAGE_PROVIDER_SPECS
 
     first_provider = next(iter(IMAGE_PROVIDER_SPECS), None)
     if not first_provider:
@@ -242,9 +242,9 @@ async def test_get_provider_api_key_env_fallback(monkeypatch):
     for var in spec.env_vars:
         monkeypatch.setenv(var, "env-key-456")
 
-    from src.web.images.handlers import _get_provider_api_key
+    from tg_agent.web.images.handlers import _get_provider_api_key
 
-    with patch("src.services.image_provider_service.ImageProviderService", return_value=mock_svc):
+    with patch("tg_agent.services.image_provider_service.ImageProviderService", return_value=mock_svc):
         result = await _get_provider_api_key(MagicMock(), first_provider)
     assert result == "env-key-456"
 
@@ -254,10 +254,10 @@ async def test_get_provider_api_key_exception_returns_empty(caplog):
     """Returns empty string on any exception — and logs it instead of swallowing (#676)."""
     import logging
 
-    from src.web.images.handlers import _get_provider_api_key
+    from tg_agent.web.images.handlers import _get_provider_api_key
 
-    with patch("src.services.image_provider_service.ImageProviderService", side_effect=Exception("boom")):
-        with caplog.at_level(logging.WARNING, logger="src.web.images.handlers"):
+    with patch("tg_agent.services.image_provider_service.ImageProviderService", side_effect=Exception("boom")):
+        with caplog.at_level(logging.WARNING, logger="tg_agent.web.images.handlers"):
             result = await _get_provider_api_key(MagicMock(), "anything")
     assert result == ""
     assert any(

@@ -9,10 +9,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.config import AppConfig, SchedulerConfig
-from src.models import Account, SearchQuery
-from src.scheduler.service import SchedulerManager
 from tests.helpers import cli_ns as _ns
+from tg_agent.config import AppConfig, SchedulerConfig
+from tg_agent.models import Account, SearchQuery
+from tg_agent.scheduler.service import SchedulerManager
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -410,7 +410,7 @@ class TestSchedulerRunPhotoDue:
 
 class TestCLINotification:
     def test_notification_status_none(self, cli_env, capsys):
-        from src.cli.commands.notification import run
+        from tg_agent.cli.commands.notification import run
 
         fake_pool = AsyncMock()
         asyncio.run(
@@ -420,12 +420,12 @@ class TestCLINotification:
         fake_pool.disconnect_all = AsyncMock()
 
         async def fake_init_pool(config, db):
-            from src.telegram.auth import TelegramAuth
+            from tg_agent.telegram.auth import TelegramAuth
             return TelegramAuth(0, ""), fake_pool
 
-        with patch("src.cli.runtime.init_pool", side_effect=fake_init_pool):
+        with patch("tg_agent.cli.runtime.init_pool", side_effect=fake_init_pool):
             with patch(
-                "src.services.notification_service.NotificationService.get_status",
+                "tg_agent.services.notification_service.NotificationService.get_status",
                 new_callable=AsyncMock,
                 return_value=None,
             ):
@@ -436,8 +436,8 @@ class TestCLINotification:
     def test_notification_status_with_bot(self, cli_env, capsys):
         from datetime import datetime, timezone
 
-        from src.cli.commands.notification import run
-        from src.models import NotificationBot
+        from tg_agent.cli.commands.notification import run
+        from tg_agent.models import NotificationBot
 
         fake_pool = AsyncMock()
         asyncio.run(
@@ -455,12 +455,12 @@ class TestCLINotification:
         )
 
         async def fake_init_pool(config, db):
-            from src.telegram.auth import TelegramAuth
+            from tg_agent.telegram.auth import TelegramAuth
             return TelegramAuth(0, ""), fake_pool
 
-        with patch("src.cli.runtime.init_pool", side_effect=fake_init_pool):
+        with patch("tg_agent.cli.runtime.init_pool", side_effect=fake_init_pool):
             with patch(
-                "src.services.notification_service.NotificationService.get_status",
+                "tg_agent.services.notification_service.NotificationService.get_status",
                 new_callable=AsyncMock,
                 return_value=bot,
             ):
@@ -470,19 +470,19 @@ class TestCLINotification:
         assert "123456" in out
 
     def test_notification_delete(self, cli_env, capsys):
-        from src.cli.commands.notification import run
+        from tg_agent.cli.commands.notification import run
 
         fake_pool = AsyncMock()
         fake_pool.clients = {}
         fake_pool.disconnect_all = AsyncMock()
 
         async def fake_init_pool(config, db):
-            from src.telegram.auth import TelegramAuth
+            from tg_agent.telegram.auth import TelegramAuth
             return TelegramAuth(0, ""), fake_pool
 
-        with patch("src.cli.runtime.init_pool", side_effect=fake_init_pool):
+        with patch("tg_agent.cli.runtime.init_pool", side_effect=fake_init_pool):
             with patch(
-                "src.services.notification_service.NotificationService.teardown_bot",
+                "tg_agent.services.notification_service.NotificationService.teardown_bot",
                 new_callable=AsyncMock,
             ):
                 run(_ns(notification_action="delete"))
@@ -490,23 +490,23 @@ class TestCLINotification:
         assert "deleted" in out.lower()
 
     def test_notification_test_message(self, cli_env, capsys):
-        from src.cli.commands.notification import run
+        from tg_agent.cli.commands.notification import run
 
         fake_pool = AsyncMock()
         fake_pool.clients = {}
         fake_pool.disconnect_all = AsyncMock()
 
         async def fake_init_pool(config, db):
-            from src.telegram.auth import TelegramAuth
+            from tg_agent.telegram.auth import TelegramAuth
             return TelegramAuth(0, ""), fake_pool
 
         # Patch the whole NotificationService so send_notification is available
         fake_svc = MagicMock()
         fake_svc.send_notification = AsyncMock()
 
-        with patch("src.cli.runtime.init_pool", side_effect=fake_init_pool):
+        with patch("tg_agent.cli.runtime.init_pool", side_effect=fake_init_pool):
             with patch(
-                "src.cli.commands.notification.NotificationService",
+                "tg_agent.cli.commands.notification.NotificationService",
                 return_value=fake_svc,
             ):
                 run(_ns(notification_action="test", message="hello"))
@@ -522,14 +522,14 @@ class TestCLINotification:
 class TestCLITestReadChecks:
     @pytest.mark.anyio
     async def test_check_get_stats_pass(self, db):
-        from src.cli.commands.test import Status, _check_get_stats
+        from tg_agent.cli.commands.test import Status, _check_get_stats
 
         result = await _check_get_stats(db)
         assert result.status == Status.PASS
 
     @pytest.mark.anyio
     async def test_check_account_list_pass(self, db):
-        from src.cli.commands.test import Status, _check_account_list
+        from tg_agent.cli.commands.test import Status, _check_account_list
 
         result = await _check_account_list(db)
         assert result.status == Status.PASS
@@ -537,62 +537,62 @@ class TestCLITestReadChecks:
 
     @pytest.mark.anyio
     async def test_check_channel_list_pass(self, db):
-        from src.cli.commands.test import Status, _check_channel_list
+        from tg_agent.cli.commands.test import Status, _check_channel_list
 
         result = await _check_channel_list(db)
         assert result.status == Status.PASS
 
     @pytest.mark.anyio
     async def test_check_notification_queries_skip_when_empty(self, db):
-        from src.cli.commands.test import Status, _check_notification_queries
+        from tg_agent.cli.commands.test import Status, _check_notification_queries
 
         result = await _check_notification_queries(db)
         assert result.status == Status.SKIP
 
     @pytest.mark.anyio
     async def test_check_local_search_pass(self, db):
-        from src.cli.commands.test import Status, _check_local_search
+        from tg_agent.cli.commands.test import Status, _check_local_search
 
         result = await _check_local_search(db)
         assert result.status == Status.PASS
 
     @pytest.mark.anyio
     async def test_check_collection_tasks_pass(self, db):
-        from src.cli.commands.test import Status, _check_collection_tasks
+        from tg_agent.cli.commands.test import Status, _check_collection_tasks
 
         result = await _check_collection_tasks(db)
         assert result.status == Status.PASS
 
     @pytest.mark.anyio
     async def test_check_recent_searches_skip_when_empty(self, db):
-        from src.cli.commands.test import Status, _check_recent_searches
+        from tg_agent.cli.commands.test import Status, _check_recent_searches
 
         result = await _check_recent_searches(db)
         assert result.status == Status.SKIP
 
     @pytest.mark.anyio
     async def test_check_pipeline_list_pass(self, db):
-        from src.cli.commands.test import Status, _check_pipeline_list
+        from tg_agent.cli.commands.test import Status, _check_pipeline_list
 
         result = await _check_pipeline_list(db)
         assert result.status == Status.PASS
 
     @pytest.mark.anyio
     async def test_check_notification_bot_pass(self, db):
-        from src.cli.commands.test import Status, _check_notification_bot
+        from tg_agent.cli.commands.test import Status, _check_notification_bot
 
         result = await _check_notification_bot(db)
         assert result.status == Status.PASS
 
     @pytest.mark.anyio
     async def test_check_photo_tasks_pass(self, db):
-        from src.cli.commands.test import Status, _check_photo_tasks
+        from tg_agent.cli.commands.test import Status, _check_photo_tasks
 
         result = await _check_photo_tasks(db)
         assert result.status == Status.PASS
 
     def test_print_result_pass(self, capsys):
-        from src.cli.commands.test import CheckResult, Status, _print_result
+        from tg_agent.cli.commands.test import CheckResult, Status, _print_result
 
         _print_result(CheckResult("test_check", Status.PASS, "all good"))
         out = capsys.readouterr().out
@@ -600,14 +600,14 @@ class TestCLITestReadChecks:
         assert "test_check" in out
 
     def test_print_result_fail(self, capsys):
-        from src.cli.commands.test import CheckResult, Status, _print_result
+        from tg_agent.cli.commands.test import CheckResult, Status, _print_result
 
         _print_result(CheckResult("test_check", Status.FAIL, "broken"))
         out = capsys.readouterr().out
         assert "FAIL" in out
 
     def test_print_result_skip(self, capsys):
-        from src.cli.commands.test import CheckResult, Status, _print_result
+        from tg_agent.cli.commands.test import CheckResult, Status, _print_result
 
         _print_result(CheckResult("test_check", Status.SKIP, "skipped"))
         out = capsys.readouterr().out
@@ -616,7 +616,7 @@ class TestCLITestReadChecks:
 
 class TestCLITestDataclasses:
     def test_check_result_attributes(self):
-        from src.cli.commands.test import CheckResult, Status
+        from tg_agent.cli.commands.test import CheckResult, Status
 
         r = CheckResult("mycheck", Status.PASS, "detail text")
         assert r.name == "mycheck"
@@ -624,21 +624,21 @@ class TestCLITestDataclasses:
         assert r.detail == "detail text"
 
     def test_benchmark_step_attributes(self):
-        from src.cli.commands.test import BenchmarkStep
+        from tg_agent.cli.commands.test import BenchmarkStep
 
         step = BenchmarkStep("my_step", ("python", "-m", "pytest"))
         assert step.name == "my_step"
         assert step.command == ("python", "-m", "pytest")
 
     def test_format_exception_with_message(self):
-        from src.cli.commands.test import _format_exception
+        from tg_agent.cli.commands.test import _format_exception
 
         exc = ValueError("something went wrong")
         result = _format_exception(exc)
         assert result == "something went wrong"
 
     def test_format_exception_empty_uses_class_name(self):
-        from src.cli.commands.test import _format_exception
+        from tg_agent.cli.commands.test import _format_exception
 
         exc = ValueError("")
         result = _format_exception(exc)
@@ -648,7 +648,7 @@ class TestCLITestDataclasses:
         """_run_benchmark_step returns a float elapsed time."""
         import sys
 
-        from src.cli.commands.test import BenchmarkStep, _run_benchmark_step
+        from tg_agent.cli.commands.test import BenchmarkStep, _run_benchmark_step
 
         # Run a trivial command that succeeds quickly
         step = BenchmarkStep("trivial", (sys.executable, "-c", "pass"))
@@ -659,7 +659,7 @@ class TestCLITestDataclasses:
     def test_run_benchmark_step_raises_on_failure(self):
         import sys
 
-        from src.cli.commands.test import BenchmarkStep, _run_benchmark_step
+        from tg_agent.cli.commands.test import BenchmarkStep, _run_benchmark_step
 
         step = BenchmarkStep("failing_step", (sys.executable, "-c", "raise SystemExit(1)"))
         with pytest.raises(SystemExit):
@@ -668,7 +668,7 @@ class TestCLITestDataclasses:
 
 class TestCLITestRun:
     def test_run_read_action_calls_db(self, cli_env, capsys):
-        from src.cli.commands.test import run
+        from tg_agent.cli.commands.test import run
 
         run(_ns(test_action="read"))
         out = capsys.readouterr().out
@@ -676,9 +676,9 @@ class TestCLITestRun:
         assert "passed" in out
 
     def test_run_read_action_db_fail_exits(self, cli_env, capsys):
-        from src.cli.commands.test import run
+        from tg_agent.cli.commands.test import run
 
-        with patch("src.cli.runtime.init_db", side_effect=Exception("db crash")):
+        with patch("tg_agent.cli.runtime.init_db", side_effect=Exception("db crash")):
             with pytest.raises(SystemExit):
                 run(_ns(test_action="read"))
 
@@ -690,27 +690,27 @@ class TestCLITestRun:
 
 class TestProcessControl:
     def test_read_pid_returns_none_when_no_file(self, tmp_path):
-        from src.cli.process_control import read_pid
+        from tg_agent.cli.process_control import read_pid
 
         p = tmp_path / "test.pid"
         assert read_pid(p) is None
 
     def test_read_pid_returns_int(self, tmp_path):
-        from src.cli.process_control import read_pid
+        from tg_agent.cli.process_control import read_pid
 
         p = tmp_path / "test.pid"
         p.write_text("12345\n", encoding="utf-8")
         assert read_pid(p) == 12345
 
     def test_read_pid_empty_file_returns_none(self, tmp_path):
-        from src.cli.process_control import read_pid
+        from tg_agent.cli.process_control import read_pid
 
         p = tmp_path / "test.pid"
         p.write_text("   \n", encoding="utf-8")
         assert read_pid(p) is None
 
     def test_read_pid_invalid_raises(self, tmp_path):
-        from src.cli.process_control import ProcessControlError, read_pid
+        from tg_agent.cli.process_control import ProcessControlError, read_pid
 
         p = tmp_path / "test.pid"
         p.write_text("not_a_pid", encoding="utf-8")
@@ -718,7 +718,7 @@ class TestProcessControl:
             read_pid(p)
 
     def test_remove_pid_file_removes_existing(self, tmp_path):
-        from src.cli.process_control import remove_pid_file
+        from tg_agent.cli.process_control import remove_pid_file
 
         p = tmp_path / "test.pid"
         p.write_text("1", encoding="utf-8")
@@ -726,25 +726,25 @@ class TestProcessControl:
         assert not p.exists()
 
     def test_remove_pid_file_ignores_missing(self, tmp_path):
-        from src.cli.process_control import remove_pid_file
+        from tg_agent.cli.process_control import remove_pid_file
 
         p = tmp_path / "nonexistent.pid"
         remove_pid_file(p)  # should not raise
 
     def test_is_process_alive_current_process(self):
-        from src.cli.process_control import is_process_alive
+        from tg_agent.cli.process_control import is_process_alive
 
         assert is_process_alive(os.getpid()) is True
 
     def test_is_process_alive_nonexistent_pid(self):
-        from src.cli.process_control import is_process_alive
+        from tg_agent.cli.process_control import is_process_alive
 
         # PID 0 is the kernel idle process on Linux/macOS; kill -0 to 0 raises PermissionError
         # Use a very large PID that's almost certainly not running
         assert is_process_alive(999999999) is False
 
     def test_register_and_unregister(self, tmp_path):
-        from src.cli.process_control import register_current_process, unregister_current_process
+        from tg_agent.cli.process_control import register_current_process, unregister_current_process
 
         p = tmp_path / "test.pid"
         register_current_process(p)
@@ -756,13 +756,13 @@ class TestProcessControl:
         assert not p.exists()
 
     def test_ensure_server_not_running_no_pid_file(self, tmp_path):
-        from src.cli.process_control import ensure_server_not_running
+        from tg_agent.cli.process_control import ensure_server_not_running
 
         p = tmp_path / "no.pid"
         ensure_server_not_running(p)  # should return silently
 
     def test_ensure_server_not_running_own_pid_removes_file(self, tmp_path):
-        from src.cli.process_control import ensure_server_not_running
+        from tg_agent.cli.process_control import ensure_server_not_running
 
         p = tmp_path / "self.pid"
         p.write_text(f"{os.getpid()}\n", encoding="utf-8")
@@ -770,14 +770,14 @@ class TestProcessControl:
         assert not p.exists()
 
     def test_stop_server_no_pid_file(self, tmp_path):
-        from src.cli.process_control import StopResult, stop_server
+        from tg_agent.cli.process_control import StopResult, stop_server
 
         p = tmp_path / "no.pid"
         outcome = stop_server(p)
         assert outcome.result == StopResult.NOT_RUNNING
 
     def test_stop_server_stale_pid(self, tmp_path):
-        from src.cli.process_control import StopResult, stop_server
+        from tg_agent.cli.process_control import StopResult, stop_server
 
         p = tmp_path / "stale.pid"
         p.write_text("999999999\n", encoding="utf-8")
@@ -786,7 +786,7 @@ class TestProcessControl:
         assert not p.exists()
 
     def test_pid_file_path(self, tmp_path):
-        from src.cli.process_control import pid_file_path
+        from tg_agent.cli.process_control import pid_file_path
 
         config = AppConfig()
         config.database.path = str(tmp_path / "mydb.db")
@@ -803,7 +803,7 @@ class TestProcessControl:
 class TestDBConnection:
     @pytest.mark.anyio
     async def test_connect_creates_wal_db(self, tmp_path):
-        from src.database.connection import DBConnection
+        from tg_agent.database.connection import DBConnection
 
         db_path = str(tmp_path / "test_conn.db")
         conn = DBConnection(db_path)
@@ -819,7 +819,7 @@ class TestDBConnection:
 
     @pytest.mark.anyio
     async def test_close_is_idempotent(self, tmp_path):
-        from src.database.connection import DBConnection
+        from tg_agent.database.connection import DBConnection
 
         db_path = str(tmp_path / "test_close.db")
         conn = DBConnection(db_path)
@@ -829,7 +829,7 @@ class TestDBConnection:
 
     @pytest.mark.anyio
     async def test_close_when_not_connected(self, tmp_path):
-        from src.database.connection import DBConnection
+        from tg_agent.database.connection import DBConnection
 
         db_path = str(tmp_path / "never_opened.db")
         conn = DBConnection(db_path)
@@ -837,7 +837,7 @@ class TestDBConnection:
 
     @pytest.mark.anyio
     async def test_execute_fetchall(self, tmp_path):
-        from src.database.connection import DBConnection
+        from tg_agent.database.connection import DBConnection
 
         db_path = str(tmp_path / "test_exec.db")
         conn = DBConnection(db_path)
@@ -850,7 +850,7 @@ class TestDBConnection:
 
     @pytest.mark.anyio
     async def test_creates_parent_directory(self, tmp_path):
-        from src.database.connection import DBConnection
+        from tg_agent.database.connection import DBConnection
 
         nested = tmp_path / "nested" / "dir" / "db.sqlite"
         conn = DBConnection(str(nested))
@@ -868,7 +868,7 @@ class TestDBConnection:
 
 class TestAgentRuntimeStatus:
     def test_dataclass_fields(self):
-        from src.agent.manager import AgentRuntimeStatus
+        from tg_agent.agent.manager import AgentRuntimeStatus
 
         status = AgentRuntimeStatus(
             claude_available=True,
@@ -886,7 +886,7 @@ class TestAgentRuntimeStatus:
         assert status.error is None
 
     def test_dataclass_with_error(self):
-        from src.agent.manager import AgentRuntimeStatus
+        from tg_agent.agent.manager import AgentRuntimeStatus
 
         status = AgentRuntimeStatus(
             claude_available=False,
@@ -905,7 +905,7 @@ class TestAgentRuntimeStatus:
 
 class TestAgentManagerInit:
     def test_init_with_defaults(self, db):
-        from src.agent.manager import AgentManager
+        from tg_agent.agent.manager import AgentManager
 
         mgr = AgentManager(db)
         assert mgr._db is db
@@ -915,14 +915,14 @@ class TestAgentManagerInit:
         assert mgr._active_tasks == {}
 
     def test_init_with_config(self, db):
-        from src.agent.manager import AgentManager
+        from tg_agent.agent.manager import AgentManager
 
         config = AppConfig()
         mgr = AgentManager(db, config=config)
         assert mgr._config is config
 
     def test_available_false_when_no_credentials(self, db):
-        from src.agent.manager import AgentManager
+        from tg_agent.agent.manager import AgentManager
 
         with patch.dict(os.environ, {}, clear=True):
             mgr = AgentManager(db)
@@ -932,7 +932,7 @@ class TestAgentManagerInit:
 class TestAgentManagerRefreshSettingsCache:
     @pytest.mark.anyio
     async def test_refresh_settings_cache_no_preflight(self, db):
-        from src.agent.manager import AgentManager
+        from tg_agent.agent.manager import AgentManager
 
         mgr = AgentManager(db)
         # Should not raise
@@ -940,7 +940,7 @@ class TestAgentManagerRefreshSettingsCache:
 
     @pytest.mark.anyio
     async def test_refresh_settings_cache_with_preflight_no_config(self, db):
-        from src.agent.manager import AgentManager
+        from tg_agent.agent.manager import AgentManager
 
         mgr = AgentManager(db)
         # preflight=True with no deepagents configured; should not raise
@@ -950,7 +950,7 @@ class TestAgentManagerRefreshSettingsCache:
 class TestAgentManagerGetRuntimeStatus:
     @pytest.mark.anyio
     async def test_get_runtime_status_returns_status(self, db):
-        from src.agent.manager import AgentManager, AgentRuntimeStatus
+        from tg_agent.agent.manager import AgentManager, AgentRuntimeStatus
 
         mgr = AgentManager(db)
         status = await mgr.get_runtime_status()
@@ -960,7 +960,7 @@ class TestAgentManagerGetRuntimeStatus:
 
     @pytest.mark.anyio
     async def test_get_runtime_status_no_backends(self, db):
-        from src.agent.manager import AgentManager, ClaudeSdkBackend
+        from tg_agent.agent.manager import AgentManager, ClaudeSdkBackend
 
         mgr = AgentManager(db)
         # Patch the `available` property at the class level temporarily
@@ -970,7 +970,7 @@ class TestAgentManagerGetRuntimeStatus:
 
     @pytest.mark.anyio
     async def test_get_runtime_status_dev_mode_override(self, db):
-        from src.agent.manager import AgentManager
+        from tg_agent.agent.manager import AgentManager
 
         mgr = AgentManager(db)
         # Set dev mode and override in DB
@@ -984,7 +984,7 @@ class TestAgentManagerGetRuntimeStatus:
 
 class TestAgentManagerBuildPrompt:
     def test_build_prompt_no_history(self, db):
-        from src.agent.manager import AgentManager
+        from tg_agent.agent.manager import AgentManager
 
         mgr = AgentManager(db)
         prompt, stats = mgr._build_prompt([], "Hello")
@@ -993,7 +993,7 @@ class TestAgentManagerBuildPrompt:
         assert stats["kept_msgs"] == 0
 
     def test_build_prompt_with_history(self, db):
-        from src.agent.manager import AgentManager
+        from tg_agent.agent.manager import AgentManager
 
         mgr = AgentManager(db)
         history = [
@@ -1006,7 +1006,7 @@ class TestAgentManagerBuildPrompt:
         assert stats["kept_msgs"] == 2
 
     def test_build_prompt_stats_only(self, db):
-        from src.agent.manager import AgentManager
+        from tg_agent.agent.manager import AgentManager
 
         mgr = AgentManager(db)
         stats = mgr._build_prompt_stats_only([], "Hello")
@@ -1017,14 +1017,14 @@ class TestAgentManagerBuildPrompt:
 
 class TestClaudeSdkBackendAvailable:
     def test_available_with_api_key(self, db):
-        from src.agent.manager import ClaudeSdkBackend
+        from tg_agent.agent.manager import ClaudeSdkBackend
 
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-test"}):
             backend = ClaudeSdkBackend(db, AppConfig())
             assert backend.available is True
 
     def test_available_with_oauth_token(self, db):
-        from src.agent.manager import ClaudeSdkBackend
+        from tg_agent.agent.manager import ClaudeSdkBackend
 
         env = {k: v for k, v in os.environ.items() if k != "ANTHROPIC_API_KEY"}
         env["CLAUDE_CODE_OAUTH_TOKEN"] = "token-test"
@@ -1033,7 +1033,7 @@ class TestClaudeSdkBackendAvailable:
             assert backend.available is True
 
     def test_not_available_without_credentials(self, db):
-        from src.agent.manager import ClaudeSdkBackend
+        from tg_agent.agent.manager import ClaudeSdkBackend
 
         env = {
             k: v for k, v in os.environ.items()

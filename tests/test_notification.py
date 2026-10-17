@@ -7,12 +7,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.models import NotificationBot
-from src.services.notification_service import NotificationService
-from src.services.notification_target_service import NotificationTargetService
-from src.telegram import botfather
-from src.telegram.notifier import Notifier
 from tests.helpers import FakeCliTelethonClient
+from tg_agent.models import NotificationBot
+from tg_agent.services.notification_service import NotificationService
+from tg_agent.services.notification_target_service import NotificationTargetService
+from tg_agent.telegram import botfather
+from tg_agent.telegram.notifier import Notifier
 
 pytestmark = pytest.mark.native_backend_allowed
 
@@ -374,7 +374,7 @@ async def test_setup_bot_success(db, real_pool_harness_factory):
     svc = NotificationService(db, NotificationTargetService(db, harness.pool))
 
     with patch(
-        "src.services.notification_service.botfather.create_bot",
+        "tg_agent.services.notification_service.botfather.create_bot",
         new_callable=AsyncMock,
         return_value="111111111:AABBCCDDEEFFaabbccddeeffAABBCCDDEEFF",
     ):
@@ -430,9 +430,9 @@ async def test_setup_bot_start_send_timeout_is_unconfirmed_not_fatal(db, real_po
 
     svc = NotificationService(db, NotificationTargetService(db, harness.pool))
 
-    with caplog.at_level("WARNING", logger="src.services.notification_service"):
+    with caplog.at_level("WARNING", logger="tg_agent.services.notification_service"):
         with patch(
-            "src.services.notification_service.botfather.create_bot",
+            "tg_agent.services.notification_service.botfather.create_bot",
             new_callable=AsyncMock,
             return_value="555555555:AABBCCDDEEFFaabbccddeeffAABBCCDDEEFF",
         ):
@@ -469,7 +469,7 @@ async def test_setup_bot_custom_prefix(db, real_pool_harness_factory):
     )
 
     with patch(
-        "src.services.notification_service.botfather.create_bot",
+        "tg_agent.services.notification_service.botfather.create_bot",
         new_callable=AsyncMock,
         return_value="222222222:AABBCCDDEEFFaabbccddeeffAABBCCDDEEFF",
     ) as mock_create:
@@ -498,7 +498,7 @@ async def test_setup_bot_slug_truncated(db, real_pool_harness_factory):
     svc = NotificationService(db, NotificationTargetService(db, harness.pool))
 
     with patch(
-        "src.services.notification_service.botfather.create_bot",
+        "tg_agent.services.notification_service.botfather.create_bot",
         new_callable=AsyncMock,
         return_value="333333333:AABBCCDDEEFFaabbccddeeffAABBCCDDEEFF",
     ):
@@ -544,7 +544,7 @@ async def test_setup_bot_bot_id_none_if_entity_fails(db, real_pool_harness_facto
 
     svc = NotificationService(db, NotificationTargetService(db, harness.pool))
     with patch(
-        "src.services.notification_service.botfather.create_bot",
+        "tg_agent.services.notification_service.botfather.create_bot",
         new_callable=AsyncMock,
         return_value="444444444:AABBCCDDEEFFaabbccddeeffAABBCCDDEEFF",
     ):
@@ -620,7 +620,7 @@ async def test_teardown_bot_success(db, real_pool_harness_factory):
     svc = NotificationService(db, NotificationTargetService(db, harness.pool))
 
     with patch(
-        "src.services.notification_service.botfather.delete_bot",
+        "tg_agent.services.notification_service.botfather.delete_bot",
         new_callable=AsyncMock,
     ):
         await svc.teardown_bot()
@@ -666,7 +666,7 @@ async def test_teardown_bot_db_delete_failure_warns_about_orphan(
     # BotFather succeeds (bot is gone from Telegram) but the DB delete blows up.
     with (
         patch(
-            "src.services.notification_service.botfather.delete_bot",
+            "tg_agent.services.notification_service.botfather.delete_bot",
             new_callable=AsyncMock,
         ),
         patch.object(
@@ -726,7 +726,7 @@ async def test_teardown_bot_idempotent_after_orphan_cleans_db(db, real_pool_harn
     # The bot was already deleted in Telegram on the first (failed) teardown, so
     # BotFather can't find it in /mybots — signalled by BotNotFoundError.
     with patch(
-        "src.services.notification_service.botfather.delete_bot",
+        "tg_agent.services.notification_service.botfather.delete_bot",
         new_callable=AsyncMock,
         side_effect=botfather.BotNotFoundError("@leadhunter_grace_bot not in /mybots"),
     ):
@@ -767,7 +767,7 @@ async def test_teardown_bot_real_botfather_error_does_not_delete_db(db, real_poo
     svc = NotificationService(db, NotificationTargetService(db, harness.pool))
 
     with patch(
-        "src.services.notification_service.botfather.delete_bot",
+        "tg_agent.services.notification_service.botfather.delete_bot",
         new_callable=AsyncMock,
         side_effect=RuntimeError("BotFather: Sorry, something went wrong"),
     ):
@@ -870,7 +870,7 @@ async def test_notification_service_uses_selected_account(db, real_pool_harness_
 
     svc = NotificationService(db, NotificationTargetService(db, harness.pool))
     with patch(
-        "src.services.notification_service.botfather.create_bot",
+        "tg_agent.services.notification_service.botfather.create_bot",
         new_callable=AsyncMock,
         return_value="222222222:AABBCCDDEEFFaabbccddeeffAABBCCDDEEFF",
     ):
@@ -890,7 +890,7 @@ async def test_send_notification_delivers_via_notifier():
     svc = NotificationService(MagicMock(), target_service)
     notifier = MagicMock()
     notifier.notify = AsyncMock(return_value=True)
-    with patch("src.telegram.notifier.Notifier", return_value=notifier) as mock_notifier:
+    with patch("tg_agent.telegram.notifier.Notifier", return_value=notifier) as mock_notifier:
         ok = await svc.send_notification("Custom message")
     assert ok is True
     notifier.notify.assert_awaited_once_with("Custom message")
@@ -903,7 +903,7 @@ async def test_send_notification_defaults_blank_message():
     svc = NotificationService(MagicMock(), MagicMock())
     notifier = MagicMock()
     notifier.notify = AsyncMock(return_value=True)
-    with patch("src.telegram.notifier.Notifier", return_value=notifier):
+    with patch("tg_agent.telegram.notifier.Notifier", return_value=notifier):
         await svc.send_notification("   ")
     sent = notifier.notify.await_args.args[0]
     assert sent.strip() != ""
@@ -914,6 +914,6 @@ async def test_send_notification_raises_on_failure():
     svc = NotificationService(MagicMock(), MagicMock())
     notifier = MagicMock()
     notifier.notify = AsyncMock(return_value=False)
-    with patch("src.telegram.notifier.Notifier", return_value=notifier):
+    with patch("tg_agent.telegram.notifier.Notifier", return_value=notifier):
         with pytest.raises(RuntimeError, match="notification_test_failed"):
             await svc.send_notification("boom")

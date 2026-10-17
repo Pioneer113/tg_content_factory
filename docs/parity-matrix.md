@@ -15,25 +15,25 @@
 
 | # | Поверхность | Для кого | Где живёт | Узкая? |
 |---|-------------|----------|-----------|:------:|
-| 1 | **FastAPI REST** (`/api/*`, JSON) | для **программ** (interop) | `src/web/routes/tasks.py` (`/api/tasks`, #829) + машинные JSON parity-зеркала внутри HTML-роутеров | ✅ узкая |
-| 2 | **Web** (HTML/HTMX) | для **человека** в браузере | `src/web/routes/` — Jinja2/HTMX/SSE/формы | — |
-| 3 | **CLI** | команды терминала | `src/cli/commands/` (тела `*_impl`) + `src/cli/typer_commands.py` (Typer-объявления) | — |
-| 4 | **Agent-tools** | тулы AI-агента (MCP) | `src/agent/tools/` | — |
-| 5 | **TUI** (Textual) | интерактивный терминальный UI | `src/cli/commands/agent_tui.py` + `.tcss` | ✅ узкая |
+| 1 | **FastAPI REST** (`/api/*`, JSON) | для **программ** (interop) | `tg_agent/web/routes/tasks.py` (`/api/tasks`, #829) + машинные JSON parity-зеркала внутри HTML-роутеров | ✅ узкая |
+| 2 | **Web** (HTML/HTMX) | для **человека** в браузере | `tg_agent/web/routes/` — Jinja2/HTMX/SSE/формы | — |
+| 3 | **CLI** | команды терминала | `tg_agent/cli/commands/` (тела `*_impl`) + `tg_agent/cli/typer_commands.py` (Typer-объявления) | — |
+| 4 | **Agent-tools** | тулы AI-агента (MCP) | `tg_agent/agent/tools/` | — |
+| 5 | **TUI** (Textual) | интерактивный терминальный UI | `tg_agent/cli/commands/agent_tui.py` + `.tcss` | ✅ узкая |
 
 **Ключевое (NB из #1023):** `FastAPI ≠ Web` — разные потребители (программы vs человек). **TUI и FastAPI — узкие**: для них parity ≠ «всё везде», а «нет неоправданных пробелов». Пробел в узкой поверхности — это **«by design»**, не баг, если он осознан.
 
 ## Авторитетные счётчики (верифицированы исполнением кода)
 
-Числа ниже получены прямым исполнением `src/agent/tools/permissions.py` и подсчётом регистраторов — НЕ скопированы из карты. Сверены с инвариантом `tests/test_agent_tools_permissions.py` (который проверяет `len(tools) == len(TOOL_CATEGORIES)` и `len(modules) == len(MODULE_GROUPS)`, а не хардкод-числа).
+Числа ниже получены прямым исполнением `tg_agent/agent/tools/permissions.py` и подсчётом регистраторов — НЕ скопированы из карты. Сверены с инвариантом `tests/test_agent_tools_permissions.py` (который проверяет `len(tools) == len(TOOL_CATEGORIES)` и `len(modules) == len(MODULE_GROUPS)`, а не хардкод-числа).
 
 | Поверхность | Счётчик | Источник истины |
 |-------------|---------|-----------------|
-| **FastAPI REST** | 1 полноценный interop-контур (`/api/tasks`) + JSON parity-зеркала в ~14 роутерах | `src/web/routes/tasks.py` + `JSONResponse`-эндпоинты |
-| **Web** | 26 смонтированных роутеров, ~18 UI-страниц меню | `src/web/assembly.py` |
-| **CLI** | 26 top-level команд (`server_control` даёт `stop`+`restart`), ~212 leaf-команд | `src/cli/typer_commands.py` (приложение Typer `app`) |
+| **FastAPI REST** | 1 полноценный interop-контур (`/api/tasks`) + JSON parity-зеркала в ~14 роутерах | `tg_agent/web/routes/tasks.py` + `JSONResponse`-эндпоинты |
+| **Web** | 26 смонтированных роутеров, ~18 UI-страниц меню | `tg_agent/web/assembly.py` |
+| **CLI** | 26 top-level команд (`server_control` даёт `stop`+`restart`), ~212 leaf-команд | `tg_agent/cli/typer_commands.py` (приложение Typer `app`) |
 | **Agent-tools** | **173 tools**, **20 групп**, **75 read / 82 write / 16 delete** | `permissions.py` (`TOOL_CATEGORIES`, `MODULE_GROUPS`) |
-| **TUI** | 1 app (`AgentTuiApp`) — покрывает ровно 1 сервис («AI-агент») | `src/cli/commands/agent_tui.py` |
+| **TUI** | 1 app (`AgentTuiApp`) — покрывает ровно 1 сервис («AI-агент») | `tg_agent/cli/commands/agent_tui.py` |
 
 > **20 групп agent-tools** (verbatim): Поиск (8), Каналы (18), Сбор (4), Пайплайны (20), Модерация (6), Поисковые запросы (8), Аккаунты (8), Фильтры (8), Аналитика (15), Планировщик (8), Уведомления (5), Фото (14), Диалоги (11), Сообщения (14), Управление чатом (8), Изображения (4), Экспорт (1), Настройки (6), Треды агента (5), Веб-поиск (2). **Нет групп** для Jobs, Providers-management, Calendar (одиночный `get_calendar` в Аналитике), Translation (одиночный `translate_message` в Сообщениях), Limits, A/B.
 
@@ -85,7 +85,7 @@
 | 25 | 🛡 **Prod Limits & Quality** | — | **🟥** | **🟥** | **🟥** | 🟦 |
 | 26 | 🧪 **A/B Testing** | — | — | — | — | N/A |
 
-> **TUI-колонка:** ровно один сервис (#23 Agent) = ✅. Все остальные = 🟦 by design — `AgentTuiApp` (`src/cli/commands/agent_tui.py`) единственный Textual-app в проекте (подтверждено grep по `from textual`/`ComposeResult`/`.tcss`) и покрывает только AI-чат (треды + потоковый чат + диалог разрешений; модель жёстко `None`, выбора провайдера/настроек нет). Сервис #25 (Prod Limits) = 🟥 в Web/CLI/agent: нет выделенной поверхности нигде (config-only, off-by-default), FastAPI = «—» — это не parity-пробел, а вопрос «нужна ли поверхность» (Тир 3, D2). Сервис #26 = N/A: A/B не подключён ни к одной поверхности вообще.
+> **TUI-колонка:** ровно один сервис (#23 Agent) = ✅. Все остальные = 🟦 by design — `AgentTuiApp` (`tg_agent/cli/commands/agent_tui.py`) единственный Textual-app в проекте (подтверждено grep по `from textual`/`ComposeResult`/`.tcss`) и покрывает только AI-чат (треды + потоковый чат + диалог разрешений; модель жёстко `None`, выбора провайдера/настроек нет). Сервис #25 (Prod Limits) = 🟥 в Web/CLI/agent: нет выделенной поверхности нигде (config-only, off-by-default), FastAPI = «—» — это не parity-пробел, а вопрос «нужна ли поверхность» (Тир 3, D2). Сервис #26 = N/A: A/B не подключён ни к одной поверхности вообще.
 
 ---
 
@@ -97,28 +97,28 @@
 Сервисы **только-HTML** (web есть, JSON-эндпоинта нет): **Collection** (`channel_collection.py` — HTMX-фрагменты), **Channels** (`channels.py` — теги тоже HTML), **Filter** (`filter.py`), **Moderation** (`moderation.py`), **Scheduler** (`scheduler.py`), **Translation** (`settings.py` — только HTML-формы). Это помечено 🟦 — FastAPI узкий, отсутствие JSON-зеркала для чисто-человеческих операций оправдано.
 
 ### Уточнения к карте #1022 (выявлено при верификации)
-- **Export (#21) web** — это НЕ HTML-страница: `POST /channels/{channel_id}/export` → `JSONResponse` (`src/web/routes/export.py:24-34`, #834). Web UI = кнопка на `/channels`, дёргающая этот эндпоинт. Поэтому Export в FastAPI REST = ✅ (`/rss.xml`, `/atom.xml`, `POST .../export`), web = ✅ (кнопка).
-- **Providers refresh/probe/test-all** — это JSON-эндпоинты внутри settings-роутера (`src/web/routes/settings.py:179-209`, `settings_json_response`), не отдельный REST-контур. FastAPI REST для Providers = ✅ через них.
+- **Export (#21) web** — это НЕ HTML-страница: `POST /channels/{channel_id}/export` → `JSONResponse` (`tg_agent/web/routes/export.py:24-34`, #834). Web UI = кнопка на `/channels`, дёргающая этот эндпоинт. Поэтому Export в FastAPI REST = ✅ (`/rss.xml`, `/atom.xml`, `POST .../export`), web = ✅ (кнопка).
+- **Providers refresh/probe/test-all** — это JSON-эндпоинты внутри settings-роутера (`tg_agent/web/routes/settings.py:179-209`, `settings_json_response`), не отдельный REST-контур. FastAPI REST для Providers = ✅ через них.
 
 ### Jobs (#19) — детально
-- Web: `GET /jobs` + `GET /jobs/fragments/list` (`src/web/routes/jobs.py:46-88`), бэкенд `JobsReadModel` (`src/services/jobs_read_model.py`).
+- Web: `GET /jobs` + `GET /jobs/fragments/list` (`tg_agent/web/routes/jobs.py:46-88`), бэкенд `JobsReadModel` (`tg_agent/services/jobs_read_model.py`).
 - FastAPI REST: `GET /jobs/api/list` (JSON, filterable по source/status — `jobs.py:57-66`).
-- CLI: **нет домена `jobs`** — подтверждено: в приложении Typer (`src/cli/typer_commands.py`) такой top-level команды нет. Косвенно видно через `scheduler status`, `dialogs queue status`, `pipeline runs`.
+- CLI: **нет домена `jobs`** — подтверждено: в приложении Typer (`tg_agent/cli/typer_commands.py`) такой top-level команды нет. Косвенно видно через `scheduler status`, `dialogs queue status`, `pipeline runs`.
 - agent: **нет прямого tool** — только косвенно `get_telegram_queue_status` (группа «Сообщения») и `get_pipeline_queue` (группа «Пайплайны»). Нет агрегированного jobs-tool.
 
 ### Providers (#22) — детально
-- CLI: `provider list/add/delete/probe/refresh/test-all` (`src/cli/commands/provider.py`).
+- CLI: `provider list/add/delete/probe/refresh/test-all` (`tg_agent/cli/commands/provider.py`).
 - Web: `POST /settings/agent-providers/{add,save,delete,refresh,probe,test-all}` + image-providers (`settings.py`).
-- agent: **нет прямого tool управления** — только косвенно `list_image_providers` (READ, группа «Изображения», `src/agent/tools/images.py`). Нет `add_provider`/`probe_provider`/`test_all_providers`/`refresh_provider` для agent-провайдеров.
+- agent: **нет прямого tool управления** — только косвенно `list_image_providers` (READ, группа «Изображения», `tg_agent/agent/tools/images.py`). Нет `add_provider`/`probe_provider`/`test_all_providers`/`refresh_provider` для agent-провайдеров.
 
 ### Production Limits & Quality (#25) — детально
-- `QualityScoringService` — **подключён** (импортируется в `src/web/pipelines/handlers.py:576`, `src/cli/commands/pipeline.py`, `src/services/task_handlers/base.py`), пишет `quality_score`.
-- `ProductionLimitsService` — **подключён, но off-by-default**: `from_config()` возвращает `None` если `config.production_limits.enabled` ложно (`src/services/production_limits_service.py:387-391`, #814). Используется в `image_generation_service.py`, `task_handlers/base.py`.
+- `QualityScoringService` — **подключён** (импортируется в `tg_agent/web/pipelines/handlers.py:576`, `tg_agent/cli/commands/pipeline.py`, `tg_agent/services/task_handlers/base.py`), пишет `quality_score`.
+- `ProductionLimitsService` — **подключён, но off-by-default**: `from_config()` возвращает `None` если `config.production_limits.enabled` ложно (`tg_agent/services/production_limits_service.py:387-391`, #814). Используется в `image_generation_service.py`, `task_handlers/base.py`.
 - `ErrorRecoveryService` — **сейчас не подключён**: импортов вне своего файла = 0 (только `tests/test_error_recovery_service.py`). По решению владельца (vulture-аудит #1044) — **подключить**, не удалять.
 - **Нет выделенной поверхности** ни в CLI, ни в Web, ни в agent — управление только через `config.yaml` / косвенно `settings`.
 
 ### A/B Testing (#26) — детально
-- `ABTestingService` (`src/services/ab_testing_service.py`) — **сейчас изолирован**: импортов вне своего файла = 0 (только `tests/test_ab_testing_service.py`, `tests/test_cross_domain_regression_paths.py`). Не подключён ни к одной из 5 поверхностей. По решению владельца (vulture-аудит #1044) — **подключить**, не удалять; parity по поверхностям появится после подключения.
+- `ABTestingService` (`tg_agent/services/ab_testing_service.py`) — **сейчас изолирован**: импортов вне своего файла = 0 (только `tests/test_ab_testing_service.py`, `tests/test_cross_domain_regression_paths.py`). Не подключён ни к одной из 5 поверхностей. По решению владельца (vulture-аудит #1044) — **подключить**, не удалять; parity по поверхностям появится после подключения.
 
 ### Инвариант parity
 Декларирован в `CLAUDE.md:160`: *«CLI/Web parity: every web operation must have a CLI equivalent and vice versa»*. Нарушается в ячейках, помеченных ⚠️ ниже.

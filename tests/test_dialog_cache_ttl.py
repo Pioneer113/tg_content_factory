@@ -36,11 +36,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.config import SchedulerConfig
-from src.models import Channel
-from src.telegram.backends import TelegramTransportSession
-from src.telegram.client_pool import ClientPool
-from src.telegram.collector import _ACQUIRE_RETRY, Collector
+from tg_agent.config import SchedulerConfig
+from tg_agent.models import Channel
+from tg_agent.telegram.backends import TelegramTransportSession
+from tg_agent.telegram.client_pool import ClientPool
+from tg_agent.telegram.collector import _ACQUIRE_RETRY, Collector
 
 
 @pytest.fixture
@@ -315,7 +315,7 @@ async def test_acquire_rewarms_after_ttl_expiry(mock_auth, mock_db):
     clock["now"] += 200.0  # past the 100s TTL → stale
 
     collector = Collector(pool, mock_db, SchedulerConfig())
-    with patch("src.telegram.collector_mixins.collection.adapt_transport_session", _identity_adapt):
+    with patch("tg_agent.telegram.collector_mixins.collection.adapt_transport_session", _identity_adapt):
         result = await collector._acquire_collection_client(channel, set())
 
     assert result is not _ACQUIRE_RETRY
@@ -337,7 +337,7 @@ async def test_acquire_skips_rewarm_within_ttl(mock_auth, mock_db):
     clock["now"] += 50.0  # still inside the 100s TTL → fresh
 
     collector = Collector(pool, mock_db, SchedulerConfig())
-    with patch("src.telegram.collector_mixins.collection.adapt_transport_session", _identity_adapt):
+    with patch("tg_agent.telegram.collector_mixins.collection.adapt_transport_session", _identity_adapt):
         result = await collector._acquire_collection_client(channel, set())
 
     assert result is not _ACQUIRE_RETRY

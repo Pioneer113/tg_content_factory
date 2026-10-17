@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.services.telegram_actions import TelegramActionClientUnavailableError, TelegramActionService
+from tg_agent.services.telegram_actions import TelegramActionClientUnavailableError, TelegramActionService
 
 
 def _pool_with_client(client):

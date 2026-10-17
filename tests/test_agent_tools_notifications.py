@@ -7,17 +7,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.models import NotificationBot
 from tests.agent_tools_helpers import _get_tool_handlers, _text
+from tg_agent.models import NotificationBot
 
 
 @contextmanager
 def _notif_ctx(notif_svc):
     """Context manager that patches notification services at their source modules."""
     with (
-        patch("src.services.notification_service.NotificationService", return_value=notif_svc),
+        patch("tg_agent.services.notification_service.NotificationService", return_value=notif_svc),
         patch(
-            "src.services.notification_target_service.NotificationTargetService",
+            "tg_agent.services.notification_target_service.NotificationTargetService",
             return_value=MagicMock(),
         ),
     ):
@@ -39,8 +39,8 @@ class TestGetNotificationStatusTool:
     @pytest.mark.anyio
     async def test_not_configured_returns_message(self, mock_db):
         with (
-            patch("src.services.notification_service.NotificationService") as mock_ns,
-            patch("src.services.notification_target_service.NotificationTargetService"),
+            patch("tg_agent.services.notification_service.NotificationService") as mock_ns,
+            patch("tg_agent.services.notification_target_service.NotificationTargetService"),
         ):
             mock_ns.return_value.get_status = AsyncMock(return_value=None)
             handlers = _get_tool_handlers(mock_db)
@@ -59,9 +59,9 @@ class TestGetNotificationStatusTool:
         target_svc = MagicMock()
         target_svc.describe_target = AsyncMock(return_value=target_status)
         with (
-            patch("src.services.notification_service.NotificationService") as mock_ns,
+            patch("tg_agent.services.notification_service.NotificationService") as mock_ns,
             patch(
-                "src.services.notification_target_service.NotificationTargetService",
+                "tg_agent.services.notification_target_service.NotificationTargetService",
                 return_value=target_svc,
             ),
         ):
@@ -84,8 +84,8 @@ class TestGetNotificationStatusTool:
             created_at="2025-01-01",
         )
         with (
-            patch("src.services.notification_service.NotificationService") as mock_ns,
-            patch("src.services.notification_target_service.NotificationTargetService"),
+            patch("tg_agent.services.notification_service.NotificationService") as mock_ns,
+            patch("tg_agent.services.notification_target_service.NotificationTargetService"),
         ):
             mock_ns.return_value.get_status = AsyncMock(return_value=bot)
             handlers = _get_tool_handlers(mock_db)
@@ -98,8 +98,8 @@ class TestGetNotificationStatusTool:
     @pytest.mark.anyio
     async def test_error_returns_text(self, mock_db):
         with (
-            patch("src.services.notification_service.NotificationService") as mock_ns,
-            patch("src.services.notification_target_service.NotificationTargetService"),
+            patch("tg_agent.services.notification_service.NotificationService") as mock_ns,
+            patch("tg_agent.services.notification_target_service.NotificationTargetService"),
         ):
             mock_ns.return_value.get_status = AsyncMock(side_effect=Exception("db fail"))
             handlers = _get_tool_handlers(mock_db)
@@ -158,8 +158,8 @@ class TestSetupNotificationBotTool:
         pool = MagicMock()
         bot = SimpleNamespace(bot_username="newbot", bot_id=99999, tg_user_id=111)
         with (
-            patch("src.services.notification_service.NotificationService") as mock_ns,
-            patch("src.services.notification_target_service.NotificationTargetService"),
+            patch("tg_agent.services.notification_service.NotificationService") as mock_ns,
+            patch("tg_agent.services.notification_target_service.NotificationTargetService"),
         ):
             mock_ns.return_value.setup_bot = AsyncMock(return_value=bot)
             handlers = _get_tool_handlers(mock_db, client_pool=pool)
@@ -209,8 +209,8 @@ class TestDeleteNotificationBotTool:
     async def test_with_confirm_deletes_bot(self, mock_db):
         pool = MagicMock()
         with (
-            patch("src.services.notification_service.NotificationService") as mock_ns,
-            patch("src.services.notification_target_service.NotificationTargetService"),
+            patch("tg_agent.services.notification_service.NotificationService") as mock_ns,
+            patch("tg_agent.services.notification_target_service.NotificationTargetService"),
         ):
             mock_ns.return_value.teardown_bot = AsyncMock()
             handlers = _get_tool_handlers(mock_db, client_pool=pool)
@@ -240,8 +240,8 @@ class TestTestNotificationTool:
     async def test_not_configured_returns_message(self, mock_db):
         pool = MagicMock()
         with (
-            patch("src.services.notification_service.NotificationService") as mock_ns,
-            patch("src.services.notification_target_service.NotificationTargetService"),
+            patch("tg_agent.services.notification_service.NotificationService") as mock_ns,
+            patch("tg_agent.services.notification_target_service.NotificationTargetService"),
         ):
             mock_ns.return_value.get_status = AsyncMock(return_value=None)
             handlers = _get_tool_handlers(mock_db, client_pool=pool)
@@ -253,8 +253,8 @@ class TestTestNotificationTool:
         pool = MagicMock()
         bot = SimpleNamespace(bot_username="testbot", bot_id=1, tg_user_id=111)
         with (
-            patch("src.services.notification_service.NotificationService") as mock_ns,
-            patch("src.services.notification_target_service.NotificationTargetService"),
+            patch("tg_agent.services.notification_service.NotificationService") as mock_ns,
+            patch("tg_agent.services.notification_target_service.NotificationTargetService"),
         ):
             inst = mock_ns.return_value
             inst.get_status = AsyncMock(return_value=bot)
@@ -283,8 +283,8 @@ class TestTestNotificationTool:
         pool = MagicMock()
         bot = SimpleNamespace(bot_username="testbot", bot_id=1, tg_user_id=111)
         with (
-            patch("src.services.notification_service.NotificationService") as mock_ns,
-            patch("src.services.notification_target_service.NotificationTargetService"),
+            patch("tg_agent.services.notification_service.NotificationService") as mock_ns,
+            patch("tg_agent.services.notification_target_service.NotificationTargetService"),
         ):
             inst = mock_ns.return_value
             inst.get_status = AsyncMock(return_value=bot)
@@ -299,8 +299,8 @@ class TestTestNotificationTool:
         pool = MagicMock()
         bot = SimpleNamespace(bot_username="testbot", bot_id=1, tg_user_id=111)
         with (
-            patch("src.services.notification_service.NotificationService") as mock_ns,
-            patch("src.services.notification_target_service.NotificationTargetService"),
+            patch("tg_agent.services.notification_service.NotificationService") as mock_ns,
+            patch("tg_agent.services.notification_target_service.NotificationTargetService"),
         ):
             inst = mock_ns.return_value
             inst.get_status = AsyncMock(return_value=bot)

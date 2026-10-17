@@ -24,7 +24,7 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from src.cli.typer_app import app
+from tg_agent.cli.typer_app import app
 
 runner = CliRunner()
 
@@ -37,8 +37,8 @@ runner = CliRunner()
 def test_debug_logs_defaults():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.debug_cmd.logs_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.debug_cmd.logs_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["debug", "logs"])
     assert result.exit_code == 0
@@ -48,8 +48,8 @@ def test_debug_logs_defaults():
 def test_debug_logs_limit():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.debug_cmd.logs_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.debug_cmd.logs_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["debug", "logs", "--limit", "5"])
     assert result.exit_code == 0
@@ -59,8 +59,8 @@ def test_debug_logs_limit():
 def test_debug_memory_delegates():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.debug_cmd.memory_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.debug_cmd.memory_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["debug", "memory"])
     assert result.exit_code == 0
@@ -70,8 +70,8 @@ def test_debug_memory_delegates():
 def test_debug_timing_delegates():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.debug_cmd.timing_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.debug_cmd.timing_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["debug", "timing"])
     assert result.exit_code == 0
@@ -92,8 +92,8 @@ def test_debug_bare_group_shows_help():
 def test_export_json_defaults():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.export_cmd.export_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.export_cmd.export_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["export", "json"])
     assert result.exit_code == 0
@@ -105,8 +105,8 @@ def test_export_json_defaults():
 def test_export_csv_flags():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.export_cmd.export_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.export_cmd.export_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(
             app, ["export", "csv", "--channel-id", "42", "--limit", "10", "-o", "out.csv"]
@@ -120,8 +120,8 @@ def test_export_csv_flags():
 def test_export_rss_delegates_with_fmt():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.export_cmd.export_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.export_cmd.export_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["export", "rss"])
     assert result.exit_code == 0
@@ -131,8 +131,8 @@ def test_export_rss_delegates_with_fmt():
 def test_export_telegram_defaults():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.export_cmd.telegram_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.export_cmd.telegram_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["export", "telegram", "--channel-id", "100"])
     assert result.exit_code == 0
@@ -153,8 +153,8 @@ def test_export_telegram_defaults():
 def test_export_telegram_full_flags():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.export_cmd.telegram_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.export_cmd.telegram_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(
             app,
@@ -181,8 +181,8 @@ def test_export_telegram_rejects_unknown_format():
     """--format keeps argparse's json/html/both choice set."""
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.export_cmd.telegram_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.export_cmd.telegram_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["export", "telegram", "--channel-id", "1", "--format", "bogus"])
     assert result.exit_code == 2
@@ -197,8 +197,8 @@ def test_export_telegram_rejects_unknown_format():
 def test_translate_stats_delegates():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.translate_cmd.stats_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.translate_cmd.stats_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["translate", "stats"])
     assert result.exit_code == 0
@@ -208,8 +208,8 @@ def test_translate_stats_delegates():
 def test_translate_detect_defaults():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.translate_cmd.detect_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.translate_cmd.detect_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["translate", "detect"])
     assert result.exit_code == 0
@@ -219,8 +219,8 @@ def test_translate_detect_defaults():
 def test_translate_detect_batch_size():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.translate_cmd.detect_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.translate_cmd.detect_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["translate", "detect", "--batch-size", "100"])
     assert result.exit_code == 0
@@ -230,8 +230,8 @@ def test_translate_detect_batch_size():
 def test_translate_run_defaults():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.translate_cmd.run_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.translate_cmd.run_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["translate", "run"])
     assert result.exit_code == 0
@@ -243,8 +243,8 @@ def test_translate_run_defaults():
 def test_translate_run_flags():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.translate_cmd.run_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.translate_cmd.run_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(
             app, ["translate", "run", "--target", "ru", "--source-filter", "en,de", "--limit", "5"]
@@ -258,8 +258,8 @@ def test_translate_run_flags():
 def test_translate_message_positional_and_target():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.translate_cmd.message_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.translate_cmd.message_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["translate", "message", "777", "--target", "fr"])
     assert result.exit_code == 0
@@ -274,8 +274,8 @@ def test_translate_message_positional_and_target():
 def test_image_generate_prompt_only():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.image_cmd.generate_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.image_cmd.generate_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["image", "generate", "a red cat"])
     assert result.exit_code == 0
@@ -285,8 +285,8 @@ def test_image_generate_prompt_only():
 def test_image_generate_with_model():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.image_cmd.generate_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.image_cmd.generate_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["image", "generate", "sky", "--model", "replicate:flux-schnell"])
     assert result.exit_code == 0
@@ -297,8 +297,8 @@ def test_image_models_requires_provider():
     """--provider is required (argparse required=True parity)."""
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.image_cmd.models_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.image_cmd.models_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["image", "models"])
     assert result.exit_code == 2
@@ -308,8 +308,8 @@ def test_image_models_requires_provider():
 def test_image_models_flags():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.image_cmd.models_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.image_cmd.models_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(
             app, ["image", "models", "--provider", "openai", "--query", "dall", "--refresh"]
@@ -323,8 +323,8 @@ def test_image_models_flags():
 def test_image_providers_delegates():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.image_cmd.providers_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.image_cmd.providers_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["image", "providers"])
     assert result.exit_code == 0
@@ -334,8 +334,8 @@ def test_image_providers_delegates():
 def test_image_generated_defaults():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.image_cmd.generated_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.image_cmd.generated_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["image", "generated"])
     assert result.exit_code == 0
@@ -345,8 +345,8 @@ def test_image_generated_defaults():
 def test_image_generated_limit():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.image_cmd.generated_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.image_cmd.generated_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["image", "generated", "--limit", "3"])
     assert result.exit_code == 0
@@ -361,8 +361,8 @@ def test_image_generated_limit():
 def test_provider_list_delegates():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.provider_cmd.list_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.provider_cmd.list_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["provider", "list"])
     assert result.exit_code == 0
@@ -372,8 +372,8 @@ def test_provider_list_delegates():
 def test_provider_add_requires_api_key():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.provider_cmd.add_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.provider_cmd.add_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["provider", "add", "openai"])
     assert result.exit_code == 2
@@ -383,8 +383,8 @@ def test_provider_add_requires_api_key():
 def test_provider_add_flags():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.provider_cmd.add_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.provider_cmd.add_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(
             app, ["provider", "add", "openai", "--api-key", "sk-xxx", "--base-url", "http://x"]
@@ -398,8 +398,8 @@ def test_provider_add_flags():
 def test_provider_delete_positional():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.provider_cmd.delete_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.provider_cmd.delete_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["provider", "delete", "groq"])
     assert result.exit_code == 0
@@ -409,8 +409,8 @@ def test_provider_delete_positional():
 def test_provider_probe_positional():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.provider_cmd.probe_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.provider_cmd.probe_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["provider", "probe", "cohere"])
     assert result.exit_code == 0
@@ -420,8 +420,8 @@ def test_provider_probe_positional():
 def test_provider_refresh_no_name():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.provider_cmd.refresh_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.provider_cmd.refresh_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["provider", "refresh"])
     assert result.exit_code == 0
@@ -431,8 +431,8 @@ def test_provider_refresh_no_name():
 def test_provider_refresh_with_name():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.provider_cmd.refresh_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.provider_cmd.refresh_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["provider", "refresh", "openai"])
     assert result.exit_code == 0
@@ -443,8 +443,8 @@ def test_provider_test_all_delegates():
     """The ``test-all`` sub-command name (with the dash) is preserved."""
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.provider_cmd.test_all_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.provider_cmd.test_all_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["provider", "test-all"])
     assert result.exit_code == 0
@@ -459,8 +459,8 @@ def test_provider_test_all_delegates():
 def test_notification_setup_delegates():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.notification_cmd.setup_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.notification_cmd.setup_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["notification", "setup"])
     assert result.exit_code == 0
@@ -470,8 +470,8 @@ def test_notification_setup_delegates():
 def test_notification_status_delegates():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.notification_cmd.status_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.notification_cmd.status_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["notification", "status"])
     assert result.exit_code == 0
@@ -481,8 +481,8 @@ def test_notification_status_delegates():
 def test_notification_delete_delegates():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.notification_cmd.delete_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.notification_cmd.delete_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["notification", "delete"])
     assert result.exit_code == 0
@@ -492,8 +492,8 @@ def test_notification_delete_delegates():
 def test_notification_test_default_message():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.notification_cmd.test_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.notification_cmd.test_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["notification", "test"])
     assert result.exit_code == 0
@@ -503,8 +503,8 @@ def test_notification_test_default_message():
 def test_notification_test_custom_message():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.notification_cmd.test_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.notification_cmd.test_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["notification", "test", "--message", "hi"])
     assert result.exit_code == 0
@@ -515,8 +515,8 @@ def test_notification_dry_run_delegates():
     """The ``dry-run`` sub-command name (with the dash) is preserved."""
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.notification_cmd.dry_run_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.notification_cmd.dry_run_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["notification", "dry-run"])
     assert result.exit_code == 0
@@ -526,8 +526,8 @@ def test_notification_dry_run_delegates():
 def test_notification_set_account_requires_phone():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.notification_cmd.set_account_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.notification_cmd.set_account_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["notification", "set-account"])
     assert result.exit_code == 2
@@ -538,8 +538,8 @@ def test_notification_set_account_phone():
     """The ``set-account`` sub-command name (with the dash) is preserved."""
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.notification_cmd.set_account_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.notification_cmd.set_account_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["notification", "set-account", "--phone", "+15550001111"])
     assert result.exit_code == 0
@@ -554,8 +554,8 @@ def test_notification_set_account_phone():
 def test_global_config_threads_into_group():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.debug_cmd.timing_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.debug_cmd.timing_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["--config", "prod.yaml", "debug", "timing"])
     assert result.exit_code == 0

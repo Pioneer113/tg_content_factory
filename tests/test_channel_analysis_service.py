@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from src.models import ChannelRating
-from src.services.channel_analysis_service import ChannelAnalysisService
+from tg_agent.models import ChannelRating
+from tg_agent.services.channel_analysis_service import ChannelAnalysisService
 
 # --- pure verdict parsing / scoring (no DB) -------------------------------
 
@@ -162,7 +162,7 @@ def test_long_reason_is_truncated_in_parse():
     """A judge that returns a multi-kilobyte `reason` (prompt-injection echo, a
     pasted article, a runaway model) must not push an unbounded blob into the
     rating row / UI. The parser bounds it to MAX_REASON_LEN (#1037)."""
-    from src.services.channel_analysis_service import MAX_REASON_LEN
+    from tg_agent.services.channel_analysis_service import MAX_REASON_LEN
 
     long_reason = "спам " * 1000  # ~5000 chars, well over any sane limit
     raw = (
@@ -214,7 +214,7 @@ def test_emoji_score_ignores_short_posts():
 async def test_classify_persists_truncated_reason(db):
     """End-to-end: a hostile provider returning a giant `reason` results in a
     persisted rating whose reason is bounded — the DB / UI never see the blob."""
-    from src.services.channel_analysis_service import MAX_REASON_LEN
+    from tg_agent.services.channel_analysis_service import MAX_REASON_LEN
 
     giant = "врёт про пользу " * 500
 

@@ -13,10 +13,10 @@ from __future__ import annotations
 
 import pytest
 
-from src.models import Account, Channel, SearchQuery
-from src.services.pipeline_service import PipelineService, PipelineTargetRef
-from src.web.runtime_shims import SnapshotSchedulerManager
 from tests.helpers import build_web_app, make_auth_client, make_test_config
+from tg_agent.models import Account, Channel, SearchQuery
+from tg_agent.services.pipeline_service import PipelineService, PipelineTargetRef
+from tg_agent.web.runtime_shims import SnapshotSchedulerManager
 
 
 @pytest.fixture

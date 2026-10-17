@@ -16,16 +16,16 @@ from types import SimpleNamespace
 import pytest
 from telethon.errors import AuthKeyDuplicatedError
 
-from src.models import Account
-from src.telegram import backends as backends_module
-from src.telegram.auth import TelegramAuth, connect_with_auth_key_retry
-from src.telegram.backends import (
+from tg_agent.models import Account
+from tg_agent.telegram import backends as backends_module
+from tg_agent.telegram.auth import TelegramAuth, connect_with_auth_key_retry
+from tg_agent.telegram.backends import (
     BackendClientLease,
     BackendRouter,
     TelegramTransportSession,
     TelethonCliBackend,
 )
-from src.telegram.session_lock import (
+from tg_agent.telegram.session_lock import (
     SessionLock,
     SessionLockError,
     acquire_session_lock,

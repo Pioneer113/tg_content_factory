@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.models import Channel, Message
-from src.search.persistence import SearchPersistence
+from tg_agent.models import Channel, Message
+from tg_agent.search.persistence import SearchPersistence
 
 
 def _msg(channel_id: int, message_id: int) -> Message:

@@ -4,8 +4,8 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
-from src.models import AccountSessionStatus
-from src.services.account_availability import compute_account_availability
+from tg_agent.models import AccountSessionStatus
+from tg_agent.services.account_availability import compute_account_availability
 
 
 def _acc(**kw):

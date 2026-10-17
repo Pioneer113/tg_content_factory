@@ -9,15 +9,15 @@ import pytest
 from telethon.errors import FloodWaitError
 from telethon_floodgate import HandledFloodWaitError, ResolveRateLimiter, UsernameResolveRateLimitedError
 
-from src.telegram.client_pool import ClientPool
-from src.telegram.resolve_guard import (
+from tests.helpers import make_resolve_limiter
+from tg_agent.telegram.client_pool import ClientPool
+from tg_agent.telegram.resolve_guard import (
     DEFAULT_RESOLVE_VOLUME_MAX_CALLS,
     DEFAULT_RESOLVE_VOLUME_WINDOW_SEC,
     RESOLVE_BACKOFF_BY_PHONE_SETTING,
     RESOLVE_BACKOFF_LEGACY_SETTING,
     ResolveGuardMixin,
 )
-from tests.helpers import make_resolve_limiter
 
 
 @pytest.mark.anyio
@@ -252,7 +252,7 @@ class TestNextResolveCapableAt:
         pool.clients = clients
         pool._db = SimpleNamespace()
         monkeypatch.setattr(
-            "src.telegram.pool_flood.load_live_usable_accounts",
+            "tg_agent.telegram.pool_flood.load_live_usable_accounts",
             AsyncMock(return_value=accounts),
         )
         return pool

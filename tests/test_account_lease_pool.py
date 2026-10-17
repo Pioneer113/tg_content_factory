@@ -4,8 +4,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from src.models import Account
-from src.telegram.account_lease_pool import AccountLeasePool
+from tg_agent.models import Account
+from tg_agent.telegram.account_lease_pool import AccountLeasePool
 
 
 @pytest.fixture

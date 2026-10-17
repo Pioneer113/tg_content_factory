@@ -9,14 +9,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.agent.tools._registry import (
+from tg_agent.agent.tools._registry import (
     normalize_phone,
     require_confirmation,
     require_phone_permission,
     require_pool,
     resolve_phone,
 )
-from src.agent.tools.permissions import (
+from tg_agent.agent.tools.permissions import (
     MCP_PREFIX,
     TOOL_CATEGORIES,
     ToolAccessState,
@@ -31,7 +31,7 @@ from src.agent.tools.permissions import (
     save_tool_permissions,
     visible_tools_for_llm,
 )
-from src.database import Database
+from tg_agent.database import Database
 
 
 @pytest.fixture
@@ -226,7 +226,7 @@ class TestRequirePhonePermission:
         assert "не разрешён" in _text(result)
 
     async def test_missing_tool_key_requests_permission_when_gate_active(self, mock_db):
-        from src.agent.permission_gate import (
+        from tg_agent.agent.permission_gate import (
             AgentRequestContext,
             PermissionGate,
             reset_request_context,
@@ -264,7 +264,7 @@ class TestRequirePhonePermission:
             set_gate(None)
 
     async def test_explicit_false_does_not_request_permission(self, mock_db):
-        from src.agent.permission_gate import (
+        from tg_agent.agent.permission_gate import (
             AgentRequestContext,
             PermissionGate,
             reset_request_context,
@@ -844,12 +844,12 @@ class TestGetAllAllowedTools:
     """Ensure get_all_allowed_tools() derives from TOOL_CATEGORIES."""
 
     def test_length_matches_categories(self):
-        from src.agent.tools.permissions import get_all_allowed_tools
+        from tg_agent.agent.tools.permissions import get_all_allowed_tools
 
         assert len(get_all_allowed_tools()) == len(TOOL_CATEGORIES)
 
     def test_all_prefixed(self):
-        from src.agent.tools.permissions import BUILTIN_TOOLS, get_all_allowed_tools
+        from tg_agent.agent.tools.permissions import BUILTIN_TOOLS, get_all_allowed_tools
 
         for tool in get_all_allowed_tools():
             if tool in BUILTIN_TOOLS:
@@ -868,10 +868,10 @@ class TestGetAllAllowedTools:
 def _get_tool_handlers(mock_db, client_pool=None, config=None):
     captured_tools = []
     with patch(
-        "src.agent.tools.create_sdk_mcp_server",
+        "tg_agent.agent.tools.create_sdk_mcp_server",
         side_effect=lambda **kwargs: captured_tools.extend(kwargs.get("tools", [])),
     ):
-        from src.agent.tools import make_mcp_server
+        from tg_agent.agent.tools import make_mcp_server
 
         make_mcp_server(mock_db, client_pool=client_pool, config=config)
     return {t.name: t.handler for t in captured_tools}
@@ -888,7 +888,7 @@ class TestEndToEndPermissionFlow:
         # (audit #837/7); mock it so resolution does not hit a bare MagicMock.
         ch_svc = MagicMock()
         ch_svc.get_my_dialogs = AsyncMock(return_value=[])
-        with patch("src.services.channel_service.ChannelService", return_value=ch_svc):
+        with patch("tg_agent.services.channel_service.ChannelService", return_value=ch_svc):
             handlers = _get_tool_handlers(mock_db, client_pool=pool)
             result = await handlers["leave_dialogs"]({
                 "phone": "+79990001111",
@@ -912,7 +912,7 @@ class TestEndToEndPermissionFlow:
         pool = MagicMock()
         ch_svc = MagicMock()
         ch_svc.get_my_dialogs = AsyncMock(return_value=[])
-        with patch("src.services.channel_service.ChannelService", return_value=ch_svc):
+        with patch("tg_agent.services.channel_service.ChannelService", return_value=ch_svc):
             handlers = _get_tool_handlers(mock_db, client_pool=pool)
             # First call — no confirm
             r1 = await handlers["leave_dialogs"]({"phone": "+79990001111", "dialog_ids": "123"})
@@ -961,11 +961,11 @@ class TestEndToEndPermissionFlow:
 
 
 def _collect_phone_binded_tool_names() -> set[str]:
-    """Scan src/agent/tools for tool names passed to phone-binded gates."""
+    """Scan tg_agent/agent/tools for tool names passed to phone-binded gates."""
     import re as _re
     from pathlib import Path as _Path
 
-    root = _Path(__file__).resolve().parent.parent / "src" / "agent" / "tools"
+    root = _Path(__file__).resolve().parent.parent / "tg_agent" / "agent" / "tools"
     patterns = [
         _re.compile(r'require_phone_permission\([^)]*?["\']([a-zA-Z_]+)["\']', _re.DOTALL),
         _re.compile(r'prepare_telegram_tool\([^)]*?tool_name=["\']([a-zA-Z_]+)["\']', _re.DOTALL),
@@ -996,11 +996,11 @@ def test_every_phone_binded_tool_is_registered_in_tool_categories():
 def test_phone_binded_tools_constant_matches_static_scan():
     """The PHONE_BINDED_TOOLS constant in permissions.py drives the access
     policy and session-gate bypass and MUST match what the static scan finds in
-    src/agent/tools.  If they drift, the agent will either advertise tools
+    tg_agent/agent/tools.  If they drift, the agent will either advertise tools
     that the runtime phone-gate denies (Codex round 5 finding) or hide
     callable ones from the agent.
     """
-    from src.agent.tools.permissions import PHONE_BINDED_TOOLS
+    from tg_agent.agent.tools.permissions import PHONE_BINDED_TOOLS
 
     scanned = _collect_phone_binded_tool_names()
     extra_in_constant = set(PHONE_BINDED_TOOLS) - scanned
@@ -1012,14 +1012,14 @@ def test_phone_binded_tools_constant_matches_static_scan():
     assert not missing_from_constant, (
         f"PHONE_BINDED_TOOLS is missing newly phone-bound tools: "
         f"{sorted(missing_from_constant)}. Add them to the constant in "
-        f"src/agent/tools/permissions.py so access policy matches the runtime gate."
+        f"tg_agent/agent/tools/permissions.py so access policy matches the runtime gate."
     )
 
 
 def test_agent_backends_do_not_use_boolean_union_for_visibility():
     from pathlib import Path
 
-    root = Path(__file__).resolve().parent.parent / "src" / "agent"
+    root = Path(__file__).resolve().parent.parent / "tg_agent" / "agent"
     offenders: list[str] = []
     for path in root.rglob("*.py"):
         if path.name == "permissions.py":

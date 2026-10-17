@@ -62,12 +62,12 @@ db.repos.settings.get_setting("key")
 
 ### Bundles и facade — compat-шимы
 
-- `src/database/facade.py` (`Database`) исторически экспонирует ~90 методов вида
+- `tg_agent/database/facade.py` (`Database`) исторически экспонирует ~90 методов вида
   `self._require(); return await self._<repo>.<method>(...)` — это механические
   pass-through к репозиториям. Они сохраняются как **compat-шимы** на время окна
   совместимости; новый код их не наращивает (`db.get_setting(k)` → `db.repos.settings.get_setting(k)`,
   `db.get_channels(...)` → `db.repos.channels.get_channels(...)`).
-- `src/database/bundles.py` (`AccountBundle`, `ChannelBundle`, …) группирует несколько
+- `tg_agent/database/bundles.py` (`AccountBundle`, `ChannelBundle`, …) группирует несколько
   репозиториев под сервисную границу (`ChannelBundle` агрегирует `channels` + `channel_stats`
   + `tasks`). Бандлы остаются там, где дают осмысленную агрегацию; чисто
   переименовывающие 1:1-методы — тоже compat-шимы.
@@ -78,9 +78,9 @@ pass-through-методов (ratchet «только вниз») — добавл
 
 ## Web App Wiring
 
-- `src/web/assembly.py` — `register_routes()` монтирует все роутеры; `configure_app()` привязывает `AppContainer` к `app.state.*`
-- `src/web/container.py` — `AppContainer` агрегирует все сервисы
-- `src/web/deps.py` — хелперы `deps.get_db()`, `deps.get_pool()` и др.
+- `tg_agent/web/assembly.py` — `register_routes()` монтирует все роутеры; `configure_app()` привязывает `AppContainer` к `app.state.*`
+- `tg_agent/web/container.py` — `AppContainer` агрегирует все сервисы
+- `tg_agent/web/deps.py` — хелперы `deps.get_db()`, `deps.get_pool()` и др.
 
 ## Web Route Layering
 
@@ -90,7 +90,7 @@ pass-through-методов (ratchet «только вниз») — добавл
 - `handlers`: оркестрируют сервисы и возвращают доменный результат.
 - `responses`: мапят результат в `RedirectResponse`, `JSONResponse` или template response.
 
-Общие redirect/JSON helpers живут в `src/web/responses.py`. Flash-redirects должны использовать
+Общие redirect/JSON helpers живут в `tg_agent/web/responses.py`. Flash-redirects должны использовать
 query-string convention `?msg=...` / `?error=...` и статус `303`; route modules не должны заново
 кодировать этот boilerplate, если хватает общего helper-а. Не создавайте пустые `forms` или
 `handlers` модули заранее — выделяйте их при реальном разрезании конкретного route domain.

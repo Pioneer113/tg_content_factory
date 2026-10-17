@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from src.cli.commands.common import resolve_channel
+from tg_agent.cli.commands.common import resolve_channel
 
 
 def test_resolve_channel_by_pk():

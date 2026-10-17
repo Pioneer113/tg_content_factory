@@ -1,13 +1,13 @@
 import pytest
 
-from src.models import (
+from tg_agent.models import (
     CollectionTask,
     CollectionTaskStatus,
     CollectionTaskType,
     PipelineRunTaskPayload,
 )
-from src.scheduler.service import SchedulerManager
-from src.services.unified_dispatcher import UnifiedDispatcher
+from tg_agent.scheduler.service import SchedulerManager
+from tg_agent.services.unified_dispatcher import UnifiedDispatcher
 
 
 class FakePipeline:
@@ -221,32 +221,32 @@ async def test_pipeline_run_handler_uses_content_generation_service(monkeypatch)
             captured["quality_service"] = quality_service
 
         async def generate(self, pipeline, model=None, **kwargs):
-            from src.models import GenerationRun
+            from tg_agent.models import GenerationRun
 
             return GenerationRun(id=77, pipeline_id=pipeline.id, status="completed")
 
     monkeypatch.setattr(
-        "src.services.unified_dispatcher.PipelineService",
+        "tg_agent.services.unified_dispatcher.PipelineService",
         FakePipelineService,
         raising=False,
     )
     monkeypatch.setattr(
-        "src.services.pipeline_service.PipelineService",
+        "tg_agent.services.pipeline_service.PipelineService",
         FakePipelineService,
         raising=True,
     )
     monkeypatch.setattr(
-        "src.services.draft_notification_service.DraftNotificationService",
+        "tg_agent.services.draft_notification_service.DraftNotificationService",
         FakeDraftNotificationService,
         raising=True,
     )
     monkeypatch.setattr(
-        "src.services.quality_scoring_service.QualityScoringService",
+        "tg_agent.services.quality_scoring_service.QualityScoringService",
         FakeQualityScoringService,
         raising=True,
     )
     monkeypatch.setattr(
-        "src.services.content_generation_service.ContentGenerationService",
+        "tg_agent.services.content_generation_service.ContentGenerationService",
         FakeContentGenerationService,
         raising=True,
     )

@@ -9,12 +9,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.cli.commands.pipeline import _parse_target_refs, _preview_text, run
-from src.database import Database
-from src.services.pipeline_service import PipelineTargetRef, PipelineValidationError
 from tests.helpers import cli_ns as _ns
+from tg_agent.cli.commands.pipeline import _parse_target_refs, _preview_text, run
+from tg_agent.database import Database
+from tg_agent.services.pipeline_service import PipelineTargetRef, PipelineValidationError
 
-_PIPELINE_INIT_DB_TARGET = "src.cli.commands.pipeline.runtime.init_db"
+_PIPELINE_INIT_DB_TARGET = "tg_agent.cli.commands.pipeline.runtime.init_db"
 
 
 def _read_pipeline_row(db_path: str, pipeline_id: int) -> dict | None:
@@ -84,7 +84,7 @@ def _seed_minimal_pipeline(db_path: str, *, name: str = "P1") -> int:
     because _pipeline_ns defaults pass source=[100_001] which would otherwise be
     re-validated and rejected on the empty test DB.
     """
-    from src.services.pipeline_service import PipelineService
+    from tg_agent.services.pipeline_service import PipelineService
 
     db = _open_db(db_path)
     try:
@@ -113,7 +113,7 @@ def _seed_pipeline_with_graph(db_path: str, *, name: str = "DAG1") -> int:
     (see pipeline.run for `pipeline node add`) yields predictable next ids.
     Edges serialize with `from`/`to` keys via PipelineGraph.to_json.
     """
-    from src.services.pipeline_service import PipelineService
+    from tg_agent.services.pipeline_service import PipelineService
 
     graph_dict = {
         "nodes": [
@@ -163,7 +163,7 @@ def _seed_generation_run(db_path: str, pipeline_id: int) -> int:
 
 def _list_template_id(db_path: str) -> int | None:
     """Return the first built-in pipeline template id."""
-    from src.services.pipeline_service import PipelineService
+    from tg_agent.services.pipeline_service import PipelineService
 
     db = _open_db(db_path)
     try:
@@ -963,8 +963,8 @@ class TestPipelineEdgeRW:
         `pipeline filter` command when a reconnection would close a cycle — it
         skips the offending edge (returns False) instead of propagating
         PipelineValidationError, while a legitimate edge is still added."""
-        from src.cli.commands.pipeline import _safe_add_edge
-        from src.services.pipeline_service import PipelineService
+        from tg_agent.cli.commands.pipeline import _safe_add_edge
+        from tg_agent.services.pipeline_service import PipelineService
 
         db_path = _empty_db_path(tmp_path, "pipeline_safe_edge.db")
         pid = _seed_pipeline_with_graph(db_path)  # source_0 -> llm_generate_0 -> publish_0
@@ -1093,10 +1093,10 @@ class TestPipelineGenerateStream:
         db = _open_db(db_path)
         try:
             with cli_init_patch(db, _PIPELINE_INIT_DB_TARGET, fresh_database=True), patch(
-                "src.services.provider_service.RuntimeProviderRegistry",
+                "tg_agent.services.provider_service.RuntimeProviderRegistry",
                 return_value=provider,
             ), patch(
-                "src.services.generation_service.GenerationService",
+                "tg_agent.services.generation_service.GenerationService",
                 _FakeGenerationService,
             ):
                 run(_gen_stream_ns(id=pid))
@@ -1150,10 +1150,10 @@ class TestPipelineGenerateStream:
         db = _open_db(db_path)
         try:
             with cli_init_patch(db, _PIPELINE_INIT_DB_TARGET, fresh_database=True), patch(
-                "src.services.provider_service.RuntimeProviderRegistry",
+                "tg_agent.services.provider_service.RuntimeProviderRegistry",
                 return_value=provider,
             ), patch(
-                "src.services.generation_service.GenerationService",
+                "tg_agent.services.generation_service.GenerationService",
                 _BreakingGenerationService,
             ):
                 run(_gen_stream_ns(id=pid))
@@ -1194,10 +1194,10 @@ class TestPipelineGenerateStream:
         db = _open_db(db_path)
         try:
             with cli_init_patch(db, _PIPELINE_INIT_DB_TARGET, fresh_database=True), patch(
-                "src.services.provider_service.RuntimeProviderRegistry",
+                "tg_agent.services.provider_service.RuntimeProviderRegistry",
                 return_value=provider,
             ), patch(
-                "src.services.generation_service.GenerationService",
+                "tg_agent.services.generation_service.GenerationService",
                 _CancellingGenerationService,
             ):
                 with pytest.raises(asyncio.CancelledError):
@@ -1221,7 +1221,7 @@ class TestPipelineGenerateStream:
         db = _open_db(db_path)
         try:
             with cli_init_patch(db, _PIPELINE_INIT_DB_TARGET, fresh_database=True), patch(
-                "src.services.provider_service.RuntimeProviderRegistry",
+                "tg_agent.services.provider_service.RuntimeProviderRegistry",
                 return_value=provider,
             ):
                 run(_gen_stream_ns(id=pid))
@@ -1266,7 +1266,7 @@ def _seed_channel_account_dialog(db_path: str) -> None:
     """Seed a channel + account + cached dialog so legacy `pipeline add`
     (which validates sources against channels and targets against
     accounts/dialog_cache) succeeds without a live Telegram client."""
-    from src.models import Account, Channel
+    from tg_agent.models import Account, Channel
 
     db = _open_db(db_path)
     try:

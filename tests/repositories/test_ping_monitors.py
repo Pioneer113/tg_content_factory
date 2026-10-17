@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from src.models import PingMonitor
+from tg_agent.models import PingMonitor
 
 
 @pytest.fixture

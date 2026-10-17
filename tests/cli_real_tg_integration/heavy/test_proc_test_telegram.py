@@ -1,6 +1,6 @@
-"""`python -m src.main test telegram` — live TG self-check on a temp DB copy.
+"""`python -m tg_agent.main test telegram` — live TG self-check on a temp DB copy.
 
-src/cli/commands/test.py copies the live DB into a tempfile before running
+tg_agent/cli/commands/test.py copies the live DB into a tempfile before running
 telegram-side checks (_init_db_copy → tg_iter_messages → cleanup), so this
 test never mutates the operator's real DB. Stays in safe_ro despite the
 "telegram" name.
@@ -25,7 +25,7 @@ def test_proc_test_telegram(run_cli, assert_cli_ok):
     #   - tg_db_copy   FAIL → environment broken before TG ever runs.
     #   - tg_pool_init FAIL → no Telegram session was established.
     #
-    # See src/cli/commands/test.py:730-772 for the check order.
+    # See tg_agent/cli/commands/test.py:730-772 for the check order.
     if "[FAIL] tg_db_copy" in combined or "[FAIL] tg_pool_init" in combined:
         pytest.fail(
             f"`test telegram` critical check failed:\n{combined}"

@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.models import Account, TelegramCommandStatus
 from tests.agent_tools_helpers import _get_tool_handlers, _text, assert_tool_text
+from tg_agent.models import Account, TelegramCommandStatus
 
 
 def _make_account(phone="+79001234567", is_active=True, is_primary=True):
@@ -243,7 +243,7 @@ class TestSendReactions:
     async def test_batch_over_limit_aborts_before_enqueue(self, mock_db):
         """A batch larger than MAX_REACTION_BATCH is rejected before any enqueue
         so a runaway/injected prompt cannot starve the DB write-lock (#736)."""
-        from src.agent.tools.messaging_write import MAX_REACTION_BATCH
+        from tg_agent.agent.tools.messaging_write import MAX_REACTION_BATCH
 
         mock_pool, _ = _make_mock_pool()
         mock_db.get_accounts = AsyncMock(return_value=[_make_account()])
@@ -658,8 +658,8 @@ class TestTranslateMessage:
         mock_db.repos.messages.get_by_id = AsyncMock(return_value=SimpleNamespace(text="Привет мир"))
         mock_db.repos.messages.update_translation = AsyncMock()
         mock_db.get_setting = AsyncMock(return_value=None)
-        with patch("src.services.provider_service.build_provider_service", AsyncMock(return_value=MagicMock())), \
-             patch("src.services.translation_service.TranslationService") as mock_svc:
+        with patch("tg_agent.services.provider_service.build_provider_service", AsyncMock(return_value=MagicMock())), \
+             patch("tg_agent.services.translation_service.TranslationService") as mock_svc:
             mock_svc.return_value.translate_batch = AsyncMock(return_value=[(5, "Hello world")])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["translate_message"]({"message_db_id": 5, "target": "en"})
@@ -671,8 +671,8 @@ class TestTranslateMessage:
     async def test_no_result(self, mock_db):
         mock_db.repos.messages.get_by_id = AsyncMock(return_value=SimpleNamespace(text="text"))
         mock_db.get_setting = AsyncMock(return_value=None)
-        with patch("src.services.provider_service.build_provider_service", AsyncMock(return_value=MagicMock())), \
-             patch("src.services.translation_service.TranslationService") as mock_svc:
+        with patch("tg_agent.services.provider_service.build_provider_service", AsyncMock(return_value=MagicMock())), \
+             patch("tg_agent.services.translation_service.TranslationService") as mock_svc:
             mock_svc.return_value.translate_batch = AsyncMock(return_value=[])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["translate_message"]({"message_db_id": 5})

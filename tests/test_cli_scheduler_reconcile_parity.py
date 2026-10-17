@@ -2,7 +2,7 @@
 
 The worker has no periodic scheduler re-sync: the only way a settings mutation
 reaches the running APScheduler is a ``scheduler.reconcile`` telegram command.
-Web routes enqueue it after every mutation (``src/web/scheduler/handlers.py``),
+Web routes enqueue it after every mutation (``tg_agent/web/scheduler/handlers.py``),
 but the CLI ``stop`` / ``job-toggle`` / ``set-interval`` impls wrote the setting
 only — the live scheduler kept the old state until a worker restart (found live
 2026-10-02: ``collect_all`` kept firing every 30 min after a CLI job-toggle).
@@ -20,10 +20,10 @@ from unittest.mock import patch
 
 import pytest
 
-from src.cli.commands import scheduler as scheduler_cmd
-from src.config import AppConfig
-from src.database import Database
-from src.models import TelegramCommandStatus
+from tg_agent.cli.commands import scheduler as scheduler_cmd
+from tg_agent.config import AppConfig
+from tg_agent.database import Database
+from tg_agent.models import TelegramCommandStatus
 
 pytestmark = pytest.mark.aiosqlite_serial
 
@@ -39,7 +39,7 @@ _SECRET = "test-session-encryption-key"
 
 @contextmanager
 def _patched_init_db(fake_init_db: Callable[..., Coroutine[Any, Any, tuple[AppConfig, Database]]]):
-    with patch("src.cli.runtime.init_db", side_effect=fake_init_db):
+    with patch("tg_agent.cli.runtime.init_db", side_effect=fake_init_db):
         yield
 
 

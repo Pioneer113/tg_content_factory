@@ -14,8 +14,8 @@ from httpx import ASGITransport, AsyncClient
 from telethon.crypto import AuthKey
 from telethon.sessions import StringSession
 
-from src.database import Database
-from src.models import Account
+from tg_agent.database import Database
+from tg_agent.models import Account
 
 
 def _valid_session() -> str:
@@ -73,7 +73,7 @@ async def test_import_session_existing_phone_not_overwritten(route_client, base_
 async def test_import_session_not_logged(route_client, base_app, caplog):
     """Application loggers must not record the session value.
 
-    Scoped to project loggers (``src.*``): the third-party ``aiosqlite`` driver
+    Scoped to project loggers (``tg_agent.*``): the third-party ``aiosqlite`` driver
     emits every SQL statement (with bound params) at DEBUG regardless of the
     column — that's driver diagnostics, off in production, and it logs all
     INSERTs identically, not a session-specific leak. We assert OUR code path
@@ -87,7 +87,7 @@ async def test_import_session_not_logged(route_client, base_app, caplog):
             data={"phone": "+15551112266", "session_string": session},
             follow_redirects=False,
         )
-    app_records = [r for r in caplog.records if r.name.startswith("src.")]
+    app_records = [r for r in caplog.records if r.name.startswith("tg_agent.")]
     assert all(session not in r.getMessage() for r in app_records)
 
 

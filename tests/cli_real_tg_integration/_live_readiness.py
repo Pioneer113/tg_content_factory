@@ -30,10 +30,10 @@ TRUE_TOKENS = frozenset({"1", "true", "yes", "on"})
 def _resolve_api_credentials(config, db_path: Path) -> tuple[int | None, str | None]:
     """Resolve Telegram api_id/api_hash the same way production does.
 
-    Mirrors ``src/cli/runtime.py:init_pool`` (the config → settings-table
+    Mirrors ``tg_agent/cli/runtime.py:init_pool`` (the config → settings-table
     fallback), but synchronously via sqlite3. ``config.telegram.*`` already
     folds in the ``TG_API_ID``/``TG_API_HASH`` env vars (see ``load_config`` in
-    ``src/config.py``); only when those are empty do we read the ``settings``
+    ``tg_agent/config.py``); only when those are empty do we read the ``settings``
     table keys ``tg_api_id``/``tg_api_hash``.
 
     Never raises: any sqlite error or incomplete pair yields ``(None, None)``.

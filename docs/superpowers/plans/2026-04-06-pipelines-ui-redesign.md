@@ -16,13 +16,13 @@
 
 | File | Action | Responsibility |
 |------|--------|----------------|
-| `src/web/static/js/searchable-picker.js` | **Create** | Reusable multi-select searchable picker component (vanilla JS) |
-| `src/web/templates/_macros.html` | **Modify** | Add `pipeline_actions` macro |
-| `src/web/templates/pipelines.html` | **Rewrite** | New list layout: collapsible add form, emoji buttons, mobile cards, searchable pickers |
-| `src/web/templates/pipelines/edit.html` | **Create** | Dedicated edit page with searchable pickers |
-| `src/web/routes/pipelines.py` | **Modify** | Add `GET /{id}/edit` route, update `templates_page` context |
-| `src/web/templates/pipelines/templates.html` | **Modify** | Conditional modal fields (LLM vs non-LLM) |
-| `src/web/static/style.css` | **Modify** | Add `.searchable-picker` styles |
+| `tg_agent/web/static/js/searchable-picker.js` | **Create** | Reusable multi-select searchable picker component (vanilla JS) |
+| `tg_agent/web/templates/_macros.html` | **Modify** | Add `pipeline_actions` macro |
+| `tg_agent/web/templates/pipelines.html` | **Rewrite** | New list layout: collapsible add form, emoji buttons, mobile cards, searchable pickers |
+| `tg_agent/web/templates/pipelines/edit.html` | **Create** | Dedicated edit page with searchable pickers |
+| `tg_agent/web/routes/pipelines.py` | **Modify** | Add `GET /{id}/edit` route, update `templates_page` context |
+| `tg_agent/web/templates/pipelines/templates.html` | **Modify** | Conditional modal fields (LLM vs non-LLM) |
+| `tg_agent/web/static/style.css` | **Modify** | Add `.searchable-picker` styles |
 | `tests/test_web.py` | **Modify** | Add tests for new edit route |
 
 ---
@@ -30,8 +30,8 @@
 ## Task 1: Searchable Multi-Select Picker Component
 
 **Files:**
-- Create: `src/web/static/js/searchable-picker.js`
-- Modify: `src/web/static/style.css`
+- Create: `tg_agent/web/static/js/searchable-picker.js`
+- Modify: `tg_agent/web/static/style.css`
 
 This component replaces all raw `<select multiple>` elements. It renders a search input + type filter buttons + scrollable checkbox list. Selected items appear as badges above the list. Communicates via hidden `<input>` elements for form submission.
 
@@ -65,7 +65,7 @@ JS auto-initializes all `[data-picker-name]` on DOMContentLoaded. Creates hidden
 
 - [ ] **Step 1: Write the picker JS**
 
-Create `src/web/static/js/searchable-picker.js`:
+Create `tg_agent/web/static/js/searchable-picker.js`:
 
 ```javascript
 /**
@@ -179,7 +179,7 @@ Create `src/web/static/js/searchable-picker.js`:
 
 - [ ] **Step 2: Add picker CSS to `style.css`**
 
-Append to `src/web/static/style.css`:
+Append to `tg_agent/web/static/style.css`:
 
 ```css
 /* Searchable multi-select picker */
@@ -203,7 +203,7 @@ Append to `src/web/static/style.css`:
 
 - [ ] **Step 3: Add `<script>` tag in `base.html`**
 
-In `src/web/templates/base.html`, after the existing `_busy_button.js` script tag, add:
+In `tg_agent/web/templates/base.html`, after the existing `_busy_button.js` script tag, add:
 
 ```html
 <script src="/static/js/searchable-picker.js"></script>
@@ -225,13 +225,13 @@ git commit -m "feat(web): add reusable searchable multi-select picker component"
 ## Task 2: `pipeline_actions` Macro
 
 **Files:**
-- Modify: `src/web/templates/_macros.html` (append after `channel_actions` macro, line 54)
+- Modify: `tg_agent/web/templates/_macros.html` (append after `channel_actions` macro, line 54)
 
 Macro renders emoji action buttons for a pipeline row, following the exact pattern of `channel_actions`.
 
 - [ ] **Step 1: Write the macro**
 
-Append to `src/web/templates/_macros.html` after line 54:
+Append to `tg_agent/web/templates/_macros.html` after line 54:
 
 ```jinja2
 
@@ -298,14 +298,14 @@ git commit -m "feat(web): add pipeline_actions emoji macro"
 ## Task 3: Dedicated Edit Page
 
 **Files:**
-- Create: `src/web/templates/pipelines/edit.html`
-- Modify: `src/web/routes/pipelines.py` — add `GET /{id}/edit` route (~line 254)
+- Create: `tg_agent/web/templates/pipelines/edit.html`
+- Modify: `tg_agent/web/routes/pipelines.py` — add `GET /{id}/edit` route (~line 254)
 
 The edit page replaces inline edit rows. Every pipeline type (legacy chain AND DAG) gets an edit page. Source/target selectors use the new searchable picker.
 
 - [ ] **Step 1: Write the edit page template**
 
-Create `src/web/templates/pipelines/edit.html`:
+Create `tg_agent/web/templates/pipelines/edit.html`:
 
 ```html
 {% extends "base.html" %}
@@ -452,7 +452,7 @@ Create `src/web/templates/pipelines/edit.html`:
 
 - [ ] **Step 2: Add the GET edit route**
 
-In `src/web/routes/pipelines.py`, add before the `generate_page` route (before `@router.get("/{pipeline_id}/generate")`):
+In `tg_agent/web/routes/pipelines.py`, add before the `generate_page` route (before `@router.get("/{pipeline_id}/generate")`):
 
 ```python
 @router.get("/{pipeline_id}/edit", response_class=HTMLResponse)
@@ -528,13 +528,13 @@ git commit -m "feat(web): add dedicated pipeline edit page with searchable picke
 ## Task 4: Rewrite Pipeline List — Emoji Buttons + Mobile Cards
 
 **Files:**
-- Rewrite: `src/web/templates/pipelines.html` (lines 155–325 — the list table and inline edit rows)
+- Rewrite: `tg_agent/web/templates/pipelines.html` (lines 155–325 — the list table and inline edit rows)
 
 Replace text buttons with `pipeline_actions` macro. Remove inline edit rows (replaced by Task 3 edit page). Add mobile card layout.
 
 - [ ] **Step 1: Replace the pipeline list table**
 
-In `src/web/templates/pipelines.html`, replace the entire list section (from `{% if items %}` to the closing `</table></div>`) with:
+In `tg_agent/web/templates/pipelines.html`, replace the entire list section (from `{% if items %}` to the closing `</table></div>`) with:
 
 ```html
 {% if items %}
@@ -683,13 +683,13 @@ git commit -m "feat(web): pipeline list with emoji buttons and mobile cards"
 ## Task 5: Collapsible Add Form with Searchable Pickers
 
 **Files:**
-- Modify: `src/web/templates/pipelines.html` (lines 57–153 — the add form)
+- Modify: `tg_agent/web/templates/pipelines.html` (lines 57–153 — the add form)
 
 Replace raw `<select multiple>` with searchable pickers. Make the form collapsible.
 
 - [ ] **Step 1: Rewrite the add form section**
 
-Replace lines 57–153 in `src/web/templates/pipelines.html`:
+Replace lines 57–153 in `tg_agent/web/templates/pipelines.html`:
 
 ```html
 <div class="card mb-4">
@@ -855,14 +855,14 @@ git commit -m "feat(web): collapsible add form with searchable source/target pic
 ## Task 6: Templates Page — Conditional Modal Fields
 
 **Files:**
-- Modify: `src/web/templates/pipelines/templates.html` (lines 44–75 — modal)
-- Modify: `src/web/routes/pipelines.py` — `templates_page()` (line 431)
+- Modify: `tg_agent/web/templates/pipelines/templates.html` (lines 44–75 — modal)
+- Modify: `tg_agent/web/routes/pipelines.py` — `templates_page()` (line 431)
 
 For non-LLM templates, remove LLM model field and show source/target/account fields instead.
 
 - [ ] **Step 1: Update `templates_page` route to pass channels/accounts**
 
-In `src/web/routes/pipelines.py`, update the `templates_page` handler:
+In `tg_agent/web/routes/pipelines.py`, update the `templates_page` handler:
 
 ```python
 @router.get("/templates", response_class=HTMLResponse)
@@ -998,13 +998,13 @@ git commit -m "feat(web): conditional template modal with searchable pickers"
 ## Task 7: Redirect `from-template` to Edit Instead of Generate
 
 **Files:**
-- Modify: `src/web/routes/pipelines.py` — `create_from_template()` (line 490)
+- Modify: `tg_agent/web/routes/pipelines.py` — `create_from_template()` (line 490)
 
 Currently redirects to `/pipelines/{id}/generate` which doesn't make sense for non-LLM pipelines.
 
 - [ ] **Step 1: Change redirect target**
 
-In `src/web/routes/pipelines.py`, change line 490:
+In `tg_agent/web/routes/pipelines.py`, change line 490:
 
 ```python
 # Before:
@@ -1032,11 +1032,11 @@ git commit -m "fix(web): redirect from-template to edit page instead of generate
 ## Task 8: Localize Table Headers and Clean Up
 
 **Files:**
-- Modify: `src/web/templates/pipelines.html` — page header, localization
+- Modify: `tg_agent/web/templates/pipelines.html` — page header, localization
 
 - [ ] **Step 1: Localize page header and remaining English text**
 
-In `src/web/templates/pipelines.html`:
+In `tg_agent/web/templates/pipelines.html`:
 
 - Page title `<h1>`: keep as "Пайплайны" (already has Russian title)
 - Header buttons: localize "Импорт JSON" → keep (already Russian), "Шаблоны" → keep

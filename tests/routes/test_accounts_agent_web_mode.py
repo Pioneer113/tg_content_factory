@@ -1,7 +1,7 @@
 """Production-like tests for accounts/agent routes in web runtime mode.
 
 These tests exercise the real `build_web_container` wiring — i.e. the same
-bootstrap path the production `src/main.py serve` entrypoint uses. No live
+bootstrap path the production `tg_agent/main.py serve` entrypoint uses. No live
 ClientPool / Collector / SchedulerManager are constructed; web code only
 sees the snapshot shims (`SnapshotClientPool`, `SnapshotCollector`,
 `SnapshotSchedulerManager`). Failures here indicate the web request path
@@ -17,12 +17,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.config import AppConfig, DatabaseConfig
-from src.models import Account
-from src.web.app import create_app
-from src.web.bootstrap import build_container_with_templates
-from src.web.log_handler import LogBuffer
-from src.web.runtime_shims import SnapshotClientPool, SnapshotCollector, SnapshotSchedulerManager
+from tg_agent.config import AppConfig, DatabaseConfig
+from tg_agent.models import Account
+from tg_agent.web.app import create_app
+from tg_agent.web.bootstrap import build_container_with_templates
+from tg_agent.web.log_handler import LogBuffer
+from tg_agent.web.runtime_shims import SnapshotClientPool, SnapshotCollector, SnapshotSchedulerManager
 
 
 @asynccontextmanager

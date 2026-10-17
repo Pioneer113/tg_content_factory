@@ -11,8 +11,8 @@ import time
 
 import pytest
 
-from src.database import Database
-from src.models import (
+from tg_agent.database import Database
+from tg_agent.models import (
     Channel,
     ContentPipeline,
     PipelineGenerationBackend,

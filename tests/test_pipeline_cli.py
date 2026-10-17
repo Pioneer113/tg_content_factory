@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.database import Database
-from src.models import (
+from tg_agent.database import Database
+from tg_agent.models import (
     Account,
     Channel,
     ContentPipeline,
@@ -20,11 +20,11 @@ from src.models import (
     PipelinePublishMode,
     PipelineTarget,
 )
-from src.services.publish_service import PublishResult
+from tg_agent.services.publish_service import PublishResult
 
 pytestmark = pytest.mark.aiosqlite_serial
 
-_PIPELINE_INIT_DB_TARGETS = ("src.cli.runtime.init_db", "src.cli.commands.pipeline.runtime.init_db")
+_PIPELINE_INIT_DB_TARGETS = ("tg_agent.cli.runtime.init_db", "tg_agent.cli.commands.pipeline.runtime.init_db")
 
 
 def _ns(**kwargs) -> argparse.Namespace:
@@ -58,7 +58,7 @@ def test_pipeline_add_and_list(tmp_path, cli_init_patch, capsys):
     _add_pipeline_prereqs(db)
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(
@@ -88,7 +88,7 @@ def test_pipeline_show_not_found(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.initialize())
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="show", id=999))
 
@@ -139,10 +139,10 @@ def test_pipeline_queue_approve_reject_and_publish(tmp_path, cli_init_patch, cap
 
     with (
         cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS),
-        patch("src.cli.commands.pipeline.runtime.init_pool", side_effect=fake_init_pool),
-        patch("src.cli.commands.pipeline.PublishService", FakePublishService),
+        patch("tg_agent.cli.commands.pipeline.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.pipeline.PublishService", FakePublishService),
     ):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="queue", id=pipeline_id, limit=20))
         run(_ns(pipeline_action="approve", run_id=run_id))
@@ -169,7 +169,7 @@ def test_pipeline_publish_not_found(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.initialize())
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="publish", run_id=999))
 
@@ -221,10 +221,10 @@ def test_pipeline_generate_prints_draft_preview(tmp_path, cli_init_patch, capsys
 
     with (
         cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS),
-        patch("src.cli.commands.pipeline.ContentGenerationService", FakeContentGenerationService),
-        patch("src.services.provider_service.RuntimeProviderRegistry.has_providers", return_value=True),
+        patch("tg_agent.cli.commands.pipeline.ContentGenerationService", FakeContentGenerationService),
+        patch("tg_agent.services.provider_service.RuntimeProviderRegistry.has_providers", return_value=True),
     ):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(
@@ -292,7 +292,7 @@ def test_pipeline_filter_set_show_clear(tmp_path, cli_init_patch, capsys):
     pipeline_id = _make_simple_dag_pipeline(db)
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(
@@ -337,7 +337,7 @@ def test_pipeline_show_includes_filter_summary(tmp_path, cli_init_patch, capsys)
     pipeline_id = _make_simple_dag_pipeline(db, name="Show Filter")
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(
@@ -412,11 +412,11 @@ def test_pipeline_generate_wires_agent_manager_for_deep_agents(tmp_path, cli_ini
 
     with (
         cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS),
-        patch("src.agent.manager.AgentManager", FakeAgentManager),
-        patch("src.cli.commands.pipeline.ContentGenerationService", FakeContentGenerationService),
-        patch("src.services.provider_service.RuntimeProviderRegistry.has_providers", return_value=True),
+        patch("tg_agent.agent.manager.AgentManager", FakeAgentManager),
+        patch("tg_agent.cli.commands.pipeline.ContentGenerationService", FakeContentGenerationService),
+        patch("tg_agent.services.provider_service.RuntimeProviderRegistry.has_providers", return_value=True),
     ):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(
@@ -464,7 +464,7 @@ def test_pipeline_runs_and_run_show(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.repos.generation_runs.save_result(run_id, "Generated draft for CLI"))
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="runs", id=pipeline_id, limit=20, status=None))
         run(_ns(pipeline_action="run-show", run_id=run_id))
@@ -507,7 +507,7 @@ def test_pipeline_show_found(tmp_path, cli_init_patch, capsys):
     )
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="show", id=pipeline_id))
 
@@ -545,7 +545,7 @@ def test_pipeline_edit_found(tmp_path, cli_init_patch, capsys):
     )
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(
@@ -575,7 +575,7 @@ def test_pipeline_edit_not_found(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.initialize())
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(
@@ -626,7 +626,7 @@ def test_pipeline_toggle_found(tmp_path, cli_init_patch, capsys):
     )
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="toggle", id=pipeline_id))
 
@@ -641,7 +641,7 @@ def test_pipeline_toggle_not_found(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.initialize())
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="toggle", id=999))
 
@@ -676,7 +676,7 @@ def test_pipeline_delete(tmp_path, cli_init_patch, capsys):
     )
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="delete", id=pipeline_id))
 
@@ -732,12 +732,12 @@ def test_pipeline_run_with_preview(tmp_path, cli_init_patch, capsys):
     with (
         cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS),
         patch(
-            "src.services.content_generation_service.ContentGenerationService._run_generation",
+            "tg_agent.services.content_generation_service.ContentGenerationService._run_generation",
             fake_run_generation,
         ),
-        patch("src.services.provider_service.RuntimeProviderRegistry.has_providers", return_value=True),
+        patch("tg_agent.services.provider_service.RuntimeProviderRegistry.has_providers", return_value=True),
     ):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(
@@ -764,7 +764,7 @@ def test_pipeline_run_not_found(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.initialize())
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="run", id=999, limit=10, max_tokens=256, temperature=0.7, preview=False, publish=False))
 
@@ -801,7 +801,7 @@ def test_pipeline_runs_with_status_filter(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.repos.generation_runs.save_result(run_id, "Test output"))
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="runs", id=pipeline_id, limit=20, status="completed"))
 
@@ -817,7 +817,7 @@ def test_pipeline_runs_not_found(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.initialize())
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="runs", id=999, limit=20, status=None))
 
@@ -852,7 +852,7 @@ def test_pipeline_queue_empty(tmp_path, cli_init_patch, capsys):
     )
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="queue", id=pipeline_id, limit=20))
 
@@ -867,7 +867,7 @@ def test_pipeline_queue_not_found(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.initialize())
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="queue", id=999, limit=20))
 
@@ -911,9 +911,9 @@ def test_pipeline_publish_no_clients(tmp_path, cli_init_patch, capsys):
 
     with (
         cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS),
-        patch("src.cli.commands.pipeline.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.pipeline.runtime.init_pool", side_effect=fake_init_pool),
     ):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="publish", run_id=run_id))
 
@@ -928,7 +928,7 @@ def test_pipeline_run_show_not_found(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.initialize())
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="run-show", run_id=999))
 
@@ -941,7 +941,7 @@ def test_pipeline_run_show_prints_result_semantics(tmp_path, cli_init_patch, cap
     db = Database(db_path, session_encryption_secret="test-session-encryption-key")
     asyncio.run(db.initialize())
     _add_pipeline_prereqs(db)
-    import src.cli.runtime  # noqa: F401
+    import tg_agent.cli.runtime  # noqa: F401
 
     pipeline_id = asyncio.run(
         db.repos.content_pipelines.add(
@@ -972,7 +972,7 @@ def test_pipeline_run_show_prints_result_semantics(tmp_path, cli_init_patch, cap
     )
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="run-show", run_id=run_id))
 
@@ -1007,7 +1007,7 @@ def test_pipeline_runs_prints_result_columns(tmp_path, cli_init_patch, capsys):
     )
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="runs", id=pipeline_id, limit=20, status=None))
 
@@ -1024,7 +1024,7 @@ def test_pipeline_approve_not_found(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.initialize())
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="approve", run_id=999))
 
@@ -1039,7 +1039,7 @@ def test_pipeline_reject_not_found(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.initialize())
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="reject", run_id=999))
 
@@ -1054,7 +1054,7 @@ def test_pipeline_generate_not_found(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.initialize())
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="generate", id=999, model=None, max_tokens=256, temperature=0.7))
 
@@ -1097,10 +1097,10 @@ def test_pipeline_generate_exception(tmp_path, cli_init_patch, capsys):
 
     with (
         cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS),
-        patch("src.cli.commands.pipeline.ContentGenerationService", FakeContentGenerationService),
-        patch("src.services.provider_service.RuntimeProviderRegistry.has_providers", return_value=True),
+        patch("tg_agent.cli.commands.pipeline.ContentGenerationService", FakeContentGenerationService),
+        patch("tg_agent.services.provider_service.RuntimeProviderRegistry.has_providers", return_value=True),
     ):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="generate", id=pipeline_id, model=None, max_tokens=256, temperature=0.7))
 
@@ -1115,7 +1115,7 @@ def test_pipeline_list_empty(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.initialize())
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="list"))
 
@@ -1136,7 +1136,7 @@ def test_pipeline_add_dag_with_node(tmp_path, cli_init_patch, capsys):
     _add_pipeline_prereqs(db)
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(
@@ -1183,7 +1183,7 @@ def test_pipeline_add_dag_invalid_spec(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.initialize())
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(
@@ -1215,7 +1215,7 @@ def test_pipeline_add_legacy_requires_prompt_template(tmp_path, cli_init_patch, 
     asyncio.run(db.initialize())
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(
@@ -1248,7 +1248,7 @@ def test_pipeline_add_dag_with_edges(tmp_path, cli_init_patch, capsys):
     _add_pipeline_prereqs(db)
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(
@@ -1288,7 +1288,7 @@ def test_pipeline_graph_cmd(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.initialize())
     _add_pipeline_prereqs(db)
 
-    from src.models import PipelineEdge, PipelineGraph, PipelineNode, PipelineNodeType
+    from tg_agent.models import PipelineEdge, PipelineGraph, PipelineNode, PipelineNodeType
 
     pid = asyncio.run(
         db.repos.content_pipelines.add(
@@ -1311,7 +1311,7 @@ def test_pipeline_graph_cmd(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.repos.content_pipelines.set_pipeline_json(pid, graph))
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="graph", id=pid))
 
@@ -1343,7 +1343,7 @@ def test_pipeline_graph_legacy_pipeline(tmp_path, cli_init_patch, capsys):
     )
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="graph", id=pipeline_id))
 
@@ -1358,7 +1358,7 @@ def test_pipeline_node_add(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.initialize())
     _add_pipeline_prereqs(db)
 
-    from src.models import PipelineGraph, PipelineNode, PipelineNodeType
+    from tg_agent.models import PipelineGraph, PipelineNode, PipelineNodeType
 
     pid = asyncio.run(
         db.repos.content_pipelines.add(
@@ -1374,7 +1374,7 @@ def test_pipeline_node_add(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.repos.content_pipelines.set_pipeline_json(pid, graph))
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="node", node_action="add", pipeline_id=pid, node_spec="delay:min_seconds=1"))
 
@@ -1394,7 +1394,7 @@ def test_pipeline_node_remove(tmp_path, cli_init_patch, capsys):
     db = Database(db_path, session_encryption_secret="test-session-encryption-key")
     asyncio.run(db.initialize())
 
-    from src.models import PipelineEdge, PipelineGraph, PipelineNode, PipelineNodeType
+    from tg_agent.models import PipelineEdge, PipelineGraph, PipelineNode, PipelineNodeType
 
     pid = asyncio.run(
         db.repos.content_pipelines.add(
@@ -1413,7 +1413,7 @@ def test_pipeline_node_remove(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.repos.content_pipelines.set_pipeline_json(pid, graph))
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="node", node_action="remove", pipeline_id=pid, node_id="b"))
 
@@ -1427,7 +1427,7 @@ def test_pipeline_node_replace(tmp_path, cli_init_patch, capsys):
     db = Database(db_path, session_encryption_secret="test-session-encryption-key")
     asyncio.run(db.initialize())
 
-    from src.models import PipelineGraph, PipelineNode, PipelineNodeType
+    from tg_agent.models import PipelineGraph, PipelineNode, PipelineNodeType
 
     pid = asyncio.run(
         db.repos.content_pipelines.add(
@@ -1446,7 +1446,7 @@ def test_pipeline_node_replace(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.repos.content_pipelines.set_pipeline_json(pid, graph))
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(
@@ -1476,7 +1476,7 @@ def test_pipeline_edge_add_remove(tmp_path, cli_init_patch, capsys):
     db = Database(db_path, session_encryption_secret="test-session-encryption-key")
     asyncio.run(db.initialize())
 
-    from src.models import PipelineGraph, PipelineNode, PipelineNodeType
+    from tg_agent.models import PipelineGraph, PipelineNode, PipelineNodeType
 
     pid = asyncio.run(
         db.repos.content_pipelines.add(
@@ -1495,7 +1495,7 @@ def test_pipeline_edge_add_remove(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.repos.content_pipelines.set_pipeline_json(pid, graph))
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="edge", edge_action="add", pipeline_id=pid, from_node="a", to_node="b"))
 
@@ -1503,7 +1503,7 @@ def test_pipeline_edge_add_remove(tmp_path, cli_init_patch, capsys):
     assert "Added edge a -> b" in out
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="edge", edge_action="remove", pipeline_id=pid, from_node="a", to_node="b"))
 
@@ -1528,7 +1528,7 @@ def test_pipeline_add_node_dsl_integration(tmp_path, cli_init_patch, capsys):
     _add_pipeline_prereqs(db)
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS, fresh_database=True):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(
             pipeline_action="add", name="Integration DAG",
@@ -1572,7 +1572,7 @@ def test_pipeline_add_legacy_integration(tmp_path, cli_init_patch, capsys):
     _add_pipeline_prereqs(db)
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS, fresh_database=True):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(
             pipeline_action="add", name="Legacy Integration",
@@ -1617,7 +1617,7 @@ def test_pipeline_add_legacy_requires_source(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.initialize())
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(
@@ -1651,7 +1651,7 @@ def test_pipeline_add_legacy_requires_target(tmp_path, cli_init_patch, capsys):
     _add_pipeline_prereqs(db)
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(
@@ -1690,7 +1690,7 @@ def test_pipeline_add_inactive_flag(tmp_path, cli_init_patch, capsys):
     _add_pipeline_prereqs(db)
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(
@@ -1744,11 +1744,11 @@ def test_pipeline_add_run_after(tmp_path, cli_init_patch, capsys):
 
     with (
         cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS),
-        patch("src.services.task_enqueuer.TaskEnqueuer") as mock_enqueuer,
+        patch("tg_agent.services.task_enqueuer.TaskEnqueuer") as mock_enqueuer,
     ):
         mock_enqueuer.return_value.enqueue_pipeline_run = fake_enqueue
 
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(
@@ -1810,7 +1810,7 @@ def test_pipeline_add_json_file(tmp_path, cli_init_patch, capsys):
         json.dump(graph_data, f)
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(
@@ -1879,7 +1879,7 @@ def test_pipeline_add_json_file_inactive(tmp_path, cli_init_patch, capsys):
         json.dump(graph_data, f)
 
     with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(
@@ -1969,7 +1969,7 @@ def test_pipeline_runs_shows_semantic_result_for_generation(tmp_path, cli_init_p
     verify_db = Database(db_path, session_encryption_secret="test-session-encryption-key")
     asyncio.run(verify_db.initialize())
     with cli_init_patch(verify_db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="runs", id=pipeline_id, limit=10, status=None))
     asyncio.run(verify_db.close())
@@ -2000,7 +2000,7 @@ def test_pipeline_runs_shows_semantic_result_for_action_only(tmp_path, cli_init_
     verify_db = Database(db_path, session_encryption_secret="test-session-encryption-key")
     asyncio.run(verify_db.initialize())
     with cli_init_patch(verify_db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(_ns(pipeline_action="runs", id=pipeline_id, limit=10, status=None))
     asyncio.run(verify_db.close())
@@ -2033,7 +2033,7 @@ def test_pipeline_run_show_prints_semantic_fields_when_text_empty(tmp_path, cli_
     verify_db = Database(db_path, session_encryption_secret="test-session-encryption-key")
     asyncio.run(verify_db.initialize())
     with cli_init_patch(verify_db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run as cli_run
+        from tg_agent.cli.commands.pipeline import run as cli_run
 
         cli_run(_ns(pipeline_action="run-show", run_id=run_id))
     asyncio.run(verify_db.close())
@@ -2081,7 +2081,7 @@ def test_pipeline_run_show_prints_node_errors(tmp_path, cli_init_patch, capsys):
     verify_db = Database(db_path, session_encryption_secret="test-session-encryption-key")
     asyncio.run(verify_db.initialize())
     with cli_init_patch(verify_db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run as cli_run
+        from tg_agent.cli.commands.pipeline import run as cli_run
 
         cli_run(_ns(pipeline_action="run-show", run_id=run_id))
     asyncio.run(verify_db.close())
@@ -2115,7 +2115,7 @@ def test_pipeline_run_show_no_errors_section_when_clean(tmp_path, cli_init_patch
     verify_db = Database(db_path, session_encryption_secret="test-session-encryption-key")
     asyncio.run(verify_db.initialize())
     with cli_init_patch(verify_db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run as cli_run
+        from tg_agent.cli.commands.pipeline import run as cli_run
 
         cli_run(_ns(pipeline_action="run-show", run_id=run_id))
     asyncio.run(verify_db.close())
@@ -2144,7 +2144,7 @@ def test_pipeline_run_show_generation_case_shows_text_preview(tmp_path, cli_init
     verify_db = Database(db_path, session_encryption_secret="test-session-encryption-key")
     asyncio.run(verify_db.initialize())
     with cli_init_patch(verify_db, *_PIPELINE_INIT_DB_TARGETS):
-        from src.cli.commands.pipeline import run as cli_run
+        from tg_agent.cli.commands.pipeline import run as cli_run
 
         cli_run(_ns(pipeline_action="run-show", run_id=run_id))
     asyncio.run(verify_db.close())
@@ -2168,7 +2168,7 @@ def test_pipeline_run_action_only_records_result_count(tmp_path, cli_init_patch,
     """
     from unittest.mock import AsyncMock, patch
 
-    from src.services.pipeline_result import increment_action_count
+    from tg_agent.services.pipeline_result import increment_action_count
 
     db_path = str(tmp_path / "cli_run_action.db")
     db = Database(db_path, session_encryption_secret="test-session-encryption-key")
@@ -2222,11 +2222,11 @@ def test_pipeline_run_action_only_records_result_count(tmp_path, cli_init_patch,
     with (
         cli_init_patch(verify_db, *_PIPELINE_INIT_DB_TARGETS),
         patch(
-            "src.services.pipeline_executor.get_handler",
+            "tg_agent.services.pipeline_executor.get_handler",
             side_effect=fake_get_handler,
         ),
     ):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(
@@ -2323,15 +2323,15 @@ def test_pipeline_run_generation_pipeline_preserves_result_metadata(
     with (
         cli_init_patch(verify_db, *_PIPELINE_INIT_DB_TARGETS),
         patch(
-            "src.services.pipeline_executor.get_handler",
+            "tg_agent.services.pipeline_executor.get_handler",
             side_effect=fake_get_handler,
         ),
         patch(
-            "src.services.provider_service.RuntimeProviderRegistry.has_providers",
+            "tg_agent.services.provider_service.RuntimeProviderRegistry.has_providers",
             lambda self: True,
         ),
     ):
-        from src.cli.commands.pipeline import run
+        from tg_agent.cli.commands.pipeline import run
 
         run(
             _ns(

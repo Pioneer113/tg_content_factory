@@ -82,10 +82,10 @@ web:
 
 ```bash
 # Запустить Web UI
-python -m src.main serve
+python -m tg_agent.main serve
 
 # Или указать пароль напрямую
-python -m src.main serve --web-pass mysecret
+python -m tg_agent.main serve --web-pass mysecret
 ```
 
 Откройте `http://localhost:8080` и войдите через Settings → Auth для добавления Telegram аккаунта.

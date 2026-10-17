@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.services.telegram_actions import (
+from tg_agent.services.telegram_actions import (
     TelegramActionMessageNotFoundError,
     TelegramActionNoMediaError,
     TelegramActionPathEscapeError,

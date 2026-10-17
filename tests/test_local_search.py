@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.database.repositories.messages import MessageSearchPage
-from src.models import Message, SearchParams, SearchResult
-from src.search.local_search import LocalSearch
+from tg_agent.database.repositories.messages import MessageSearchPage
+from tg_agent.models import Message, SearchParams, SearchResult
+from tg_agent.search.local_search import LocalSearch
 
 
 @pytest.fixture

@@ -12,10 +12,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.models import PhotoBatchStatus, PhotoSendMode
-from src.services.photo_publish_service import PhotoPublishService
-from src.services.photo_task_service import PhotoTaskService
 from tests.helpers import FakeCliTelethonClient
+from tg_agent.models import PhotoBatchStatus, PhotoSendMode
+from tg_agent.services.photo_publish_service import PhotoPublishService
+from tg_agent.services.photo_task_service import PhotoTaskService
 
 _NOW = datetime.now(timezone.utc)
 

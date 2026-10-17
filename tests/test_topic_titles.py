@@ -13,11 +13,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.cli.commands.messages import _print_messages
-from src.database import Database
-from src.database.repositories.messages import MessageSearchPage, MessagesRepository
-from src.models import Message
 from tests.agent_tools_helpers import _get_tool_handlers, _text
+from tg_agent.cli.commands.messages import _print_messages
+from tg_agent.database import Database
+from tg_agent.database.repositories.messages import MessageSearchPage, MessagesRepository
+from tg_agent.models import Message
 
 FORUM_CID = 100500
 NOW = datetime(2026, 10, 17, 12, 0, 0, tzinfo=timezone.utc)

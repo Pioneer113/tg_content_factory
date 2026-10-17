@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.models import (
+from tg_agent.models import (
     EXTERNAL_INTEROP_TASK_TYPES,
     ChatAnswerTaskPayload,
     CollectionTaskType,
@@ -28,7 +28,7 @@ def test_external_interop_types_are_defined():
 def test_external_types_absent_from_unified_dispatcher_pool():
     # HANDLED_TYPES drives claim_next_due_generic_task; if an external type leaked
     # in, the factory worker would steal a task meant for tg_messenger.
-    from src.services.unified_dispatcher import HANDLED_TYPES
+    from tg_agent.services.unified_dispatcher import HANDLED_TYPES
 
     for task_type in EXTERNAL_INTEROP_TASK_TYPES:
         assert task_type.value not in HANDLED_TYPES

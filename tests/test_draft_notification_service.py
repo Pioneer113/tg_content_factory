@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.models import ContentPipeline, GenerationRun, PipelinePublishMode
-from src.services.draft_notification_service import DraftNotificationService
+from tg_agent.models import ContentPipeline, GenerationRun, PipelinePublishMode
+from tg_agent.services.draft_notification_service import DraftNotificationService
 
 
 @pytest.fixture

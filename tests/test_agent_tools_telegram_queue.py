@@ -5,9 +5,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from src.database import Database
-from src.models import TelegramCommand, TelegramCommandStatus
 from tests.agent_tools_helpers import _get_tool_handlers, _text
+from tg_agent.database import Database
+from tg_agent.models import TelegramCommand, TelegramCommandStatus
 
 
 async def _open_db(tmp_path) -> Database:

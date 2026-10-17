@@ -2,8 +2,8 @@ import asyncio
 
 import pytest
 
-from src.models import ContentPipeline, GenerationRun, PipelinePublishMode, PipelineTarget
-from src.services.publish_service import PublishService
+from tg_agent.models import ContentPipeline, GenerationRun, PipelinePublishMode, PipelineTarget
+from tg_agent.services.publish_service import PublishService
 
 
 class FakeDB:
@@ -1010,7 +1010,7 @@ async def test_publish_service_slow_send_is_recorded_as_delivered():
     """A slow send is awaited and recorded as delivered, rather than cancelled."""
     from unittest.mock import patch
 
-    import src.services.publish_service as ps
+    import tg_agent.services.publish_service as ps
 
     db = FakeDB()
     db.repos.content_pipelines.set_targets(
@@ -1090,7 +1090,7 @@ async def test_publish_service_slow_image_send_is_recorded_as_delivered():
     """The image send is also awaited before progress is persisted (#1383)."""
     from unittest.mock import patch
 
-    import src.services.publish_service as ps
+    import tg_agent.services.publish_service as ps
 
     db = FakeDB()
     db.repos.content_pipelines.set_targets(
@@ -1150,7 +1150,7 @@ async def test_publish_service_stalled_send_is_bounded_and_unconfirmed():
     """A send that never completes cannot strand the sequential dispatcher."""
     from unittest.mock import patch
 
-    import src.services.publish_service as ps
+    import tg_agent.services.publish_service as ps
 
     db = FakeDB()
     db.repos.content_pipelines.set_targets(
@@ -1187,7 +1187,7 @@ async def test_publish_service_cancelled_send_is_persisted_unconfirmed():
     from contextlib import suppress
     from unittest.mock import patch
 
-    import src.services.publish_service as ps
+    import tg_agent.services.publish_service as ps
 
     db = FakeDB()
     db.repos.content_pipelines.set_targets(
@@ -1222,7 +1222,7 @@ async def test_publish_service_cancelled_send_persistence_failure_holds_claim():
     """If uncertainty cannot be persisted, the run stays fail-closed."""
     from unittest.mock import patch
 
-    import src.services.publish_service as ps
+    import tg_agent.services.publish_service as ps
 
     db = FakeDB(fail_set_metadata_after=0)
     db.repos.content_pipelines.set_targets(
@@ -1314,8 +1314,8 @@ async def test_publish_service_s3_refresh_timeout_is_plain_retryable_not_unconfi
     async def _boom(_url):
         raise asyncio.TimeoutError()
 
-    # refresh_s3_url is imported inside _publish_to_target from src.services.s3_store.
-    with patch("src.services.s3_store.refresh_s3_url", _boom):
+    # refresh_s3_url is imported inside _publish_to_target from tg_agent.services.s3_store.
+    with patch("tg_agent.services.s3_store.refresh_s3_url", _boom):
         results = await service.publish_run(run, make_pipeline())
 
     assert results[0].success is False

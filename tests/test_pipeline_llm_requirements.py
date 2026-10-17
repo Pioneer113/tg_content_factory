@@ -2,7 +2,7 @@
 get_react_emoji_config, get_dag_source_channel_ids helpers."""
 from __future__ import annotations
 
-from src.models import (
+from tg_agent.models import (
     ContentPipeline,
     PipelineEdge,
     PipelineGenerationBackend,
@@ -10,7 +10,7 @@ from src.models import (
     PipelineNode,
     PipelineNodeType,
 )
-from src.services.pipeline_llm_requirements import (
+from tg_agent.services.pipeline_llm_requirements import (
     get_dag_source_channel_ids,
     get_react_emoji_config,
     pipeline_is_dag,

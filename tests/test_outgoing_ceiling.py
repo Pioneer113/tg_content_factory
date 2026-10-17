@@ -8,9 +8,9 @@ from unittest.mock import MagicMock
 import pytest
 from telethon_floodgate import RateLimitSpec, TelegramRateLimitedError, TelegramRateLimitGate
 
-from src.telegram.backends import TelegramTransportSession
-from src.telegram.client_pool import PROCESS_OUTGOING_SPEC, ClientPool
-from src.telegram.outgoing_ceiling import OutgoingRateCeiling
+from tg_agent.telegram.backends import TelegramTransportSession
+from tg_agent.telegram.client_pool import PROCESS_OUTGOING_SPEC, ClientPool
+from tg_agent.telegram.outgoing_ceiling import OutgoingRateCeiling
 
 
 class _FakeClock:

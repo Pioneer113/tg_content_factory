@@ -4,7 +4,8 @@ from __future__ import annotations
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.agent.tools._registry import (
+from tests.helpers import fast_llm_error_recovery
+from tg_agent.agent.tools._registry import (
     _text_response,
     normalize_phone,
     require_confirmation,
@@ -12,7 +13,6 @@ from src.agent.tools._registry import (
     require_pool,
     resolve_phone,
 )
-from tests.helpers import fast_llm_error_recovery
 
 # --- normalize_phone ---
 
@@ -184,7 +184,7 @@ async def test_phone_permission_phone_not_in_perms_write_denied():
 
 
 def test_quality_score_passes_threshold():
-    from src.services.quality_scoring_service import QualityScore
+    from tg_agent.services.quality_scoring_service import QualityScore
 
     score = QualityScore(
         relevance=0.8, language_quality=0.9, informativeness=0.7,
@@ -194,7 +194,7 @@ def test_quality_score_passes_threshold():
 
 
 async def test_quality_scoring_passes():
-    from src.services.quality_scoring_service import QualityScore, QualityScoringService
+    from tg_agent.services.quality_scoring_service import QualityScore, QualityScoringService
 
     svc = QualityScoringService(db=MagicMock(), default_threshold=0.7)
     score = QualityScore(
@@ -206,10 +206,10 @@ async def test_quality_scoring_passes():
 
 
 async def test_quality_scoring_no_provider():
-    from src.services.quality_scoring_service import QualityScoringService
+    from tg_agent.services.quality_scoring_service import QualityScoringService
 
     svc = QualityScoringService(db=MagicMock(), error_recovery=fast_llm_error_recovery())
-    with patch("src.services.quality_scoring_service.RuntimeProviderRegistry", create=True):
+    with patch("tg_agent.services.quality_scoring_service.RuntimeProviderRegistry", create=True):
         # Provider raises exception
         mock_ps = MagicMock()
         mock_ps.get_provider_callable.return_value = AsyncMock(side_effect=OSError("fail"))
@@ -220,7 +220,7 @@ async def test_quality_scoring_no_provider():
 
 
 async def test_quality_scoring_json_parse():
-    from src.services.quality_scoring_service import QualityScoringService
+    from tg_agent.services.quality_scoring_service import QualityScoringService
 
     svc = QualityScoringService(db=MagicMock())
     mock_callable = AsyncMock(return_value=json.dumps({
@@ -236,7 +236,7 @@ async def test_quality_scoring_json_parse():
 
 
 async def test_quality_scoring_score_and_check():
-    from src.services.quality_scoring_service import QualityScoringService
+    from tg_agent.services.quality_scoring_service import QualityScoringService
 
     svc = QualityScoringService(db=MagicMock(), default_threshold=0.6)
     mock_callable = AsyncMock(return_value=json.dumps({"overall": 0.8}))

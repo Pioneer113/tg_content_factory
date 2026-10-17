@@ -5,8 +5,8 @@ import json
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.cli.commands.export import _export_csv, _export_json, _export_rss, _rfc822, run
 from tests.helpers import cli_ns, fake_asyncio_run, make_cli_db
+from tg_agent.cli.commands.export import _export_csv, _export_json, _export_rss, _rfc822, run
 
 
 def _args(**overrides):
@@ -105,7 +105,7 @@ def test_export_rss_skips_empty_text():
 def test_run_json_no_messages(capsys):
     db = make_cli_db()
     db.search_messages = AsyncMock(return_value=([], 0))
-    with patch("src.cli.commands.export.runtime.init_db", AsyncMock(return_value=(MagicMock(), db))), \
+    with patch("tg_agent.cli.commands.export.runtime.init_db", AsyncMock(return_value=(MagicMock(), db))), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(export_action="json"))
     assert "No messages" in capsys.readouterr().err
@@ -115,7 +115,7 @@ def test_run_json_with_messages(capsys):
     db = make_cli_db()
     msgs = [_make_msg()]
     db.search_messages = AsyncMock(return_value=(msgs, 1))
-    with patch("src.cli.commands.export.runtime.init_db", AsyncMock(return_value=(MagicMock(), db))), \
+    with patch("tg_agent.cli.commands.export.runtime.init_db", AsyncMock(return_value=(MagicMock(), db))), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(export_action="json"))
     out = capsys.readouterr().out
@@ -127,7 +127,7 @@ def test_run_csv_with_messages(capsys):
     db = make_cli_db()
     msgs = [_make_msg()]
     db.search_messages = AsyncMock(return_value=(msgs, 1))
-    with patch("src.cli.commands.export.runtime.init_db", AsyncMock(return_value=(MagicMock(), db))), \
+    with patch("tg_agent.cli.commands.export.runtime.init_db", AsyncMock(return_value=(MagicMock(), db))), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(export_action="csv"))
     out = capsys.readouterr().out
@@ -138,7 +138,7 @@ def test_run_rss_with_messages(capsys):
     db = make_cli_db()
     msgs = [_make_msg()]
     db.search_messages = AsyncMock(return_value=(msgs, 1))
-    with patch("src.cli.commands.export.runtime.init_db", AsyncMock(return_value=(MagicMock(), db))), \
+    with patch("tg_agent.cli.commands.export.runtime.init_db", AsyncMock(return_value=(MagicMock(), db))), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(export_action="rss"))
     assert "<?xml" in capsys.readouterr().out
@@ -149,7 +149,7 @@ def test_run_to_file(capsys, tmp_path):
     msgs = [_make_msg()]
     db.search_messages = AsyncMock(return_value=(msgs, 1))
     outfile = str(tmp_path / "out.json")
-    with patch("src.cli.commands.export.runtime.init_db", AsyncMock(return_value=(MagicMock(), db))), \
+    with patch("tg_agent.cli.commands.export.runtime.init_db", AsyncMock(return_value=(MagicMock(), db))), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(export_action="json", output=outfile))
     with open(outfile) as f:
@@ -161,7 +161,7 @@ def test_run_unknown_format(capsys):
     db = make_cli_db()
     msgs = [_make_msg()]
     db.search_messages = AsyncMock(return_value=(msgs, 1))
-    with patch("src.cli.commands.export.runtime.init_db", AsyncMock(return_value=(MagicMock(), db))), \
+    with patch("tg_agent.cli.commands.export.runtime.init_db", AsyncMock(return_value=(MagicMock(), db))), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(export_action="xml"))
     assert "Unknown" in capsys.readouterr().err
@@ -171,7 +171,7 @@ def test_run_with_channel_filter(capsys):
     db = make_cli_db()
     msgs = [_make_msg()]
     db.search_messages = AsyncMock(return_value=(msgs, 1))
-    with patch("src.cli.commands.export.runtime.init_db", AsyncMock(return_value=(MagicMock(), db))), \
+    with patch("tg_agent.cli.commands.export.runtime.init_db", AsyncMock(return_value=(MagicMock(), db))), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(export_action="json", channel_id=100))
     db.search_messages.assert_called_once_with(channel_id=100, limit=100)

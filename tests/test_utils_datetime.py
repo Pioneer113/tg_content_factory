@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from src.utils.datetime import (
+from tg_agent.utils.datetime import (
     normalize_utc,
     parse_datetime,
     parse_required_datetime,

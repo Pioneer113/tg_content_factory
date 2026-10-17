@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.cli.node_dsl import (
+from tg_agent.cli.node_dsl import (
     NodeSpecError,
     _coerce_bare,
     _parse_relaxed_array,
@@ -11,7 +11,7 @@ from src.cli.node_dsl import (
     generate_node_id,
     parse_node_spec,
 )
-from src.models import PipelineNodeType
+from tg_agent.models import PipelineNodeType
 
 # --- generate_node_id ---
 

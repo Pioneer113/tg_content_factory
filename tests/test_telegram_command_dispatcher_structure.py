@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import inspect
 
-import src.services.telegram_command_dispatcher as mod
-from src.services.telegram_command_dispatcher import (
+import tg_agent.services.telegram_command_dispatcher as mod
+from tg_agent.services.telegram_command_dispatcher import (
     DEFAULT_REACTION_MIN_INTERVAL_SEC,
     REACTION_MIN_INTERVAL_SETTING,
     TelegramCommandDispatcher,
@@ -105,15 +105,15 @@ def test_every_expected_command_type_resolves_to_a_handler():
 def test_dispatcher_is_composed_of_per_domain_mixins():
     """The monolith was split into independent per-domain mixin classes; the
     dispatcher must inherit all of them (so MRO keeps every handler on self)."""
-    from src.services.dispatcher.accounts_mixin import AccountsCommandsMixin
-    from src.services.dispatcher.auth_mixin import AuthCommandsMixin
-    from src.services.dispatcher.channels_mixin import ChannelsCommandsMixin
-    from src.services.dispatcher.dialogs_mixin import DialogsCommandsMixin
-    from src.services.dispatcher.moderation_mixin import ModerationCommandsMixin
-    from src.services.dispatcher.notifications_mixin import NotificationsCommandsMixin
-    from src.services.dispatcher.photo_mixin import PhotoCommandsMixin
-    from src.services.dispatcher.scheduler_mixin import SchedulerCommandsMixin
-    from src.services.dispatcher.search_mixin import SearchCommandsMixin
+    from tg_agent.services.dispatcher.accounts_mixin import AccountsCommandsMixin
+    from tg_agent.services.dispatcher.auth_mixin import AuthCommandsMixin
+    from tg_agent.services.dispatcher.channels_mixin import ChannelsCommandsMixin
+    from tg_agent.services.dispatcher.dialogs_mixin import DialogsCommandsMixin
+    from tg_agent.services.dispatcher.moderation_mixin import ModerationCommandsMixin
+    from tg_agent.services.dispatcher.notifications_mixin import NotificationsCommandsMixin
+    from tg_agent.services.dispatcher.photo_mixin import PhotoCommandsMixin
+    from tg_agent.services.dispatcher.scheduler_mixin import SchedulerCommandsMixin
+    from tg_agent.services.dispatcher.search_mixin import SearchCommandsMixin
 
     mixins = (
         AuthCommandsMixin,

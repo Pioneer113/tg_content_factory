@@ -6,14 +6,14 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from src.database.repositories.channels import ChannelsRepository
-from src.database.repositories.messages import (
+from tg_agent.database.repositories.channels import ChannelsRepository
+from tg_agent.database.repositories.messages import (
     MessagesRepository,
     _normalize_date_to,
     _normalize_username,
 )
-from src.models import Message, SearchParams, SearchQuery
-from src.security.session_cipher import SessionCipher
+from tg_agent.models import Message, SearchParams, SearchQuery
+from tg_agent.security.session_cipher import SessionCipher
 
 
 @pytest.fixture
@@ -468,7 +468,7 @@ async def test_search_messages_pagination(messages_repo):
 
 async def test_search_messages_excludes_filtered_channels(messages_repo, channels_repo):
     """Test that messages from filtered channels are excluded."""
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     await channels_repo.add_channel(Channel(channel_id=1, title="Unfiltered"))
     await channels_repo.add_channel(Channel(channel_id=2, title="Filtered"))
@@ -703,9 +703,9 @@ async def test_delete_messages_for_channel_nonexistent(messages_repo):
 
 async def test_get_stats(messages_repo, channels_repo):
     """Test getting database stats."""
-    from src.database.repositories.accounts import AccountsRepository
-    from src.database.repositories.search_queries import SearchQueriesRepository
-    from src.models import Account, Channel
+    from tg_agent.database.repositories.accounts import AccountsRepository
+    from tg_agent.database.repositories.search_queries import SearchQueriesRepository
+    from tg_agent.models import Account, Channel
 
     accounts_repo = AccountsRepository(
         messages_repo._db,
@@ -746,7 +746,7 @@ async def test_get_recent_for_channels_joins_on_channel_id_not_pk(
     messages_repo, channels_repo
 ):
     """Ensure join uses Telegram channel_id — would fail if joined on c.id."""
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     # Seed a few dummy channels first so the target channel gets pk > 1,
     # making the bug deterministic (pk 3 ≠ channel_id 2694960513).

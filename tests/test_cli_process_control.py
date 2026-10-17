@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.cli.process_control import (
+from tg_agent.cli.process_control import (
     ProcessControlError,
     StopResult,
     ensure_server_not_running,
@@ -22,7 +22,7 @@ from src.cli.process_control import (
     stop_server,
     unregister_current_process,
 )
-from src.config import AppConfig
+from tg_agent.config import AppConfig
 
 # ---------------------------------------------------------------------------
 # is_process_alive
@@ -110,18 +110,18 @@ class TestIsExpectedServerProcess:
     def test_rejects_dead_pid(self):
         assert is_expected_server_process(2999999) is False
 
-    @patch("src.cli.process_control._process_command", return_value="python -m src.main serve")
-    @patch("src.cli.process_control.is_process_alive", return_value=True)
+    @patch("tg_agent.cli.process_control._process_command", return_value="python -m tg_agent.main serve")
+    @patch("tg_agent.cli.process_control.is_process_alive", return_value=True)
     def test_accepts_matching_command(self, _mock_alive, _mock_cmd):
         assert is_expected_server_process(1234) is True
 
-    @patch("src.cli.process_control._process_command", return_value="python -m other_app")
-    @patch("src.cli.process_control.is_process_alive", return_value=True)
+    @patch("tg_agent.cli.process_control._process_command", return_value="python -m other_app")
+    @patch("tg_agent.cli.process_control.is_process_alive", return_value=True)
     def test_rejects_non_matching_command(self, _mock_alive, _mock_cmd):
         assert is_expected_server_process(1234) is False
 
-    @patch("src.cli.process_control._process_command", return_value="")
-    @patch("src.cli.process_control.is_process_alive", return_value=True)
+    @patch("tg_agent.cli.process_control._process_command", return_value="")
+    @patch("tg_agent.cli.process_control.is_process_alive", return_value=True)
     def test_rejects_empty_command(self, _mock_alive, _mock_cmd):
         assert is_expected_server_process(1234) is False
 
@@ -134,28 +134,28 @@ class TestIsExpectedServerProcess:
 class TestProcessCommand:
     @patch("sys.platform", "linux")
     def test_linux_reads_proc_cmdline(self, tmp_path):
-        from src.cli.process_control import _process_command
+        from tg_agent.cli.process_control import _process_command
 
         fake_proc = tmp_path / "1234"
         fake_proc.mkdir()
-        (fake_proc / "cmdline").write_bytes(b"python\x00-m\x00src.main\x00serve\x00")
+        (fake_proc / "cmdline").write_bytes(b"python\x00-m\x00tg_agent.main\x00serve\x00")
         with patch.object(Path, "__truediv__", return_value=fake_proc / "cmdline"):
             # Directly test by patching the path construction
             pass
         # Test the actual function with a real /proc path mock
-        with patch("src.cli.process_control.Path") as mock_path_cls:
+        with patch("tg_agent.cli.process_control.Path") as mock_path_cls:
             mock_path = MagicMock()
             mock_path_cls.return_value.__truediv__.return_value.__truediv__.return_value = mock_path
-            mock_path.read_bytes.return_value = b"python\x00-m\x00src.main\x00serve\x00"
+            mock_path.read_bytes.return_value = b"python\x00-m\x00tg_agent.main\x00serve\x00"
             result = _process_command(1234)
             assert "python" in result
-            assert "src.main" in result
+            assert "tg_agent.main" in result
 
     @patch("sys.platform", "linux")
     def test_linux_proc_not_found(self):
-        from src.cli.process_control import _process_command
+        from tg_agent.cli.process_control import _process_command
 
-        with patch("src.cli.process_control.Path") as mock_path_cls:
+        with patch("tg_agent.cli.process_control.Path") as mock_path_cls:
             mock_path = MagicMock()
             mock_path_cls.return_value.__truediv__.return_value.__truediv__.return_value = mock_path
             mock_path.read_bytes.side_effect = FileNotFoundError
@@ -179,14 +179,14 @@ class TestEnsureServerNotRunning:
         ensure_server_not_running(p)
         assert not p.exists()
 
-    @patch("src.cli.process_control.is_expected_server_process", return_value=True)
+    @patch("tg_agent.cli.process_control.is_expected_server_process", return_value=True)
     def test_raises_if_other_server_running(self, _mock, tmp_path):
         p = tmp_path / "other.pid"
         p.write_text("99999\n")
         with pytest.raises(ProcessControlError, match="Server already running"):
             ensure_server_not_running(p)
 
-    @patch("src.cli.process_control.is_expected_server_process", return_value=False)
+    @patch("tg_agent.cli.process_control.is_expected_server_process", return_value=False)
     def test_removes_stale_pid(self, _mock, tmp_path):
         p = tmp_path / "stale.pid"
         p.write_text("99999\n")
@@ -200,13 +200,13 @@ class TestEnsureServerNotRunning:
 
 
 class TestRegisterCurrentProcess:
-    @patch("src.cli.process_control.ensure_server_not_running")
+    @patch("tg_agent.cli.process_control.ensure_server_not_running")
     def test_writes_own_pid(self, _mock_ensure, tmp_path):
         p = tmp_path / "reg.pid"
         register_current_process(p)
         assert p.read_text().strip() == str(os.getpid())
 
-    @patch("src.cli.process_control.ensure_server_not_running")
+    @patch("tg_agent.cli.process_control.ensure_server_not_running")
     def test_creates_parent_dirs(self, _mock_ensure, tmp_path):
         p = tmp_path / "deep" / "nested" / "reg.pid"
         register_current_process(p)
@@ -238,7 +238,7 @@ class TestUnregisterCurrentProcess:
     def test_no_error_on_read_failure(self, tmp_path):
         p = tmp_path / "unreg.pid"
         p.write_text(f"{os.getpid()}\n")
-        with patch("src.cli.process_control.read_pid", side_effect=OSError("boom")):
+        with patch("tg_agent.cli.process_control.read_pid", side_effect=OSError("boom")):
             unregister_current_process(p)  # must not raise
 
 
@@ -253,7 +253,7 @@ class TestStopServer:
         outcome = stop_server(p)
         assert outcome.result == StopResult.NOT_RUNNING
 
-    @patch("src.cli.process_control.is_process_alive", return_value=False)
+    @patch("tg_agent.cli.process_control.is_process_alive", return_value=False)
     def test_stale_pid_file(self, _mock, tmp_path):
         p = tmp_path / "stale.pid"
         p.write_text("99999\n")
@@ -261,16 +261,16 @@ class TestStopServer:
         assert outcome.result == StopResult.STALE_PID
         assert not p.exists()
 
-    @patch("src.cli.process_control.is_expected_server_process", return_value=False)
-    @patch("src.cli.process_control.is_process_alive", return_value=True)
+    @patch("tg_agent.cli.process_control.is_expected_server_process", return_value=False)
+    @patch("tg_agent.cli.process_control.is_process_alive", return_value=True)
     def test_unmanaged_process(self, _mock_alive, _mock_expected, tmp_path):
         p = tmp_path / "unmanaged.pid"
         p.write_text("99999\n")
         outcome = stop_server(p)
         assert outcome.result == StopResult.UNMANAGED
 
-    @patch("src.cli.process_control.is_expected_server_process", return_value=True)
-    @patch("src.cli.process_control.is_process_alive", side_effect=[True, False])
+    @patch("tg_agent.cli.process_control.is_expected_server_process", return_value=True)
+    @patch("tg_agent.cli.process_control.is_process_alive", side_effect=[True, False])
     @patch("os.kill")
     def test_stops_gracefully(self, mock_kill, _mock_alive, _mock_expected, tmp_path):
         p = tmp_path / "grace.pid"
@@ -280,8 +280,8 @@ class TestStopServer:
         mock_kill.assert_called_once_with(99999, signal.SIGTERM)
         assert not p.exists()
 
-    @patch("src.cli.process_control.is_expected_server_process", return_value=True)
-    @patch("src.cli.process_control.is_process_alive", side_effect=[True, True, True, False])
+    @patch("tg_agent.cli.process_control.is_expected_server_process", return_value=True)
+    @patch("tg_agent.cli.process_control.is_process_alive", side_effect=[True, True, True, False])
     @patch("os.kill")
     def test_force_kills_after_timeout(self, mock_kill, _mock_alive, _mock_expected, tmp_path):
         p = tmp_path / "force.pid"
@@ -291,8 +291,8 @@ class TestStopServer:
         # SIGTERM first, then SIGKILL
         assert mock_kill.call_count == 2
 
-    @patch("src.cli.process_control.is_expected_server_process", return_value=True)
-    @patch("src.cli.process_control.is_process_alive", return_value=True)
+    @patch("tg_agent.cli.process_control.is_expected_server_process", return_value=True)
+    @patch("tg_agent.cli.process_control.is_process_alive", return_value=True)
     @patch("os.kill")
     def test_timeout_if_never_dies(self, mock_kill, _mock_alive, _mock_expected, tmp_path):
         p = tmp_path / "hung.pid"
@@ -300,8 +300,8 @@ class TestStopServer:
         outcome = stop_server(p, timeout_sec=0.05, kill_timeout_sec=0.05)
         assert outcome.result == StopResult.TIMEOUT
 
-    @patch("src.cli.process_control.is_expected_server_process", return_value=True)
-    @patch("src.cli.process_control.is_process_alive", side_effect=[True, False])
+    @patch("tg_agent.cli.process_control.is_expected_server_process", return_value=True)
+    @patch("tg_agent.cli.process_control.is_process_alive", side_effect=[True, False])
     @patch("os.kill", side_effect=ProcessLookupError)
     def test_term_raises_process_lookup(self, mock_kill, _mock_alive, _mock_expected, tmp_path):
         p = tmp_path / "gone.pid"
@@ -310,8 +310,8 @@ class TestStopServer:
         assert outcome.result == StopResult.STALE_PID
         assert not p.exists()
 
-    @patch("src.cli.process_control.is_expected_server_process", return_value=True)
-    @patch("src.cli.process_control.is_process_alive", return_value=True)
+    @patch("tg_agent.cli.process_control.is_expected_server_process", return_value=True)
+    @patch("tg_agent.cli.process_control.is_process_alive", return_value=True)
     @patch("os.kill", side_effect=PermissionError("nope"))
     def test_term_raises_permission_error(self, mock_kill, _mock_alive, _mock_expected, tmp_path):
         p = tmp_path / "perm.pid"

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.utils.search_query_chat_filter import _normalize_token
+from tg_agent.utils.search_query_chat_filter import _normalize_token
 
 
 def test_private_chat_link_normalizes_to_bare_positive_id():

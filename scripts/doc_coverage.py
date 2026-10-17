@@ -207,7 +207,7 @@ def section_undocumented(results: object, top: int) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Отчёт о doc-coverage (долге документации).")
-    parser.add_argument("--path", default="src", help="Путь для анализа (по умолчанию src)")
+    parser.add_argument("--path", default="tg_agent", help="Путь для анализа (по умолчанию src)")
     parser.add_argument("--top", type=int, default=20, help="Сколько строк показывать в топах")
     parser.add_argument(
         "--fail-under",

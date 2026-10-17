@@ -78,14 +78,14 @@ async def test_dashboard_contains_stats(route_client, base_app):
 @pytest.mark.anyio
 async def test_time_ago_none():
     """Test _time_ago returns None for None input."""
-    from src.web.routes.dashboard import _time_ago
+    from tg_agent.web.routes.dashboard import _time_ago
     assert _time_ago(None) is None
 
 
 @pytest.mark.anyio
 async def test_time_ago_just_now():
     """Test _time_ago returns 'только что' for very recent."""
-    from src.web.routes.dashboard import _time_ago
+    from tg_agent.web.routes.dashboard import _time_ago
     now = datetime.now(tz=timezone.utc)
     assert _time_ago(now) == "только что"
 
@@ -93,7 +93,7 @@ async def test_time_ago_just_now():
 @pytest.mark.anyio
 async def test_time_ago_minutes():
     """Test _time_ago returns minutes ago."""
-    from src.web.routes.dashboard import _time_ago
+    from tg_agent.web.routes.dashboard import _time_ago
     dt = datetime.now(tz=timezone.utc) - timedelta(minutes=5)
     result = _time_ago(dt)
     assert "5" in result
@@ -103,7 +103,7 @@ async def test_time_ago_minutes():
 @pytest.mark.anyio
 async def test_time_ago_hours():
     """Test _time_ago returns hours ago."""
-    from src.web.routes.dashboard import _time_ago
+    from tg_agent.web.routes.dashboard import _time_ago
     dt = datetime.now(tz=timezone.utc) - timedelta(hours=3)
     result = _time_ago(dt)
     assert "3" in result
@@ -113,7 +113,7 @@ async def test_time_ago_hours():
 @pytest.mark.anyio
 async def test_time_ago_days():
     """Test _time_ago returns days ago."""
-    from src.web.routes.dashboard import _time_ago
+    from tg_agent.web.routes.dashboard import _time_ago
     dt = datetime.now(tz=timezone.utc) - timedelta(days=5)
     result = _time_ago(dt)
     assert "5" in result
@@ -123,7 +123,7 @@ async def test_time_ago_days():
 @pytest.mark.anyio
 async def test_time_ago_naive_datetime():
     """Test _time_ago handles naive datetime (no tzinfo)."""
-    from src.web.routes.dashboard import _time_ago
+    from tg_agent.web.routes.dashboard import _time_ago
     dt = datetime.now(tz=timezone.utc).replace(tzinfo=None) - timedelta(minutes=10)
     result = _time_ago(dt)
     assert "10" in result

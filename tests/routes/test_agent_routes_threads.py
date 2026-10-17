@@ -225,7 +225,7 @@ async def test_resolve_permission_unknown_request_returns_404(client, db):
 @pytest.mark.anyio
 async def test_resolve_permission_session_choice_updates_gate(client, db):
     """Web resolve route stores a real session approval when the browser POST arrives."""
-    from src.agent.permission_gate import (
+    from tg_agent.agent.permission_gate import (
         AgentRequestContext,
         PermissionGate,
         reset_request_context,
@@ -397,7 +397,7 @@ async def test_chat_with_model_parameter(client, db):
     """Test chat with explicit model parameter (line 225-226)."""
     thread_id = await db.create_agent_thread("Chat")
 
-    from src.agent.models import CLAUDE_MODEL_IDS
+    from tg_agent.agent.models import CLAUDE_MODEL_IDS
 
     if CLAUDE_MODEL_IDS:
         model = list(CLAUDE_MODEL_IDS)[0]
@@ -491,7 +491,7 @@ async def test_chat_enables_interactive_permissions(client, db):
 
 def test_permission_dialog_items_all_have_cursor_span():
     """Every permission menu item must satisfy highlight()'s .perm-cursor lookup."""
-    template = Path("src/web/templates/agent.html").read_text(encoding="utf-8")
+    template = Path("tg_agent/web/templates/agent.html").read_text(encoding="utf-8")
     for choice in ("once", "session", "deny"):
         marker = f'class="perm-item" data-choice="{choice}"'
         start = template.index(marker)
@@ -502,7 +502,7 @@ def test_permission_dialog_items_all_have_cursor_span():
 
 def test_permission_dialog_keyboard_and_post_contract():
     """Pressing 2 must map to session and POST failures must not auto-deny."""
-    template = Path("src/web/templates/agent.html").read_text(encoding="utf-8")
+    template = Path("tg_agent/web/templates/agent.html").read_text(encoding="utf-8")
 
     assert "document.addEventListener('keydown', onKey, true)" in template
     assert "document.removeEventListener('keydown', onKey, true)" in template
@@ -574,7 +574,7 @@ async def test_delete_thread_no_agent_manager(client, db):
 @pytest.mark.anyio
 async def test_get_channels_json_with_data(client, db):
     """Test get channels JSON with active channels."""
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     await db.add_channel(Channel(channel_id=200, title="Active Channel", channel_type="channel"))
 

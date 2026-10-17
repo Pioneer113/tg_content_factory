@@ -7,7 +7,7 @@
 
 TG Agent — личный инструмент: один пользователь, один процесс (`serve` с
 встроенным воркером), один файл SQLite. Плагин здесь — способ добавить
-свою операцию (команду, инструмент агента), не трогая `src/`.
+свою операцию (команду, инструмент агента), не трогая `tg_agent/`.
 
 Плагин работает **в процессе ядра с его правами** — как модули pytest,
 Django или Flask. Python-код в одном процессе изолировать нельзя: он
@@ -27,17 +27,17 @@ pull request**. Что прочитано и поставлено — то и д
 
 ## 2. Что уже есть в коде
 
-Де-факто плагинный интерфейс существует: 18 модулей в `src/agent/tools/`
+Де-факто плагинный интерфейс существует: 18 модулей в `tg_agent/agent/tools/`
 (`search`, `channels`, `dialogs`, …), у каждого функция
 
 ```python
 def register(db, client_pool, embedding_service, **extras) -> list[tool]
 ```
 
-Список модулей — `TOOL_MODULE_ORDER` в `src/agent/tools/_categories.py`.
-Агент и MCP-сервер (`python -m src.main mcp-server`) видят все
+Список модулей — `TOOL_MODULE_ORDER` в `tg_agent/agent/tools/_categories.py`.
+Агент и MCP-сервер (`python -m tg_agent.main mcp-server`) видят все
 зарегистрированные инструменты автоматически; права read/write/delete
-берутся из `TOOL_CATEGORIES` (`src/agent/tools/permissions.py`).
+берутся из `TOOL_CATEGORIES` (`tg_agent/agent/tools/permissions.py`).
 
 Плагин — это такой же модуль, только живущий в отдельном pip-пакете и
 найденный через entry point вместо жёсткого списка.
@@ -52,11 +52,10 @@ my_digest = "tg_plugin_digest:PLUGIN"
 ```
 
 `PLUGIN` — объект с тремя вещами: кто я, с чем совместим, что регистрирую.
-Публичный модуль — `src.plugin_api` (пакет ставится как `src*`, отдельного
-`tg_agent` пространства имён нет). Он реэкспортирует `text_response` из
-`src/agent/tools/_registry.py` и даёт **свой** декоратор `tool`: у
+Публичный модуль — `tg_agent.plugin_api`. Он реэкспортирует `text_response` из
+`tg_agent/agent/tools/_registry.py` и даёт **свой** декоратор `tool`: у
 `claude_agent_sdk.tool` нет параметров `category`/`phone_bound`, поэтому
-обёртка принимает их, создаёт `ToolMeta` (`src/agent/tools/_categories.py`)
+обёртка принимает их, создаёт `ToolMeta` (`tg_agent/agent/tools/_categories.py`)
 и вызывает SDK-декоратор.
 
 `id` плагина — только `[a-z][a-z0-9_]*`: он идёт в имена таблиц без
@@ -65,7 +64,7 @@ my_digest = "tg_plugin_digest:PLUGIN"
 ```python
 from datetime import UTC, datetime, timedelta
 
-from src.plugin_api import Plugin, PluginContext, text_response, tool
+from tg_agent.plugin_api import Plugin, PluginContext, text_response, tool
 
 async def setup(ctx: PluginContext) -> None:
     # один раз на контейнер, до register; здесь всё, что требует await
@@ -132,7 +131,7 @@ policy — иначе агент их не увидит.
 |---|---|---|
 | Агент | автоматически, через `register` | 325.1 |
 | MCP-сервер | автоматически (он раздаёт тот же реестр) | 325.1 |
-| CLI | `python -m src.main plugin run <tool> --limit 5` — команда генерируется из схемы инструмента | 325.2 |
+| CLI | `python -m tg_agent.main plugin run <tool> --limit 5` — команда генерируется из схемы инструмента | 325.2 |
 | Веб | JSON endpoint `POST /api/tools/<tool>` из той же схемы; UI-страницы плагин не рисует | 325.2 |
 
 Ключевой момент 325.2: генератор CLI/JSON из схемы `tool` пригоден и для
@@ -184,7 +183,7 @@ policy — иначе агент их не увидит.
 
 | # | Что | ~строк |
 |---|---|---|
-| 325.1 | `src/plugin_api.py` (`Plugin`, `PluginContext`, `PluginRuntime`, `PLUGIN_API_VERSION = 1`, обёртка `tool(category=, phone_bound=)` → `ToolMeta`, реэкспорт `text_response`, валидация `id`); discovery через entry points с проверкой `requires_api` и `plugins_disabled`; `await setup` в `build_container_with_templates` и в `_serve` MCP-сервера; `register` в `build_agent_tool_registry` после `TOOL_MODULE_ORDER`; категории плагинов в `permissions.py`; `shutdown` в `stop_container` и в `finally` `_serve`; пример `examples/plugin_digest/` (код из §3, должен реально запускаться); тест на контракт + правка golden-снапшота `TOOL_CATEGORIES` | ~250 |
+| 325.1 | `tg_agent/plugin_api.py` (`Plugin`, `PluginContext`, `PluginRuntime`, `PLUGIN_API_VERSION = 1`, обёртка `tool(category=, phone_bound=)` → `ToolMeta`, реэкспорт `text_response`, валидация `id`); discovery через entry points с проверкой `requires_api` и `plugins_disabled`; `await setup` в `build_container_with_templates` и в `_serve` MCP-сервера; `register` в `build_agent_tool_registry` после `TOOL_MODULE_ORDER`; категории плагинов в `permissions.py`; `shutdown` в `stop_container` и в `finally` `_serve`; пример `examples/plugin_digest/` (код из §3, должен реально запускаться); тест на контракт + правка golden-снапшота `TOOL_CATEGORIES` | ~250 |
 | 325.2 | Генератор CLI-команды и JSON endpoint из схемы `tool`; `plugin list` в CLI и на веб-странице настроек | ~200 |
 | 325.3 | Страница в mkdocs: как написать, поставить, обновить плагин | ~100 |
 

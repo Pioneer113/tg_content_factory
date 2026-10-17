@@ -1,19 +1,19 @@
 [importlinter]
-root_package = src
+root_package = tg_agent
 include_external_packages = True
 
 [importlinter:contract:telegram_actions_no_raw_telethon_functions_in_entrypoints]
 name = Telegram entrypoints do not import Telethon directly outside allowed pipeline errors
 type = forbidden
 source_modules =
-    src.cli
-    src.web
-    src.agent.tools
-    src.services.pipeline_nodes
-    src.services.telegram_command_dispatcher
+    tg_agent.cli
+    tg_agent.web
+    tg_agent.agent.tools
+    tg_agent.services.pipeline_nodes
+    tg_agent.services.telegram_command_dispatcher
 forbidden_modules =
     telethon
 allow_indirect_imports = True
 ignore_imports =
-    src.services.pipeline_nodes.handlers -> telethon
-    src.services.telegram_command_dispatcher -> telethon
+    tg_agent.services.pipeline_nodes.handlers -> telethon
+    tg_agent.services.telegram_command_dispatcher -> telethon

@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.database import Database
 from tests.agent_tools_helpers import _get_tool_handlers, _text
+from tg_agent.database import Database
 
 
 @pytest.fixture
@@ -31,7 +31,7 @@ class TestIndexMessagesTool:
     @pytest.mark.anyio
     async def test_success(self, mock_db):
         with patch(
-            "src.services.embedding_service.EmbeddingService"
+            "tg_agent.services.embedding_service.EmbeddingService"
         ) as mock_cls:
             mock_instance = MagicMock()
             mock_instance.index_pending_messages = AsyncMock(return_value=42)
@@ -46,7 +46,7 @@ class TestIndexMessagesTool:
     @pytest.mark.anyio
     async def test_error_returns_text(self, mock_db):
         with patch(
-            "src.services.embedding_service.EmbeddingService"
+            "tg_agent.services.embedding_service.EmbeddingService"
         ) as mock_cls:
             mock_instance = MagicMock()
             mock_instance.index_pending_messages = AsyncMock(
@@ -86,8 +86,8 @@ class TestSearchTelegramTool:
         )
 
         with (
-            patch("src.services.embedding_service.EmbeddingService"),
-            patch("src.search.engine.SearchEngine") as mock_se,
+            patch("tg_agent.services.embedding_service.EmbeddingService"),
+            patch("tg_agent.search.engine.SearchEngine") as mock_se,
         ):
             se_instance = mock_se.return_value
             se_instance.search_telegram = AsyncMock(return_value=fake_result)
@@ -109,8 +109,8 @@ class TestSearchTelegramTool:
         )
 
         with (
-            patch("src.services.embedding_service.EmbeddingService"),
-            patch("src.search.engine.SearchEngine") as mock_se,
+            patch("tg_agent.services.embedding_service.EmbeddingService"),
+            patch("tg_agent.search.engine.SearchEngine") as mock_se,
         ):
             se_instance = mock_se.return_value
             se_instance.search_telegram = AsyncMock(return_value=fake_result)
@@ -131,8 +131,8 @@ class TestSearchTelegramTool:
         )
 
         with (
-            patch("src.services.embedding_service.EmbeddingService"),
-            patch("src.search.engine.SearchEngine") as mock_se,
+            patch("tg_agent.services.embedding_service.EmbeddingService"),
+            patch("tg_agent.search.engine.SearchEngine") as mock_se,
         ):
             se_instance = mock_se.return_value
             se_instance.search_telegram = AsyncMock(return_value=fake_result)
@@ -146,8 +146,8 @@ class TestSearchTelegramTool:
     @pytest.mark.anyio
     async def test_exception_returns_error_text(self, mock_db, mock_pool):
         with (
-            patch("src.services.embedding_service.EmbeddingService"),
-            patch("src.search.engine.SearchEngine") as mock_se,
+            patch("tg_agent.services.embedding_service.EmbeddingService"),
+            patch("tg_agent.search.engine.SearchEngine") as mock_se,
         ):
             se_instance = mock_se.return_value
             se_instance.search_telegram = AsyncMock(side_effect=Exception("timeout"))
@@ -184,8 +184,8 @@ class TestSearchMyChatsTool:
         )
 
         with (
-            patch("src.services.embedding_service.EmbeddingService"),
-            patch("src.search.engine.SearchEngine") as mock_se,
+            patch("tg_agent.services.embedding_service.EmbeddingService"),
+            patch("tg_agent.search.engine.SearchEngine") as mock_se,
         ):
             se_instance = mock_se.return_value
             se_instance.search_my_chats = AsyncMock(return_value=fake_result)
@@ -207,8 +207,8 @@ class TestSearchMyChatsTool:
         )
 
         with (
-            patch("src.services.embedding_service.EmbeddingService"),
-            patch("src.search.engine.SearchEngine") as mock_se,
+            patch("tg_agent.services.embedding_service.EmbeddingService"),
+            patch("tg_agent.search.engine.SearchEngine") as mock_se,
         ):
             se_instance = mock_se.return_value
             se_instance.search_my_chats = AsyncMock(return_value=fake_result)
@@ -222,8 +222,8 @@ class TestSearchMyChatsTool:
     @pytest.mark.anyio
     async def test_exception_returns_error_text(self, mock_db, mock_pool):
         with (
-            patch("src.services.embedding_service.EmbeddingService"),
-            patch("src.search.engine.SearchEngine") as mock_se,
+            patch("tg_agent.services.embedding_service.EmbeddingService"),
+            patch("tg_agent.search.engine.SearchEngine") as mock_se,
         ):
             se_instance = mock_se.return_value
             se_instance.search_my_chats = AsyncMock(side_effect=Exception("network"))
@@ -265,8 +265,8 @@ class TestSearchInChannelTool:
         )
 
         with (
-            patch("src.services.embedding_service.EmbeddingService"),
-            patch("src.search.engine.SearchEngine") as mock_se,
+            patch("tg_agent.services.embedding_service.EmbeddingService"),
+            patch("tg_agent.search.engine.SearchEngine") as mock_se,
         ):
             se_instance = mock_se.return_value
             se_instance.search_in_channel = AsyncMock(return_value=fake_result)
@@ -289,8 +289,8 @@ class TestSearchInChannelTool:
         )
 
         with (
-            patch("src.services.embedding_service.EmbeddingService"),
-            patch("src.search.engine.SearchEngine") as mock_se,
+            patch("tg_agent.services.embedding_service.EmbeddingService"),
+            patch("tg_agent.search.engine.SearchEngine") as mock_se,
         ):
             se_instance = mock_se.return_value
             se_instance.search_in_channel = AsyncMock(return_value=fake_result)
@@ -306,8 +306,8 @@ class TestSearchInChannelTool:
     @pytest.mark.anyio
     async def test_exception_returns_error_text(self, mock_db, mock_pool):
         with (
-            patch("src.services.embedding_service.EmbeddingService"),
-            patch("src.search.engine.SearchEngine") as mock_se,
+            patch("tg_agent.services.embedding_service.EmbeddingService"),
+            patch("tg_agent.search.engine.SearchEngine") as mock_se,
         ):
             se_instance = mock_se.return_value
             se_instance.search_in_channel = AsyncMock(side_effect=Exception("flood"))
@@ -339,8 +339,8 @@ class TestSearchHybridTool:
         )
 
         with (
-            patch("src.services.embedding_service.EmbeddingService"),
-            patch("src.search.engine.SearchEngine") as mock_se,
+            patch("tg_agent.services.embedding_service.EmbeddingService"),
+            patch("tg_agent.search.engine.SearchEngine") as mock_se,
         ):
             se_instance = mock_se.return_value
             se_instance.search_hybrid = AsyncMock(return_value=fake_result)
@@ -368,8 +368,8 @@ class TestSearchHybridTool:
         )
 
         with (
-            patch("src.services.embedding_service.EmbeddingService"),
-            patch("src.search.engine.SearchEngine") as mock_se,
+            patch("tg_agent.services.embedding_service.EmbeddingService"),
+            patch("tg_agent.search.engine.SearchEngine") as mock_se,
         ):
             se_instance = mock_se.return_value
             se_instance.search_hybrid = AsyncMock(return_value=fake_result)
@@ -390,8 +390,8 @@ class TestSearchHybridTool:
         )
 
         with (
-            patch("src.services.embedding_service.EmbeddingService"),
-            patch("src.search.engine.SearchEngine") as mock_se,
+            patch("tg_agent.services.embedding_service.EmbeddingService"),
+            patch("tg_agent.search.engine.SearchEngine") as mock_se,
         ):
             se_instance = mock_se.return_value
             se_instance.search_hybrid = AsyncMock(return_value=fake_result)
@@ -405,8 +405,8 @@ class TestSearchHybridTool:
     @pytest.mark.anyio
     async def test_exception_returns_error_text(self, mock_db, mock_pool):
         with (
-            patch("src.services.embedding_service.EmbeddingService"),
-            patch("src.search.engine.SearchEngine") as mock_se,
+            patch("tg_agent.services.embedding_service.EmbeddingService"),
+            patch("tg_agent.search.engine.SearchEngine") as mock_se,
         ):
             se_instance = mock_se.return_value
             se_instance.search_hybrid = AsyncMock(side_effect=Exception("OOM"))
@@ -428,8 +428,8 @@ class TestSearchHybridTool:
         )
 
         with (
-            patch("src.services.embedding_service.EmbeddingService"),
-            patch("src.search.engine.SearchEngine") as mock_se,
+            patch("tg_agent.services.embedding_service.EmbeddingService"),
+            patch("tg_agent.search.engine.SearchEngine") as mock_se,
         ):
             se_instance = mock_se.return_value
             se_instance.search_hybrid = AsyncMock(return_value=fake_result)
@@ -463,8 +463,8 @@ class TestSearchHybridTool:
         )
 
         with (
-            patch("src.services.embedding_service.EmbeddingService"),
-            patch("src.search.engine.SearchEngine") as mock_se,
+            patch("tg_agent.services.embedding_service.EmbeddingService"),
+            patch("tg_agent.search.engine.SearchEngine") as mock_se,
         ):
             se_instance = mock_se.return_value
             se_instance.search_hybrid = AsyncMock(return_value=fake_result)

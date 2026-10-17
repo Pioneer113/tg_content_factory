@@ -81,7 +81,7 @@ async def test_collect_all_stats_already_running(route_client, base_app):
     app, db, pool = base_app
     await _add_channel(db)
 
-    from src.models import StatsAllTaskPayload
+    from tg_agent.models import StatsAllTaskPayload
 
     await db.create_stats_task(
         StatsAllTaskPayload(channel_ids=[100], batch_size=20)

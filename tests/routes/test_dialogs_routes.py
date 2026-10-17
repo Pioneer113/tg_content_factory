@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.models import Account, Channel
 from tests.helpers import AsyncIterEmpty, AsyncIterMessages
+from tg_agent.models import Account, Channel
 
 
 @pytest.fixture

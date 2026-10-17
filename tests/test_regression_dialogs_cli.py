@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.config import AppConfig
-from src.database import Database
+from tg_agent.config import AppConfig
+from tg_agent.database import Database
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -62,7 +62,7 @@ class TestMyTelegramActions:
     """Test dialogs CLI actions by mocking pool/db and calling run()."""
 
     def _run_action(self, action, pool=None, db=None, extra_args=None):
-        from src.cli.commands import dialogs
+        from tg_agent.cli.commands import dialogs
 
         pool = pool or _make_pool_with_clients()
         db = db or _make_mock_db()
@@ -95,8 +95,8 @@ class TestMyTelegramActions:
             return cfg, pool
 
         with (
-            patch("src.cli.commands.dialogs.runtime.init_db", side_effect=fake_init_db),
-            patch("src.cli.commands.dialogs.runtime.init_pool", side_effect=fake_init_pool),
+            patch("tg_agent.cli.commands.dialogs.runtime.init_db", side_effect=fake_init_db),
+            patch("tg_agent.cli.commands.dialogs.runtime.init_pool", side_effect=fake_init_pool),
         ):
             dialogs.run(args)
 
@@ -105,7 +105,7 @@ class TestMyTelegramActions:
         db = _make_mock_db()
         db.close = AsyncMock()
         with patch(
-            "src.cli.commands.dialogs.ChannelService.get_my_dialogs",
+            "tg_agent.cli.commands.dialogs.ChannelService.get_my_dialogs",
             new_callable=AsyncMock,
             return_value=[{"channel_id": 1, "title": "t"}],
         ):
@@ -118,7 +118,7 @@ class TestMyTelegramActions:
         db = _make_mock_db()
         db.close = AsyncMock()
         with patch(
-            "src.cli.commands.dialogs.ChannelService.get_my_dialogs",
+            "tg_agent.cli.commands.dialogs.ChannelService.get_my_dialogs",
             new_callable=AsyncMock,
             return_value=[
                 {
@@ -139,7 +139,7 @@ class TestMyTelegramActions:
         db = _make_mock_db()
         db.close = AsyncMock()
         with patch(
-            "src.cli.commands.dialogs.ChannelService.get_my_dialogs",
+            "tg_agent.cli.commands.dialogs.ChannelService.get_my_dialogs",
             new_callable=AsyncMock,
             return_value=[],
         ):
@@ -277,7 +277,7 @@ class TestMyTelegramActions:
 
     def test_transcribe_action_prints_transcript(self, capsys):
         pool = _make_pool_with_clients()
-        with patch("src.cli.commands.dialogs.TelegramActionService") as service_cls:
+        with patch("tg_agent.cli.commands.dialogs.TelegramActionService") as service_cls:
             service_cls.return_value.transcribe_voice = AsyncMock(
                 return_value={
                     "status": "ok",
@@ -299,7 +299,7 @@ class TestMyTelegramActions:
 
     def test_transcribe_action_marks_cache_hits(self, capsys):
         pool = _make_pool_with_clients()
-        with patch("src.cli.commands.dialogs.TelegramActionService") as service_cls:
+        with patch("tg_agent.cli.commands.dialogs.TelegramActionService") as service_cls:
             service_cls.return_value.transcribe_voice = AsyncMock(
                 return_value={
                     "status": "ok", "text": "повтор", "source": "groq",
@@ -315,7 +315,7 @@ class TestMyTelegramActions:
 
     def test_transcribe_action_premium_required_is_a_clear_message(self, capsys):
         pool = _make_pool_with_clients()
-        with patch("src.cli.commands.dialogs.TelegramActionService") as service_cls:
+        with patch("tg_agent.cli.commands.dialogs.TelegramActionService") as service_cls:
             service_cls.return_value.transcribe_voice = AsyncMock(
                 return_value={
                     "status": "premium_required",
@@ -331,7 +331,7 @@ class TestMyTelegramActions:
 
     def test_transcribe_action_engine_error_is_a_clear_message(self, capsys):
         pool = _make_pool_with_clients()
-        with patch("src.cli.commands.dialogs.TelegramActionService") as service_cls:
+        with patch("tg_agent.cli.commands.dialogs.TelegramActionService") as service_cls:
             service_cls.return_value.transcribe_voice = AsyncMock(
                 return_value={
                     "status": "error",
@@ -347,7 +347,7 @@ class TestMyTelegramActions:
 
     def test_transcribe_action_service_error_is_caught(self, capsys):
         pool = _make_pool_with_clients()
-        with patch("src.cli.commands.dialogs.TelegramActionService") as service_cls:
+        with patch("tg_agent.cli.commands.dialogs.TelegramActionService") as service_cls:
             service_cls.return_value.transcribe_voice = AsyncMock(
                 side_effect=RuntimeError("boom")
             )
@@ -361,7 +361,7 @@ class TestMyTelegramActions:
     def test_transcribe_action_engine_defaults_from_env(self, capsys, monkeypatch):
         monkeypatch.setenv("TELEGRAM_TRANSCRIBE_ENGINE", "whisper")
         pool = _make_pool_with_clients()
-        with patch("src.cli.commands.dialogs.TelegramActionService") as service_cls:
+        with patch("tg_agent.cli.commands.dialogs.TelegramActionService") as service_cls:
             service_cls.return_value.transcribe_voice = AsyncMock(
                 return_value={"status": "ok", "text": "локально", "source": "whisper", "cached": False}
             )
@@ -377,7 +377,7 @@ class TestMyTelegramActions:
         """No explicit --phone + engine=telegram → phone=None reaches the service
         so the premium lease picks a premium account (review on #1561)."""
         pool = _make_pool_with_clients()
-        with patch("src.cli.commands.dialogs.TelegramActionService") as service_cls:
+        with patch("tg_agent.cli.commands.dialogs.TelegramActionService") as service_cls:
             service_cls.return_value.transcribe_voice = AsyncMock(
                 return_value={"status": "ok", "text": "нативно", "source": "telegram", "cached": False}
             )
@@ -392,7 +392,7 @@ class TestMyTelegramActions:
 
     def test_transcribe_action_explicit_phone_is_honored_for_telegram(self, capsys):
         pool = _make_pool_with_clients()
-        with patch("src.cli.commands.dialogs.TelegramActionService") as service_cls:
+        with patch("tg_agent.cli.commands.dialogs.TelegramActionService") as service_cls:
             service_cls.return_value.transcribe_voice = AsyncMock(
                 return_value={"status": "ok", "text": "нативно", "source": "telegram", "cached": False}
             )
@@ -552,7 +552,7 @@ class TestMyTelegramToolErrors:
     def mytg_setup(self):
         mock_db = MagicMock(spec=Database)
         mock_db.repos = MagicMock()
-        from src.models import Account
+        from tg_agent.models import Account
         mock_db.get_accounts = AsyncMock(return_value=[
             Account(id=1, phone="+1111", session_string="s", is_active=True, is_primary=True),
         ])
@@ -567,23 +567,23 @@ class TestMyTelegramToolErrors:
 
         captured_tools = []
         with patch(
-            "src.agent.tools.create_sdk_mcp_server",
+            "tg_agent.agent.tools.create_sdk_mcp_server",
             side_effect=lambda **kw: captured_tools.extend(kw.get("tools", [])),
         ):
-            from src.agent.tools import make_mcp_server
+            from tg_agent.agent.tools import make_mcp_server
             make_mcp_server(mock_db, client_pool=pool)
         return {t.name: t.handler for t in captured_tools if hasattr(t, "handler")}, mock_db, pool
 
     async def test_list_dialogs_exception(self, mytg_setup):
         handlers, _, _ = mytg_setup
-        with patch("src.services.channel_service.ChannelService.get_my_dialogs",
+        with patch("tg_agent.services.channel_service.ChannelService.get_my_dialogs",
                     new_callable=AsyncMock, side_effect=RuntimeError("fail")):
             result = await handlers["search_dialogs"]({"phone": "+1111"})
             assert "ошибка" in _text(result).lower()
 
     async def test_refresh_dialogs_exception(self, mytg_setup):
         handlers, _, _ = mytg_setup
-        with patch("src.services.channel_service.ChannelService.get_my_dialogs",
+        with patch("tg_agent.services.channel_service.ChannelService.get_my_dialogs",
                     new_callable=AsyncMock, side_effect=RuntimeError("fail")):
             result = await handlers["refresh_dialogs"]({"phone": "+1111"})
             assert "ошибка" in _text(result).lower()
@@ -646,7 +646,7 @@ class TestMyTelegramNoAccounts:
     """Cover the 'no connected accounts' and 'client unavailable' branches."""
 
     def _run_action(self, action, pool=None, db=None, extra_args=None):
-        from src.cli.commands import dialogs
+        from tg_agent.cli.commands import dialogs
 
         pool = pool or _make_pool_with_clients()
         db = db or _make_mock_db()
@@ -679,8 +679,8 @@ class TestMyTelegramNoAccounts:
             return cfg, pool
 
         with (
-            patch("src.cli.commands.dialogs.runtime.init_db", side_effect=fake_init_db),
-            patch("src.cli.commands.dialogs.runtime.init_pool", side_effect=fake_init_pool),
+            patch("tg_agent.cli.commands.dialogs.runtime.init_db", side_effect=fake_init_db),
+            patch("tg_agent.cli.commands.dialogs.runtime.init_pool", side_effect=fake_init_pool),
         ):
             dialogs.run(args)
 
@@ -817,7 +817,7 @@ class TestMyTelegramNoAccounts:
 
 class TestMyTelegramMoreBranches:
     def _run_action(self, action, pool=None, db=None, extra_args=None):
-        from src.cli.commands import dialogs
+        from tg_agent.cli.commands import dialogs
 
         pool = pool or _make_pool_with_clients()
         db = db or _make_mock_db()
@@ -850,8 +850,8 @@ class TestMyTelegramMoreBranches:
             return cfg, pool
 
         with (
-            patch("src.cli.commands.dialogs.runtime.init_db", side_effect=fake_init_db),
-            patch("src.cli.commands.dialogs.runtime.init_pool", side_effect=fake_init_pool),
+            patch("tg_agent.cli.commands.dialogs.runtime.init_db", side_effect=fake_init_db),
+            patch("tg_agent.cli.commands.dialogs.runtime.init_pool", side_effect=fake_init_pool),
         ):
             dialogs.run(args)
 
@@ -1079,10 +1079,10 @@ class TestMyTelegramToolPhoneGates:
 
         captured_tools = []
         with patch(
-            "src.agent.tools.create_sdk_mcp_server",
+            "tg_agent.agent.tools.create_sdk_mcp_server",
             side_effect=lambda **kw: captured_tools.extend(kw.get("tools", [])),
         ):
-            from src.agent.tools import make_mcp_server
+            from tg_agent.agent.tools import make_mcp_server
             make_mcp_server(mock_db, client_pool=pool)
         return {t.name: t.handler for t in captured_tools if hasattr(t, "handler")}, mock_db
 

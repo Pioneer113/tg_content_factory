@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from src.telegram.utils import normalize_utc
+from tg_agent.telegram.utils import normalize_utc
 
 
 @pytest.mark.anyio

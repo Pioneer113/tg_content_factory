@@ -10,17 +10,17 @@ import pytest
 from telethon.errors import FloodWaitError, TypeNotFoundError
 from telethon_floodgate import HandledFloodWaitError
 
-from src.models import Account
-from src.telegram.backends import (
+from tests.helpers import AsyncIterMessages, FakeCliTelethonClient
+from tg_agent.models import Account
+from tg_agent.telegram.backends import (
     NativeTelethonBackend,
     TelegramTransportSession,
     TelethonCliBackend,
     fetch_message_reaction_users_raw,
 )
-from src.telegram.collector_types import unknown_tl_type_note
-from src.telegram.reactions import TelegramReactionInvalidError
-from src.telegram.schema_drift import SchemaDriftError
-from tests.helpers import AsyncIterMessages, FakeCliTelethonClient
+from tg_agent.telegram.collector_types import unknown_tl_type_note
+from tg_agent.telegram.reactions import TelegramReactionInvalidError
+from tg_agent.telegram.schema_drift import SchemaDriftError
 
 
 def _session(**kwargs) -> TelegramTransportSession:
@@ -609,7 +609,7 @@ async def test_telethon_cli_backend_disables_flood_auto_sleep(monkeypatch, tmp_p
     """TelethonCliBackend.acquire_client must also set flood_sleep_threshold=0 (#495)."""
     fake_client = FakeCliTelethonClient()
     monkeypatch.setattr(
-        "src.telegram.backends.telethon_cli_runtime.create_client",
+        "tg_agent.telegram.backends.telethon_cli_runtime.create_client",
         lambda namespace: fake_client,
     )
 
@@ -635,7 +635,7 @@ async def test_telethon_cli_backend_applies_proxy_before_connect(monkeypatch, tm
     fake_client = FakeCliTelethonClient()
     fake_client.set_proxy = MagicMock()
     monkeypatch.setattr(
-        "src.telegram.backends.telethon_cli_runtime.create_client",
+        "tg_agent.telegram.backends.telethon_cli_runtime.create_client",
         lambda namespace: fake_client,
     )
 
@@ -660,7 +660,7 @@ async def test_telethon_cli_backend_disconnects_partial_client_on_acquire_error(
     fake_client = FakeCliTelethonClient()
     fake_client.is_user_authorized = AsyncMock(side_effect=sqlite3.OperationalError("database is locked"))
     monkeypatch.setattr(
-        "src.telegram.backends.telethon_cli_runtime.create_client",
+        "tg_agent.telegram.backends.telethon_cli_runtime.create_client",
         lambda namespace: fake_client,
     )
 
@@ -719,7 +719,7 @@ def test_reserve_gate_slot_boundary_and_raised_contracts():
     errors carry phone + peer/category + retry seconds (#mutation slice 6)."""
     from telethon_floodgate import TelegramRateLimitGate
 
-    from src.telegram.backends import TelegramPeerRateLimitedError, TelegramRateLimitedError
+    from tg_agent.telegram.backends import TelegramPeerRateLimitedError, TelegramRateLimitedError
 
     gate = TelegramRateLimitGate()
     gate.category_for = MagicMock(return_value="send")

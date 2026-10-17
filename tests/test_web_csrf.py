@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock
 
-from src.web.csrf import (
+from tg_agent.web.csrf import (
     OriginCSRFMiddleware,
     _forwarded_values,
     _is_same_origin,
@@ -349,7 +349,7 @@ async def test_csrf_logout_same_origin_passes():
 
 
 async def test_csrf_no_origin_referer_with_cookie_blocked():
-    from src.web.session import COOKIE_NAME
+    from tg_agent.web.session import COOKIE_NAME
 
     app = MagicMock()
     middleware = OriginCSRFMiddleware(app)

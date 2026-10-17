@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from src.database.bundles import PipelineBundle
-from src.models import Account, Channel
-from src.services.pipeline_service import (
+from tg_agent.database.bundles import PipelineBundle
+from tg_agent.models import Account, Channel
+from tg_agent.services.pipeline_service import (
     PipelineService,
     PipelineTargetRef,
     PipelineValidationError,

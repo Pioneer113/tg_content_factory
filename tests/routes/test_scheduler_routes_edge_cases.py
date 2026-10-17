@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.models import Channel, CollectionTaskStatus, SearchQuery
+from tg_agent.models import Channel, CollectionTaskStatus, SearchQuery
 
 
 @pytest.fixture
@@ -249,7 +249,7 @@ async def test_set_job_interval_pipeline(client, base_app):
     """Test set interval for pipeline_run job (lines 378-385)."""
     app, db, _ = base_app
 
-    from src.models import ContentPipeline
+    from tg_agent.models import ContentPipeline
     pipeline = ContentPipeline(name="Test Pipeline", target_channel_id=-1001234567890)
     pid = await db.repos.content_pipelines.add(pipeline, source_channel_ids=[], targets=[])
 
@@ -268,7 +268,7 @@ async def test_set_job_interval_content_generate(client, base_app):
     """Test set interval for content_generate job (lines 378-385)."""
     app, db, _ = base_app
 
-    from src.models import ContentPipeline
+    from tg_agent.models import ContentPipeline
     pipeline = ContentPipeline(name="Test Pipeline2", target_channel_id=-1001234567890)
     pid = await db.repos.content_pipelines.add(pipeline, source_channel_ids=[], targets=[])
 
@@ -461,12 +461,12 @@ async def test_scheduler_page_with_sq_job(client, base_app):
 @pytest.mark.anyio
 async def test_trigger_collection_uses_bulk_enqueue_msg(client, base_app):
     """Test trigger collection uses bulk_enqueue_msg for flash message."""
-    from src.services.collection_service import BulkEnqueueResult
+    from tg_agent.services.collection_service import BulkEnqueueResult
 
     with patch(
-        "src.web.routes.scheduler.deps.collection_service"
+        "tg_agent.web.routes.scheduler.deps.collection_service"
     ) as mock_svc, patch(
-        "src.web.scheduler.handlers.bulk_enqueue_msg"
+        "tg_agent.web.scheduler.handlers.bulk_enqueue_msg"
     ) as mock_msg:
         mock_service = MagicMock()
         result = BulkEnqueueResult(queued_count=3, skipped_existing_count=0, total_candidates=3)
@@ -485,7 +485,7 @@ async def test_trigger_collection_uses_bulk_enqueue_msg(client, base_app):
 @pytest.mark.anyio
 async def test_is_worker_alive_fresh_heartbeat(base_app):
     """Fresh heartbeat → worker is alive."""
-    from src.web.routes.scheduler import _is_worker_alive
+    from tg_agent.web.routes.scheduler import _is_worker_alive
 
     _, db, _ = base_app
     # Default base_app fixture already stamps a fresh heartbeat.
@@ -498,8 +498,8 @@ async def test_is_worker_alive_missing_heartbeat(tmp_path):
 
     Uses a clean DB (not `base_app`) so no default heartbeat is stamped.
     """
-    from src.database import Database
-    from src.web.routes.scheduler import _is_worker_alive
+    from tg_agent.database import Database
+    from tg_agent.web.routes.scheduler import _is_worker_alive
 
     db = Database(str(tmp_path / "worker_down.db"))
     await db.initialize()
@@ -512,8 +512,8 @@ async def test_is_worker_alive_missing_heartbeat(tmp_path):
 @pytest.mark.anyio
 async def test_is_worker_alive_stale_heartbeat(base_app):
     """Heartbeat older than threshold → worker is considered down."""
-    from src.models import RuntimeSnapshot
-    from src.web.routes.scheduler import _is_worker_alive
+    from tg_agent.models import RuntimeSnapshot
+    from tg_agent.web.routes.scheduler import _is_worker_alive
 
     _, db, _ = base_app
     stale = datetime.now(timezone.utc) - timedelta(minutes=5)
@@ -530,8 +530,8 @@ async def test_is_worker_alive_stale_heartbeat(base_app):
 @pytest.mark.anyio
 async def test_is_worker_alive_naive_datetime(base_app):
     """Heartbeat with a naive datetime must still be comparable (UTC assumed)."""
-    from src.models import RuntimeSnapshot
-    from src.web.routes.scheduler import _is_worker_alive
+    from tg_agent.models import RuntimeSnapshot
+    from tg_agent.web.routes.scheduler import _is_worker_alive
 
     _, db, _ = base_app
     # Stamp a recent naive datetime — the helper must treat it as UTC.
@@ -554,7 +554,7 @@ async def test_is_worker_alive_db_error_fails_closed(base_app):
     tool drift from the same failure, defeating the single-source-of-truth goal."""
     from unittest.mock import AsyncMock
 
-    from src.web.routes.scheduler import _is_worker_alive
+    from tg_agent.web.routes.scheduler import _is_worker_alive
 
     _, db, _ = base_app
     db.repos.runtime_snapshots.get_snapshot = AsyncMock(side_effect=Exception("table missing"))
@@ -569,7 +569,7 @@ async def test_scheduler_page_renders_worker_down_banner(client, base_app):
     collection tasks into a PENDING pile without any UI signal that no worker
     was executing them.
     """
-    from src.models import RuntimeSnapshot
+    from tg_agent.models import RuntimeSnapshot
 
     _, db, _ = base_app
     # Override the fresh heartbeat stamped by base_app with a stale one.
@@ -587,7 +587,7 @@ async def test_scheduler_page_renders_worker_down_banner(client, base_app):
     assert resp.status_code == 200
     body = resp.text
     assert "Telegram-воркер не запущен" in body
-    assert "python -m src.main worker" in body
+    assert "python -m tg_agent.main worker" in body
 
 
 @pytest.mark.anyio
@@ -627,7 +627,7 @@ async def test_scheduler_page_renders_stuck_collector_banner_for_stale_progress(
 @pytest.mark.anyio
 async def test_scheduler_page_shows_worker_down_when_progress_stale_and_heartbeat_stale(client, base_app):
     """Stale heartbeat + stale RUNNING row = worker_down, because no worker is alive."""
-    from src.models import RuntimeSnapshot
+    from tg_agent.models import RuntimeSnapshot
 
     _, db, _ = base_app
     heartbeat_stale = datetime.now(timezone.utc) - timedelta(minutes=5)
@@ -670,7 +670,7 @@ async def test_scheduler_page_shows_worker_down_when_progress_fresh_but_heartbea
     heartbeat as 'collector_stuck', mislabelling a simply-crashed worker (which
     left an orphaned RUNNING row) as a hung collection.
     """
-    from src.models import RuntimeSnapshot
+    from tg_agent.models import RuntimeSnapshot
 
     _, db, _ = base_app
     stale = datetime.now(timezone.utc) - timedelta(minutes=5)
@@ -709,7 +709,7 @@ async def test_scheduler_page_shows_worker_down_when_progress_fresh_but_heartbea
 
 @pytest.mark.anyio
 async def test_scheduler_page_marks_stuck_when_any_parallel_running_task_is_stale(client, base_app):
-    from src.models import RuntimeSnapshot
+    from tg_agent.models import RuntimeSnapshot
 
     _, db, _ = base_app
     await db.repos.runtime_snapshots.upsert_snapshot(
@@ -764,7 +764,7 @@ def _running_task(*, last_progress_at):
 
 def test_running_task_stale_with_default_idle_timeout():
     """With the default idle timeout, ~6min of no progress reads as stuck."""
-    from src.web.scheduler.context import _is_running_task_stale
+    from tg_agent.web.scheduler.context import _is_running_task_stale
 
     now = datetime.now(timezone.utc)
     task = _running_task(last_progress_at=now - timedelta(seconds=360))
@@ -778,7 +778,7 @@ def test_running_task_not_stale_when_idle_timeout_is_large():
     so a stall shorter than that (plus grace) is NOT stuck — otherwise the page
     cries 'stuck' while the worker is still legally waiting.
     """
-    from src.web.scheduler.context import _is_running_task_stale
+    from tg_agent.web.scheduler.context import _is_running_task_stale
 
     now = datetime.now(timezone.utc)
     # 7 minutes of no progress, but the configured idle timeout is 10 minutes.
@@ -795,7 +795,7 @@ def test_running_task_not_stale_when_idle_timeout_is_large():
 @pytest.mark.anyio
 async def test_web_mode_app_has_snapshot_shims(web_mode_app):
     """Sanity check — the new fixture must really produce the web-mode wiring."""
-    from src.web.runtime_shims import (
+    from tg_agent.web.runtime_shims import (
         SnapshotClientPool,
         SnapshotCollector,
         SnapshotSchedulerManager,
@@ -862,7 +862,7 @@ async def test_clear_pending_collect_web_mode_falls_back_to_db(client, base_app)
     `deps.get_queue()` returned None and the route crashed with
     `AttributeError: 'NoneType' object has no attribute 'clear_pending_tasks'`.
     """
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     app, db, _ = base_app
     # Drop the live CollectionQueue so the route sees the same state as `serve`
@@ -898,7 +898,7 @@ async def test_cancel_task_web_mode_falls_back_to_db(client, base_app):
     a None queue. With the fix it delegates through CollectionService, which flips
     the DB row to CANCELLED without the in-memory queue.
     """
-    from src.models import Channel, CollectionTaskStatus
+    from tg_agent.models import Channel, CollectionTaskStatus
 
     app, db, _ = base_app
     app.state.collection_queue = None

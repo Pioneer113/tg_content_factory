@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from telethon.errors import FloodWaitError, UsernameInvalidError
 
-from src.models import Account, Channel
-from src.telegram.backends import TelegramTransportSession
-from src.telegram.client_pool import ClientPool
+from tg_agent.models import Account, Channel
+from tg_agent.telegram.backends import TelegramTransportSession
+from tg_agent.telegram.client_pool import ClientPool
 
 
 @pytest.fixture
@@ -299,7 +299,7 @@ async def test_leave_channels_flood(mock_db, mock_auth):
 
     with (
         patch("telethon_floodgate.flood_wait.asyncio.sleep", AsyncMock()),
-        patch("src.telegram.pool_dialogs.asyncio.sleep", AsyncMock()),
+        patch("tg_agent.telegram.pool_dialogs.asyncio.sleep", AsyncMock()),
     ):
         res = await pool.leave_channels("+7001", [(123, "channel"), (456, "channel")])
     assert res[123] is True
@@ -444,7 +444,7 @@ async def test_resolve_any_entity_warms_cache_on_cold_lookup(mock_db, mock_auth)
     pool.mark_dialogs_fetched = MagicMock()
 
     with patch(
-        "src.telegram.pool_dialogs.adapt_transport_session",
+        "tg_agent.telegram.pool_dialogs.adapt_transport_session",
         side_effect=lambda candidate, **_kwargs: candidate,
     ):
         result = await pool.resolve_any_entity("-100777", phone="+7001")
@@ -472,7 +472,7 @@ async def test_resolve_any_entity_no_warm_on_direct_hit(mock_db, mock_auth):
     pool.mark_dialogs_fetched = MagicMock()
 
     with patch(
-        "src.telegram.pool_dialogs.adapt_transport_session",
+        "tg_agent.telegram.pool_dialogs.adapt_transport_session",
         side_effect=lambda candidate, **_kwargs: candidate,
     ):
         result = await pool.resolve_any_entity("-100888", phone="+7001")
@@ -496,7 +496,7 @@ async def test_resolve_entity_with_warm_retries_after_warm(mock_db, mock_auth):
     pool.mark_dialogs_fetched = MagicMock()
 
     with patch(
-        "src.telegram.pool_dialogs.adapt_transport_session",
+        "tg_agent.telegram.pool_dialogs.adapt_transport_session",
         side_effect=lambda candidate, **_kwargs: candidate,
     ):
         result = await pool.resolve_entity_with_warm(session, "+7001", object())
@@ -520,7 +520,7 @@ async def test_resolve_entity_with_warm_uses_input_entity_resolver(mock_db, mock
     pool.mark_dialogs_fetched = MagicMock()
 
     with patch(
-        "src.telegram.pool_dialogs.adapt_transport_session",
+        "tg_agent.telegram.pool_dialogs.adapt_transport_session",
         side_effect=lambda candidate, **_kwargs: candidate,
     ):
         result = await pool.resolve_entity_with_warm(
@@ -542,7 +542,7 @@ async def test_await_transient_flood_sleeps_for_short_flood(mock_db, mock_auth):
     pool = ClientPool(mock_auth, mock_db)
     pool._get_account_for_phone = AsyncMock(return_value=acc)
 
-    with patch("src.telegram.pool_flood.asyncio.sleep", new=AsyncMock()) as sleep_mock:
+    with patch("tg_agent.telegram.pool_flood.asyncio.sleep", new=AsyncMock()) as sleep_mock:
         await pool._await_transient_flood("+7001")
 
     sleep_mock.assert_awaited_once()
@@ -558,7 +558,7 @@ async def test_await_transient_flood_skips_long_flood(mock_db, mock_auth):
     pool = ClientPool(mock_auth, mock_db)
     pool._get_account_for_phone = AsyncMock(return_value=acc)
 
-    with patch("src.telegram.pool_flood.asyncio.sleep", new=AsyncMock()) as sleep_mock:
+    with patch("tg_agent.telegram.pool_flood.asyncio.sleep", new=AsyncMock()) as sleep_mock:
         await pool._await_transient_flood("+7001")
 
     sleep_mock.assert_not_awaited()
@@ -572,7 +572,7 @@ async def test_await_transient_flood_noop_when_clear(mock_db, mock_auth):
     pool = ClientPool(mock_auth, mock_db)
     pool._get_account_for_phone = AsyncMock(return_value=acc)
 
-    with patch("src.telegram.pool_flood.asyncio.sleep", new=AsyncMock()) as sleep_mock:
+    with patch("tg_agent.telegram.pool_flood.asyncio.sleep", new=AsyncMock()) as sleep_mock:
         await pool._await_transient_flood("+7001")
 
     sleep_mock.assert_not_awaited()

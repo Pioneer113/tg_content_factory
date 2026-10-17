@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.services.content_analytics_service import DailyStats
+from tg_agent.services.content_analytics_service import DailyStats
 
 
 @pytest.mark.anyio
@@ -58,7 +58,7 @@ async def test_content_analytics_page_renders(route_client):
 async def test_content_analytics_pipeline_links_use_edit_route(route_client):
     """Pipeline statistics links point to an existing pipeline page."""
     db = route_client._transport_app.state.db
-    from src.models import ContentPipeline
+    from tg_agent.models import ContentPipeline
 
     pipeline_id = await db.repos.content_pipelines.add(
         ContentPipeline(name="Linked Pipeline", prompt_template="Write"),
@@ -83,7 +83,7 @@ async def test_analytics_top_message_link_uses_bare_channel_id(route_client):
     """
     from datetime import datetime, timezone
 
-    from src.models import Channel, Message
+    from tg_agent.models import Channel, Message
 
     db = route_client._transport_app.state.db
     channel_id = 1005551782
@@ -144,7 +144,7 @@ async def test_api_pipelines_returns_json(route_client):
 async def test_api_pipelines_with_data(route_client):
     """Test pipeline stats API with created pipeline."""
     db = route_client._transport_app.state.db
-    from src.models import (
+    from tg_agent.models import (
         ContentPipeline,
         PipelineGenerationBackend,
         PipelinePublishMode,
@@ -184,7 +184,7 @@ async def test_api_pipelines_with_data(route_client):
 async def test_api_pipelines_filter_by_id(route_client):
     """Test pipeline stats API filtered by pipeline_id."""
     db = route_client._transport_app.state.db
-    from src.models import (
+    from tg_agent.models import (
         ContentPipeline,
         PipelineGenerationBackend,
         PipelinePublishMode,
@@ -222,7 +222,7 @@ async def test_api_pipelines_filter_by_id(route_client):
 @pytest.mark.anyio
 async def test_api_daily_stats(route_client):
     """GET /analytics/content/api/daily returns daily content stats."""
-    with patch("src.web.routes.analytics.ContentAnalyticsService") as mock_svc:
+    with patch("tg_agent.web.routes.analytics.ContentAnalyticsService") as mock_svc:
         instance = mock_svc.return_value
         instance.get_daily_stats = AsyncMock(
             return_value=[
@@ -258,7 +258,7 @@ async def test_api_hourly_activity_returns_json(route_client):
 async def test_api_messages_top_with_data(route_client):
     from datetime import datetime, timezone
 
-    from src.models import Channel, Message
+    from tg_agent.models import Channel, Message
 
     db = route_client._transport_app.state.db
     await db.add_channel(Channel(channel_id=500, title="Top Chan", username="top"))
@@ -295,7 +295,7 @@ async def test_api_message_velocity_returns_json(route_client):
 @pytest.mark.anyio
 async def test_api_message_velocity_clamps_days(route_client):
     """GET /analytics/messages/velocity clamps expensive day windows."""
-    with patch("src.web.routes.analytics.TrendService") as mock_svc:
+    with patch("tg_agent.web.routes.analytics.TrendService") as mock_svc:
         instance = mock_svc.return_value
         instance.get_message_velocity = AsyncMock(return_value=[])
         resp = await route_client.get("/analytics/messages/velocity?days=999999")
@@ -315,7 +315,7 @@ async def test_api_peak_hours_returns_json(route_client):
 @pytest.mark.anyio
 async def test_api_peak_hours_clamps_days(route_client):
     """GET /analytics/peak-hours clamps expensive day windows."""
-    with patch("src.web.routes.analytics.TrendService") as mock_svc:
+    with patch("tg_agent.web.routes.analytics.TrendService") as mock_svc:
         instance = mock_svc.return_value
         instance.get_peak_hours = AsyncMock(return_value=[])
         resp = await route_client.get("/analytics/peak-hours?days=0")
@@ -384,7 +384,7 @@ async def _seed_channel_with_messages(route_client, *, channel_id: int, n: int =
     """
     from datetime import datetime, timedelta, timezone
 
-    from src.models import Channel, ChannelStats, Message
+    from tg_agent.models import Channel, ChannelStats, Message
 
     db = route_client._transport_app.state.db
     await db.add_channel(Channel(channel_id=channel_id, title="Тест канал", username="test_chan"))

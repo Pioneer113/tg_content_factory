@@ -4,7 +4,7 @@ from unittest.mock import PropertyMock, patch
 import pytest
 from claude_agent_sdk import CLIConnectionError, CLINotFoundError, ProcessError
 
-from src.agent.manager import AgentManager, ClaudeSdkBackend, DeepagentsBackend
+from tg_agent.agent.manager import AgentManager, ClaudeSdkBackend, DeepagentsBackend
 
 
 @pytest.mark.anyio

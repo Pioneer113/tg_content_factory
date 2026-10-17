@@ -196,7 +196,7 @@ def _detect_handrolled_signing(
 ) -> Finding | None:
     """Ручная криптоподпись токена: `hmac.new`/`hashlib.*` + base64 + json в одной функции.
 
-    Эталон эпика — hand-rolled HMAC-JWT из `src/web/session.py` (#782 / #1): функция
+    Эталон эпика — hand-rolled HMAC-JWT из `tg_agent/web/session.py` (#782 / #1): функция
     собирала `base64url(HMAC-SHA256(secret, payload))` руками. Зрелая замена —
     `itsdangerous.Signer` (на которую session.py и переехал в #953), либо
     PyJWT/`hmac.compare_digest`. High-confidence, потому что комбинация
@@ -701,7 +701,7 @@ def print_report(findings: list[Finding], new: list[Finding], baseline_existed: 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Детектор кастомных функций → стандартные библиотеки.")
-    parser.add_argument("--path", default="src", help="Путь для анализа (по умолчанию src)")
+    parser.add_argument("--path", default="tg_agent", help="Путь для анализа (по умолчанию src)")
     parser.add_argument("--json", action="store_true", help="Машинный JSON-вывод вместо человекочитаемого отчёта")
     parser.add_argument(
         "--update-baseline",

@@ -4,9 +4,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from src.database.bundles import SearchQueryBundle
-from src.models import Channel, Message, SearchQuery
-from src.services.search_query_service import SearchQueryService
+from tg_agent.database.bundles import SearchQueryBundle
+from tg_agent.models import Channel, Message, SearchQuery
+from tg_agent.services.search_query_service import SearchQueryService
 
 
 @pytest.fixture
@@ -294,7 +294,7 @@ async def test_unknown_chat_filter_matches_nothing(bundle, db):
 @pytest.mark.anyio
 async def test_fts_collector_matching():
     """Test the _fts_query_matches function."""
-    from src.services.notification_matcher import _fts_query_matches
+    from tg_agent.services.notification_matcher import _fts_query_matches
 
     assert _fts_query_matches(
         "(байк OR мотобайк) AND (аренда OR снять)",
@@ -311,7 +311,7 @@ async def test_fts_collector_matching():
 @pytest.mark.anyio
 async def test_fts_query_matches_wildcards():
     """Test _fts_query_matches handles FTS5 trailing wildcards."""
-    from src.services.notification_matcher import _fts_query_matches
+    from tg_agent.services.notification_matcher import _fts_query_matches
 
     # Single wildcard term
     assert _fts_query_matches("байк*", "аренда байка на день")

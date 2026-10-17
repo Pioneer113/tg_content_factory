@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.database.repositories.pipeline_action_log import PipelineActionLogRepository
+from tg_agent.database.repositories.pipeline_action_log import PipelineActionLogRepository
 
 
 @pytest.fixture

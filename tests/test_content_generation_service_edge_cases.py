@@ -6,7 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.models import (
+from tests.helpers import fast_llm_error_recovery
+from tg_agent.models import (
     ContentPipeline,
     GenerationRun,
     Message,
@@ -17,8 +18,7 @@ from src.models import (
     PipelinePublishMode,
     SearchResult,
 )
-from src.services.content_generation_service import ContentGenerationService
-from tests.helpers import fast_llm_error_recovery
+from tg_agent.services.content_generation_service import ContentGenerationService
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -158,7 +158,7 @@ class FakeQualityService:
         self.calls = []
 
     async def score_content(self, text, model=None):
-        from src.services.quality_scoring_service import QualityScore
+        from tg_agent.services.quality_scoring_service import QualityScore
 
         self.calls.append((text, model))
         return QualityScore(
@@ -189,7 +189,7 @@ def _provider(text="GENERATED OUTPUT"):
 
 def _patch_provider(provider_fn):
     """Patch ProviderConfigService.get_provider_callable to return provider_fn."""
-    from src.services import provider_service
+    from tg_agent.services import provider_service
 
     original = getattr(provider_service.RuntimeProviderRegistry, "get_provider_callable", None)
 
@@ -201,7 +201,7 @@ def _patch_provider(provider_fn):
 
 
 def _restore_provider(original):
-    from src.services import provider_service
+    from tg_agent.services import provider_service
 
     if original:
         provider_service.RuntimeProviderRegistry.get_provider_callable = original
@@ -272,7 +272,7 @@ async def test_generate_publish_reply_and_reply_to_id():
     )
 
     orig = _patch_provider(_provider())
-    from src.services import pipeline_executor
+    from tg_agent.services import pipeline_executor
 
     original_execute = getattr(pipeline_executor.PipelineExecutor, "execute", None)
     pipeline_executor.PipelineExecutor.execute = AsyncMock(
@@ -329,7 +329,7 @@ async def test_generate_image_url_from_graph_executor():
     )
 
     orig = _patch_provider(_provider())
-    from src.services import pipeline_executor
+    from tg_agent.services import pipeline_executor
 
     original_execute = getattr(pipeline_executor.PipelineExecutor, "execute", None)
     pipeline_executor.PipelineExecutor.execute = AsyncMock(
@@ -622,7 +622,7 @@ async def test_generate_refinement_steps_skipped_for_graph_pipeline():
     )
 
     orig = _patch_provider(_provider())
-    from src.services import pipeline_executor
+    from tg_agent.services import pipeline_executor
 
     original_execute = getattr(pipeline_executor.PipelineExecutor, "execute", None)
     pipeline_executor.PipelineExecutor.execute = AsyncMock(
@@ -905,7 +905,7 @@ async def test_run_graph_passes_services():
     )
 
     orig = _patch_provider(_provider())
-    from src.services import pipeline_executor
+    from tg_agent.services import pipeline_executor
 
     original_execute = getattr(pipeline_executor.PipelineExecutor, "execute", None)
 
@@ -1033,7 +1033,7 @@ async def test_generate_exception_sets_failed():
     orig = _patch_provider(failing_provider)
     try:
         with pytest.raises(RuntimeError, match="Provider crashed"), patch(
-            "src.services.generation_service.for_llm", side_effect=fast_llm_error_recovery
+            "tg_agent.services.generation_service.for_llm", side_effect=fast_llm_error_recovery
         ):
             await service.generate(pipeline)
         # The run should have been marked as failed
@@ -1105,7 +1105,7 @@ async def test_auto_not_approved_when_post_save_step_fails():
 
     class _Quality:
         async def score_content(self, text, model=None):
-            from src.services.quality_scoring_service import QualityScore
+            from tg_agent.services.quality_scoring_service import QualityScore
 
             return QualityScore(
                 relevance=0.9,
@@ -1229,7 +1229,7 @@ async def test_run_generation_selects_graph():
     )
 
     orig = _patch_provider(_provider())
-    from src.services import pipeline_executor
+    from tg_agent.services import pipeline_executor
 
     original_execute = getattr(pipeline_executor.PipelineExecutor, "execute", None)
     pipeline_executor.PipelineExecutor.execute = AsyncMock(
@@ -1359,7 +1359,7 @@ async def test_generate_auto_respects_effective_mode_from_graph():
     )
 
     orig = _patch_provider(_provider())
-    from src.services import pipeline_executor
+    from tg_agent.services import pipeline_executor
 
     original_execute = getattr(pipeline_executor.PipelineExecutor, "execute", None)
     pipeline_executor.PipelineExecutor.execute = AsyncMock(

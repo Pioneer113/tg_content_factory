@@ -10,16 +10,16 @@ from unittest.mock import ANY, AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.collection_queue import CollectionQueue
-from src.config import AppConfig
-from src.database import Database
-from src.models import Account, Channel, PhotoBatchItem, PhotoBatchStatus, PhotoSendMode
-from src.search.ai_search import AISearchEngine
-from src.search.engine import SearchEngine
-from src.telegram.auth import TelegramAuth
-from src.telegram.collector import Collector
-from src.web.app import create_app
 from tests.helpers import cli_ns as _ns
+from tg_agent.collection_queue import CollectionQueue
+from tg_agent.config import AppConfig
+from tg_agent.database import Database
+from tg_agent.models import Account, Channel, PhotoBatchItem, PhotoBatchStatus, PhotoSendMode
+from tg_agent.search.ai_search import AISearchEngine
+from tg_agent.search.engine import SearchEngine
+from tg_agent.telegram.auth import TelegramAuth
+from tg_agent.telegram.collector import Collector
+from tg_agent.web.app import create_app
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -183,9 +183,9 @@ class TestWebSchedulerRoutes:
     @pytest.mark.anyio
     async def test_trigger_collection(self, route_client):
         """POST /scheduler/trigger enqueues all channels."""
-        from src.services.collection_service import BulkEnqueueResult
+        from tg_agent.services.collection_service import BulkEnqueueResult
 
-        with patch("src.web.routes.scheduler.deps.collection_service") as mock_svc_fn:
+        with patch("tg_agent.web.routes.scheduler.deps.collection_service") as mock_svc_fn:
             svc = MagicMock()
             svc.enqueue_all_channels = AsyncMock(
                 return_value=BulkEnqueueResult(
@@ -266,7 +266,7 @@ class TestWebSettingsRoutes:
     @pytest.mark.anyio
     async def test_settings_agent_providers_page(self, route_client):
         """GET /settings/agent-providers returns 200 or redirect."""
-        with patch("src.web.settings.handlers._agent_provider_service") as mock_fn:
+        with patch("tg_agent.web.settings.handlers._agent_provider_service") as mock_fn:
             svc = MagicMock()
             svc.load_provider_configs = AsyncMock(return_value=[])
             mock_fn.return_value = svc
@@ -276,7 +276,7 @@ class TestWebSettingsRoutes:
     @pytest.mark.anyio
     async def test_settings_image_providers_get(self, route_client):
         """GET /settings/image-providers returns 200."""
-        with patch("src.web.settings.handlers._image_provider_service") as mock_fn:
+        with patch("tg_agent.web.settings.handlers._image_provider_service") as mock_fn:
             svc = MagicMock()
             svc.load_provider_configs = AsyncMock(return_value=[])
             mock_fn.return_value = svc
@@ -334,7 +334,7 @@ class TestCLIAnalyticsTop:
 
     def test_top_empty(self, cli_env, capsys):
         """top action with no data prints message."""
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
         with patch.object(
             type(cli_env),
@@ -342,14 +342,14 @@ class TestCLIAnalyticsTop:
             new=AsyncMock(return_value=[]),
             create=True,
         ):
-            with patch("src.database.facade.Database.get_top_messages", new=AsyncMock(return_value=[])):
+            with patch("tg_agent.database.facade.Database.get_top_messages", new=AsyncMock(return_value=[])):
                 run(_ns(analytics_action="top", date_from=None, date_to=None, limit=20))
         out = capsys.readouterr().out
         assert "No messages" in out
 
     def test_top_with_data(self, cli_env, capsys):
         """top action with data prints table."""
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
         rows = [
             {
@@ -361,16 +361,16 @@ class TestCLIAnalyticsTop:
                 "date": "2025-01-01 12:00:00",
             }
         ]
-        with patch("src.database.facade.Database.get_top_messages", new=AsyncMock(return_value=rows)):
+        with patch("tg_agent.database.facade.Database.get_top_messages", new=AsyncMock(return_value=rows)):
             run(_ns(analytics_action="top", date_from=None, date_to=None, limit=20))
         out = capsys.readouterr().out
         assert "TestChan" in out or "100" in out
 
     def test_top_with_date_filter(self, cli_env, capsys):
         """top with date filters passes them through."""
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
-        with patch("src.database.facade.Database.get_top_messages", new=AsyncMock(return_value=[])):
+        with patch("tg_agent.database.facade.Database.get_top_messages", new=AsyncMock(return_value=[])):
             run(_ns(
                 analytics_action="top",
                 date_from="2025-01-01",
@@ -382,19 +382,19 @@ class TestCLIAnalyticsTop:
 
     def test_top_limit_clamped(self, cli_env, capsys):
         """top action clamps limit to 100."""
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
-        with patch("src.database.facade.Database.get_top_messages", new=AsyncMock(return_value=[])):
+        with patch("tg_agent.database.facade.Database.get_top_messages", new=AsyncMock(return_value=[])):
             run(_ns(analytics_action="top", date_from=None, date_to=None, limit=999))
         out = capsys.readouterr().out
         assert "No messages" in out
 
     def test_content_types_empty(self, cli_env, capsys):
         """content-types action with no data prints 'No data'."""
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
         with patch(
-            "src.database.facade.Database.get_engagement_by_media_type",
+            "tg_agent.database.facade.Database.get_engagement_by_media_type",
             new=AsyncMock(return_value=[]),
         ):
             run(_ns(analytics_action="content-types", date_from=None, date_to=None))
@@ -403,14 +403,14 @@ class TestCLIAnalyticsTop:
 
     def test_content_types_with_data(self, cli_env, capsys):
         """content-types prints table rows."""
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
         rows = [
             {"content_type": "text", "message_count": 50, "avg_reactions": 3.5},
             {"content_type": "photo", "message_count": 20, "avg_reactions": 7.2},
         ]
         with patch(
-            "src.database.facade.Database.get_engagement_by_media_type",
+            "tg_agent.database.facade.Database.get_engagement_by_media_type",
             new=AsyncMock(return_value=rows),
         ):
             run(_ns(analytics_action="content-types", date_from=None, date_to=None))
@@ -420,10 +420,10 @@ class TestCLIAnalyticsTop:
 
     def test_hourly_empty(self, cli_env, capsys):
         """hourly action with no data prints 'No data'."""
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
         with patch(
-            "src.database.facade.Database.get_hourly_activity",
+            "tg_agent.database.facade.Database.get_hourly_activity",
             new=AsyncMock(return_value=[]),
         ):
             run(_ns(analytics_action="hourly", date_from=None, date_to=None))
@@ -432,14 +432,14 @@ class TestCLIAnalyticsTop:
 
     def test_hourly_with_data(self, cli_env, capsys):
         """hourly prints table with hour entries."""
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
         rows = [
             {"hour": 9, "message_count": 30, "avg_reactions": 5.0},
             {"hour": 18, "message_count": 80, "avg_reactions": 10.0},
         ]
         with patch(
-            "src.database.facade.Database.get_hourly_activity",
+            "tg_agent.database.facade.Database.get_hourly_activity",
             new=AsyncMock(return_value=rows),
         ):
             run(_ns(analytics_action="hourly", date_from=None, date_to=None))
@@ -449,7 +449,7 @@ class TestCLIAnalyticsTop:
 
     def test_pipeline_stats_with_data(self, cli_env, capsys):
         """pipeline-stats action with data prints rows."""
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
         stat = MagicMock()
         stat.pipeline_name = "MyPipeline"
@@ -460,7 +460,7 @@ class TestCLIAnalyticsTop:
         stat.success_rate = 0.7
 
         with patch(
-            "src.services.content_analytics_service.ContentAnalyticsService.get_pipeline_stats",
+            "tg_agent.services.content_analytics_service.ContentAnalyticsService.get_pipeline_stats",
             new=AsyncMock(return_value=[stat]),
         ):
             run(_ns(analytics_action="pipeline-stats", date_from=None, date_to=None, pipeline_id=None))
@@ -469,14 +469,14 @@ class TestCLIAnalyticsTop:
 
     def test_daily_with_data(self, cli_env, capsys):
         """daily action with data prints rows."""
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
         rows = [
             {"date": "2025-01-01", "count": 5, "published": 3},
             {"date": "2025-01-02", "count": 8, "published": 6},
         ]
         with patch(
-            "src.services.content_analytics_service.ContentAnalyticsService.get_daily_stats",
+            "tg_agent.services.content_analytics_service.ContentAnalyticsService.get_daily_stats",
             new=AsyncMock(return_value=rows),
         ):
             run(_ns(analytics_action="daily", date_from=None, date_to=None, days=30, pipeline_id=None))
@@ -494,8 +494,8 @@ class TestCLIPipelineAdd:
         """add action creates pipeline and prints id."""
         db_path = _make_pipeline_db(tmp_path, "add_basic.db")
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(
                 pipeline_action="add",
@@ -518,8 +518,8 @@ class TestCLIPipelineAdd:
         """add with llm_model and image_model specified."""
         db_path = _make_pipeline_db(tmp_path, "add_models.db")
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(
                 pipeline_action="add",
@@ -541,8 +541,8 @@ class TestCLIPipelineAdd:
         """add with --inactive creates inactive pipeline."""
         db_path = _make_pipeline_db(tmp_path, "add_inactive.db")
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(
                 pipeline_action="add",
@@ -564,8 +564,8 @@ class TestCLIPipelineAdd:
         """add with bad target format prints error."""
         db_path = _make_pipeline_db(tmp_path, "add_bad_target.db")
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(
                 pipeline_action="add",
@@ -587,8 +587,8 @@ class TestCLIPipelineAdd:
         """add with non-numeric dialog id prints error."""
         db_path = _make_pipeline_db(tmp_path, "add_bad_dialog.db")
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(
                 pipeline_action="add",
@@ -615,8 +615,8 @@ class TestCLIPipelineList:
         asyncio.run(db.initialize())
         asyncio.run(db.close())
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(pipeline_action="list"))
         assert "No pipelines found" in capsys.readouterr().out
@@ -625,8 +625,8 @@ class TestCLIPipelineList:
         """list shows pipeline table."""
         db_path = _make_pipeline_db(tmp_path, "list_with.db")
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(
                 pipeline_action="add",
@@ -642,8 +642,8 @@ class TestCLIPipelineList:
                 inactive=False,
             ))
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(pipeline_action="list"))
         out = capsys.readouterr().out
@@ -658,8 +658,8 @@ class TestCLIPipelineShow:
         asyncio.run(db.initialize())
         asyncio.run(db.close())
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(pipeline_action="show", id=999))
         assert "not found" in capsys.readouterr().out
@@ -668,8 +668,8 @@ class TestCLIPipelineShow:
         """show for existing pipeline prints details."""
         db_path = _make_pipeline_db(tmp_path, "show_exists.db")
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(
                 pipeline_action="add",
@@ -691,8 +691,8 @@ class TestCLIPipelineShow:
         pid = pipelines[0].id
         asyncio.run(db.close())
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(pipeline_action="show", id=pid))
         out = capsys.readouterr().out
@@ -705,8 +705,8 @@ class TestCLIPipelineDeleteToggle:
         """delete removes pipeline."""
         db_path = _make_pipeline_db(tmp_path, "delete7.db")
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(
                 pipeline_action="add",
@@ -728,8 +728,8 @@ class TestCLIPipelineDeleteToggle:
         pid = pipelines[0].id
         asyncio.run(db.close())
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(pipeline_action="delete", id=pid))
         out = capsys.readouterr().out
@@ -742,8 +742,8 @@ class TestCLIPipelineDeleteToggle:
         asyncio.run(db.initialize())
         asyncio.run(db.close())
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(pipeline_action="toggle", id=999))
         assert "not found" in capsys.readouterr().out
@@ -752,8 +752,8 @@ class TestCLIPipelineDeleteToggle:
         """toggle on existing pipeline prints toggled message."""
         db_path = _make_pipeline_db(tmp_path, "toggle_ok7.db")
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(
                 pipeline_action="add",
@@ -775,8 +775,8 @@ class TestCLIPipelineDeleteToggle:
         pid = pipelines[0].id
         asyncio.run(db.close())
 
-        with patch("src.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
-            from src.cli.commands.pipeline import run
+        with patch("tg_agent.cli.runtime.init_db", side_effect=_pipeline_fake_init_db(db_path)):
+            from tg_agent.cli.commands.pipeline import run
 
             run(_ns(pipeline_action="toggle", id=pid))
         out = capsys.readouterr().out
@@ -793,10 +793,10 @@ def _get_channel_tool_handlers(mock_db, client_pool=None, config=None):
     captured_tools = []
 
     with patch(
-        "src.agent.tools.create_sdk_mcp_server",
+        "tg_agent.agent.tools.create_sdk_mcp_server",
         side_effect=lambda **kw: captured_tools.extend(kw.get("tools", [])),
     ):
-        from src.agent.tools import make_mcp_server
+        from tg_agent.agent.tools import make_mcp_server
 
         make_mcp_server(mock_db, client_pool=client_pool, config=config)
 
@@ -936,7 +936,10 @@ class TestImportChannelsTool:
     @pytest.mark.anyio
     async def test_confirmed_import(self, mock_db):
         mock_db.repos = MagicMock()
-        with patch("src.services.channel_service.ChannelService.add_by_identifier", new=AsyncMock(return_value=True)):
+        with patch(
+            "tg_agent.services.channel_service.ChannelService.add_by_identifier",
+            new=AsyncMock(return_value=True),
+        ):
             handlers = _get_channel_tool_handlers(mock_db)
             result = await handlers["import_channels"]({"text": "@testchannel", "confirm": True})
         text = _text(result)
@@ -976,7 +979,7 @@ class TestGenerateImageTool:
 
     @pytest.mark.anyio
     async def test_no_service_returns_not_configured(self, mock_db):
-        _svc_path = "src.services.image_generation_service.ImageGenerationService"
+        _svc_path = "tg_agent.services.image_generation_service.ImageGenerationService"
         with patch(f"{_svc_path}.is_available", new=AsyncMock(return_value=False)):
             handlers = _get_channel_tool_handlers(mock_db)
             result = await handlers["generate_image"]({"prompt": "a cat"})
@@ -986,7 +989,7 @@ class TestGenerateImageTool:
     @pytest.mark.anyio
     async def test_generate_returns_non_url(self, mock_db):
         """When result is a local path (not URL), prints it directly."""
-        _svc_path = "src.services.image_generation_service.ImageGenerationService"
+        _svc_path = "tg_agent.services.image_generation_service.ImageGenerationService"
         with (
             patch(f"{_svc_path}.is_available", new=AsyncMock(return_value=True)),
             patch(f"{_svc_path}.generate", new=AsyncMock(return_value="/local/path/img.png")),
@@ -999,7 +1002,7 @@ class TestGenerateImageTool:
     @pytest.mark.anyio
     async def test_generate_returns_none(self, mock_db):
         """When result is None, prints 'не вернула результат'."""
-        _svc_path = "src.services.image_generation_service.ImageGenerationService"
+        _svc_path = "tg_agent.services.image_generation_service.ImageGenerationService"
         with (
             patch(f"{_svc_path}.is_available", new=AsyncMock(return_value=True)),
             patch(f"{_svc_path}.generate", new=AsyncMock(return_value=None)),
@@ -1012,7 +1015,7 @@ class TestGenerateImageTool:
     @pytest.mark.anyio
     async def test_generate_exception(self, mock_db):
         """Exception in generate returns error text."""
-        _svc_path = "src.services.image_generation_service.ImageGenerationService"
+        _svc_path = "tg_agent.services.image_generation_service.ImageGenerationService"
         with (
             patch(f"{_svc_path}.is_available", new=AsyncMock(return_value=True)),
             patch(f"{_svc_path}.generate", new=AsyncMock(side_effect=Exception("api down"))),
@@ -1032,7 +1035,7 @@ class TestListImageModelsTool:
 
     @pytest.mark.anyio
     async def test_no_models_found(self, mock_db):
-        _svc_path = "src.services.image_generation_service.ImageGenerationService"
+        _svc_path = "tg_agent.services.image_generation_service.ImageGenerationService"
         with patch(f"{_svc_path}.search_models", new=AsyncMock(return_value=[])):
             handlers = _get_channel_tool_handlers(mock_db)
             result = await handlers["list_image_models"]({"provider": "replicate"})
@@ -1044,7 +1047,7 @@ class TestListImageModelsTool:
             {"id": "model1", "run_count": 10000, "rank": 1},
             {"id": "model2", "run_count": None, "rank": None},
         ]
-        _svc_path = "src.services.image_generation_service.ImageGenerationService"
+        _svc_path = "tg_agent.services.image_generation_service.ImageGenerationService"
         with patch(f"{_svc_path}.search_models", new=AsyncMock(return_value=models)):
             handlers = _get_channel_tool_handlers(mock_db)
             result = await handlers["list_image_models"]({"provider": "replicate", "query": "flux"})
@@ -1056,7 +1059,7 @@ class TestListImageModelsTool:
     @pytest.mark.anyio
     async def test_models_all_shown_beyond_30(self, mock_db):
         models = [{"id": f"m{i}"} for i in range(35)]
-        _svc_path = "src.services.image_generation_service.ImageGenerationService"
+        _svc_path = "tg_agent.services.image_generation_service.ImageGenerationService"
         with patch(f"{_svc_path}.search_models", new=AsyncMock(return_value=models)):
             handlers = _get_channel_tool_handlers(mock_db)
             result = await handlers["list_image_models"]({"provider": "replicate"})
@@ -1123,7 +1126,7 @@ class TestPhotoTaskServiceValidateFiles:
     """Tests for PhotoTaskService.validate_files()"""
 
     def _make_service(self):
-        from src.services.photo_task_service import PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTaskService
 
         bundle = MagicMock()
         publish = MagicMock()
@@ -1163,25 +1166,25 @@ class TestPhotoTaskServiceValidateFiles:
 
 class TestPhotoTaskServiceNormalizeMode:
     def test_album_with_single_file_becomes_separate(self):
-        from src.services.photo_task_service import PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTaskService
 
         result = PhotoTaskService.normalize_mode("album", 1)
         assert result == PhotoSendMode.SEPARATE
 
     def test_album_with_two_files_stays_album(self):
-        from src.services.photo_task_service import PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTaskService
 
         result = PhotoTaskService.normalize_mode("album", 2)
         assert result == PhotoSendMode.ALBUM
 
     def test_separate_with_single_file_stays_separate(self):
-        from src.services.photo_task_service import PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTaskService
 
         result = PhotoTaskService.normalize_mode("separate", 1)
         assert result == PhotoSendMode.SEPARATE
 
     def test_accepts_enum_value(self):
-        from src.services.photo_task_service import PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTaskService
 
         result = PhotoTaskService.normalize_mode(PhotoSendMode.ALBUM, 3)
         assert result == PhotoSendMode.ALBUM
@@ -1190,7 +1193,7 @@ class TestPhotoTaskServiceNormalizeMode:
 class TestPhotoTaskServiceSendNow:
     @pytest.mark.anyio
     async def test_send_now_success(self, tmp_path):
-        from src.services.photo_task_service import PhotoTarget, PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTarget, PhotoTaskService
 
         img = tmp_path / "photo.jpg"
         img.write_bytes(b"\xff\xd8\xff")
@@ -1223,7 +1226,7 @@ class TestPhotoTaskServiceSendNow:
 
     @pytest.mark.anyio
     async def test_send_now_failure_marks_failed(self, tmp_path):
-        from src.services.photo_task_service import PhotoTarget, PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTarget, PhotoTaskService
 
         img = tmp_path / "photo.jpg"
         img.write_bytes(b"\xff\xd8\xff")
@@ -1256,7 +1259,7 @@ class TestPhotoTaskServiceSendNow:
         """Regression (#864 review): an immediate SEPARATE send that publishes file 1 then fails
         on file 2 must persist file 1's id and NOT raise. Raising makes the CLI/agent/UI report
         failure, the user reruns, and file 1 is published a second time (duplicate)."""
-        from src.services.photo_task_service import PhotoTarget, PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTarget, PhotoTaskService
 
         img = tmp_path / "photo.jpg"
         img.write_bytes(b"\xff\xd8\xff")
@@ -1305,7 +1308,7 @@ class TestPhotoTaskServiceSendNow:
 class TestPhotoTaskServiceScheduleSend:
     @pytest.mark.anyio
     async def test_schedule_send_success(self, tmp_path):
-        from src.services.photo_task_service import PhotoTarget, PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTarget, PhotoTaskService
 
         img = tmp_path / "photo.jpg"
         img.write_bytes(b"\xff\xd8\xff")
@@ -1338,7 +1341,7 @@ class TestPhotoTaskServiceScheduleSend:
 
     @pytest.mark.anyio
     async def test_schedule_send_failure_marks_failed(self, tmp_path):
-        from src.services.photo_task_service import PhotoTarget, PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTarget, PhotoTaskService
 
         img = tmp_path / "photo.jpg"
         img.write_bytes(b"\xff\xd8\xff")
@@ -1370,7 +1373,7 @@ class TestPhotoTaskServiceScheduleSend:
         FAILED-with-no-ids, which would strand a queued post with no cancel handle (ghost publish).
         And partial success must NOT raise: raising makes the dispatcher/CLI report the schedule as
         FAILED, so the user retries and schedules a duplicate while the first stays queued."""
-        from src.services.photo_task_service import PhotoTarget, PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTarget, PhotoTaskService
 
         img = tmp_path / "photo.jpg"
         img.write_bytes(b"\xff\xd8\xff")
@@ -1423,8 +1426,8 @@ class TestPhotoTaskServiceCancelItem:
     async def test_cancel_delegates_to_bundle(self):
         from types import SimpleNamespace
 
-        from src.models import PhotoBatchStatus
-        from src.services.photo_task_service import PhotoTaskService
+        from tg_agent.models import PhotoBatchStatus
+        from tg_agent.services.photo_task_service import PhotoTaskService
 
         bundle = MagicMock()
         # A non-SCHEDULED item with no batch: cancel_item skips the Telegram
@@ -1442,7 +1445,7 @@ class TestPhotoTaskServiceCancelItem:
 
     @pytest.mark.anyio
     async def test_cancel_returns_false_if_not_found(self):
-        from src.services.photo_task_service import PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTaskService
 
         bundle = MagicMock()
         bundle.get_item = AsyncMock(return_value=None)
@@ -1455,7 +1458,7 @@ class TestPhotoTaskServiceCancelItem:
 class TestPhotoTaskServiceRunDue:
     @pytest.mark.anyio
     async def test_run_due_no_items(self):
-        from src.services.photo_task_service import PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTaskService
 
         bundle = MagicMock()
         bundle.claim_next_due_item = AsyncMock(return_value=None)
@@ -1466,7 +1469,7 @@ class TestPhotoTaskServiceRunDue:
 
     @pytest.mark.anyio
     async def test_run_due_processes_one_item(self, tmp_path):
-        from src.services.photo_task_service import PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTaskService
 
         img = tmp_path / "photo.jpg"
         img.write_bytes(b"\xff\xd8\xff")
@@ -1501,7 +1504,7 @@ class TestPhotoTaskServiceRunDue:
 
     @pytest.mark.anyio
     async def test_run_due_with_item_id_claims_only_that_item(self, tmp_path):
-        from src.services.photo_task_service import PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTaskService
 
         img = tmp_path / "photo.jpg"
         img.write_bytes(b"\xff\xd8\xff")
@@ -1538,7 +1541,7 @@ class TestPhotoTaskServiceRunDue:
 
     @pytest.mark.anyio
     async def test_run_due_handles_item_failure(self, tmp_path):
-        from src.services.photo_task_service import PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTaskService
 
         img = tmp_path / "photo.jpg"
         img.write_bytes(b"\xff\xd8\xff")
@@ -1578,7 +1581,7 @@ class TestPhotoTaskServiceRunDue:
 class TestPhotoTaskServiceCreateBatch:
     @pytest.mark.anyio
     async def test_create_batch_empty_entries(self):
-        from src.services.photo_task_service import PhotoTarget, PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTarget, PhotoTaskService
 
         svc = PhotoTaskService(MagicMock(), MagicMock())
         target = PhotoTarget(dialog_id=1)
@@ -1587,7 +1590,7 @@ class TestPhotoTaskServiceCreateBatch:
 
     @pytest.mark.anyio
     async def test_create_batch_success(self, tmp_path):
-        from src.services.photo_task_service import PhotoTarget, PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTarget, PhotoTaskService
 
         img = tmp_path / "photo.jpg"
         img.write_bytes(b"\xff\xd8\xff")
@@ -1606,19 +1609,19 @@ class TestPhotoTaskServiceCreateBatch:
         assert batch_id == 10
 
     def test_parse_schedule_at_naive_datetime(self):
-        from src.services.photo_task_service import PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTaskService
 
         result = PhotoTaskService._parse_schedule_at("2026-01-01T12:00:00")
         assert result.tzinfo is not None
 
     def test_parse_schedule_at_empty_raises(self):
-        from src.services.photo_task_service import PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTaskService
 
         with pytest.raises(ValueError, match="must include 'at'"):
             PhotoTaskService._parse_schedule_at("")
 
     def test_parse_schedule_at_none_raises(self):
-        from src.services.photo_task_service import PhotoTaskService
+        from tg_agent.services.photo_task_service import PhotoTaskService
 
         with pytest.raises(ValueError, match="must include 'at'"):
             PhotoTaskService._parse_schedule_at(None)
@@ -1634,8 +1637,8 @@ class TestTelegramSearchNoPool:
 
     @pytest.mark.anyio
     async def test_search_telegram_no_pool(self):
-        from src.search.persistence import SearchPersistence
-        from src.search.telegram_search import TelegramSearch
+        from tg_agent.search.persistence import SearchPersistence
+        from tg_agent.search.telegram_search import TelegramSearch
 
         persistence = MagicMock(spec=SearchPersistence)
         ts = TelegramSearch(pool=None, persistence=persistence)
@@ -1645,8 +1648,8 @@ class TestTelegramSearchNoPool:
 
     @pytest.mark.anyio
     async def test_search_my_chats_no_pool(self):
-        from src.search.persistence import SearchPersistence
-        from src.search.telegram_search import TelegramSearch
+        from tg_agent.search.persistence import SearchPersistence
+        from tg_agent.search.telegram_search import TelegramSearch
 
         persistence = MagicMock(spec=SearchPersistence)
         ts = TelegramSearch(pool=None, persistence=persistence)
@@ -1655,8 +1658,8 @@ class TestTelegramSearchNoPool:
 
     @pytest.mark.anyio
     async def test_search_in_channel_no_pool(self):
-        from src.search.persistence import SearchPersistence
-        from src.search.telegram_search import TelegramSearch
+        from tg_agent.search.persistence import SearchPersistence
+        from tg_agent.search.telegram_search import TelegramSearch
 
         persistence = MagicMock(spec=SearchPersistence)
         ts = TelegramSearch(pool=None, persistence=persistence)
@@ -1665,8 +1668,8 @@ class TestTelegramSearchNoPool:
 
     @pytest.mark.anyio
     async def test_check_search_quota_no_pool(self):
-        from src.search.persistence import SearchPersistence
-        from src.search.telegram_search import TelegramSearch
+        from tg_agent.search.persistence import SearchPersistence
+        from tg_agent.search.telegram_search import TelegramSearch
 
         persistence = MagicMock(spec=SearchPersistence)
         ts = TelegramSearch(pool=None, persistence=persistence)
@@ -1679,8 +1682,8 @@ class TestTelegramSearchNoPremiumClient:
 
     @pytest.mark.anyio
     async def test_search_telegram_no_premium_client(self):
-        from src.search.persistence import SearchPersistence
-        from src.search.telegram_search import TelegramSearch
+        from tg_agent.search.persistence import SearchPersistence
+        from tg_agent.search.telegram_search import TelegramSearch
 
         pool = MagicMock()
         pool.get_premium_client = AsyncMock(return_value=None)
@@ -1693,8 +1696,8 @@ class TestTelegramSearchNoPremiumClient:
 
     @pytest.mark.anyio
     async def test_check_search_quota_no_premium_client(self):
-        from src.search.persistence import SearchPersistence
-        from src.search.telegram_search import TelegramSearch
+        from tg_agent.search.persistence import SearchPersistence
+        from tg_agent.search.telegram_search import TelegramSearch
 
         pool = MagicMock()
         pool.get_premium_client = AsyncMock(return_value=None)
@@ -1705,8 +1708,8 @@ class TestTelegramSearchNoPremiumClient:
 
     @pytest.mark.anyio
     async def test_search_my_chats_no_available_client(self):
-        from src.search.persistence import SearchPersistence
-        from src.search.telegram_search import TelegramSearch
+        from tg_agent.search.persistence import SearchPersistence
+        from tg_agent.search.telegram_search import TelegramSearch
 
         pool = MagicMock()
         pool.get_available_client = AsyncMock(return_value=None)
@@ -1718,8 +1721,8 @@ class TestTelegramSearchNoPremiumClient:
 
     @pytest.mark.anyio
     async def test_search_in_channel_no_available_client(self):
-        from src.search.persistence import SearchPersistence
-        from src.search.telegram_search import TelegramSearch
+        from tg_agent.search.persistence import SearchPersistence
+        from tg_agent.search.telegram_search import TelegramSearch
 
         pool = MagicMock()
         pool.get_available_client = AsyncMock(return_value=None)
@@ -1734,8 +1737,8 @@ class TestTelegramSearchPremiumUnavailabilityReason:
 
     @pytest.mark.anyio
     async def test_no_reason_getter(self):
-        from src.search.persistence import SearchPersistence
-        from src.search.telegram_search import TelegramSearch
+        from tg_agent.search.persistence import SearchPersistence
+        from tg_agent.search.telegram_search import TelegramSearch
 
         pool = MagicMock(spec=[])  # no get_premium_unavailability_reason
         persistence = MagicMock(spec=SearchPersistence)
@@ -1745,8 +1748,8 @@ class TestTelegramSearchPremiumUnavailabilityReason:
 
     @pytest.mark.anyio
     async def test_reason_getter_returns_string(self):
-        from src.search.persistence import SearchPersistence
-        from src.search.telegram_search import TelegramSearch
+        from tg_agent.search.persistence import SearchPersistence
+        from tg_agent.search.telegram_search import TelegramSearch
 
         pool = MagicMock()
         pool.get_premium_unavailability_reason = MagicMock(return_value="Flood waited")
@@ -1757,8 +1760,8 @@ class TestTelegramSearchPremiumUnavailabilityReason:
 
     @pytest.mark.anyio
     async def test_reason_getter_raises(self):
-        from src.search.persistence import SearchPersistence
-        from src.search.telegram_search import TelegramSearch
+        from tg_agent.search.persistence import SearchPersistence
+        from tg_agent.search.telegram_search import TelegramSearch
 
         pool = MagicMock()
         pool.get_premium_unavailability_reason = MagicMock(side_effect=Exception("crash"))

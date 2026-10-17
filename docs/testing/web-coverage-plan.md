@@ -42,7 +42,7 @@ async def client(tmp_path):
 
 **Ключевые правила:**
 - Моки через `app.state.*`, не через `dependency_overrides`
-- Точечный `patch("src.web.routes.X.deps.Y")` для конкретных сервисов
+- Точечный `patch("tg_agent.web.routes.X.deps.Y")` для конкретных сервисов
 - POST — форм-данные через `data={...}`, JSON через `json={...}`
 - Redirect: `follow_redirects=False` + проверка `location` header
 - `CollectionQueue` в teardown: всегда `await cq.shutdown()`
@@ -118,7 +118,7 @@ async def route_client(base_app):
 
 ### 3. `tests/routes/test_search_routes.py`
 
-Локальный `client` fixture. Мок `search_service` через `monkeypatch.setattr("src.web.routes.search.deps.search_service", ...)`.
+Локальный `client` fixture. Мок `search_service` через `monkeypatch.setattr("tg_agent.web.routes.search.deps.search_service", ...)`.
 
 | Тест | Подготовка | Проверяет |
 |------|-----------|-----------|
@@ -241,8 +241,8 @@ async def _enable_dev_mode(db):
 
 Локальный `client`. Мокаем тяжёлые сервисы через `monkeypatch`:
 ```python
-monkeypatch.setattr("src.web.routes.settings.AgentProviderService.load_provider_configs", AsyncMock(return_value=[]))
-monkeypatch.setattr("src.web.routes.settings.AgentProviderService.load_model_cache", AsyncMock(return_value={}))
+monkeypatch.setattr("tg_agent.web.routes.settings.AgentProviderService.load_provider_configs", AsyncMock(return_value=[]))
+monkeypatch.setattr("tg_agent.web.routes.settings.AgentProviderService.load_model_cache", AsyncMock(return_value={}))
 ```
 
 | Тест | Проверяет |
@@ -308,7 +308,7 @@ agent_manager_mock.chat_stream = _fake_stream
 ### 9. `tests/routes/test_photo_loader_routes.py`
 
 Специальный `client` fixture. `pool_mock.get_dialogs_for_phone = AsyncMock(return_value=[...])`.
-Для upload-тестов: `monkeypatch.setattr("src.web.routes.photo_loader._persist_uploads", AsyncMock(return_value=[]))`.
+Для upload-тестов: `monkeypatch.setattr("tg_agent.web.routes.photo_loader._persist_uploads", AsyncMock(return_value=[]))`.
 
 | Тест | Проверяет |
 |------|-----------|
@@ -356,7 +356,7 @@ async def _create_pipeline_and_run(db) -> tuple[int, int]:
 
 ```python
 # В fixture добавить:
-from src.services.task_enqueuer import TaskEnqueuer
+from tg_agent.services.task_enqueuer import TaskEnqueuer
 enqueuer_mock = MagicMock(spec=TaskEnqueuer)
 enqueuer_mock.enqueue_pipeline_run = AsyncMock()
 app.state.task_enqueuer = enqueuer_mock
@@ -387,9 +387,9 @@ app.state.task_enqueuer = enqueuer_mock
 - `tests/routes/test_scheduler_routes.py` — эталон паттерна fixture с CollectionQueue и teardown
 - `tests/routes/test_pipelines_routes.py` — эталон fixture и структуры POST-тестов
 - `tests/routes/test_moderation_routes.py` — паттерн вспомогательных DB-функций и monkeypatch
-- `src/web/deps.py` — точки монтирования для правильных путей `patch(...)`
-- `src/web/routes/agent.py` — логика agent routes и нужные поля `AgentManager`
-- `src/web/container.py` — список всех `app.state.*` атрибутов
+- `tg_agent/web/deps.py` — точки монтирования для правильных путей `patch(...)`
+- `tg_agent/web/routes/agent.py` — логика agent routes и нужные поля `AgentManager`
+- `tg_agent/web/container.py` — список всех `app.state.*` атрибутов
 
 ---
 

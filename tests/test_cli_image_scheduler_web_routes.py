@@ -19,17 +19,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.collection_queue import CollectionQueue
-from src.config import AppConfig
-from src.database import Database
-from src.models import Account, Channel
-from src.scheduler.service import SchedulerManager
-from src.search.ai_search import AISearchEngine
-from src.search.engine import SearchEngine
-from src.telegram.auth import TelegramAuth
-from src.telegram.collector import Collector
-from src.web.app import create_app
 from tests.helpers import cli_ns as _ns
+from tg_agent.collection_queue import CollectionQueue
+from tg_agent.config import AppConfig
+from tg_agent.database import Database
+from tg_agent.models import Account, Channel
+from tg_agent.scheduler.service import SchedulerManager
+from tg_agent.search.ai_search import AISearchEngine
+from tg_agent.search.engine import SearchEngine
+from tg_agent.telegram.auth import TelegramAuth
+from tg_agent.telegram.collector import Collector
+from tg_agent.web.app import create_app
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -52,9 +52,9 @@ class TestCLIImageCommand:
 
     def test_providers_none_configured(self, capsys):
         """providers action with no adapters prints help message."""
-        from src.cli.commands.image import run
+        from tg_agent.cli.commands.image import run
 
-        with patch("src.cli.commands.image.ImageGenerationService") as mock_svc_cls:
+        with patch("tg_agent.cli.commands.image.ImageGenerationService") as mock_svc_cls:
             svc = MagicMock()
             svc.adapter_names = []
             mock_svc_cls.return_value = svc
@@ -65,9 +65,9 @@ class TestCLIImageCommand:
 
     def test_providers_lists_names(self, capsys):
         """providers action prints each adapter name."""
-        from src.cli.commands.image import run
+        from tg_agent.cli.commands.image import run
 
-        with patch("src.cli.commands.image.ImageGenerationService") as mock_svc_cls:
+        with patch("tg_agent.cli.commands.image.ImageGenerationService") as mock_svc_cls:
             svc = MagicMock()
             svc.adapter_names = ["replicate", "together"]
             mock_svc_cls.return_value = svc
@@ -79,9 +79,9 @@ class TestCLIImageCommand:
 
     def test_generate_no_providers(self, capsys):
         """generate action when no providers configured prints warning."""
-        from src.cli.commands.image import run
+        from tg_agent.cli.commands.image import run
 
-        with patch("src.cli.commands.image.ImageGenerationService") as mock_svc_cls:
+        with patch("tg_agent.cli.commands.image.ImageGenerationService") as mock_svc_cls:
             svc = MagicMock()
             svc.is_available = AsyncMock(return_value=False)
             mock_svc_cls.return_value = svc
@@ -92,9 +92,9 @@ class TestCLIImageCommand:
 
     def test_generate_success(self, capsys):
         """generate action prints result URL on success."""
-        from src.cli.commands.image import run
+        from tg_agent.cli.commands.image import run
 
-        with patch("src.cli.commands.image.ImageGenerationService") as mock_svc_cls:
+        with patch("tg_agent.cli.commands.image.ImageGenerationService") as mock_svc_cls:
             svc = MagicMock()
             svc.is_available = AsyncMock(return_value=True)
             svc.generate = AsyncMock(return_value="https://example.com/img.png")
@@ -106,9 +106,9 @@ class TestCLIImageCommand:
 
     def test_generate_failure(self, capsys):
         """generate action prints failure message when result is None."""
-        from src.cli.commands.image import run
+        from tg_agent.cli.commands.image import run
 
-        with patch("src.cli.commands.image.ImageGenerationService") as mock_svc_cls:
+        with patch("tg_agent.cli.commands.image.ImageGenerationService") as mock_svc_cls:
             svc = MagicMock()
             svc.is_available = AsyncMock(return_value=True)
             svc.generate = AsyncMock(return_value=None)
@@ -121,10 +121,10 @@ class TestCLIImageCommand:
 
     def test_generate_timeout_failure(self, capsys):
         """generate action prints actionable timeout message when the service reports timeout."""
-        from src.cli.commands.image import run
-        from src.services.image_generation_service import ImageGenerationFailure
+        from tg_agent.cli.commands.image import run
+        from tg_agent.services.image_generation_service import ImageGenerationFailure
 
-        with patch("src.cli.commands.image.ImageGenerationService") as mock_svc_cls:
+        with patch("tg_agent.cli.commands.image.ImageGenerationService") as mock_svc_cls:
             svc = MagicMock()
             svc.is_available = AsyncMock(return_value=True)
             svc.generate = AsyncMock(return_value=None)
@@ -140,9 +140,9 @@ class TestCLIImageCommand:
 
     def test_models_no_results(self, capsys):
         """models action with no results prints message."""
-        from src.cli.commands.image import run
+        from tg_agent.cli.commands.image import run
 
-        with patch("src.cli.commands.image.ImageGenerationService") as mock_svc_cls:
+        with patch("tg_agent.cli.commands.image.ImageGenerationService") as mock_svc_cls:
             svc = MagicMock()
             svc.search_models = AsyncMock(return_value=[])
             mock_svc_cls.return_value = svc
@@ -153,9 +153,9 @@ class TestCLIImageCommand:
 
     def test_models_with_results(self, capsys):
         """models action prints model strings and descriptions."""
-        from src.cli.commands.image import run
+        from tg_agent.cli.commands.image import run
 
-        with patch("src.cli.commands.image.ImageGenerationService") as mock_svc_cls:
+        with patch("tg_agent.cli.commands.image.ImageGenerationService") as mock_svc_cls:
             svc = MagicMock()
             svc.search_models = AsyncMock(return_value=[
                 {"model_string": "replicate:flux", "run_count": 1000, "description": "Fast model"},
@@ -170,9 +170,9 @@ class TestCLIImageCommand:
 
     def test_unknown_action(self, capsys):
         """Unknown action prints usage help."""
-        from src.cli.commands.image import run
+        from tg_agent.cli.commands.image import run
 
-        with patch("src.cli.commands.image.ImageGenerationService") as mock_svc_cls:
+        with patch("tg_agent.cli.commands.image.ImageGenerationService") as mock_svc_cls:
             svc = MagicMock()
             mock_svc_cls.return_value = svc
 
@@ -191,7 +191,7 @@ class TestCLISettingsCommand:
 
     def test_get_all_empty(self, cli_env, capsys):
         """get action with no key lists whatever settings exist (at least header)."""
-        from src.cli.commands.settings import run
+        from tg_agent.cli.commands.settings import run
 
         run(_ns(settings_action="get", key=None))
         out = capsys.readouterr().out
@@ -202,7 +202,7 @@ class TestCLISettingsCommand:
         """get action with no key lists all settings."""
         asyncio.run(cli_env.set_setting("test_key", "test_value"))
 
-        from src.cli.commands.settings import run
+        from tg_agent.cli.commands.settings import run
 
         run(_ns(settings_action="get", key=None))
         out = capsys.readouterr().out
@@ -213,7 +213,7 @@ class TestCLISettingsCommand:
         """get action with specific key prints value."""
         asyncio.run(cli_env.set_setting("my_key", "my_value"))
 
-        from src.cli.commands.settings import run
+        from tg_agent.cli.commands.settings import run
 
         run(_ns(settings_action="get", key="my_key"))
         out = capsys.readouterr().out
@@ -222,7 +222,7 @@ class TestCLISettingsCommand:
 
     def test_get_missing_key(self, cli_env, capsys):
         """get action with missing key prints '(not set)'."""
-        from src.cli.commands.settings import run
+        from tg_agent.cli.commands.settings import run
 
         run(_ns(settings_action="get", key="nonexistent_key"))
         out = capsys.readouterr().out
@@ -230,7 +230,7 @@ class TestCLISettingsCommand:
 
     def test_set_setting(self, cli_env, capsys):
         """set action prints confirmation (DB access happens inside the CLI run)."""
-        from src.cli.commands.settings import run
+        from tg_agent.cli.commands.settings import run
 
         run(_ns(settings_action="set", key="foo", value="bar"))
         out = capsys.readouterr().out
@@ -238,7 +238,7 @@ class TestCLISettingsCommand:
 
     def test_info_action(self, cli_env, capsys):
         """info action prints system information."""
-        from src.cli.commands.settings import run
+        from tg_agent.cli.commands.settings import run
 
         run(_ns(settings_action="info"))
         out = capsys.readouterr().out
@@ -255,7 +255,7 @@ class TestCLIAnalyticsExtended:
 
     def test_summary_empty(self, cli_env, capsys):
         """summary action works with empty DB."""
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
         run(_ns(analytics_action="summary", date_from=None, date_to=None))
         out = capsys.readouterr().out
@@ -263,7 +263,7 @@ class TestCLIAnalyticsExtended:
 
     def test_pipeline_stats_empty(self, cli_env, capsys):
         """pipeline-stats action with no data prints message."""
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
         run(_ns(analytics_action="pipeline-stats", date_from=None, date_to=None, pipeline_id=None))
         out = capsys.readouterr().out
@@ -271,9 +271,9 @@ class TestCLIAnalyticsExtended:
 
     def test_daily_empty(self, cli_env, capsys):
         """daily action with no data prints 'No data'."""
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
-        _target = "src.services.content_analytics_service.ContentAnalyticsService.get_daily_stats"
+        _target = "tg_agent.services.content_analytics_service.ContentAnalyticsService.get_daily_stats"
         with patch(_target, new=AsyncMock(return_value=[])):
             run(_ns(analytics_action="daily", date_from=None, date_to=None, days=30, pipeline_id=None))
         out = capsys.readouterr().out
@@ -281,7 +281,7 @@ class TestCLIAnalyticsExtended:
 
     def test_trending_topics_empty(self, cli_env, capsys):
         """trending-topics action with no data prints message."""
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
         run(_ns(analytics_action="trending-topics", date_from=None, date_to=None, days=7, limit=20))
         out = capsys.readouterr().out
@@ -289,7 +289,7 @@ class TestCLIAnalyticsExtended:
 
     def test_trending_channels_empty(self, cli_env, capsys):
         """trending-channels action with no data prints message."""
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
         run(_ns(analytics_action="trending-channels", date_from=None, date_to=None, days=7, limit=20))
         out = capsys.readouterr().out
@@ -297,25 +297,25 @@ class TestCLIAnalyticsExtended:
 
     def test_velocity_empty(self, cli_env, capsys):
         """velocity action with no data prints message."""
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
-        with patch("src.services.trend_service.TrendService.get_message_velocity", new=AsyncMock(return_value=[])):
+        with patch("tg_agent.services.trend_service.TrendService.get_message_velocity", new=AsyncMock(return_value=[])):
             run(_ns(analytics_action="velocity", date_from=None, date_to=None, days=30))
         out = capsys.readouterr().out
         assert "No velocity data found" in out
 
     def test_peak_hours_empty(self, cli_env, capsys):
         """peak-hours action with no data prints message."""
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
-        with patch("src.services.trend_service.TrendService.get_peak_hours", new=AsyncMock(return_value=[])):
+        with patch("tg_agent.services.trend_service.TrendService.get_peak_hours", new=AsyncMock(return_value=[])):
             run(_ns(analytics_action="peak-hours", date_from=None, date_to=None))
         out = capsys.readouterr().out
         assert "No peak hours data found" in out
 
     def test_calendar_empty(self, cli_env, capsys):
         """calendar action with no upcoming publications prints message."""
-        from src.cli.commands.analytics import run
+        from tg_agent.cli.commands.analytics import run
 
         run(_ns(analytics_action="calendar", date_from=None, date_to=None, limit=20, pipeline_id=None))
         out = capsys.readouterr().out
@@ -335,10 +335,10 @@ def cli_env_scheduler(cli_env):
     fake_pool.disconnect_all = AsyncMock()
 
     async def fake_init_pool(config, db):
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
         return TelegramAuth(0, ""), fake_pool
 
-    with patch("src.cli.runtime.init_pool", side_effect=fake_init_pool):
+    with patch("tg_agent.cli.runtime.init_pool", side_effect=fake_init_pool):
         yield cli_env, fake_pool
 
 
@@ -350,7 +350,7 @@ class TestCLISchedulerCommand:
         cli_env, fake_pool = cli_env_scheduler
         fake_pool.clients = {"dummy": MagicMock()}
 
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         run(_ns(scheduler_action="status"))
         out = capsys.readouterr().out
@@ -361,7 +361,7 @@ class TestCLISchedulerCommand:
         cli_env, fake_pool = cli_env_scheduler
         fake_pool.clients = {"dummy": MagicMock()}
 
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         run(_ns(scheduler_action="stop"))
         out = capsys.readouterr().out
@@ -372,7 +372,7 @@ class TestCLISchedulerCommand:
         cli_env, fake_pool = cli_env_scheduler
         fake_pool.clients = {"dummy": MagicMock()}
 
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         run(_ns(scheduler_action="job-toggle", job_id="collect_all"))
         out = capsys.readouterr().out
@@ -384,7 +384,7 @@ class TestCLISchedulerCommand:
         fake_pool.clients = {"dummy": MagicMock()}
         asyncio.run(cli_env.repos.settings.set_setting("scheduler_job_disabled:collect_all", "1"))
 
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         run(_ns(scheduler_action="job-toggle", job_id="collect_all"))
         out = capsys.readouterr().out
@@ -395,7 +395,7 @@ class TestCLISchedulerCommand:
         cli_env, fake_pool = cli_env_scheduler
         fake_pool.clients = {"dummy": MagicMock()}
 
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         run(_ns(scheduler_action="set-interval", job_id="collect_all", minutes=45))
         out = capsys.readouterr().out
@@ -408,7 +408,7 @@ class TestCLISchedulerCommand:
         cli_env, fake_pool = cli_env_scheduler
         fake_pool.clients = {"dummy": MagicMock()}
 
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         run(_ns(scheduler_action="set-interval", job_id="collect_all", minutes=0))
         out = capsys.readouterr().out
@@ -419,7 +419,7 @@ class TestCLISchedulerCommand:
         cli_env, fake_pool = cli_env_scheduler
         fake_pool.clients = {"dummy": MagicMock()}
 
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         run(_ns(scheduler_action="task-cancel", task_id=99999))
         out = capsys.readouterr().out
@@ -430,7 +430,7 @@ class TestCLISchedulerCommand:
         cli_env, fake_pool = cli_env_scheduler
         fake_pool.clients = {"dummy": MagicMock()}
 
-        from src.cli.commands.scheduler import run
+        from tg_agent.cli.commands.scheduler import run
 
         run(_ns(scheduler_action="clear-pending"))
         out = capsys.readouterr().out
@@ -532,7 +532,7 @@ class TestWebImagesRoutes:
     @pytest.mark.anyio
     async def test_images_page_renders(self, route_client):
         """GET /images/ returns 200."""
-        with patch("src.web.images.handlers._get_image_service", new_callable=AsyncMock) as mock_svc_fn:
+        with patch("tg_agent.web.images.handlers._get_image_service", new_callable=AsyncMock) as mock_svc_fn:
             svc = MagicMock()
             svc.adapter_names = []
             mock_svc_fn.return_value = svc
@@ -542,7 +542,7 @@ class TestWebImagesRoutes:
     @pytest.mark.anyio
     async def test_generate_no_prompt(self, route_client):
         """POST /images/generate without prompt returns 400."""
-        with patch("src.web.images.handlers._get_image_service", new_callable=AsyncMock) as mock_svc_fn:
+        with patch("tg_agent.web.images.handlers._get_image_service", new_callable=AsyncMock) as mock_svc_fn:
             svc = MagicMock()
             svc.is_available = AsyncMock(return_value=True)
             mock_svc_fn.return_value = svc
@@ -554,7 +554,7 @@ class TestWebImagesRoutes:
     @pytest.mark.anyio
     async def test_generate_no_providers(self, route_client):
         """POST /images/generate when no providers returns 409."""
-        with patch("src.web.images.handlers._get_image_service", new_callable=AsyncMock) as mock_svc_fn:
+        with patch("tg_agent.web.images.handlers._get_image_service", new_callable=AsyncMock) as mock_svc_fn:
             svc = MagicMock()
             svc.is_available = AsyncMock(return_value=False)
             mock_svc_fn.return_value = svc
@@ -564,7 +564,7 @@ class TestWebImagesRoutes:
     @pytest.mark.anyio
     async def test_generate_success(self, route_client):
         """POST /images/generate with valid prompt and provider returns 200 with url."""
-        with patch("src.web.images.handlers._get_image_service", new_callable=AsyncMock) as mock_svc_fn:
+        with patch("tg_agent.web.images.handlers._get_image_service", new_callable=AsyncMock) as mock_svc_fn:
             svc = MagicMock()
             svc.is_available = AsyncMock(return_value=True)
             svc.generate = AsyncMock(return_value="https://example.com/img.png")
@@ -581,7 +581,7 @@ class TestWebImagesRoutes:
     @pytest.mark.anyio
     async def test_generate_provider_failure(self, route_client):
         """POST /images/generate when generation fails returns 500."""
-        with patch("src.web.images.handlers._get_image_service", new_callable=AsyncMock) as mock_svc_fn:
+        with patch("tg_agent.web.images.handlers._get_image_service", new_callable=AsyncMock) as mock_svc_fn:
             svc = MagicMock()
             svc.is_available = AsyncMock(return_value=True)
             svc.generate = AsyncMock(return_value=None)
@@ -600,8 +600,8 @@ class TestWebImagesRoutes:
     async def test_models_search_with_provider(self, route_client):
         """GET /images/models/search with provider returns model list."""
         with (
-            patch("src.web.images.handlers._get_provider_api_key", new_callable=AsyncMock, return_value="key"),
-            patch("src.web.images.handlers.ImageGenerationService") as mock_svc_cls,
+            patch("tg_agent.web.images.handlers._get_provider_api_key", new_callable=AsyncMock, return_value="key"),
+            patch("tg_agent.web.images.handlers.ImageGenerationService") as mock_svc_cls,
         ):
             svc = MagicMock()
             svc.search_models = AsyncMock(return_value=[])

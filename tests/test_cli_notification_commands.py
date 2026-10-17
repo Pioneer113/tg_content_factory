@@ -4,8 +4,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.cli.commands.notification import run
 from tests.helpers import cli_ns, fake_asyncio_run, make_cli_db
+from tg_agent.cli.commands.notification import run
 
 
 def _args(**overrides):
@@ -39,10 +39,10 @@ def test_setup(capsys):
     mock_svc = MagicMock()
     mock_svc.setup_bot = AsyncMock(return_value=MagicMock(bot_username="test_bot", bot_token="123:abc"))
     mock_ts = MagicMock()
-    with patch("src.cli.commands.notification.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.notification.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
-         patch("src.cli.commands.notification.NotificationService", return_value=mock_svc), \
-         patch("src.cli.commands.notification.NotificationTargetService", return_value=mock_ts), \
+    with patch("tg_agent.cli.commands.notification.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.notification.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
+         patch("tg_agent.cli.commands.notification.NotificationService", return_value=mock_svc), \
+         patch("tg_agent.cli.commands.notification.NotificationTargetService", return_value=mock_ts), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(notification_action="setup"))
     out = capsys.readouterr().out
@@ -61,10 +61,10 @@ def test_status_no_bot(capsys):
     mock_svc = MagicMock()
     mock_svc.get_status = AsyncMock(return_value=None)
     mock_ts = MagicMock()
-    with patch("src.cli.commands.notification.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.notification.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
-         patch("src.cli.commands.notification.NotificationService", return_value=mock_svc), \
-         patch("src.cli.commands.notification.NotificationTargetService", return_value=mock_ts), \
+    with patch("tg_agent.cli.commands.notification.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.notification.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
+         patch("tg_agent.cli.commands.notification.NotificationService", return_value=mock_svc), \
+         patch("tg_agent.cli.commands.notification.NotificationTargetService", return_value=mock_ts), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(notification_action="status"))
     assert "No notification bot" in capsys.readouterr().out
@@ -77,10 +77,10 @@ def test_status_with_bot(capsys):
     mock_svc = MagicMock()
     mock_svc.get_status = AsyncMock(return_value=MagicMock(bot_username="test_bot", bot_id=42, created_at="2024-01-01"))
     mock_ts = MagicMock()
-    with patch("src.cli.commands.notification.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.notification.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
-         patch("src.cli.commands.notification.NotificationService", return_value=mock_svc), \
-         patch("src.cli.commands.notification.NotificationTargetService", return_value=mock_ts), \
+    with patch("tg_agent.cli.commands.notification.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.notification.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
+         patch("tg_agent.cli.commands.notification.NotificationService", return_value=mock_svc), \
+         patch("tg_agent.cli.commands.notification.NotificationTargetService", return_value=mock_ts), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(notification_action="status"))
     assert "test_bot" in capsys.readouterr().out
@@ -101,10 +101,10 @@ def test_status_target_unavailable_prints_diagnostic(capsys):
     mock_svc.get_status = AsyncMock(side_effect=AssertionError("get_status should not be called"))
     mock_ts = MagicMock()
     mock_ts.describe_target = AsyncMock(return_value=target_status)
-    with patch("src.cli.commands.notification.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.notification.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
-         patch("src.cli.commands.notification.NotificationService", return_value=mock_svc), \
-         patch("src.cli.commands.notification.NotificationTargetService", return_value=mock_ts), \
+    with patch("tg_agent.cli.commands.notification.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.notification.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
+         patch("tg_agent.cli.commands.notification.NotificationService", return_value=mock_svc), \
+         patch("tg_agent.cli.commands.notification.NotificationTargetService", return_value=mock_ts), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(notification_action="status"))
 
@@ -131,10 +131,10 @@ def test_status_target_unavailable_accepts_sync_status(capsys):
     mock_svc.get_status = AsyncMock(side_effect=AssertionError("get_status should not be called"))
     mock_ts = MagicMock()
     mock_ts.describe_target = MagicMock(return_value=target_status)
-    with patch("src.cli.commands.notification.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.notification.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
-         patch("src.cli.commands.notification.NotificationService", return_value=mock_svc), \
-         patch("src.cli.commands.notification.NotificationTargetService", return_value=mock_ts), \
+    with patch("tg_agent.cli.commands.notification.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.notification.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
+         patch("tg_agent.cli.commands.notification.NotificationService", return_value=mock_svc), \
+         patch("tg_agent.cli.commands.notification.NotificationTargetService", return_value=mock_ts), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(notification_action="status"))
 
@@ -158,10 +158,10 @@ def test_delete(capsys):
     mock_svc = MagicMock()
     mock_svc.teardown_bot = AsyncMock()
     mock_ts = MagicMock()
-    with patch("src.cli.commands.notification.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.notification.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
-         patch("src.cli.commands.notification.NotificationService", return_value=mock_svc), \
-         patch("src.cli.commands.notification.NotificationTargetService", return_value=mock_ts), \
+    with patch("tg_agent.cli.commands.notification.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.notification.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
+         patch("tg_agent.cli.commands.notification.NotificationService", return_value=mock_svc), \
+         patch("tg_agent.cli.commands.notification.NotificationTargetService", return_value=mock_ts), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(notification_action="delete"))
     assert "deleted" in capsys.readouterr().out.lower()
@@ -179,10 +179,10 @@ def test_test_notification(capsys):
     mock_svc = MagicMock()
     mock_svc.send_notification = AsyncMock()
     mock_ts = MagicMock()
-    with patch("src.cli.commands.notification.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.notification.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
-         patch("src.cli.commands.notification.NotificationService", return_value=mock_svc), \
-         patch("src.cli.commands.notification.NotificationTargetService", return_value=mock_ts), \
+    with patch("tg_agent.cli.commands.notification.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.notification.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
+         patch("tg_agent.cli.commands.notification.NotificationService", return_value=mock_svc), \
+         patch("tg_agent.cli.commands.notification.NotificationTargetService", return_value=mock_ts), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(notification_action="test", message="Custom test"))
     mock_svc.send_notification.assert_called_with("Custom test")
@@ -200,10 +200,10 @@ def test_set_account(capsys):
     mock_svc = MagicMock()
     mock_ts = MagicMock()
     mock_ts.set_configured_phone = AsyncMock()
-    with patch("src.cli.commands.notification.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.notification.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
-         patch("src.cli.commands.notification.NotificationService", return_value=mock_svc), \
-         patch("src.cli.commands.notification.NotificationTargetService", return_value=mock_ts), \
+    with patch("tg_agent.cli.commands.notification.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.notification.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
+         patch("tg_agent.cli.commands.notification.NotificationService", return_value=mock_svc), \
+         patch("tg_agent.cli.commands.notification.NotificationTargetService", return_value=mock_ts), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(notification_action="set-account", phone="+1234567890"))
     assert "+1234567890" in capsys.readouterr().out
@@ -222,10 +222,10 @@ def test_dry_run_no_queries(capsys):
     db.repos.tasks.get_last_completed_collect_task = AsyncMock(return_value=None)
     mock_svc = MagicMock()
     mock_ts = MagicMock()
-    with patch("src.cli.commands.notification.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.notification.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
-         patch("src.cli.commands.notification.NotificationService", return_value=mock_svc), \
-         patch("src.cli.commands.notification.NotificationTargetService", return_value=mock_ts), \
+    with patch("tg_agent.cli.commands.notification.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.notification.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
+         patch("tg_agent.cli.commands.notification.NotificationService", return_value=mock_svc), \
+         patch("tg_agent.cli.commands.notification.NotificationTargetService", return_value=mock_ts), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(notification_action="dry-run"))
     assert "No active" in capsys.readouterr().out
@@ -244,10 +244,10 @@ def test_dry_run_with_queries(capsys):
     db.repos.settings.get_setting = AsyncMock(return_value=None)
     mock_svc = MagicMock()
     mock_ts = MagicMock()
-    with patch("src.cli.commands.notification.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.notification.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
-         patch("src.cli.commands.notification.NotificationService", return_value=mock_svc), \
-         patch("src.cli.commands.notification.NotificationTargetService", return_value=mock_ts), \
+    with patch("tg_agent.cli.commands.notification.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.notification.runtime.init_pool", AsyncMock(return_value=(MagicMock(), pool))), \
+         patch("tg_agent.cli.commands.notification.NotificationService", return_value=mock_svc), \
+         patch("tg_agent.cli.commands.notification.NotificationTargetService", return_value=mock_ts), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(notification_action="dry-run"))
     out = capsys.readouterr().out

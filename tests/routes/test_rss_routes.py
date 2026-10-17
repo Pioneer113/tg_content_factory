@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from src.models import Message
+from tg_agent.models import Message
 
 NOW = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -16,7 +16,7 @@ NOW = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 
 @pytest.mark.anyio
 async def test_rfc822_none():
-    from src.web.routes.rss import _rfc822
+    from tg_agent.web.routes.rss import _rfc822
 
     result = _rfc822(None)
     assert isinstance(result, str)
@@ -25,7 +25,7 @@ async def test_rfc822_none():
 
 @pytest.mark.anyio
 async def test_rfc822_naive_datetime():
-    from src.web.routes.rss import _rfc822
+    from tg_agent.web.routes.rss import _rfc822
 
     naive = datetime(2025, 6, 15, 10, 30, 0, tzinfo=timezone.utc).replace(tzinfo=None)
     result = _rfc822(naive)
@@ -34,7 +34,7 @@ async def test_rfc822_naive_datetime():
 
 @pytest.mark.anyio
 async def test_rfc822_aware_datetime():
-    from src.web.routes.rss import _rfc822
+    from tg_agent.web.routes.rss import _rfc822
 
     aware = datetime(2025, 6, 15, 10, 30, 0, tzinfo=timezone.utc)
     result = _rfc822(aware)
@@ -43,7 +43,7 @@ async def test_rfc822_aware_datetime():
 
 @pytest.mark.anyio
 async def test_iso8601_none():
-    from src.web.routes.rss import _iso8601
+    from tg_agent.web.routes.rss import _iso8601
 
     result = _iso8601(None)
     assert isinstance(result, str)

@@ -1,0 +1,179 @@
+"""Журнал входящих личных сообщений (DM) — этап 2.2 эпика #1416 (#1427).
+
+Журнал, а не снапшот: строки накапливаются с уникальностью
+`(phone, chat_id, message_id)`, чтобы догон пропущенного (#1428) был
+идемпотентным. Статус самого слушателя живёт отдельно в `runtime_snapshots`
+(тот upsert-ится по ключу — для потока сообщений не годится).
+
+Хранит текст личной переписки, поэтому унаследовал планку приватности
+`dialogs_history`: конечный TTL и prune-on-write при каждой записи, а
+heartbeat воркера дочищает протухшее, когда новые записи перестают
+приходить (prune-on-write без этого покрывал бы только активные диалоги).
+Гарантия «не дольше TTL» действует, пока жив воркер.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+import aiosqlite
+
+from tg_agent.database.pool import ReadConnection
+from tg_agent.models import INCOMING_DM_JOURNAL_TTL_SECONDS, IncomingDm
+from tg_agent.utils.datetime import parse_datetime
+
+if TYPE_CHECKING:
+    from tg_agent.database.facade import Database
+
+# julianday() сравнивает mixed ISO-форматы (см. комментарий в
+# runtime_snapshots.prune_expired — 'T'/' ' и смещения).
+_PRUNE_SQL = (
+    "DELETE FROM incoming_dms WHERE julianday(received_at) < julianday('now', ?)"
+)
+
+
+class IncomingDmsRepository:
+    """Журнал входящих DM: идемпотентная запись, TTL/prune, признак обработки."""
+
+    def __init__(
+        self,
+        db: ReadConnection,
+        *,
+        database: "Database | None" = None,
+    ):
+        self._db = db
+        self._database = database
+
+    @staticmethod
+    def _to_dm(row: aiosqlite.Row) -> IncomingDm:
+        return IncomingDm(
+            id=row["id"],
+            phone=row["phone"],
+            chat_id=row["chat_id"],
+            message_id=row["message_id"],
+            text=row["text"],
+            message_date=parse_datetime(row["message_date"]),
+            received_at=parse_datetime(row["received_at"]),
+            processed=bool(row["processed"]),
+        )
+
+    async def record(
+        self,
+        dm: IncomingDm,
+        *,
+        ttl_seconds: int = INCOMING_DM_JOURNAL_TTL_SECONDS,
+        processed: bool = False,
+    ) -> bool:
+        """Записать входящее DM; True — строка новая, False — дубль (уже в журнале).
+
+        В той же транзакции чистит протухшие строки (prune-on-write, как у
+        dialogs_history). Это покрывает только активные диалоги: когда новые
+        записи перестают приходить, DELETE не выполняется — протухшее
+        дочищает `prune_expired()` в heartbeat воркера.
+
+        `processed` — готовит ли черновик этап 2.4 (#1428): догон пишет
+        False только для свежих входящих в режиме full, всё остальное —
+        True. Повторная запись дубля значение НЕ меняет (INSERT OR IGNORE),
+        поэтому повторный догон не откатывает разобранное.
+        """
+        assert self._database is not None, (
+            "IncomingDmsRepository.record requires a Database reference"
+        )
+        async with self._database.transaction() as conn:
+            cur = await conn.execute(
+                """
+                INSERT OR IGNORE INTO incoming_dms
+                    (phone, chat_id, message_id, text, message_date, received_at, processed)
+                VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?)
+                """,
+                (
+                    dm.phone,
+                    dm.chat_id,
+                    dm.message_id,
+                    dm.text,
+                    dm.message_date.isoformat() if dm.message_date else None,
+                    dm.received_at.isoformat() if dm.received_at else None,
+                    1 if processed else 0,
+                ),
+            )
+            inserted = cur.rowcount > 0
+            await conn.execute(_PRUNE_SQL, (f"-{ttl_seconds} seconds",))
+        return inserted
+
+    async def get(self, dm_id: int) -> IncomingDm | None:
+        """Запись журнала по pk; None — нет или уже вычищена prune'ом (TTL)."""
+        cur = await self._db.execute("SELECT * FROM incoming_dms WHERE id = ?", (dm_id,))
+        row = await cur.fetchone()
+        return self._to_dm(row) if row else None
+
+    async def max_message_id(self, phone: str, chat_id: int) -> int:
+        """Водяной знак догона: максимум message_id журнала диалога, 0 если пусто."""
+        cur = await self._db.execute(
+            "SELECT MAX(message_id) AS n FROM incoming_dms WHERE phone = ? AND chat_id = ?",
+            (phone, chat_id),
+        )
+        row = await cur.fetchone()
+        return int(row["n"]) if row and row["n"] is not None else 0
+
+    async def get_catchup_cursor(self, phone: str, chat_id: int) -> int:
+        """Курсор догона #1428: ниже MAX журнала — живые вставки его не двигают.
+
+        Сдвигается только после успешного persist страницы догона, поэтому
+        сообщение, пропущенное в даунтайм и записанное живьём соседом сверху,
+        остаётся достижимым для следующего прохода.
+        """
+        cur = await self._db.execute(
+            "SELECT cursor FROM dm_catchup_cursors WHERE phone = ? AND chat_id = ?",
+            (phone, chat_id),
+        )
+        row = await cur.fetchone()
+        return int(row["cursor"]) if row else 0
+
+    async def set_catchup_cursor(self, phone: str, chat_id: int, cursor: int) -> None:
+        """Сдвинуть курсор догона после успешного persist страницы (upsert)."""
+        assert self._database is not None, (
+            "IncomingDmsRepository.set_catchup_cursor requires a Database reference"
+        )
+        await self._database.execute_write(
+            """
+            INSERT INTO dm_catchup_cursors (phone, chat_id, cursor, updated_at)
+            VALUES (?, ?, ?, datetime('now'))
+            ON CONFLICT(phone, chat_id)
+            DO UPDATE SET cursor = excluded.cursor, updated_at = datetime('now')
+            """,
+            (phone, chat_id, int(cursor)),
+        )
+
+    async def prune_expired(
+        self, older_than_seconds: int = INCOMING_DM_JOURNAL_TTL_SECONDS
+    ) -> int:
+        """Удалить записи старше `older_than_seconds`; вернуть число удалённых."""
+        assert self._database is not None, (
+            "IncomingDmsRepository.prune_expired requires a Database reference"
+        )
+        cur = await self._database.execute_write(
+            _PRUNE_SQL, (f"-{older_than_seconds} seconds",)
+        )
+        return cur.rowcount
+
+    async def count_unprocessed(self) -> int:
+        """Число ещё не разобранных записей журнала (для снапшота статуса слушателя)."""
+        cur = await self._db.execute(
+            "SELECT COUNT(*) AS n FROM incoming_dms WHERE processed = 0"
+        )
+        row = await cur.fetchone()
+        return int(row["n"]) if row else 0
+
+    async def mark_processed(self, phone: str, chat_id: int, message_ids: list[int]) -> int:
+        """Пометить сообщения одного диалога обработанными; вернуть число обновлённых."""
+        assert self._database is not None, (
+            "IncomingDmsRepository.mark_processed requires a Database reference"
+        )
+        if not message_ids:
+            return 0
+        cur = await self._database.executemany_write(
+            "UPDATE incoming_dms SET processed = 1 "
+            "WHERE phone = ? AND chat_id = ? AND message_id = ?",
+            [(phone, chat_id, message_id) for message_id in message_ids],
+        )
+        return cur.rowcount

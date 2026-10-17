@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-SRC_DIR = Path(__file__).resolve().parent.parent / "src"
+SRC_DIR = Path(__file__).resolve().parent.parent / "tg_agent"
 
 
 def _iter_py_sources() -> list[Path]:

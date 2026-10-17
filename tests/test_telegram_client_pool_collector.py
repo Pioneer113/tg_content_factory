@@ -36,21 +36,6 @@ from telethon.tl.types import (
 )
 from telethon_floodgate import HandledFloodWaitError
 
-from src.config import SchedulerConfig, TelegramRuntimeConfig
-from src.models import Account, Channel, ChannelStats
-from src.telegram.backends import TelegramTransportSession
-from src.telegram.client_pool import (
-    ClientPool,
-    StatsClientAvailability,
-)
-from src.telegram.collector import (
-    AllCollectionClientsFloodedError,
-    AllStatsClientsFloodedError,
-    Collector,
-    NoActiveCollectionClientsError,
-    NoActiveStatsClientsError,
-)
-from src.telegram.collector_resolve import _resolve_by_numeric
 from tests.helpers import (
     AsyncIterEmpty,
     AsyncIterMessages,
@@ -58,6 +43,21 @@ from tests.helpers import (
     make_mock_pool,
     wait_until,
 )
+from tg_agent.config import SchedulerConfig, TelegramRuntimeConfig
+from tg_agent.models import Account, Channel, ChannelStats
+from tg_agent.telegram.backends import TelegramTransportSession
+from tg_agent.telegram.client_pool import (
+    ClientPool,
+    StatsClientAvailability,
+)
+from tg_agent.telegram.collector import (
+    AllCollectionClientsFloodedError,
+    AllStatsClientsFloodedError,
+    Collector,
+    NoActiveCollectionClientsError,
+    NoActiveStatsClientsError,
+)
+from tg_agent.telegram.collector_resolve import _resolve_by_numeric
 
 # ---------------------------------------------------------------------------
 # ClientPool fixtures
@@ -313,7 +313,7 @@ async def test_warm_all_dialogs_logs_when_preferred_phone_persist_fails(
     )
 
     with patch.object(pool, "get_client_by_phone", return_value=(session, "+7001")):
-        with caplog.at_level(logging.DEBUG, logger="src.telegram.pool_dialogs"):
+        with caplog.at_level(logging.DEBUG, logger="tg_agent.telegram.pool_dialogs"):
             await pool.warm_all_dialogs()
 
     # In-memory map is still updated despite the DB failure...
@@ -1550,7 +1550,7 @@ async def test_remove_client_disconnect_timeout_marks_client_removed(pool, monke
     async def _hung_disconnect():
         await asyncio.Event().wait()
 
-    monkeypatch.setattr("src.telegram.pool_lifecycle.REMOVE_CLIENT_DISCONNECT_TIMEOUT_SEC", 0.01)
+    monkeypatch.setattr("tg_agent.telegram.pool_lifecycle.REMOVE_CLIENT_DISCONNECT_TIMEOUT_SEC", 0.01)
     client = AsyncMock()
     client.disconnect = AsyncMock(side_effect=_hung_disconnect)
     pool.clients["+7001"] = TelegramTransportSession(client, disconnect_on_close=False)
@@ -1871,7 +1871,7 @@ async def test_get_forum_topics_channel_invalid_returns_empty_without_traceback(
             "fetch_forum_topics",
             new=AsyncMock(side_effect=ChannelInvalidError(request=None)),
         ),
-        caplog.at_level(logging.INFO, logger="src.telegram.pool_dialogs"),
+        caplog.at_level(logging.INFO, logger="tg_agent.telegram.pool_dialogs"),
     ):
         result = await pool.get_forum_topics(1)
 
@@ -2543,7 +2543,7 @@ async def test_collect_all_stats_defers_on_flood_without_sleep(monkeypatch):
     collector = Collector(pool, db, config)
 
     sleep = AsyncMock()
-    monkeypatch.setattr("src.telegram.collector_mixins.stats.asyncio.sleep", sleep)
+    monkeypatch.setattr("tg_agent.telegram.collector_mixins.stats.asyncio.sleep", sleep)
 
     next_at = datetime.now(timezone.utc) + timedelta(hours=1)
 
@@ -2922,7 +2922,7 @@ async def test_collect_channel_logs_when_clearing_preferred_phone_fails(caplog):
     # The TOCTOU-safe clear now lives in forget_channel_phone; its DB write failure
     # must still be VISIBLE at WARNING (not silently swallowed at DEBUG) or #676
     # regresses. Assert the warning surfaces from the forget_channel_phone source.
-    with caplog.at_level(logging.WARNING, logger="src.telegram.pool_dialogs"):
+    with caplog.at_level(logging.WARNING, logger="tg_agent.telegram.pool_dialogs"):
         result = await collector._collect_channel(channel)
 
     # Collection still degrades gracefully (no crash, channel quarantined)...
@@ -2974,7 +2974,7 @@ async def test_collect_channel_logs_when_persisting_rediscovered_phone_fails(cap
 
     collector = Collector(pool, db, SchedulerConfig())
     with patch.object(collector, "_discover_phone_for_channel", AsyncMock(return_value="+7002")):
-        with caplog.at_level(logging.WARNING, logger="src.telegram.collector"):
+        with caplog.at_level(logging.WARNING, logger="tg_agent.telegram.collector"):
             # Iteration 1 rediscovers +7002 (logging the failed persist), then
             # `continue`. Iteration 2 finds the preferred phone unavailable and the
             # #1245 fallback empty, so the loop ultimately raises. We only care that
@@ -3156,7 +3156,7 @@ async def test_transient_owner_flood_does_not_deactivate_private_channel(caplog)
     pool._lease_pool.get_account = AsyncMock(return_value=None)
 
     collector = Collector(pool, db, SchedulerConfig())
-    with caplog.at_level(logging.WARNING, logger="src.telegram.collector"):
+    with caplog.at_level(logging.WARNING, logger="tg_agent.telegram.collector"):
         result = await collector._collect_channel(channel)
 
     # This pass collects nothing (owner flooded), but the channel survives intact.
@@ -3204,7 +3204,7 @@ async def test_kicked_owner_account_is_quarantined_when_no_rediscovery(caplog):
     collector = Collector(pool, db, SchedulerConfig())
     # No other account can resolve it → rediscovery finds nothing → quarantine.
     with patch.object(collector, "_discover_phone_for_channel", AsyncMock(return_value=None)):
-        with caplog.at_level(logging.WARNING, logger="src.telegram.collector"):
+        with caplog.at_level(logging.WARNING, logger="tg_agent.telegram.collector"):
             result = await collector._collect_channel(channel)
 
     assert result == 0
@@ -3259,7 +3259,7 @@ async def test_dead_preferred_owner_deactivates_not_sticks_active(caplog):
     # No live account can rediscover the dead-owner channel, but this remains
     # an uncertain collection state rather than an operator deactivation.
     with patch.object(collector, "_discover_phone_for_channel", AsyncMock(return_value=None)):
-        with caplog.at_level(logging.WARNING, logger="src.telegram.collector"):
+        with caplog.at_level(logging.WARNING, logger="tg_agent.telegram.collector"):
             result = await collector._collect_channel(channel)
 
     assert result == 0

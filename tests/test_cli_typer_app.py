@@ -4,8 +4,8 @@ These tests stand up the ``typer.testing.CliRunner`` infrastructure *before* the
 first command is migrated, so Waves 1–4 can be written test-first. They cover the
 scaffold contract only:
 
-* ``--version`` prints ``src.__version__`` and exits (the version string is the
-  hard parity invariant; the program-name prefix is intentionally ``src``).
+* ``--version`` prints ``tg_agent.__version__`` and exits (the version string is the
+  hard parity invariant; the program-name prefix is intentionally ``tg-agent``, #1448).
 * ``--help`` / no-args show usage without running startup side effects.
 * ``apply_startup`` exports ``TG_CONFIG_PATH`` as an abspath (the one side effect
   the whole migration depends on) and is the argparse-identical place for it —
@@ -30,9 +30,9 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from src import __version__
-from src.cli import typer_app
-from src.cli.typer_app import DEFAULT_CONFIG, app, apply_startup, main_callback, run_async
+from tg_agent import __version__
+from tg_agent.cli import typer_app
+from tg_agent.cli.typer_app import DEFAULT_CONFIG, app, apply_startup, main_callback, run_async
 
 runner = CliRunner()
 
@@ -64,15 +64,16 @@ def _app_with_probe() -> typer.Typer:
 
 class TestGlobalOptions:
     def test_version_flag_prints_version_and_exits(self):
-        """--version prints ``src.__version__`` and exits 0."""
+        """--version prints ``tg_agent.__version__`` and exits 0."""
         result = runner.invoke(app, ["--version"])
         assert result.exit_code == 0
         # The version string itself is the hard invariant from #1120 (``--version``
-        # via ``src.__version__``). The ``src`` program-name prefix is intentional
-        # and differs from argparse's ``%(prog)s`` (``main.py``) banner — only the
-        # version component must match across the two entry points.
+        # via ``tg_agent.__version__``). The ``tg-agent`` program-name prefix is
+        # intentional (#1448: it echoes the distribution name) and differs from
+        # argparse's ``%(prog)s`` (``main.py``) banner — only the version component
+        # must match across the two entry points.
         assert __version__ in result.output
-        assert result.output.strip() == f"src {__version__}"
+        assert result.output.strip() == f"tg-agent {__version__}"
 
     def test_version_flag_skips_startup_side_effects(self):
         """--version is eager: logging/data-dirs/dotenv never run for it."""
@@ -184,7 +185,7 @@ class TestStartupSideEffects:
             result = runner.invoke(_app_with_probe(), ["--config", "x.yaml", "probe"])
 
         assert result.exit_code == 0
-        # Same trio of side effects as src/cli/main.py::main(), and dotenv is
+        # Same trio of side effects as tg_agent/cli/main.py::main(), and dotenv is
         # passed the raw config path (not the abspath), matching main().
         mock_dotenv.assert_called_once_with("x.yaml")
         mock_log.assert_called_once_with()

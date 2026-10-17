@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from src.scheduler.service import SchedulerManager
+from tg_agent.scheduler.service import SchedulerManager
 
 
 class FakeJob:

@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import os
 
-from src.services.provider_service import RuntimeProviderRegistry, build_provider_service
+from tg_agent.services.provider_service import RuntimeProviderRegistry, build_provider_service
 
 
 def test_explicit_env_registers_openai_provider():
@@ -128,7 +128,7 @@ def test_registry_body_has_no_os_environ_reads():
 
 def test_make_service_module_keeps_os_import_for_factory():
     """Sanity: the factory still imports os to snapshot the process env."""
-    import src.services.provider_service as mod
+    import tg_agent.services.provider_service as mod
 
     assert hasattr(mod, "os")
     assert mod.os is os

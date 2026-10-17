@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.services.content_calendar_service import (
+from tg_agent.services.content_calendar_service import (
     CalendarDay,
     CalendarEvent,
     ContentCalendarService,

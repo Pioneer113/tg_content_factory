@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.web.scheduler import forms
+from tg_agent.web.scheduler import forms
 
 
 @pytest.mark.parametrize(

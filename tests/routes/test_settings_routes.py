@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.models import RuntimeSnapshot
-from src.security import SessionCipher
-from src.services.image_provider_service import ImageProviderConfig, ImageProviderService
+from tg_agent.models import RuntimeSnapshot
+from tg_agent.security import SessionCipher
+from tg_agent.services.image_provider_service import ImageProviderConfig, ImageProviderService
 
 
 @pytest.fixture
@@ -33,10 +33,10 @@ async def _seed_image_provider_for_decrypt_failure(route_client, db, provider: s
 async def test_settings_page_renders(route_client):
     """Test settings page renders."""
     with patch(
-        "src.web.settings.handlers.ProviderConfigService.load_provider_configs",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_provider_configs",
         AsyncMock(return_value=[]),
     ), patch(
-        "src.web.settings.handlers.ProviderConfigService.load_model_cache",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_model_cache",
         AsyncMock(return_value={}),
     ):
         resp = await route_client.get("/settings/")
@@ -47,10 +47,10 @@ async def test_settings_page_renders(route_client):
 async def test_settings_shows_accounts(route_client):
     """Test settings page shows accounts."""
     with patch(
-        "src.web.settings.handlers.ProviderConfigService.load_provider_configs",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_provider_configs",
         AsyncMock(return_value=[]),
     ), patch(
-        "src.web.settings.handlers.ProviderConfigService.load_model_cache",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_model_cache",
         AsyncMock(return_value={}),
     ):
         resp = await route_client.get("/settings/")
@@ -69,10 +69,10 @@ async def test_settings_degrades_when_account_session_key_is_wrong(route_client,
     db._accounts._session_cipher = SessionCipher("wrong-session-key")
 
     with patch(
-        "src.web.settings.handlers.ProviderConfigService.load_provider_configs",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_provider_configs",
         AsyncMock(return_value=[]),
     ), patch(
-        "src.web.settings.handlers.ProviderConfigService.load_model_cache",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_model_cache",
         AsyncMock(return_value={}),
     ):
         resp = await route_client.get("/settings/")
@@ -92,10 +92,10 @@ async def test_settings_degrades_for_image_provider_only_key_failure(route_clien
     await _seed_image_provider_for_decrypt_failure(route_client, db)
 
     with patch(
-        "src.web.settings.handlers.ProviderConfigService.load_provider_configs",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_provider_configs",
         AsyncMock(return_value=[]),
     ), patch(
-        "src.web.settings.handlers.ProviderConfigService.load_model_cache",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_model_cache",
         AsyncMock(return_value={}),
     ):
         resp = await route_client.get("/settings/")
@@ -118,10 +118,10 @@ async def test_settings_degrades_with_separate_telegram_and_image_warnings(route
     await _seed_image_provider_for_decrypt_failure(route_client, db)
 
     with patch(
-        "src.web.settings.handlers.ProviderConfigService.load_provider_configs",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_provider_configs",
         AsyncMock(return_value=[]),
     ), patch(
-        "src.web.settings.handlers.ProviderConfigService.load_model_cache",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_model_cache",
         AsyncMock(return_value={}),
     ):
         resp = await route_client.get("/settings/")
@@ -154,10 +154,10 @@ async def test_settings_shows_flood_banner_and_account_availability(route_client
         await db.update_account_flood(acc.phone, future)
 
     with patch(
-        "src.web.settings.handlers.ProviderConfigService.load_provider_configs",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_provider_configs",
         AsyncMock(return_value=[]),
     ), patch(
-        "src.web.settings.handlers.ProviderConfigService.load_model_cache",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_model_cache",
         AsyncMock(return_value={}),
     ):
         resp = await route_client.get("/settings/")
@@ -171,10 +171,10 @@ async def test_settings_shows_flood_banner_and_account_availability(route_client
 async def test_settings_msg_param(route_client):
     """Test settings page with message param."""
     with patch(
-        "src.web.settings.handlers.ProviderConfigService.load_provider_configs",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_provider_configs",
         AsyncMock(return_value=[]),
     ), patch(
-        "src.web.settings.handlers.ProviderConfigService.load_model_cache",
+        "tg_agent.web.settings.handlers.ProviderConfigService.load_model_cache",
         AsyncMock(return_value={}),
     ):
         resp = await route_client.get("/settings/?msg=credentials_saved")
@@ -321,9 +321,9 @@ async def test_save_agent_backend(route_client, db):
 async def test_save_notification_account(route_client, db):
     """Test save notification account."""
     with patch(
-        "src.web.settings.handlers.deps.get_notification_target_service"
+        "tg_agent.web.settings.handlers.deps.get_notification_target_service"
     ) as mock_svc, patch(
-        "src.web.settings.handlers.deps.get_notifier"
+        "tg_agent.web.settings.handlers.deps.get_notifier"
     ) as mock_notifier:
         mock_svc.return_value.set_configured_phone = AsyncMock()
         mock_notifier.return_value = None
@@ -424,7 +424,7 @@ async def test_save_semantic_search_reset_index(route_client, db):
 async def test_run_semantic_index(route_client, db):
     """Test running semantic index."""
     with patch(
-        "src.web.settings.handlers.EmbeddingService.index_pending_messages",
+        "tg_agent.web.settings.handlers.EmbeddingService.index_pending_messages",
         AsyncMock(return_value=5),
     ):
         resp = await route_client.post(
@@ -441,7 +441,7 @@ async def test_run_semantic_index(route_client, db):
 async def test_run_semantic_index_with_reset(route_client, db):
     """Test running semantic index with reset."""
     with patch(
-        "src.web.settings.handlers.EmbeddingService.index_pending_messages",
+        "tg_agent.web.settings.handlers.EmbeddingService.index_pending_messages",
         AsyncMock(return_value=3),
     ):
         resp = await route_client.post(
@@ -537,7 +537,7 @@ async def test_save_agent_logs_rejected_deepagents_override(route_client, db, ca
     """Rejected deepagents override should be written to logs."""
     await db.set_setting("agent_dev_mode_enabled", "1")
 
-    with caplog.at_level(logging.WARNING, logger="src.web.routes.settings"):
+    with caplog.at_level(logging.WARNING, logger="tg_agent.web.routes.settings"):
         resp = await route_client.post(
             "/settings/save-agent",
             data={
@@ -560,7 +560,7 @@ async def test_add_agent_provider_writes_disabled(route_client, db):
     """Test add agent provider when writes are disabled."""
     await db.set_setting("agent_dev_mode_enabled", "1")
 
-    with patch("src.web.settings.handlers.ProviderConfigService") as mock_service_cls:
+    with patch("tg_agent.web.settings.handlers.ProviderConfigService") as mock_service_cls:
         mock_service = MagicMock()
         mock_service.writes_enabled = False
         mock_service.load_provider_configs = AsyncMock(return_value=[])
@@ -580,7 +580,7 @@ async def test_add_agent_provider_dev_mode_required(route_client, db):
     """Test add agent provider requires dev mode."""
     await db.set_setting("agent_dev_mode_enabled", "0")
 
-    with patch("src.web.settings.handlers.ProviderConfigService") as mock_service_cls:
+    with patch("tg_agent.web.settings.handlers.ProviderConfigService") as mock_service_cls:
         mock_service = MagicMock()
         mock_service.writes_enabled = True  # Set writes_enabled first
         mock_service.load_provider_configs = AsyncMock(return_value=[])
@@ -601,7 +601,7 @@ async def test_save_agent_providers_writes_disabled(route_client, db):
     """Test save agent providers when writes are disabled."""
     await db.set_setting("agent_dev_mode_enabled", "1")
 
-    with patch("src.web.settings.handlers.ProviderConfigService") as mock_service_cls:
+    with patch("tg_agent.web.settings.handlers.ProviderConfigService") as mock_service_cls:
         mock_service = MagicMock()
         mock_service.writes_enabled = False
         mock_service.load_provider_configs = AsyncMock(return_value=[])
@@ -621,7 +621,7 @@ async def test_delete_agent_provider_writes_disabled(route_client, db):
     """Test delete agent provider when writes are disabled."""
     await db.set_setting("agent_dev_mode_enabled", "1")
 
-    with patch("src.web.settings.handlers.ProviderConfigService") as mock_service_cls:
+    with patch("tg_agent.web.settings.handlers.ProviderConfigService") as mock_service_cls:
         mock_service = MagicMock()
         mock_service.writes_enabled = False
         mock_service.load_provider_configs = AsyncMock(return_value=[])
@@ -692,7 +692,7 @@ async def test_test_all_agent_provider_models_dev_mode_required(route_client, db
     """Test test all requires dev mode."""
     await db.set_setting("agent_dev_mode_enabled", "0")
 
-    with patch("src.web.settings.handlers.ProviderConfigService") as mock_service_cls:
+    with patch("tg_agent.web.settings.handlers.ProviderConfigService") as mock_service_cls:
         mock_service = MagicMock()
         mock_service.writes_enabled = True  # Must be True to reach dev_mode check
         mock_service_cls.return_value = mock_service
@@ -718,7 +718,7 @@ async def test_test_all_status_dev_mode_required(route_client, db):
     """Test test all status requires dev mode."""
     await db.set_setting("agent_dev_mode_enabled", "0")
 
-    with patch("src.web.settings.handlers.ProviderConfigService") as mock_service_cls:
+    with patch("tg_agent.web.settings.handlers.ProviderConfigService") as mock_service_cls:
         mock_service = MagicMock()
         mock_service.writes_enabled = True  # Must be True to reach dev_mode check
         mock_service_cls.return_value = mock_service

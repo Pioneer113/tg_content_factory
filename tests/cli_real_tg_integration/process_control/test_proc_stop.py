@@ -1,7 +1,7 @@
 """`stop` — terminate a running serve process via the PID file.
 
 1. Spawn `serve --no-worker` and wait for /health.
-2. Spawn `python -m src.main stop`.
+2. Spawn `python -m tg_agent.main stop`.
 3. Assert that the Popen handle eventually reports a poll() != None.
 """
 import subprocess

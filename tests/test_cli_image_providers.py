@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.cli.commands.image import _build_image_service
+from tg_agent.cli.commands.image import _build_image_service
 
 
 @pytest.mark.anyio
@@ -19,7 +19,7 @@ async def test_build_image_service_uses_db_configured_providers():
     provider_svc.build_adapters = MagicMock(return_value=adapters)
 
     with patch(
-        "src.services.image_provider_service.ImageProviderService", return_value=provider_svc
+        "tg_agent.services.image_provider_service.ImageProviderService", return_value=provider_svc
     ):
         svc = await _build_image_service(db, config)
 
@@ -35,7 +35,7 @@ async def test_build_image_service_falls_back_to_env_when_no_db_providers():
     provider_svc.build_adapters = MagicMock(return_value={})
 
     with patch(
-        "src.services.image_provider_service.ImageProviderService", return_value=provider_svc
+        "tg_agent.services.image_provider_service.ImageProviderService", return_value=provider_svc
     ):
         svc = await _build_image_service(db, config)
 

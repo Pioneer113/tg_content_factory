@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.config import AppConfig
 from tests.helpers import build_web_app, cli_ns, make_auth_client
+from tg_agent.config import AppConfig
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -32,7 +32,7 @@ class _FakeGatedIterator:
     async def __anext__(self):
         return await self._agen.__anext__()
 
-_SVC_DIALOGS = "src.services.channel_service.ChannelService.get_my_dialogs"
+_SVC_DIALOGS = "tg_agent.services.channel_service.ChannelService.get_my_dialogs"
 
 _FAKE_DIALOGS = [
     {
@@ -85,14 +85,14 @@ def _run_cli(action, pool, db, extra_ns=None):
         return AppConfig(), db
 
     async def fake_init_pool(config, database):
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
         return TelegramAuth(0, ""), pool
 
     with (
-        patch("src.cli.runtime.init_db", side_effect=fake_init_db),
-        patch("src.cli.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.runtime.init_db", side_effect=fake_init_db),
+        patch("tg_agent.cli.runtime.init_pool", side_effect=fake_init_pool),
     ):
-        from src.cli.commands.dialogs import run
+        from tg_agent.cli.commands.dialogs import run
         run(ns)
 
 
@@ -176,7 +176,7 @@ class TestCliRefresh:
         pool, _ = _mock_pool()
         partial_result = type("PartialDialogs", (list,), {"partial": True})([{"channel_id": 1}])
         with patch(
-            "src.services.channel_service.ChannelService.get_my_dialogs",
+            "tg_agent.services.channel_service.ChannelService.get_my_dialogs",
             new_callable=AsyncMock,
             return_value=partial_result,
         ):
@@ -533,7 +533,7 @@ class TestCliRead:
     """CLI dialogs read — live history via tg_messenger (src/telegram/dm_history.py)."""
 
     def _client_with_history(self, messages):
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         pool, client = _mock_pool()
         pool._auth = TelegramAuth(12345, "fakehash")
@@ -595,7 +595,7 @@ class TestCliRead:
         assert "No connected accounts." in capsys.readouterr().out
 
     def test_read_error(self, cli_db, capsys):
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         pool, client = _mock_pool()
         pool._auth = TelegramAuth(12345, "fakehash")
@@ -965,7 +965,7 @@ class TestCliCreateChannel:
         client.create_channel = AsyncMock(return_value=mock_result)
         client.update_channel_username = AsyncMock()
 
-        with patch("src.cli.commands.dialogs.pool", pool, create=True):
+        with patch("tg_agent.cli.commands.dialogs.pool", pool, create=True):
             _run_cli("create-channel", pool, cli_db, {
                 "phone": _PHONE, "title": "New Channel", "about": "test", "username": "",
             })
@@ -979,7 +979,7 @@ class TestCliCreateChannel:
         client.create_channel = AsyncMock(return_value=mock_result)
         client.update_channel_username = AsyncMock()
 
-        with patch("src.cli.commands.dialogs.pool", pool, create=True):
+        with patch("tg_agent.cli.commands.dialogs.pool", pool, create=True):
             _run_cli("create-group", pool, cli_db, {
                 "phone": _PHONE, "title": "New Group", "about": "test",
             })
@@ -1339,7 +1339,7 @@ class TestWebReadHistory:
     @pytest.mark.anyio
     async def test_read_history_returns_cached_snapshot(self, web_client):
         c, app = web_client
-        from src.models import RuntimeSnapshot
+        from tg_agent.models import RuntimeSnapshot
 
         payload = {"messages": [{"id": 1, "text": "hi"}], "total": 1, "dialog_id": -100777}
         await app.state.db.repos.runtime_snapshots.upsert_snapshot(

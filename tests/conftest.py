@@ -12,11 +12,11 @@ import pytest
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 
-from src.config import AppConfig, parse_proxy_url
-from src.database import Database
-from src.telegram.auth import TelegramAuth
-from src.telegram.session_materializer import SessionMaterializer
 from tests.helpers import RealPoolHarness
+from tg_agent.config import AppConfig, parse_proxy_url
+from tg_agent.database import Database
+from tg_agent.telegram.auth import TelegramAuth
+from tg_agent.telegram.session_materializer import SessionMaterializer
 
 os.environ.setdefault("SESSION_ENCRYPTION_KEY", "test-session-encryption-key")
 
@@ -84,7 +84,7 @@ def cli_env(cli_db):
     async def fake_init_db(config_path: str):
         return config, cli_db
 
-    with patch("src.cli.runtime.init_db", side_effect=fake_init_db):
+    with patch("tg_agent.cli.runtime.init_db", side_effect=fake_init_db):
         yield cli_db
 
 
@@ -428,7 +428,7 @@ def no_running_server(request, monkeypatch):
     if any(fixture in request.fixturenames for fixture in REAL_TG_LIVE_FIXTURES):
         return
     monkeypatch.setattr(
-        "src.cli.worker_handoff.serve_is_running", lambda _config: False, raising=False
+        "tg_agent.cli.worker_handoff.serve_is_running", lambda _config: False, raising=False
     )
 
 
@@ -476,7 +476,7 @@ def _enforce_cli_transport(
         return client
 
     monkeypatch.setattr(
-        "src.telegram.backends.telethon_cli_runtime.create_client",
+        "tg_agent.telegram.backends.telethon_cli_runtime.create_client",
         _fake_create_client,
     )
 
@@ -547,7 +547,7 @@ def pin_codex(monkeypatch):
     lru_cache'd predicate), so patch it at the source and drop the cache.
     Returns a ``pin(available: bool)`` callable.
     """
-    from src.services import provider_adapters
+    from tg_agent.services import provider_adapters
 
     def _pin(available: bool) -> None:
         provider_adapters.codex_available.cache_clear()
@@ -567,8 +567,8 @@ async def pipeline_client(tmp_path, real_pool_harness_factory):
     """
     from types import MethodType
 
-    from src.models import Account, Channel
     from tests.helpers import build_web_app, make_auth_client, make_test_config
+    from tg_agent.models import Account, Channel
 
     config = make_test_config(tmp_path)
     harness = real_pool_harness_factory()

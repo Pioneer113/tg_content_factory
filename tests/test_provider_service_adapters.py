@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.services.provider_service import RuntimeProviderRegistry
+from tg_agent.services.provider_service import RuntimeProviderRegistry
 
 # === Z.AI registration failure ===
 
@@ -38,7 +38,7 @@ def test_zai_env_registration_defaults_without_base_url():
 
 def test_context7_registration_failure_path():
     """Context7 adapter registration failure is caught gracefully."""
-    with patch("src.services.provider_adapters.make_context7_adapter", side_effect=ImportError("no ctx7")):
+    with patch("tg_agent.services.provider_adapters.make_context7_adapter", side_effect=ImportError("no ctx7")):
         svc = RuntimeProviderRegistry(env={"CONTEXT7_API_KEY": "ctx7-test-key"})
     assert "context7" not in svc._registry
 
@@ -48,7 +48,7 @@ def test_context7_registration_failure_path():
 
 def test_env_langchain_adapter_registration_does_not_depend_on_provider_adapters():
     """LLM env adapters no longer depend on custom provider_adapters."""
-    with patch.dict("sys.modules", {"src.services.provider_adapters": None}):
+    with patch.dict("sys.modules", {"tg_agent.services.provider_adapters": None}):
         svc = RuntimeProviderRegistry(env={"COHERE_API_KEY": "cohere-test"})
     assert "cohere" in svc._registry
 
@@ -90,7 +90,7 @@ async def test_get_provider_status_list_db_exception():
     svc.db = mock_db
     svc._config = mock_config
 
-    with patch("src.services.agent_provider_service.ProviderConfigService") as mock_cls:
+    with patch("tg_agent.services.agent_provider_service.ProviderConfigService") as mock_cls:
         mock_instance = MagicMock()
         mock_instance.load_provider_configs = AsyncMock(side_effect=Exception("DB error"))
         mock_cls.return_value = mock_instance
@@ -208,7 +208,7 @@ async def test_get_provider_status_list_with_configs():
     cfg3.provider = "no_secrets"
     cfg3.enabled = True
 
-    with patch("src.services.agent_provider_service.ProviderConfigService") as mock_cls:
+    with patch("tg_agent.services.agent_provider_service.ProviderConfigService") as mock_cls:
         mock_instance = MagicMock()
         mock_instance.load_provider_configs = AsyncMock(return_value=[cfg1, cfg2, cfg3])
         mock_cls.return_value = mock_instance

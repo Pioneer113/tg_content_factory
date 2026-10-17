@@ -10,12 +10,12 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from telethon.errors import FloodWaitError
 
-from src.models import Message
-from src.search import telegram_search as telegram_search_module
-from src.search.engine import SearchEngine
-from src.services.embedding_service import EmbeddingService
-from src.web.routes.search import _extract_length
 from tests.helpers import AsyncIterMessages, FakeCliTelethonClient
+from tg_agent.models import Message
+from tg_agent.search import telegram_search as telegram_search_module
+from tg_agent.search.engine import SearchEngine
+from tg_agent.services.embedding_service import EmbeddingService
+from tg_agent.web.routes.search import _extract_length
 
 
 @pytest.mark.anyio
@@ -80,7 +80,7 @@ async def test_search_local_pagination(db):
 
 @pytest.mark.anyio
 async def test_search_local_maps_channel_title(db):
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     await db.add_channel(Channel(channel_id=-100123, title="Crypto News", username="crypto_news"))
     messages = [
@@ -305,7 +305,7 @@ async def test_search_telegram_quota_timeout_returns_diagnostic_error_and_releas
     caplog,
 ):
     monkeypatch.setattr(telegram_search_module, "PREMIUM_SEARCH_RPC_TIMEOUT_SEC", 0.01)
-    caplog.set_level(logging.WARNING, logger="src.search.telegram_search")
+    caplog.set_level(logging.WARNING, logger="tg_agent.search.telegram_search")
 
     request_names: list[str] = []
 
@@ -353,7 +353,7 @@ async def test_search_telegram_rpc_timeout_returns_diagnostic_error_and_releases
     caplog,
 ):
     monkeypatch.setattr(telegram_search_module, "PREMIUM_SEARCH_RPC_TIMEOUT_SEC", 0.01)
-    caplog.set_level(logging.WARNING, logger="src.search.telegram_search")
+    caplog.set_level(logging.WARNING, logger="tg_agent.search.telegram_search")
 
     async def _invoke(request):
         if request.__class__.__name__ == "CheckSearchPostsFloodRequest":
@@ -416,7 +416,7 @@ async def test_search_telegram_success_logs_safe_diagnostics(
         ),
     )
 
-    caplog.set_level(logging.INFO, logger="src.search.telegram_search")
+    caplog.set_level(logging.INFO, logger="tg_agent.search.telegram_search")
     engine = SearchEngine(db, pool=harness.pool)
     result = await engine.search_telegram("AI", limit=10)
 

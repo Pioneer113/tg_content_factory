@@ -118,9 +118,9 @@ def _install_fake_codex(
 
 
 def _make_backend():
-    from src.agent.codex_backend import CodexSdkBackend
-    from src.config import AppConfig
-    from src.database import Database
+    from tg_agent.agent.codex_backend import CodexSdkBackend
+    from tg_agent.config import AppConfig
+    from tg_agent.database import Database
 
     return CodexSdkBackend(Database(":memory:"), AppConfig())
 
@@ -183,7 +183,7 @@ async def test_chat_stream_wires_project_mcp_server(monkeypatch):
     cfg = captured["start_kwargs"]["config"]
     assert "telegram_db" in cfg["mcp_servers"]
     server = cfg["mcp_servers"]["telegram_db"]
-    assert server["args"][:2] == ["-m", "src.main"]
+    assert server["args"][:2] == ["-m", "tg_agent.main"]
     assert "mcp-server" in server["args"]
 
 
@@ -381,7 +381,7 @@ def test_notification_methods_match_sdk_registry():
     pytest.importorskip("openai_codex")
     from openai_codex.generated import notification_registry as nr
 
-    from src.agent import codex_backend as cb
+    from tg_agent.agent import codex_backend as cb
 
     registry = nr.NOTIFICATION_MODELS
     consumed = {

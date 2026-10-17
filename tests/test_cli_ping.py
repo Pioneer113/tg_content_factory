@@ -14,9 +14,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import typer
 
-from src.cli.commands import ping as ping_cli
-from src.models import CollectionTaskType, DialogMessage, MessagesResult
-from src.services.telegram_actions import TelegramActionService
+from tg_agent.cli.commands import ping as ping_cli
+from tg_agent.models import CollectionTaskType, DialogMessage, MessagesResult
+from tg_agent.services.telegram_actions import TelegramActionService
 
 NOW = datetime(2026, 10, 17, 12, 0, tzinfo=timezone.utc)
 
@@ -34,7 +34,7 @@ def _run_ping_impl(coro_factory, cli_db, capsys, *, config_path="cfg"):
     async def fake_init_db(_):
         return None, cli_db
 
-    with patch("src.cli.commands.ping.runtime.init_db", side_effect=fake_init_db):
+    with patch("tg_agent.cli.commands.ping.runtime.init_db", side_effect=fake_init_db):
         ping_cli.run_async(coro_factory())
     return capsys.readouterr().out
 
@@ -111,8 +111,8 @@ def test_cli_create_resolves_username_via_pool(cli_db, capsys):
 
     _reopen(cli_db)
     with (
-        patch("src.cli.commands.ping.runtime.init_db", side_effect=fake_init_db),
-        patch("src.cli.commands.ping.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.ping.runtime.init_db", side_effect=fake_init_db),
+        patch("tg_agent.cli.commands.ping.runtime.init_pool", side_effect=fake_init_pool),
     ):
         ping_cli.run_async(
             ping_cli.create_impl(
@@ -227,13 +227,13 @@ def test_cli_run_due_invokes_service_and_reports(cli_db, capsys):
 
     _reopen(cli_db)
     with (
-        patch("src.cli.commands.ping.runtime.init_db", side_effect=fake_init_db),
-        patch("src.cli.commands.ping.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.ping.runtime.init_db", side_effect=fake_init_db),
+        patch("tg_agent.cli.commands.ping.runtime.init_pool", side_effect=fake_init_pool),
         patch(
-            "src.cli.commands.ping.worker_handoff.serve_is_running", return_value=False
+            "tg_agent.cli.commands.ping.worker_handoff.serve_is_running", return_value=False
         ),
         # run_due_impl импортирует TelegramActionService локально — патчим источник.
-        patch("src.services.telegram_actions.TelegramActionService", return_value=actions),
+        patch("tg_agent.services.telegram_actions.TelegramActionService", return_value=actions),
     ):
         ping_cli.run_async(ping_cli.run_due_impl("cfg"))
 
@@ -263,10 +263,10 @@ def test_cli_run_due_hands_off_to_running_worker(cli_db, capsys):
 
     _reopen(cli_db)
     with (
-        patch("src.cli.commands.ping.runtime.init_db", side_effect=fake_init_db),
-        patch("src.cli.commands.ping.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.ping.runtime.init_db", side_effect=fake_init_db),
+        patch("tg_agent.cli.commands.ping.runtime.init_pool", side_effect=fake_init_pool),
         patch(
-            "src.cli.commands.ping.worker_handoff.serve_is_running", return_value=True
+            "tg_agent.cli.commands.ping.worker_handoff.serve_is_running", return_value=True
         ),
     ):
         ping_cli.run_async(ping_cli.run_due_impl("cfg"))

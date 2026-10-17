@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.services import trend_service as trend_service_module
-from src.services.trend_service import (
+from tg_agent.services import trend_service as trend_service_module
+from tg_agent.services.trend_service import (
     MessageVelocity,
     PeakHour,
     TrendingChannel,
@@ -54,7 +54,7 @@ async def test_get_trending_topics_logs_empty_vocabulary(service, mock_db, caplo
         return_value=[{"text": "alphaword"}, {"text": "bravoword"}, {"text": "charlieword"}]
     )
 
-    with caplog.at_level(logging.DEBUG, logger="src.services.trend_service"):
+    with caplog.at_level(logging.DEBUG, logger="tg_agent.services.trend_service"):
         result = await service.get_trending_topics(days=7, limit=20)
 
     assert result == []

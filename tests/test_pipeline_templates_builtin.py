@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import pytest
 
-from src.database.bundles import PipelineBundle
-from src.models import Account, Channel, PipelineNodeType
-from src.services.pipeline_service import PipelineService, PipelineTargetRef
-from src.services.pipeline_templates_builtin import get_builtin_templates
+from tg_agent.database.bundles import PipelineBundle
+from tg_agent.models import Account, Channel, PipelineNodeType
+from tg_agent.services.pipeline_service import PipelineService, PipelineTargetRef
+from tg_agent.services.pipeline_templates_builtin import get_builtin_templates
 
 
 def test_list_templates_not_empty():
