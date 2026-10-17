@@ -95,7 +95,7 @@ class PingMonitorService:
         )
         last = result.messages[0] if result.messages else None
         if last is None:
-            await self._repo.update(monitor_id, last_checked_at=now)
+            await self._repo.update(monitor_id, last_checked_at=now, error="")
             return
         last_date = normalize_utc(last.date)
         if not last.out:

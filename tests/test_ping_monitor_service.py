@@ -218,6 +218,7 @@ async def test_run_due_reply_older_than_recent_own_message_uses_own_message_anch
 
 
 async def test_run_due_empty_dialog_just_checks_in():
+    # Пустая история — ветка успеха: прошлая ошибка (flood wait и т.п.) очищается.
     monitor = _monitor()
     repo = _repo([monitor])
     actions = _actions(None)
@@ -227,7 +228,7 @@ async def test_run_due_empty_dialog_just_checks_in():
 
     assert checked == 1
     actions.send_message.assert_not_awaited()
-    repo.update.assert_awaited_once_with(1, last_checked_at=NOW)
+    repo.update.assert_awaited_once_with(1, last_checked_at=NOW, error="")
 
 
 async def test_run_due_error_on_one_monitor_does_not_stop_others():
