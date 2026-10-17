@@ -239,7 +239,38 @@ def test_filter_apply_precheck_delegate():
         ):
             result = runner.invoke(app, ["filter", sub])
         assert result.exit_code == 0, (sub, result.output)
-        mock_impl.assert_called_once_with("config.yaml")
+        if sub == "apply":
+            # --whitelist (#1490) добавлен как опция; по умолчанию False.
+            mock_impl.assert_called_once_with("config.yaml", whitelist=False)
+        else:
+            mock_impl.assert_called_once_with("config.yaml")
+
+
+def test_filter_apply_whitelist_forwards():
+    """`filter apply --whitelist` включает whitelist-режим (#1490)."""
+    mock_impl = MagicMock()
+    with (
+        patch("src.cli.typer_commands.filter_cmd.apply_impl", mock_impl),
+        patch("src.cli.typer_commands.run_async"),
+    ):
+        result = runner.invoke(app, ["filter", "apply", "--whitelist"])
+    assert result.exit_code == 0, result.output
+    assert mock_impl.call_args.kwargs == {"whitelist": True}
+
+
+def test_filter_flag_delegates_set_and_unset():
+    """`filter flag <pk> --set/--unset manual` пробрасывает pk и действие (#1499)."""
+    mock_impl = MagicMock()
+    with (
+        patch("src.cli.typer_commands.filter_cmd.flag_impl", mock_impl),
+        patch("src.cli.typer_commands.run_async"),
+    ):
+        set_result = runner.invoke(app, ["filter", "flag", "7", "--set", "manual"])
+        unset_result = runner.invoke(app, ["filter", "flag", "8", "--unset", "manual"])
+    assert set_result.exit_code == 0, set_result.output
+    assert unset_result.exit_code == 0, unset_result.output
+    assert mock_impl.call_args_list[0].kwargs == {"pk": 7, "set_flag": "manual", "unset_flag": None}
+    assert mock_impl.call_args_list[1].kwargs == {"pk": 8, "set_flag": None, "unset_flag": "manual"}
 
 
 def test_filter_suspects_delegates():

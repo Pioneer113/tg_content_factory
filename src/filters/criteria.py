@@ -84,6 +84,20 @@ KEEP_TAG = "keep"
 # `filter suspects` (read-only, поведение сбора не меняет).
 AUTHOR_CONTENT_TAG = "авторский контент"
 
+# Whitelist-режим (#1490, MVP): `filter apply --whitelist` переворачивает модель —
+# канал БЕЗ тега AUTHOR_CONTENT_TAG получает is_filtered=1 + этот флаг («не похож
+# на нормальный материал»), тегированные — is_filtered=0. Флаг не производит
+# analyze/apply (blacklist-цикл не знает о нём и сносит при следующем прогоне):
+# whitelist — явный режим, перезапускаемый вручную. Открытые вопросы дизайна
+# (глобальный переключатель vs флаг-режим, миграция базы, взаимодействие
+# с blacklist) сознательно не решены — см. PR #1490.
+WHITELIST_FLAG = "no_author_content"
+
+# Операторские sticky-флаги (#1499): единственное, что можно ставить руками через
+# `filter flag <pk> --set/--unset`. Системные флаги анализатора
+# (username_changed и т.п.) руками не ставятся — их пишет коллекто/анализатор.
+OPERATOR_STICKY_FLAGS = frozenset({"manual"})
+
 PRECHECK_CROSS_DUPE_SAMPLE = 10  # сколько постов сэмплировать
 PRECHECK_CROSS_DUPE_RATIO = 0.8  # порог совпадений (80%)
 PRECHECK_CROSS_DUPE_MIN_SAMPLE = 5  # минимум текстовых сообщений для вывода
@@ -109,6 +123,7 @@ VALID_FLAGS = frozenset(
         "auto_feed",
         "low_engagement",
         "forwarder",
+        "no_author_content",
     }
 )
 

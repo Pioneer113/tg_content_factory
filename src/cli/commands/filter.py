@@ -21,7 +21,11 @@ from src.cli.commands.common import (
 )
 from src.database.bundles import ChannelBundle
 from src.filters.analyzer import ChannelAnalyzer
-from src.filters.criteria import AUTHOR_CONTENT_TAG, DEFAULT_QUICK_SAMPLE_SIZE
+from src.filters.criteria import (
+    AUTHOR_CONTENT_TAG,
+    DEFAULT_QUICK_SAMPLE_SIZE,
+    OPERATOR_STICKY_FLAGS,
+)
 from src.services.channel_service import ChannelService
 from src.services.filter_deletion_service import FilterDeletionService
 
@@ -113,11 +117,23 @@ async def analyze_impl(config_path: str, *, quick: bool = False, sample_size: in
         await db.close()
 
 
-async def apply_impl(config_path: str) -> None:
-    """Analyze and mark filtered channels."""
+async def apply_impl(config_path: str, *, whitelist: bool = False) -> None:
+    """Analyze and mark filtered channels.
+
+    whitelist=True switches to the whitelist mode (#1490): channels WITHOUT the
+    «авторский контент» trust tag get filtered (no_author_content), tagged ones
+    are unfiltered — metrics/analyze are not used, the verdict is tag-only.
+    """
     _, db = await runtime.init_db(config_path)
     try:
         analyzer = ChannelAnalyzer(db)
+        if whitelist:
+            count = await analyzer.apply_whitelist()
+            print(
+                f"Whitelist applied: {count} channels filtered without the "
+                "«авторский контент» trust tag."
+            )
+            return
         report = await analyzer.analyze_all()
         count = await analyzer.apply_filters(report)
         print(f"Applied filters: {count} channels marked as filtered.")
@@ -215,6 +231,37 @@ async def toggle_impl(config_path: str, *, pk: int) -> None:
         await db.set_channel_filtered(pk, new_state, origin="human", actor="cli")
         status = "filtered" if new_state else "unfiltered"
         print(f"Channel pk={pk} ({channel.title}) marked as {status}.")
+    finally:
+        await db.close()
+
+
+async def flag_impl(
+    config_path: str,
+    *,
+    pk: int,
+    set_flag: str | None = None,
+    unset_flag: str | None = None,
+) -> None:
+    """Set/unset an operator sticky filter flag (#1499) — durable across apply cycles."""
+    if (set_flag is None) == (unset_flag is None):
+        print("Usage: filter flag <pk> --set manual | --unset manual (exactly one action).")
+        return
+    action, flag = ("set", set_flag) if set_flag is not None else ("unset", unset_flag)
+    if flag not in OPERATOR_STICKY_FLAGS:
+        valid = ", ".join(sorted(OPERATOR_STICKY_FLAGS))
+        print(f"Unknown operator flag '{flag}'. Sticky flags settable by hand: {valid}.")
+        return
+    _, db = await runtime.init_db(config_path)
+    try:
+        applied = await db.repos.channels.merge_filter_flag(pk, flag, add=action == "set")
+        if applied is False:
+            print(f"Channel pk={pk} not found.")
+        elif applied is None:
+            print(f"Channel pk={pk}: flag '{flag}' was not set; nothing changed.")
+        elif action == "set":
+            print(f"Channel pk={pk}: sticky flag '{flag}' set (is_filtered=1, origin=human).")
+        else:
+            print(f"Channel pk={pk}: sticky flag '{flag}' unset (back under auto verdicts).")
     finally:
         await db.close()
 
@@ -344,7 +391,7 @@ def run(args: argparse.Namespace) -> None:
     """
     action = getattr(args, "filter_action", None)
     if not action:
-        print("Usage: filter {analyze|apply|reset|purge|hard-delete|suspects}")
+        print("Usage: filter {analyze|apply|reset|precheck|toggle|flag|purge|hard-delete|suspects}")
         return
     if action == "analyze":
         asyncio.run(
@@ -355,13 +402,22 @@ def run(args: argparse.Namespace) -> None:
             )
         )
     elif action == "apply":
-        asyncio.run(apply_impl(args.config))
+        asyncio.run(apply_impl(args.config, whitelist=getattr(args, "whitelist", False)))
     elif action == "precheck":
         asyncio.run(precheck_impl(args.config))
     elif action == "suspects":
         asyncio.run(suspects_impl(args.config))
     elif action == "toggle":
         asyncio.run(toggle_impl(args.config, pk=args.pk))
+    elif action == "flag":
+        asyncio.run(
+            flag_impl(
+                args.config,
+                pk=args.pk,
+                set_flag=getattr(args, "set_flag", None),
+                unset_flag=getattr(args, "unset_flag", None),
+            )
+        )
     elif action == "reset":
         asyncio.run(reset_impl(args.config, pks=getattr(args, "pks", None)))
     elif action == "purge":
@@ -383,8 +439,8 @@ def run(args: argparse.Namespace) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# filter → analyze / apply / reset / precheck / toggle / purge / purge-messages
-#          / hard-delete
+# filter → analyze / apply / reset / precheck / toggle / flag / purge
+#          / purge-messages / hard-delete
 # --------------------------------------------------------------------------- #
 
 filter_app = typer.Typer(no_args_is_help=True, help="Channel content filter")
@@ -413,10 +469,20 @@ def filter_analyze(
 
 
 @filter_app.command("apply")
-def filter_apply(ctx: typer.Context) -> None:
+def filter_apply(
+    ctx: typer.Context,
+    whitelist: bool = typer.Option(
+        False,
+        "--whitelist",
+        help=(
+            "Whitelist mode (#1490): filter channels WITHOUT the «авторский контент» "
+            "tag (no_author_content), unfilter tagged ones; analyze is not run"
+        ),
+    ),
+) -> None:
     """Analyze and mark filtered channels."""
     apply_startup(ctx)
-    run_async(apply_impl(ctx.obj.config))
+    run_async(apply_impl(ctx.obj.config, whitelist=whitelist))
 
 
 @filter_app.command("reset")
@@ -458,6 +524,20 @@ def filter_toggle(
     """Toggle filter for a single channel."""
     apply_startup(ctx)
     run_async(toggle_impl(ctx.obj.config, pk=pk))
+
+
+@filter_app.command("flag")
+def filter_flag(
+    ctx: typer.Context,
+    pk: int = typer.Argument(..., help="Channel primary key"),
+    set_flag: str | None = typer.Option(None, "--set", help="Sticky flag to set (manual)"),
+    unset_flag: str | None = typer.Option(None, "--unset", help="Sticky flag to unset (manual)"),
+) -> None:
+    """Set/unset an operator sticky filter flag (#1499)."""
+    apply_startup(ctx)
+    run_async(
+        flag_impl(ctx.obj.config, pk=pk, set_flag=set_flag, unset_flag=unset_flag)
+    )
 
 
 @filter_app.command("purge")

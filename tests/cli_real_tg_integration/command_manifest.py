@@ -224,6 +224,7 @@ CLI_REAL_TG_MANUAL_OR_EXCLUDED_COMMANDS: dict[tuple[str, ...], str] = {
         "local provenance migration/report; covered by migration and CLI unit tests"
     ),
     ("filter", "hard-delete"): "local hard delete mutation",
+    ("filter", "flag"): "local filter mutation (sticky operator flag #1499)",
     ("filter", "purge"): "local message deletion",
     ("filter", "purge-messages"): "local message deletion",
     ("filter", "reset"): "local filter mutation",

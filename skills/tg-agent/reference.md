@@ -38,7 +38,7 @@ disturbs the live session; when the holder exits, the lock clears on its own.
 ```
 channel list | add | delete | toggle | collect | stats | refresh-types | refresh-meta
 channel import | add-bulk | list-for-import | candidates | tag (list|add|delete|set|get)
-filter analyze | apply | reset | precheck | suspects | toggle | purge | purge-messages | hard-delete
+filter analyze | apply | reset | precheck | suspects | toggle | flag | purge | purge-messages | hard-delete
 ```
 
 - `channel collect [--channel-id ID]` — incremental collection for one channel; without flags
@@ -60,6 +60,16 @@ filter analyze | apply | reset | precheck | suspects | toggle | purge | purge-me
 - `filter suspects` — read-only contradiction report (#1490): channels carrying the
   «авторский контент» trust tag together with filter flags — candidates for a wrong
   automatic filter decision. Changes nothing; review and decide manually.
+- `filter flag <pk> --set manual` / `--unset manual` — set/unset the operator sticky
+  flag (#1499). `--set` marks the channel as a durable human verdict
+  (`is_filtered=1`, `origin=human`); the flag survives reset→apply cycles. `--unset`
+  returns the channel to automatic verdicts. Other flags (analyzer/system) are not
+  settable by hand.
+- `filter apply --whitelist` — whitelist mode (#1490, MVP): filters every channel
+  WITHOUT the «авторский контент» tag (`no_author_content` flag) and unfilters tagged
+  ones (trust beats flags; `keep`-tag escrow and human decisions are respected).
+  Tag-only verdict — `analyze` is not run. Open design questions (default mode,
+  migration, blacklist interplay) are tracked in #1490.
 
 ## reading & search
 

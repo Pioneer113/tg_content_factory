@@ -5,6 +5,7 @@ import time
 
 from src.database import Database
 from src.filters.criteria import (
+    AUTHOR_CONTENT_TAG,
     AUTO_FEED_MIN_MESSAGES,
     AUTO_FEED_THRESHOLD,
     CHAT_NOISE_THRESHOLD,
@@ -21,6 +22,7 @@ from src.filters.criteria import (
     LOW_UNIQUENESS_THRESHOLD,
     NON_CYRILLIC_THRESHOLD,
     SUSPICIOUS_USERNAME_RE,
+    WHITELIST_FLAG,
 )
 from src.filters.models import ChannelFilterResult, FilterReport
 from src.settings_utils import parse_int_setting
@@ -518,6 +520,49 @@ class ChannelAnalyzer:
                     (merged, row["pk"]),
                 )
         return count
+
+    async def apply_whitelist(self) -> int:
+        """Whitelist-режим (#1490, MVP): доверие по тегу «авторский контент».
+
+        Тегированные (AUTHOR_CONTENT_TAG) и keep-эскроу — is_filtered=0: доверие
+        сильнее blacklist-флагов, флаги остаются метками (их видит `filter suspects`).
+        Остальные без человеческого решения — is_filtered=1 + WHITELIST_FLAG,
+        прежние флаги сохраняются. Человеческие вердикты (filtered_origin='human')
+        не трогаются в обе стороны. Возвращает число каналов под whitelist-фильтром.
+        Метрики сообщений не нужны — вердикт чисто теговый, analyze не запускается.
+        """
+        trusted_pks = {
+            row["pk"]
+            for tag in (AUTHOR_CONTENT_TAG, KEEP_TAG)
+            for row in await self._database.repos.channels.fetch_channels_with_tag(tag)
+        }
+        channels = await self._database.get_channels(active_only=False, include_filtered=True)
+        conn = self._database.db
+        assert conn is not None
+
+        filtered = 0
+        async with self._database.transaction():
+            for ch in channels:
+                old_flags = {f.strip() for f in (ch.filter_flags or "").split(",") if f.strip()}
+                if ch.id in trusted_pks:
+                    # Доверие: снять авто-фильтр; human-вердикт «фильтровать» не
+                    # трогаем. Stale WHITELIST_FLAG снимается: иначе после
+                    # «фильтр → тегирование → повторный whitelist» метка
+                    # «канал без тега» остаётся навсегда и лжёт куратору (#1573).
+                    await conn.execute(
+                        "UPDATE channels SET is_filtered = 0, filter_flags = ? "
+                        "WHERE id = ? AND is_filtered = 1 AND filtered_origin != 'human'",
+                        (",".join(sorted(old_flags - {WHITELIST_FLAG})) or None, ch.id),
+                    )
+                elif ch.filtered_origin == "human":
+                    continue
+                else:
+                    await conn.execute(
+                        "UPDATE channels SET is_filtered = 1, filter_flags = ? WHERE id = ?",
+                        (",".join(sorted(old_flags | {WHITELIST_FLAG})), ch.id),
+                    )
+                    filtered += 1
+        return filtered
 
     async def precheck_subscriber_ratio(self) -> int:
         """Filter channels by subscriber_count/message_count without Telegram.
