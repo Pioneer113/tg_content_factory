@@ -14,7 +14,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import logging
 import math
 from datetime import datetime, timezone
 
@@ -26,12 +25,9 @@ from src.cli.commands.common import (
     run_async,
 )
 from src.database import Database
-from src.database.bundles import ChannelBundle
 from src.models import CollectionTaskType
-from src.services.collection_service import CollectionService
 from src.services.runtime_diagnostics import evaluate_worker_heartbeat
 from src.services.telegram_command_service import TelegramCommandService
-from src.telegram.collector import Collector
 from src.utils.datetime import parse_datetime
 
 
