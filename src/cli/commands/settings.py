@@ -46,11 +46,41 @@ async def get_impl(config_path: str, *, key: str | None = None) -> None:
 
 
 async def set_impl(config_path: str, *, key: str, value: str) -> None:
-    """Set a single setting key to a value."""
+    """Set a single setting key to a value.
+
+    Keys the worker mutates at runtime must also reach the live worker through
+    the same channel as the dedicated commands (#1570): the DB row alone is
+    read only at worker startup, so without the follow-up command a raw write
+    silently diverges from what the worker actually does (pause gate, job
+    intervals). Mirrors the web settings routes, which enqueue
+    ``scheduler.reconcile`` after every scheduler mutation.
+    """
     _, db = await runtime.init_db(config_path)
     try:
+        paused_key = "collection_queue_paused"
+        reconcile_keys = {
+            "scheduler_autostart",
+            "collect_interval_minutes",
+            "warm_dialogs_interval_minutes",
+        }
+        followup: str | None = None
+        if key == paused_key:
+            # The live pause gate is binary; a raw "true"/"false" string would
+            # read as unpaused (`== "1"`) everywhere else — canonicalize here.
+            value = "1" if value.strip().lower() in {"1", "true", "yes", "on"} else "0"
+            followup = "collection.pause" if value == "1" else "collection.resume"
+        elif key in reconcile_keys or key.startswith("scheduler_job_disabled:"):
+            followup = "scheduler.reconcile"
         await db.set_setting(key, value)
-        print(f"Set {key} = {value}")
+        if followup is None:
+            print(f"Set {key} = {value}")
+        else:
+            from src.services.telegram_command_service import TelegramCommandService
+
+            await TelegramCommandService(db).enqueue(
+                followup, payload={}, requested_by="cli:settings.set"
+            )
+            print(f"Set {key} = {value}; enqueued {followup} for the running worker")
     finally:
         await db.close()
 
