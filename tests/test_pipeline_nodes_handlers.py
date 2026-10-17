@@ -6,8 +6,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.services.pipeline_nodes import NodeContext
-from src.services.pipeline_nodes.handlers import (
+from tests.helpers import make_pipeline_node_message
+from tg_agent.services.pipeline_nodes import NodeContext
+from tg_agent.services.pipeline_nodes.handlers import (
     AgentLoopHandler,
     ConditionHandler,
     DelayHandler,
@@ -25,7 +26,6 @@ from src.services.pipeline_nodes.handlers import (
     SearchQueryTriggerHandler,
     SourceHandler,
 )
-from tests.helpers import make_pipeline_node_message
 
 # Shared message factory (deduped into tests/helpers.py).
 _msg = make_pipeline_node_message
@@ -412,7 +412,7 @@ async def test_notify_success(caplog):
     ctx.set_global("generated_text", "news")
     ctx.set_global("trigger_channel_title", "Chan")
     svc = AsyncMock()
-    with caplog.at_level("INFO", logger="src.services.pipeline_nodes.handlers"):
+    with caplog.at_level("INFO", logger="tg_agent.services.pipeline_nodes.handlers"):
         await NotifyHandler().execute(
             {"message_template": "[{channel_title}] {text}"}, ctx, {"notification_service": svc}
         )
@@ -1175,7 +1175,7 @@ async def test_agent_loop_unknown_tool():
 @pytest.mark.anyio
 async def test_fetch_messages_respects_limit():
     """FetchMessagesHandler slices context_messages to node_config['limit']."""
-    from src.services.pipeline_nodes.handlers import FetchMessagesHandler
+    from tg_agent.services.pipeline_nodes.handlers import FetchMessagesHandler
 
     ctx = NodeContext()
     ctx.set_global("source_channel_ids", [1, 2])
@@ -1198,9 +1198,9 @@ async def test_fetch_messages_respects_limit():
 @pytest.mark.anyio
 async def test_agent_loop_with_tools_in_graph_execution():
     """Integration: AgentLoopHandler receives agent_tools through PipelineExecutor."""
-    from src.models import ContentPipeline, PipelineEdge, PipelineGraph, PipelineNode
-    from src.services.pipeline_executor import PipelineExecutor
-    from src.services.pipeline_nodes import PipelineNodeType
+    from tg_agent.models import ContentPipeline, PipelineEdge, PipelineGraph, PipelineNode
+    from tg_agent.services.pipeline_executor import PipelineExecutor
+    from tg_agent.services.pipeline_nodes import PipelineNodeType
 
     graph = PipelineGraph(
         nodes=[

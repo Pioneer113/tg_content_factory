@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiosqlite
 import pytest
 
-from src.database.repositories.messages import MessageSearchPage
-from src.models import SearchParams
+from tg_agent.database.repositories.messages import MessageSearchPage
+from tg_agent.models import SearchParams
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -34,7 +34,7 @@ def _flood_info(operation: str, *, wait_seconds: int = 5, detail: str = ""):
 
 
 def _make_msg(channel_id: int = 100, message_id: int = 1, text: str = "hello"):
-    from src.models import Message
+    from tg_agent.models import Message
 
     return Message(
         channel_id=channel_id,
@@ -51,7 +51,7 @@ def _make_msg(channel_id: int = 100, message_id: int = 1, text: str = "hello"):
 
 class TestFormatAllFloodedDetail:
     def test_no_retry_sec(self):
-        from src.cli.commands.test import _format_all_flooded_detail
+        from tg_agent.cli.commands.test import _format_all_flooded_detail
 
         result = _format_all_flooded_detail(
             "base",
@@ -62,7 +62,7 @@ class TestFormatAllFloodedDetail:
         assert "base" in result
 
     def test_retry_sec_no_datetime(self):
-        from src.cli.commands.test import _format_all_flooded_detail
+        from tg_agent.cli.commands.test import _format_all_flooded_detail
 
         result = _format_all_flooded_detail(
             "base",
@@ -73,7 +73,7 @@ class TestFormatAllFloodedDetail:
         assert "retry after about" in result
 
     def test_retry_sec_with_datetime(self):
-        from src.cli.commands.test import _format_all_flooded_detail
+        from tg_agent.cli.commands.test import _format_all_flooded_detail
 
         dt = datetime(2025, 5, 1, 12, 0, 0, tzinfo=timezone.utc)
         result = _format_all_flooded_detail(
@@ -87,14 +87,14 @@ class TestFormatAllFloodedDetail:
 
 class TestIsPremiumFlood:
     def test_premium_flood_operations(self):
-        from src.cli.commands.test import _is_premium_flood
+        from tg_agent.cli.commands.test import _is_premium_flood
 
         for op in ("check_search_quota", "search_telegram_check_quota", "search_telegram"):
             info = _flood_info(op, wait_seconds=10)
             assert _is_premium_flood(info) is True
 
     def test_non_premium_operation(self):
-        from src.cli.commands.test import _is_premium_flood
+        from tg_agent.cli.commands.test import _is_premium_flood
 
         info = _flood_info("get_dialogs")
         assert _is_premium_flood(info) is False
@@ -103,7 +103,7 @@ class TestIsPremiumFlood:
 class TestGetLiveFloodAvailability:
     @pytest.mark.anyio
     async def test_premium_flood_uses_premium_getter(self):
-        from src.cli.commands.test import _get_live_flood_availability
+        from tg_agent.cli.commands.test import _get_live_flood_availability
 
         info = _flood_info("search_telegram")
         avail = MagicMock()
@@ -114,7 +114,7 @@ class TestGetLiveFloodAvailability:
 
     @pytest.mark.anyio
     async def test_non_premium_uses_regular_getter(self):
-        from src.cli.commands.test import _get_live_flood_availability
+        from tg_agent.cli.commands.test import _get_live_flood_availability
 
         info = _flood_info("get_dialogs")
         avail = MagicMock()
@@ -125,7 +125,7 @@ class TestGetLiveFloodAvailability:
 
     @pytest.mark.anyio
     async def test_returns_none_when_no_getter(self):
-        from src.cli.commands.test import _get_live_flood_availability
+        from tg_agent.cli.commands.test import _get_live_flood_availability
 
         info = _flood_info("get_dialogs")
         pool = MagicMock(spec=[])  # no attributes
@@ -136,7 +136,7 @@ class TestGetLiveFloodAvailability:
 class TestDecideLiveTestFloodAction:
     @pytest.mark.anyio
     async def test_no_availability_returns_skip(self):
-        from src.cli.commands.test import _decide_live_test_flood_action
+        from tg_agent.cli.commands.test import _decide_live_test_flood_action
 
         info = _flood_info("get_dialogs", detail="flooded")
         pool = MagicMock(spec=[])
@@ -145,7 +145,7 @@ class TestDecideLiveTestFloodAction:
 
     @pytest.mark.anyio
     async def test_not_all_flooded_returns_rotate(self):
-        from src.cli.commands.test import _decide_live_test_flood_action
+        from tg_agent.cli.commands.test import _decide_live_test_flood_action
 
         info = _flood_info("get_dialogs", detail="partial")
         avail = MagicMock()
@@ -157,7 +157,7 @@ class TestDecideLiveTestFloodAction:
 
     @pytest.mark.anyio
     async def test_all_flooded_short_retry_returns_wait_retry(self):
-        from src.cli.commands.test import _decide_live_test_flood_action
+        from tg_agent.cli.commands.test import _decide_live_test_flood_action
 
         info = _flood_info("get_dialogs", detail="all flood")
         avail = MagicMock()
@@ -172,7 +172,7 @@ class TestDecideLiveTestFloodAction:
 
     @pytest.mark.anyio
     async def test_all_flooded_long_retry_returns_skip(self):
-        from src.cli.commands.test import _decide_live_test_flood_action
+        from tg_agent.cli.commands.test import _decide_live_test_flood_action
 
         info = _flood_info("get_dialogs", detail="all flood")
         avail = MagicMock()
@@ -187,7 +187,7 @@ class TestDecideLiveTestFloodAction:
 
 class TestGetSearchResultFloodWait:
     def test_returns_flood_wait_info(self):
-        from src.cli.commands.test import _get_search_result_flood_wait
+        from tg_agent.cli.commands.test import _get_search_result_flood_wait
 
         info = _flood_info("search")
         result = MagicMock()
@@ -195,14 +195,14 @@ class TestGetSearchResultFloodWait:
         assert _get_search_result_flood_wait(result) is info
 
     def test_returns_none_when_not_flood_wait(self):
-        from src.cli.commands.test import _get_search_result_flood_wait
+        from tg_agent.cli.commands.test import _get_search_result_flood_wait
 
         result = MagicMock()
         result.flood_wait = "not_a_flood_wait"
         assert _get_search_result_flood_wait(result) is None
 
     def test_returns_none_when_no_attribute(self):
-        from src.cli.commands.test import _get_search_result_flood_wait
+        from tg_agent.cli.commands.test import _get_search_result_flood_wait
 
         result = MagicMock(spec=[])
         assert _get_search_result_flood_wait(result) is None
@@ -210,7 +210,7 @@ class TestGetSearchResultFloodWait:
 
 class TestIsClientUnavailableErrors:
     def test_regular_search_unavailable(self):
-        from src.cli.commands.test import _is_regular_search_client_unavailable_error
+        from tg_agent.cli.commands.test import _is_regular_search_client_unavailable_error
 
         assert _is_regular_search_client_unavailable_error(
             "Нет доступных Telegram-аккаунтов. Проверьте подключение."
@@ -219,7 +219,7 @@ class TestIsClientUnavailableErrors:
         assert not _is_regular_search_client_unavailable_error(None)
 
     def test_premium_flood_unavailable(self):
-        from src.cli.commands.test import _is_premium_flood_unavailable_error
+        from tg_agent.cli.commands.test import _is_premium_flood_unavailable_error
 
         assert _is_premium_flood_unavailable_error(
             "Premium-аккаунты временно недоступны из-за Flood Wait."
@@ -230,7 +230,7 @@ class TestIsClientUnavailableErrors:
 
 class TestSkipRemainingChecks:
     def test_appends_skip_results(self):
-        from src.cli.commands.test import Status, _skip_remaining_tg_checks
+        from tg_agent.cli.commands.test import Status, _skip_remaining_tg_checks
 
         results = []
         _skip_remaining_tg_checks(results, "pool failed", ["check_a", "check_b"])
@@ -243,7 +243,7 @@ class TestSkipRemainingChecks:
 class TestRunChecks:
     @pytest.mark.anyio
     async def test_check_get_stats_fail(self):
-        from src.cli.commands.test import Status, _check_get_stats
+        from tg_agent.cli.commands.test import Status, _check_get_stats
 
         db = MagicMock()
         db.get_stats = AsyncMock(side_effect=Exception("stats error"))
@@ -253,7 +253,7 @@ class TestRunChecks:
 
     @pytest.mark.anyio
     async def test_check_account_list_fail(self):
-        from src.cli.commands.test import Status, _check_account_list
+        from tg_agent.cli.commands.test import Status, _check_account_list
 
         db = MagicMock()
         db.get_accounts = AsyncMock(side_effect=Exception("acct error"))
@@ -262,7 +262,7 @@ class TestRunChecks:
 
     @pytest.mark.anyio
     async def test_check_channel_list_fail(self):
-        from src.cli.commands.test import Status, _check_channel_list
+        from tg_agent.cli.commands.test import Status, _check_channel_list
 
         db = MagicMock()
         db.get_channels_with_counts = AsyncMock(side_effect=Exception("ch error"))
@@ -271,7 +271,7 @@ class TestRunChecks:
 
     @pytest.mark.anyio
     async def test_check_notification_queries_with_data(self):
-        from src.cli.commands.test import Status, _check_notification_queries
+        from tg_agent.cli.commands.test import Status, _check_notification_queries
 
         db = MagicMock()
         db.get_notification_queries = AsyncMock(return_value=[MagicMock(), MagicMock()])
@@ -281,7 +281,7 @@ class TestRunChecks:
 
     @pytest.mark.anyio
     async def test_check_notification_queries_fail(self):
-        from src.cli.commands.test import Status, _check_notification_queries
+        from tg_agent.cli.commands.test import Status, _check_notification_queries
 
         db = MagicMock()
         db.get_notification_queries = AsyncMock(side_effect=Exception("db fail"))
@@ -290,7 +290,7 @@ class TestRunChecks:
 
     @pytest.mark.anyio
     async def test_check_local_search_fail(self):
-        from src.cli.commands.test import Status, _check_local_search
+        from tg_agent.cli.commands.test import Status, _check_local_search
 
         db = MagicMock()
         db.search_messages = AsyncMock(side_effect=Exception("search fail"))
@@ -299,7 +299,7 @@ class TestRunChecks:
 
     @pytest.mark.anyio
     async def test_check_collection_tasks_fail(self):
-        from src.cli.commands.test import Status, _check_collection_tasks
+        from tg_agent.cli.commands.test import Status, _check_collection_tasks
 
         db = MagicMock()
         db.get_collection_tasks = AsyncMock(side_effect=Exception("task fail"))
@@ -308,7 +308,7 @@ class TestRunChecks:
 
     @pytest.mark.anyio
     async def test_check_recent_searches_with_data(self):
-        from src.cli.commands.test import Status, _check_recent_searches
+        from tg_agent.cli.commands.test import Status, _check_recent_searches
 
         db = MagicMock()
         db.get_recent_searches = AsyncMock(return_value=[MagicMock()])
@@ -318,7 +318,7 @@ class TestRunChecks:
 
     @pytest.mark.anyio
     async def test_check_recent_searches_fail(self):
-        from src.cli.commands.test import Status, _check_recent_searches
+        from tg_agent.cli.commands.test import Status, _check_recent_searches
 
         db = MagicMock()
         db.get_recent_searches = AsyncMock(side_effect=Exception("rs fail"))
@@ -327,7 +327,7 @@ class TestRunChecks:
 
     @pytest.mark.anyio
     async def test_check_pipeline_list_fail(self):
-        from src.cli.commands.test import Status, _check_pipeline_list
+        from tg_agent.cli.commands.test import Status, _check_pipeline_list
 
         db = MagicMock()
         db.repos = MagicMock()
@@ -338,7 +338,7 @@ class TestRunChecks:
 
     @pytest.mark.anyio
     async def test_check_notification_bot_fail(self):
-        from src.cli.commands.test import Status, _check_notification_bot
+        from tg_agent.cli.commands.test import Status, _check_notification_bot
 
         db = MagicMock()
         db.repos = MagicMock()
@@ -349,7 +349,7 @@ class TestRunChecks:
 
     @pytest.mark.anyio
     async def test_check_notification_bot_configured(self):
-        from src.cli.commands.test import Status, _check_notification_bot
+        from tg_agent.cli.commands.test import Status, _check_notification_bot
 
         db = MagicMock()
         db.repos = MagicMock()
@@ -361,7 +361,7 @@ class TestRunChecks:
 
     @pytest.mark.anyio
     async def test_check_photo_tasks_fail(self):
-        from src.cli.commands.test import Status, _check_photo_tasks
+        from tg_agent.cli.commands.test import Status, _check_photo_tasks
 
         db = MagicMock()
         db.repos = MagicMock()
@@ -373,18 +373,18 @@ class TestRunChecks:
 
 class TestCLITestRunEntry:
     def test_run_read_db_init_failure(self, capsys):
-        from src.cli.commands.test import run
+        from tg_agent.cli.commands.test import run
 
         ns = SimpleNamespace(config="config.yaml", test_action="read")
-        with patch("src.cli.runtime.init_db", side_effect=Exception("db crash")):
+        with patch("tg_agent.cli.runtime.init_db", side_effect=Exception("db crash")):
             with pytest.raises(SystemExit):
                 run(ns)
 
     def test_run_write_db_init_failure(self, capsys):
-        from src.cli.commands.test import run
+        from tg_agent.cli.commands.test import run
 
         ns = SimpleNamespace(config="config.yaml", test_action="write")
-        with patch("src.cli.runtime.init_db", side_effect=Exception("no config")):
+        with patch("tg_agent.cli.runtime.init_db", side_effect=Exception("no config")):
             # write_db_copy fails → run() exits with 1
             with pytest.raises(SystemExit) as exc_info:
                 run(ns)
@@ -393,10 +393,10 @@ class TestCLITestRunEntry:
         assert "Write Tests" in out
 
     def test_run_telegram_db_init_failure(self, capsys):
-        from src.cli.commands.test import run
+        from tg_agent.cli.commands.test import run
 
         ns = SimpleNamespace(config="config.yaml", test_action="telegram")
-        with patch("src.cli.runtime.init_db", side_effect=Exception("no config")):
+        with patch("tg_agent.cli.runtime.init_db", side_effect=Exception("no config")):
             # tg_db_copy fails → run() exits with 1
             with pytest.raises(SystemExit) as exc_info:
                 run(ns)
@@ -405,7 +405,7 @@ class TestCLITestRunEntry:
         assert "Telegram" in out
 
     def test_run_all_with_mocked_db(self, capsys):
-        from src.cli.commands.test import run
+        from tg_agent.cli.commands.test import run
 
         fake_db = MagicMock()
         fake_db.get_stats = AsyncMock(return_value={"channels": 0, "messages": 0})
@@ -428,14 +428,14 @@ class TestCLITestRunEntry:
 
         # Only run read to keep the test fast
         ns = SimpleNamespace(config="config.yaml", test_action="read")
-        with patch("src.cli.runtime.init_db", return_value=(MagicMock(), fake_db)):
+        with patch("tg_agent.cli.runtime.init_db", return_value=(MagicMock(), fake_db)):
             run(ns)
         out = capsys.readouterr().out
         assert "Read Tests" in out
         assert "Test Summary" in out
 
     def test_run_all_exits_1_on_failure(self, capsys):
-        from src.cli.commands.test import run
+        from tg_agent.cli.commands.test import run
 
         fake_db = MagicMock()
         fake_db.get_stats = AsyncMock(side_effect=Exception("force fail"))
@@ -457,7 +457,7 @@ class TestCLITestRunEntry:
         fake_db._session_encryption_secret = None
 
         ns = SimpleNamespace(config="config.yaml", test_action="read")
-        with patch("src.cli.runtime.init_db", return_value=(MagicMock(), fake_db)):
+        with patch("tg_agent.cli.runtime.init_db", return_value=(MagicMock(), fake_db)):
             with pytest.raises(SystemExit) as exc_info:
                 run(ns)
         assert exc_info.value.code == 1
@@ -466,7 +466,7 @@ class TestCLITestRunEntry:
 class TestDisableFloodAutoSleep:
     @pytest.mark.anyio
     async def test_sets_threshold_to_zero(self):
-        from src.cli.commands.test import _disable_flood_auto_sleep
+        from tg_agent.cli.commands.test import _disable_flood_auto_sleep
 
         raw_client = MagicMock()
         raw_client.flood_sleep_threshold = 60
@@ -475,7 +475,7 @@ class TestDisableFloodAutoSleep:
         session.raw_client = raw_client
 
         with patch(
-            "src.cli.commands.test.adapt_transport_session",
+            "tg_agent.cli.commands.test.adapt_transport_session",
             return_value=session,
         ):
             pool = MagicMock()
@@ -486,13 +486,13 @@ class TestDisableFloodAutoSleep:
 
     @pytest.mark.anyio
     async def test_skips_when_no_raw_client(self):
-        from src.cli.commands.test import _disable_flood_auto_sleep
+        from tg_agent.cli.commands.test import _disable_flood_auto_sleep
 
         session = MagicMock()
         session.raw_client = None
 
         with patch(
-            "src.cli.commands.test.adapt_transport_session",
+            "tg_agent.cli.commands.test.adapt_transport_session",
             return_value=session,
         ):
             pool = MagicMock()
@@ -503,7 +503,7 @@ class TestDisableFloodAutoSleep:
 
 class TestTelegramLiveFloodDecision:
     def test_dataclass_attributes(self):
-        from src.cli.commands.test import TelegramLiveFloodDecision
+        from tg_agent.cli.commands.test import TelegramLiveFloodDecision
 
         d = TelegramLiveFloodDecision(action="skip", detail="flooded")
         assert d.action == "skip"
@@ -519,36 +519,36 @@ class TestTelegramLiveFloodDecision:
 
 class TestProcessControlAdditional:
     def test_is_expected_server_process_negative_pid(self):
-        from src.cli.process_control import is_expected_server_process
+        from tg_agent.cli.process_control import is_expected_server_process
 
         assert is_expected_server_process(-1) is False
 
     def test_is_expected_server_process_dead_pid(self):
-        from src.cli.process_control import is_expected_server_process
+        from tg_agent.cli.process_control import is_expected_server_process
 
         assert is_expected_server_process(999999999) is False
 
     def test_is_expected_server_process_alive_but_wrong_command(self):
-        from src.cli.process_control import is_expected_server_process
+        from tg_agent.cli.process_control import is_expected_server_process
 
-        # Current process is alive but not running src.main serve
+        # Current process is alive but not running tg_agent.main serve
         result = is_expected_server_process(os.getpid())
-        # pytest itself is not src.main serve, so should be False
+        # pytest itself is not tg_agent.main serve, so should be False
         assert result is False
 
     def test_stop_server_unmanaged_pid(self, tmp_path):
-        """Process exists but is not src.main serve — returns UNMANAGED."""
-        from src.cli.process_control import StopResult, stop_server
+        """Process exists but is not tg_agent.main serve — returns UNMANAGED."""
+        from tg_agent.cli.process_control import StopResult, stop_server
 
         p = tmp_path / "unmanaged.pid"
         p.write_text(f"{os.getpid()}\n", encoding="utf-8")
-        # Current process is alive but not src.main serve
+        # Current process is alive but not tg_agent.main serve
         outcome = stop_server(p)
         assert outcome.result == StopResult.UNMANAGED
 
     def test_ensure_server_not_running_stale_pid_removes_file(self, tmp_path):
         """ensure_server_not_running removes file when PID is dead."""
-        from src.cli.process_control import ensure_server_not_running
+        from tg_agent.cli.process_control import ensure_server_not_running
 
         p = tmp_path / "stale.pid"
         p.write_text("999999999\n", encoding="utf-8")
@@ -557,7 +557,7 @@ class TestProcessControlAdditional:
 
     def test_unregister_current_process_wrong_pid(self, tmp_path):
         """unregister_current_process does NOT remove file owned by another PID."""
-        from src.cli.process_control import unregister_current_process
+        from tg_agent.cli.process_control import unregister_current_process
 
         p = tmp_path / "other.pid"
         # Write a PID that's definitely not ours (use PID 1 which is init/launchd)
@@ -568,7 +568,7 @@ class TestProcessControlAdditional:
 
     def test_unregister_swallows_exceptions(self, tmp_path):
         """unregister_current_process must never raise."""
-        from src.cli.process_control import unregister_current_process
+        from tg_agent.cli.process_control import unregister_current_process
 
         p = tmp_path / "corrupt.pid"
         p.write_text("not_a_number\n", encoding="utf-8")
@@ -577,7 +577,7 @@ class TestProcessControlAdditional:
 
     def test_is_process_alive_permission_error(self):
         """PID 1 (init) returns PermissionError -> alive=True on macOS/Linux."""
-        from src.cli.process_control import is_process_alive
+        from tg_agent.cli.process_control import is_process_alive
 
         # PID 1 always exists but may raise PermissionError
         result = is_process_alive(1)
@@ -586,9 +586,9 @@ class TestProcessControlAdditional:
 
     def test_process_command_oserror_returns_empty(self):
         """_process_command returns '' on OSError in subprocess.run."""
-        from src.cli.process_control import _process_command
+        from tg_agent.cli.process_control import _process_command
 
-        with patch("src.cli.process_control.sys.platform", "darwin"):
+        with patch("tg_agent.cli.process_control.sys.platform", "darwin"):
             with patch("subprocess.run", side_effect=OSError("no ps")):
                 result = _process_command(os.getpid())
                 assert result == ""
@@ -596,31 +596,31 @@ class TestProcessControlAdditional:
     def test_process_command_nonzero_rc_returns_empty(self):
         """_process_command returns '' on non-zero returncode."""
 
-        from src.cli.process_control import _process_command
+        from tg_agent.cli.process_control import _process_command
 
         mock_result = MagicMock()
         mock_result.returncode = 1
         mock_result.stdout = ""
-        with patch("src.cli.process_control.sys.platform", "darwin"):
+        with patch("tg_agent.cli.process_control.sys.platform", "darwin"):
             with patch("subprocess.run", return_value=mock_result):
                 result = _process_command(os.getpid())
                 assert result == ""
 
     def test_stop_server_permission_denied_sigterm(self, tmp_path):
         """stop_server raises ProcessControlError on PermissionError during SIGTERM."""
-        from src.cli.process_control import ProcessControlError, stop_server
+        from tg_agent.cli.process_control import ProcessControlError, stop_server
 
         p = tmp_path / "perm.pid"
         p.write_text(f"{os.getpid()}\n", encoding="utf-8")
 
-        with patch("src.cli.process_control.is_expected_server_process", return_value=True):
+        with patch("tg_agent.cli.process_control.is_expected_server_process", return_value=True):
             with patch("os.kill", side_effect=PermissionError("no perm")):
                 with pytest.raises(ProcessControlError, match="Permission denied"):
                     stop_server(p)
 
     def test_register_creates_parent_dirs(self, tmp_path):
         """register_current_process creates parent directories if needed."""
-        from src.cli.process_control import register_current_process, unregister_current_process
+        from tg_agent.cli.process_control import register_current_process, unregister_current_process
 
         nested = tmp_path / "a" / "b" / "c" / "test.pid"
         register_current_process(nested)
@@ -637,7 +637,7 @@ class TestProcessControlAdditional:
 class TestDBConnectionAdditional:
     @pytest.mark.anyio
     async def test_execute_method_works(self, tmp_path):
-        from src.database.connection import DBConnection
+        from tg_agent.database.connection import DBConnection
 
         conn = DBConnection(str(tmp_path / "exec.db"))
         try:
@@ -650,7 +650,7 @@ class TestDBConnectionAdditional:
 
     @pytest.mark.anyio
     async def test_connect_sets_row_factory(self, tmp_path):
-        from src.database.connection import DBConnection
+        from tg_agent.database.connection import DBConnection
 
         conn = DBConnection(str(tmp_path / "rf.db"))
         try:
@@ -662,7 +662,7 @@ class TestDBConnectionAdditional:
 
     @pytest.mark.anyio
     async def test_connect_sets_foreign_keys(self, tmp_path):
-        from src.database.connection import DBConnection
+        from tg_agent.database.connection import DBConnection
 
         conn = DBConnection(str(tmp_path / "fk.db"))
         try:
@@ -675,7 +675,7 @@ class TestDBConnectionAdditional:
 
     @pytest.mark.anyio
     async def test_profiling_connection_execute_without_profiler(self, tmp_path):
-        from src.database.connection import ProfilingConnection
+        from tg_agent.database.connection import ProfilingConnection
 
         async with aiosqlite.connect(str(tmp_path / "prof.db")) as raw:
             raw.row_factory = aiosqlite.Row
@@ -686,7 +686,7 @@ class TestDBConnectionAdditional:
 
     @pytest.mark.anyio
     async def test_profiling_connection_execute_fetchall(self, tmp_path):
-        from src.database.connection import ProfilingConnection
+        from tg_agent.database.connection import ProfilingConnection
 
         async with aiosqlite.connect(str(tmp_path / "prof2.db")) as raw:
             raw.row_factory = aiosqlite.Row
@@ -696,7 +696,7 @@ class TestDBConnectionAdditional:
 
     @pytest.mark.anyio
     async def test_profiling_connection_executemany(self, tmp_path):
-        from src.database.connection import ProfilingConnection
+        from tg_agent.database.connection import ProfilingConnection
 
         async with aiosqlite.connect(str(tmp_path / "prof3.db")) as raw:
             raw.row_factory = aiosqlite.Row
@@ -708,7 +708,7 @@ class TestDBConnectionAdditional:
 
     @pytest.mark.anyio
     async def test_profiling_connection_executescript(self, tmp_path):
-        from src.database.connection import ProfilingConnection
+        from tg_agent.database.connection import ProfilingConnection
 
         async with aiosqlite.connect(str(tmp_path / "prof4.db")) as raw:
             raw.row_factory = aiosqlite.Row
@@ -717,7 +717,7 @@ class TestDBConnectionAdditional:
 
     @pytest.mark.anyio
     async def test_profiling_connection_getattr_delegates(self, tmp_path):
-        from src.database.connection import ProfilingConnection
+        from tg_agent.database.connection import ProfilingConnection
 
         async with aiosqlite.connect(str(tmp_path / "prof5.db")) as raw:
             raw.row_factory = aiosqlite.Row
@@ -728,7 +728,7 @@ class TestDBConnectionAdditional:
     @pytest.mark.anyio
     async def test_profiling_connection_with_profiler(self, tmp_path):
         """ProfilingConnection records timing when profiler is active."""
-        from src.database.connection import ProfilingConnection
+        from tg_agent.database.connection import ProfilingConnection
 
         profiler = MagicMock()
         profiler.record_db = MagicMock()
@@ -737,7 +737,7 @@ class TestDBConnectionAdditional:
             raw.row_factory = aiosqlite.Row
             pc = ProfilingConnection(raw)
             with patch(
-                "src.web.timing.get_current_profiler",
+                "tg_agent.web.timing.get_current_profiler",
                 return_value=profiler,
             ):
                 cur = await pc.execute("SELECT 99 AS n")
@@ -871,7 +871,7 @@ async def test_messages_get_by_id_nonexistent(db):
 @pytest.mark.anyio
 async def test_messages_build_fts_match_fts_mode():
     """_build_fts_match returns raw query in FTS mode."""
-    from src.database.repositories.messages import MessagesRepository
+    from tg_agent.database.repositories.messages import MessagesRepository
 
     result = MessagesRepository._build_fts_match("my query", is_fts=True)
     assert result == "my query"
@@ -880,7 +880,7 @@ async def test_messages_build_fts_match_fts_mode():
 @pytest.mark.anyio
 async def test_messages_build_fts_match_phrase_mode():
     """_build_fts_match wraps query in quotes for phrase mode."""
-    from src.database.repositories.messages import MessagesRepository
+    from tg_agent.database.repositories.messages import MessagesRepository
 
     result = MessagesRepository._build_fts_match("test phrase", is_fts=False)
     assert result.startswith('"')
@@ -890,7 +890,7 @@ async def test_messages_build_fts_match_phrase_mode():
 @pytest.mark.anyio
 async def test_messages_build_fts_match_escapes_quotes():
     """_build_fts_match escapes internal quotes."""
-    from src.database.repositories.messages import MessagesRepository
+    from tg_agent.database.repositories.messages import MessagesRepository
 
     result = MessagesRepository._build_fts_match('say "hello"', is_fts=False)
     assert '""' in result
@@ -899,8 +899,8 @@ async def test_messages_build_fts_match_escapes_quotes():
 @pytest.mark.anyio
 async def test_messages_build_extra_conditions_with_max_length():
     """_build_extra_conditions adds max_length and exclude patterns."""
-    from src.database.repositories.messages import MessagesRepository
-    from src.models import SearchQuery
+    from tg_agent.database.repositories.messages import MessagesRepository
+    from tg_agent.models import SearchQuery
 
     sq = SearchQuery(
         name="test",
@@ -971,7 +971,7 @@ async def test_messages_insert_batch_with_reactions(db):
 
 @pytest.mark.anyio
 async def test_messages_parse_reactions_json_valid():
-    from src.database.repositories.messages import _parse_reactions_json
+    from tg_agent.database.repositories.messages import _parse_reactions_json
 
     result = _parse_reactions_json('[{"emoji": "👍", "count": 5}]')
     assert len(result) == 1
@@ -980,7 +980,7 @@ async def test_messages_parse_reactions_json_valid():
 
 @pytest.mark.anyio
 async def test_messages_parse_reactions_json_invalid():
-    from src.database.repositories.messages import _parse_reactions_json
+    from tg_agent.database.repositories.messages import _parse_reactions_json
 
     result = _parse_reactions_json("not json")
     assert result == []
@@ -988,7 +988,7 @@ async def test_messages_parse_reactions_json_invalid():
 
 @pytest.mark.anyio
 async def test_messages_parse_reactions_json_none():
-    from src.database.repositories.messages import _parse_reactions_json
+    from tg_agent.database.repositories.messages import _parse_reactions_json
 
     result = _parse_reactions_json(None)  # type: ignore[arg-type]
     assert result == []
@@ -1011,7 +1011,7 @@ async def test_messages_search_topic_id_filter(db):
 @pytest.mark.anyio
 async def test_messages_like_fallback_search(db):
     """MessagesRepository with fts_available=False uses LIKE search."""
-    from src.database.repositories.messages import MessagesRepository
+    from tg_agent.database.repositories.messages import MessagesRepository
 
     msg = _make_msg(channel_id=400, message_id=1, text="like fallback search word")
     await db.repos.messages.insert_message(msg)
@@ -1030,8 +1030,8 @@ async def test_messages_like_fallback_search(db):
 @pytest.mark.anyio
 async def test_migrations_from_scratch_creates_all_tables():
     """run_migrations on fresh schema creates expected tables."""
-    from src.database.migrations import run_migrations
-    from src.database.schema import SCHEMA_SQL
+    from tg_agent.database.migrations import run_migrations
+    from tg_agent.database.schema import SCHEMA_SQL
 
     async with aiosqlite.connect(":memory:") as conn:
         conn.row_factory = aiosqlite.Row
@@ -1054,8 +1054,8 @@ async def test_migrations_from_scratch_creates_all_tables():
 @pytest.mark.anyio
 async def test_migrations_notification_bots_table_created():
     """notification_bots table is created during migration."""
-    from src.database.migrations import run_migrations
-    from src.database.schema import SCHEMA_SQL
+    from tg_agent.database.migrations import run_migrations
+    from tg_agent.database.schema import SCHEMA_SQL
 
     async with aiosqlite.connect(":memory:") as conn:
         conn.row_factory = aiosqlite.Row
@@ -1071,8 +1071,8 @@ async def test_migrations_notification_bots_table_created():
 @pytest.mark.anyio
 async def test_migrations_photo_tables_created():
     """Photo tables are created during migration."""
-    from src.database.migrations import run_migrations
-    from src.database.schema import SCHEMA_SQL
+    from tg_agent.database.migrations import run_migrations
+    from tg_agent.database.schema import SCHEMA_SQL
 
     async with aiosqlite.connect(":memory:") as conn:
         conn.row_factory = aiosqlite.Row
@@ -1089,8 +1089,8 @@ async def test_migrations_photo_tables_created():
 @pytest.mark.anyio
 async def test_migrations_collection_tasks_index():
     """Collection tasks index is created during migration."""
-    from src.database.migrations import run_migrations
-    from src.database.schema import SCHEMA_SQL
+    from tg_agent.database.migrations import run_migrations
+    from tg_agent.database.schema import SCHEMA_SQL
 
     async with aiosqlite.connect(":memory:") as conn:
         conn.row_factory = aiosqlite.Row
@@ -1107,8 +1107,8 @@ async def test_migrations_collection_tasks_index():
 @pytest.mark.anyio
 async def test_migrations_search_queries_columns():
     """search_queries gets all expected columns."""
-    from src.database.migrations import run_migrations
-    from src.database.schema import SCHEMA_SQL
+    from tg_agent.database.migrations import run_migrations
+    from tg_agent.database.schema import SCHEMA_SQL
 
     async with aiosqlite.connect(":memory:") as conn:
         conn.row_factory = aiosqlite.Row
@@ -1129,7 +1129,7 @@ async def test_migrations_search_queries_columns():
 
 
 def _make_photo_batch(status="pending"):
-    from src.models import PhotoBatch, PhotoBatchStatus, PhotoSendMode
+    from tg_agent.models import PhotoBatch, PhotoBatchStatus, PhotoSendMode
 
     return PhotoBatch(
         phone="+1234567890",
@@ -1144,7 +1144,7 @@ def _make_photo_batch(status="pending"):
 
 
 def _make_photo_item(batch_id: int, status="pending"):
-    from src.models import PhotoBatchItem, PhotoBatchStatus, PhotoSendMode
+    from tg_agent.models import PhotoBatchItem, PhotoBatchStatus, PhotoSendMode
 
     return PhotoBatchItem(
         batch_id=batch_id,
@@ -1163,7 +1163,7 @@ def _make_photo_item(batch_id: int, status="pending"):
 
 
 def _make_auto_job():
-    from src.models import PhotoAutoUploadJob, PhotoSendMode
+    from tg_agent.models import PhotoAutoUploadJob, PhotoSendMode
 
     return PhotoAutoUploadJob(
         phone="+1234567890",
@@ -1221,7 +1221,7 @@ async def test_photo_loader_list_batches_with_limit(db):
 
 @pytest.mark.anyio
 async def test_photo_loader_update_batch_status(db):
-    from src.models import PhotoBatchStatus
+    from tg_agent.models import PhotoBatchStatus
 
     batch = _make_photo_batch()
     batch_id = await db.repos.photo_loader.create_batch(batch)
@@ -1311,7 +1311,7 @@ async def test_photo_loader_list_items_for_batch(db):
 
 @pytest.mark.anyio
 async def test_photo_loader_update_item_status(db):
-    from src.models import PhotoBatchStatus
+    from tg_agent.models import PhotoBatchStatus
 
     batch = _make_photo_batch()
     batch_id = await db.repos.photo_loader.create_batch(batch)
@@ -1387,7 +1387,7 @@ async def test_photo_loader_cancel_item(db):
     assert result is True
 
     fetched = await db.repos.photo_loader.get_item(item_id)
-    from src.models import PhotoBatchStatus
+    from tg_agent.models import PhotoBatchStatus
     assert fetched.status == PhotoBatchStatus.CANCELLED
 
 
@@ -1407,7 +1407,7 @@ async def test_photo_loader_claim_next_due_item(db):
 
     now = datetime.now(timezone.utc)
     claimed = await db.repos.photo_loader.claim_next_due_item(now)
-    from src.models import PhotoBatchStatus
+    from tg_agent.models import PhotoBatchStatus
     assert claimed is not None
     assert claimed.id == item_id
     assert claimed.status == PhotoBatchStatus.RUNNING
@@ -1424,7 +1424,7 @@ async def test_photo_loader_claim_next_due_item_none(db):
 @pytest.mark.anyio
 async def test_photo_loader_requeue_running_items(db):
     """requeue_running_items_on_startup requeues RUNNING items."""
-    from src.models import PhotoBatchStatus
+    from tg_agent.models import PhotoBatchStatus
 
     batch = _make_photo_batch()
     batch_id = await db.repos.photo_loader.create_batch(batch)
@@ -1495,7 +1495,7 @@ async def test_photo_loader_update_auto_job_all_fields(db):
     job_id = await db.repos.photo_loader.create_auto_job(job)
 
     now = datetime.now(timezone.utc)
-    from src.models import PhotoSendMode
+    from tg_agent.models import PhotoSendMode
     await db.repos.photo_loader.update_auto_job(
         job_id,
         folder_path="/new/folder",
@@ -1590,7 +1590,7 @@ async def test_photo_loader_mark_auto_file_sent_idempotent(db):
 
 @pytest.mark.anyio
 async def test_photo_loader_json_loads_list_valid():
-    from src.database.repositories.photo_loader import _json_loads_list
+    from tg_agent.database.repositories.photo_loader import _json_loads_list
 
     result = _json_loads_list('[1, 2, 3]')
     assert result == [1, 2, 3]
@@ -1598,7 +1598,7 @@ async def test_photo_loader_json_loads_list_valid():
 
 @pytest.mark.anyio
 async def test_photo_loader_json_loads_list_invalid():
-    from src.database.repositories.photo_loader import _json_loads_list
+    from tg_agent.database.repositories.photo_loader import _json_loads_list
 
     result = _json_loads_list("not json")
     assert result == []
@@ -1606,7 +1606,7 @@ async def test_photo_loader_json_loads_list_invalid():
 
 @pytest.mark.anyio
 async def test_photo_loader_json_loads_list_not_list():
-    from src.database.repositories.photo_loader import _json_loads_list
+    from tg_agent.database.repositories.photo_loader import _json_loads_list
 
     result = _json_loads_list('{"key": "value"}')
     assert result == []
@@ -1614,7 +1614,7 @@ async def test_photo_loader_json_loads_list_not_list():
 
 @pytest.mark.anyio
 async def test_photo_loader_json_loads_list_empty():
-    from src.database.repositories.photo_loader import _json_loads_list
+    from tg_agent.database.repositories.photo_loader import _json_loads_list
 
     result = _json_loads_list(None)
     assert result == []
@@ -1622,7 +1622,7 @@ async def test_photo_loader_json_loads_list_empty():
 
 @pytest.mark.anyio
 async def test_photo_loader_uses_shared_datetime_parser():
-    from src.utils.datetime import parse_datetime
+    from tg_agent.utils.datetime import parse_datetime
 
     assert parse_datetime(None) is None
     dt = parse_datetime("2025-01-15T10:00:00")

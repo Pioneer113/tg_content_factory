@@ -5,14 +5,14 @@ import asyncio
 import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.cli.runtime import (
+from tg_agent.cli.runtime import (
     ensure_data_dirs,
     install_log_redaction,
     redirect_logging_to_file,
     restore_logging,
     setup_logging,
 )
-from src.utils.safe_logging import RedactingFormatter, redact_log_text, text_hash
+from tg_agent.utils.safe_logging import RedactingFormatter, redact_log_text, text_hash
 
 
 class TestSetupLogging:
@@ -66,7 +66,7 @@ class TestEnsureDataDirs:
     def test_ensure_data_dirs_creates_subdirs(self, tmp_path, monkeypatch):
         """ensure_data_dirs creates expected subdirectories."""
         data_root = tmp_path / "data_test"
-        monkeypatch.setattr("src.cli.runtime._DATA_ROOT", data_root)
+        monkeypatch.setattr("tg_agent.cli.runtime._DATA_ROOT", data_root)
 
         ensure_data_dirs()
 
@@ -76,7 +76,7 @@ class TestEnsureDataDirs:
     def test_ensure_data_dirs_idempotent(self, tmp_path, monkeypatch):
         """ensure_data_dirs does not fail when dirs already exist."""
         data_root = tmp_path / "data_idem"
-        monkeypatch.setattr("src.cli.runtime._DATA_ROOT", data_root)
+        monkeypatch.setattr("tg_agent.cli.runtime._DATA_ROOT", data_root)
 
         ensure_data_dirs()
         ensure_data_dirs()  # should not raise
@@ -220,8 +220,8 @@ class TestRedactingFilter:
 class TestInitPool:
     def test_init_pool_with_config_values(self, tmp_path):
         """init_pool uses config telegram api_id and api_hash when set."""
-        from src.cli.runtime import init_pool
-        from src.config import AppConfig, TelegramRuntimeConfig
+        from tg_agent.cli.runtime import init_pool
+        from tg_agent.config import AppConfig, TelegramRuntimeConfig
 
         config = AppConfig()
         config.telegram.api_id = 12345
@@ -236,7 +236,7 @@ class TestInitPool:
 
         loop = asyncio.new_event_loop()
         try:
-            with patch("src.cli.runtime.ClientPool", return_value=mock_pool) as mock_pool_cls:
+            with patch("tg_agent.cli.runtime.ClientPool", return_value=mock_pool) as mock_pool_cls:
                 auth, pool = loop.run_until_complete(init_pool(config, db))
 
                 mock_pool_cls.assert_called_once()
@@ -249,8 +249,8 @@ class TestInitPool:
 
     def test_init_pool_fallback_to_db_settings(self, tmp_path):
         """init_pool reads api_id/api_hash from DB when config has defaults."""
-        from src.cli.runtime import init_pool
-        from src.config import AppConfig, TelegramRuntimeConfig
+        from tg_agent.cli.runtime import init_pool
+        from tg_agent.config import AppConfig, TelegramRuntimeConfig
 
         config = AppConfig()
         config.telegram.api_id = 0
@@ -268,7 +268,7 @@ class TestInitPool:
 
         loop = asyncio.new_event_loop()
         try:
-            with patch("src.cli.runtime.ClientPool", return_value=mock_pool) as mock_pool_cls:
+            with patch("tg_agent.cli.runtime.ClientPool", return_value=mock_pool) as mock_pool_cls:
                 auth, pool = loop.run_until_complete(init_pool(config, db))
 
                 auth_arg = mock_pool_cls.call_args[0][0]
@@ -279,8 +279,8 @@ class TestInitPool:
 
     def test_init_pool_no_db_settings_fallback(self, tmp_path):
         """init_pool handles missing DB settings gracefully."""
-        from src.cli.runtime import init_pool
-        from src.config import AppConfig, TelegramRuntimeConfig
+        from tg_agent.cli.runtime import init_pool
+        from tg_agent.config import AppConfig, TelegramRuntimeConfig
 
         config = AppConfig()
         config.telegram.api_id = 0
@@ -295,7 +295,7 @@ class TestInitPool:
 
         loop = asyncio.new_event_loop()
         try:
-            with patch("src.cli.runtime.ClientPool", return_value=mock_pool) as mock_pool_cls:
+            with patch("tg_agent.cli.runtime.ClientPool", return_value=mock_pool) as mock_pool_cls:
                 auth, pool = loop.run_until_complete(init_pool(config, db))
 
                 auth_arg = mock_pool_cls.call_args[0][0]
@@ -306,8 +306,8 @@ class TestInitPool:
 
     def test_init_pool_passes_requested_phones_to_pool_initialize(self, tmp_path):
         """init_pool can initialize only the requested live account."""
-        from src.cli.runtime import init_pool
-        from src.config import AppConfig, TelegramRuntimeConfig
+        from tg_agent.cli.runtime import init_pool
+        from tg_agent.config import AppConfig, TelegramRuntimeConfig
 
         config = AppConfig()
         config.telegram.api_id = 12345
@@ -322,7 +322,7 @@ class TestInitPool:
 
         loop = asyncio.new_event_loop()
         try:
-            with patch("src.cli.runtime.ClientPool", return_value=mock_pool):
+            with patch("tg_agent.cli.runtime.ClientPool", return_value=mock_pool):
                 loop.run_until_complete(init_pool(config, db, phones=("+1000",)))
 
                 mock_pool.initialize.assert_awaited_once_with(phones=("+1000",))

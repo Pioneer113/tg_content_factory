@@ -11,8 +11,8 @@ import logging
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.database import Database
-from src.models import Account
+from tg_agent.database import Database
+from tg_agent.models import Account
 
 
 @pytest.mark.anyio

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.models import ContentPipeline
+from tg_agent.models import ContentPipeline
 
 
 async def _create_calendar_run(route_client) -> int:

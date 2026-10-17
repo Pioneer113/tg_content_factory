@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.models import Channel, Message, SearchResult
+from tg_agent.models import Channel, Message, SearchResult
 
 
 @pytest.mark.anyio
@@ -21,7 +21,7 @@ async def test_root_redirects_to_search_when_no_agent(route_client):
 @pytest.mark.anyio
 async def test_root_redirects_to_agent_when_available(route_client):
     """Test root redirects to /agent when agent manager available."""
-    from src.agent.manager import AgentManager
+    from tg_agent.agent.manager import AgentManager
 
     agent_manager_mock = MagicMock(spec=AgentManager)
     agent_manager_mock.available = True
@@ -52,7 +52,7 @@ async def test_sidebar_hides_agent_link_when_unavailable(route_client):
 @pytest.mark.anyio
 async def test_sidebar_shows_agent_link_when_available(route_client):
     """Available agent backends should still get an active-capable sidebar link."""
-    from src.agent.manager import AgentManager
+    from tg_agent.agent.manager import AgentManager
 
     agent_manager_mock = MagicMock(spec=AgentManager)
     agent_manager_mock.available = True
@@ -78,7 +78,7 @@ async def test_search_page_is_skeleton_and_defers_search(route_client, monkeypat
     mock_svc = MagicMock()
     mock_svc.search = AsyncMock(return_value=SearchResult(messages=[], total=0, query="test"))
     mock_svc.check_quota = AsyncMock(return_value=None)
-    monkeypatch.setattr("src.web.search.handlers.deps.search_service", lambda r: mock_svc)
+    monkeypatch.setattr("tg_agent.web.search.handlers.deps.search_service", lambda r: mock_svc)
 
     resp = await route_client.get("/search?q=test")
     assert resp.status_code == 200
@@ -94,7 +94,7 @@ async def test_skeleton_forwards_raw_channel_id_to_fragment(route_client, monkey
     instead of being parsed to None and silently searching all channels."""
     mock_svc = MagicMock()
     mock_svc.check_quota = AsyncMock(return_value=None)
-    monkeypatch.setattr("src.web.search.handlers.deps.search_service", lambda r: mock_svc)
+    monkeypatch.setattr("tg_agent.web.search.handlers.deps.search_service", lambda r: mock_svc)
 
     resp = await route_client.get("/search?q=test&channel_id=bad")
     assert resp.status_code == 200
@@ -109,7 +109,7 @@ async def test_search_with_query(route_client, monkeypatch):
     mock_svc.search = AsyncMock(return_value=mock_result)
     mock_svc.check_quota = AsyncMock(return_value=None)
     monkeypatch.setattr(
-        "src.web.search.handlers.deps.search_service",
+        "tg_agent.web.search.handlers.deps.search_service",
         lambda r: mock_svc,
     )
 
@@ -139,7 +139,7 @@ async def test_search_result_does_not_render_translate_button_without_db_id(rout
     mock_svc.search = AsyncMock(return_value=mock_result)
     mock_svc.check_quota = AsyncMock(return_value=None)
     monkeypatch.setattr(
-        "src.web.search.handlers.deps.search_service",
+        "tg_agent.web.search.handlers.deps.search_service",
         lambda r: mock_svc,
     )
 
@@ -170,7 +170,7 @@ async def test_search_result_renders_translate_button_with_db_id(route_client, m
     mock_svc.search = AsyncMock(return_value=mock_result)
     mock_svc.check_quota = AsyncMock(return_value=None)
     monkeypatch.setattr(
-        "src.web.search.handlers.deps.search_service",
+        "tg_agent.web.search.handlers.deps.search_service",
         lambda r: mock_svc,
     )
 
@@ -190,7 +190,7 @@ async def test_search_invalid_channel_id(route_client, monkeypatch):
     )
     mock_svc.check_quota = AsyncMock(return_value=None)
     monkeypatch.setattr(
-        "src.web.search.handlers.deps.search_service",
+        "tg_agent.web.search.handlers.deps.search_service",
         lambda r: mock_svc,
     )
 
@@ -207,7 +207,7 @@ async def test_search_pagination(route_client, monkeypatch):
     mock_svc.search = AsyncMock(return_value=mock_result)
     mock_svc.check_quota = AsyncMock(return_value=None)
     monkeypatch.setattr(
-        "src.web.search.handlers.deps.search_service",
+        "tg_agent.web.search.handlers.deps.search_service",
         lambda r: mock_svc,
     )
 
@@ -223,7 +223,7 @@ async def test_search_fts_mode(route_client, monkeypatch):
     mock_svc.search = AsyncMock(return_value=mock_result)
     mock_svc.check_quota = AsyncMock(return_value=None)
     monkeypatch.setattr(
-        "src.web.search.handlers.deps.search_service",
+        "tg_agent.web.search.handlers.deps.search_service",
         lambda r: mock_svc,
     )
 
@@ -239,7 +239,7 @@ async def test_search_hybrid_mode(route_client, monkeypatch):
     mock_svc.search = AsyncMock(return_value=mock_result)
     mock_svc.check_quota = AsyncMock(return_value=None)
     monkeypatch.setattr(
-        "src.web.search.handlers.deps.search_service",
+        "tg_agent.web.search.handlers.deps.search_service",
         lambda r: mock_svc,
     )
 
@@ -254,7 +254,7 @@ async def test_search_error_rendered(route_client, monkeypatch):
     mock_svc.search = AsyncMock(side_effect=Exception("Search failed"))
     mock_svc.check_quota = AsyncMock(return_value=None)
     monkeypatch.setattr(
-        "src.web.search.handlers.deps.search_service",
+        "tg_agent.web.search.handlers.deps.search_service",
         lambda r: mock_svc,
     )
 
@@ -271,7 +271,7 @@ async def test_search_date_filters(route_client, monkeypatch):
     mock_svc.search = AsyncMock(return_value=mock_result)
     mock_svc.check_quota = AsyncMock(return_value=None)
     monkeypatch.setattr(
-        "src.web.search.handlers.deps.search_service",
+        "tg_agent.web.search.handlers.deps.search_service",
         lambda r: mock_svc,
     )
 
@@ -289,7 +289,7 @@ async def test_search_length_filter(route_client, monkeypatch):
     mock_svc.search = AsyncMock(return_value=mock_result)
     mock_svc.check_quota = AsyncMock(return_value=None)
     monkeypatch.setattr(
-        "src.web.search.handlers.deps.search_service",
+        "tg_agent.web.search.handlers.deps.search_service",
         lambda r: mock_svc,
     )
 
@@ -305,7 +305,7 @@ async def test_browse_mode_with_channel_id(route_client, monkeypatch, base_app):
     """Browse mode: channel_id without query shows latest messages from that channel."""
     app, db, pool = base_app
     # Add a channel to the DB
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     await db.add_channel(Channel(channel_id=200, title="Browse Test Channel"))
 
@@ -314,7 +314,7 @@ async def test_browse_mode_with_channel_id(route_client, monkeypatch, base_app):
     mock_svc.search = AsyncMock(return_value=mock_result)
     mock_svc.check_quota = AsyncMock(return_value=None)
     monkeypatch.setattr(
-        "src.web.search.handlers.deps.search_service",
+        "tg_agent.web.search.handlers.deps.search_service",
         lambda r: mock_svc,
     )
 
@@ -334,7 +334,7 @@ async def test_browse_mode_no_channel_id(route_client, monkeypatch):
     mock_svc.search = AsyncMock(return_value=mock_result)
     mock_svc.check_quota = AsyncMock(return_value=None)
     monkeypatch.setattr(
-        "src.web.search.handlers.deps.search_service",
+        "tg_agent.web.search.handlers.deps.search_service",
         lambda r: mock_svc,
     )
 
@@ -352,7 +352,7 @@ async def test_browse_mode_with_query(route_client, monkeypatch, base_app):
     mock_svc.search = AsyncMock(return_value=mock_result)
     mock_svc.check_quota = AsyncMock(return_value=None)
     monkeypatch.setattr(
-        "src.web.search.handlers.deps.search_service",
+        "tg_agent.web.search.handlers.deps.search_service",
         lambda r: mock_svc,
     )
 
@@ -366,7 +366,7 @@ async def test_browse_mode_with_query(route_client, monkeypatch, base_app):
 async def test_browse_mode_error_handling(route_client, monkeypatch, base_app):
     """Browse mode error is handled gracefully."""
     app, db, pool = base_app
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     await db.add_channel(Channel(channel_id=300, title="Error Channel"))
 
@@ -374,7 +374,7 @@ async def test_browse_mode_error_handling(route_client, monkeypatch, base_app):
     mock_svc.search = AsyncMock(side_effect=Exception("Browse failed"))
     mock_svc.check_quota = AsyncMock(return_value=None)
     monkeypatch.setattr(
-        "src.web.search.handlers.deps.search_service",
+        "tg_agent.web.search.handlers.deps.search_service",
         lambda r: mock_svc,
     )
 
@@ -388,7 +388,7 @@ async def test_browse_mode_error_handling(route_client, monkeypatch, base_app):
 @pytest.mark.anyio
 async def test_extract_length_filter():
     """Test _extract_length helper function."""
-    from src.web.routes.search import _extract_length
+    from tg_agent.web.routes.search import _extract_length
 
     cleaned, min_len, max_len = _extract_length("test len<500")
     assert cleaned == "test"
@@ -474,7 +474,7 @@ async def test_search_quota_failure(route_client, monkeypatch):
     mock_svc.search = AsyncMock(return_value=mock_result)
     mock_svc.check_quota = AsyncMock(side_effect=Exception("Quota check failed"))
     monkeypatch.setattr(
-        "src.web.search.handlers.deps.search_service",
+        "tg_agent.web.search.handlers.deps.search_service",
         lambda r: mock_svc,
     )
 
@@ -489,7 +489,7 @@ async def _insert_message_get_id(db, channel_id, message_id, text, date=None):
     """Helper: insert a message and return its DB row id."""
     from datetime import datetime, timezone
 
-    from src.models import Channel, Message
+    from tg_agent.models import Channel, Message
 
     await db.add_channel(Channel(channel_id=channel_id, title=f"Ch{channel_id}"))
     msg = Message(
@@ -674,7 +674,7 @@ async def test_read_messages_route_returns_json(route_client):
 async def test_read_messages_route_clamps_limit(route_client, monkeypatch):
     db = route_client._transport_app.state.db
     await db.add_channel(Channel(channel_id=778, title="ClampChan", username="clampchan"))
-    from src.database.repositories.messages import MessageSearchPage
+    from tg_agent.database.repositories.messages import MessageSearchPage
 
     search_messages = AsyncMock(return_value=MessageSearchPage(messages=[], total=0))
     monkeypatch.setattr(db, "search_messages", search_messages)
@@ -706,7 +706,7 @@ async def test_search_page_shows_plus_when_has_more(route_client, monkeypatch):
     mock_svc.search = AsyncMock(return_value=mock_result)
     mock_svc.check_quota = AsyncMock(return_value=None)
     monkeypatch.setattr(
-        "src.web.search.handlers.deps.search_service",
+        "tg_agent.web.search.handlers.deps.search_service",
         lambda r: mock_svc,
     )
 
@@ -735,7 +735,7 @@ async def test_search_page_no_next_when_no_more(route_client, monkeypatch):
     mock_svc.search = AsyncMock(return_value=mock_result)
     mock_svc.check_quota = AsyncMock(return_value=None)
     monkeypatch.setattr(
-        "src.web.search.handlers.deps.search_service",
+        "tg_agent.web.search.handlers.deps.search_service",
         lambda r: mock_svc,
     )
 
@@ -813,7 +813,7 @@ async def test_search_page_next_link_for_exact_total_modes(route_client, monkeyp
     mock_svc.search = AsyncMock(return_value=mock_result)
     mock_svc.check_quota = AsyncMock(return_value=None)
     monkeypatch.setattr(
-        "src.web.search.handlers.deps.search_service",
+        "tg_agent.web.search.handlers.deps.search_service",
         lambda r: mock_svc,
     )
 

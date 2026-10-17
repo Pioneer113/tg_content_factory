@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.database import Database
 from tests.agent_tools_helpers import _get_tool_handlers, _text
+from tg_agent.database import Database
 
 
 class SnapshotClientPool:
@@ -1083,7 +1083,7 @@ class TestReadMessagesTool:
             {"title": "802", "channel_id": 111802, "channel_type": "group"}
         ])
 
-        with patch("src.services.channel_service.ChannelService", return_value=ch_svc):
+        with patch("tg_agent.services.channel_service.ChannelService", return_value=ch_svc):
             handlers = _get_tool_handlers(mock_db, client_pool=mock_pool)
             result = await handlers["read_messages"]({
                 "phone": None,

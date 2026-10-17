@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from src.models import Channel, Message
+from tg_agent.models import Channel, Message
 
 
 async def _seed(db, channel_id: int, title: str = "Test", username: str | None = None) -> None:

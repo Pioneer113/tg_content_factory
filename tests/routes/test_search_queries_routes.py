@@ -130,7 +130,7 @@ async def test_run_search_query(route_client):
         data={"query": "run test", "interval_minutes": "60"},
     )
 
-    with patch("src.web.search_queries.handlers.deps.search_query_service") as mock_svc:
+    with patch("tg_agent.web.search_queries.handlers.deps.search_query_service") as mock_svc:
         mock_svc.return_value.run_once = AsyncMock()
         resp = await route_client.post("/search-queries/1/run", follow_redirects=False)
         assert resp.status_code == 303
@@ -195,7 +195,7 @@ async def test_edit_search_query_missing_query(route_client):
 
 @pytest.mark.anyio
 async def test_get_search_query_json(route_client, db):
-    from src.models import SearchQuery
+    from tg_agent.models import SearchQuery
 
     sq_id = await db.repos.search_queries.add(SearchQuery(query="btc", interval_minutes=60))
     resp = await route_client.get(f"/search-queries/{sq_id}")
@@ -213,7 +213,7 @@ async def test_get_search_query_not_found(route_client):
 
 @pytest.mark.anyio
 async def test_get_search_query_stats_json(route_client, db):
-    from src.models import SearchQuery
+    from tg_agent.models import SearchQuery
 
     sq_id = await db.repos.search_queries.add(SearchQuery(query="eth", interval_minutes=60))
     resp = await route_client.get(f"/search-queries/{sq_id}/stats?days=7")

@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
-from src.services.runtime_diagnostics import (
+from tg_agent.services.runtime_diagnostics import (
     DEFAULT_SNAPSHOT_PUBLISH_TIMEOUT_SEC,
     WORKER_HEARTBEAT_STALE_AFTER_SEC,
     evaluate_worker_heartbeat,

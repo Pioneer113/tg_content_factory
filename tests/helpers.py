@@ -19,18 +19,18 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from telethon_floodgate import ResolveRateLimiter
 
-from src.collection_queue import CollectionQueue
-from src.config import AppConfig, TelegramRuntimeConfig
-from src.database import Database
-from src.models import Account, Channel
-from src.scheduler.service import SchedulerManager
-from src.search.ai_search import AISearchEngine
-from src.search.engine import SearchEngine
-from src.telegram.auth import TelegramAuth
-from src.telegram.client_pool import ClientPool
-from src.telegram.collector import Collector
-from src.telegram.resolve_guard import ResolveGuardMixin, build_resolve_rate_limiter
-from src.web.app import create_app
+from tg_agent.collection_queue import CollectionQueue
+from tg_agent.config import AppConfig, TelegramRuntimeConfig
+from tg_agent.database import Database
+from tg_agent.models import Account, Channel
+from tg_agent.scheduler.service import SchedulerManager
+from tg_agent.search.ai_search import AISearchEngine
+from tg_agent.search.engine import SearchEngine
+from tg_agent.telegram.auth import TelegramAuth
+from tg_agent.telegram.client_pool import ClientPool
+from tg_agent.telegram.collector import Collector
+from tg_agent.telegram.resolve_guard import ResolveGuardMixin, build_resolve_rate_limiter
+from tg_agent.web.app import create_app
 
 
 def make_resolve_limiter(**kwargs: object) -> ResolveRateLimiter:
@@ -510,7 +510,7 @@ class FakeClientPool(ResolveGuardMixin, MagicMock):
         # unset / force when a fallback confirmably resolved" DB persist, #1327)
         # so tests exercise the production remember path against the fake's
         # _db/_channel_phone_map state, mirroring forget_channel_phone below.
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         return await ClientPool.remember_channel_phone(
             self, channel_id, phone, known_preferred=known_preferred, force=force
@@ -521,7 +521,7 @@ class FakeClientPool(ResolveGuardMixin, MagicMock):
         # conditional DB clear + #676 WARNING on failure) so tests exercise the
         # production forget path, including its logging, against the fake's
         # _db/_channel_phone_map state.
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         return await ClientPool.forget_channel_phone(
             self, channel_id, only_if_phone=only_if_phone
@@ -529,14 +529,14 @@ class FakeClientPool(ResolveGuardMixin, MagicMock):
 
     @staticmethod
     def _classify_entity(entity) -> tuple[str, bool]:
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         return ClientPool._classify_entity(entity)
 
     async def resolve_entity_with_warm(self, session, phone, peer, **kwargs):
         # Delegate to the real centralized resolver so the warm-then-retry path
         # is exercised against the fake session/cache state.
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         return await ClientPool.resolve_entity_with_warm(self, session, phone, peer, **kwargs)
 
@@ -908,7 +908,7 @@ async def drain_loop(rounds: int = 3) -> None:
 
 def fast_llm_error_recovery(max_retries: int = 0):
     """Return an LLM recovery service without wall-clock retry backoff."""
-    from src.services.error_recovery_service import ErrorRecoveryService, RetryPolicy
+    from tg_agent.services.error_recovery_service import ErrorRecoveryService, RetryPolicy
 
     return ErrorRecoveryService(
         retry_policy=RetryPolicy(

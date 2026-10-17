@@ -16,14 +16,14 @@ from datetime import datetime, timezone
 
 import pytest
 
-from src.models import (
+from tg_agent.models import (
     ContentPipeline,
     Message,
     PipelineGenerationBackend,
     PipelinePublishMode,
     SearchResult,
 )
-from src.services.content_generation_service import ContentGenerationService
+from tg_agent.services.content_generation_service import ContentGenerationService
 
 
 class DummySearchEngine:
@@ -103,7 +103,7 @@ class FakeQualityService:
         self.scored: list[str] = []
 
     async def score_and_check(self, text: str):
-        from src.services.quality_scoring_service import QualityScore
+        from tg_agent.services.quality_scoring_service import QualityScore
 
         self.scored.append(text)
         value = self._scores.get(text, 0.0)
@@ -120,7 +120,7 @@ class FakeQualityService:
         )
 
     async def score_content(self, text: str, model=None):
-        from src.services.quality_scoring_service import QualityScore
+        from tg_agent.services.quality_scoring_service import QualityScore
 
         value = self._scores.get(text, 0.0)
         return QualityScore(

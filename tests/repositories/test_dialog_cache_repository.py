@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from src.database import Database
+from tg_agent.database import Database
 
 
 @pytest.mark.anyio

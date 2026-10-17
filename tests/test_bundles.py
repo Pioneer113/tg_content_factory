@@ -6,14 +6,14 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from src.database.bundles import (
+from tg_agent.database.bundles import (
     AccountBundle,
     ChannelBundle,
     CollectionBundle,
     NotificationBundle,
     SearchBundle,
 )
-from src.models import (
+from tg_agent.models import (
     Account,
     Channel,
     ChannelStats,
@@ -239,7 +239,7 @@ class TestChannelBundle:
         """
         import asyncio
 
-        from src.models import ContentPipeline, PipelineGenerationBackend, PipelinePublishMode
+        from tg_agent.models import ContentPipeline, PipelineGenerationBackend, PipelinePublishMode
 
         b = ChannelBundle.from_database(db)
         pk = await b.add_channel(_channel(channel_id=730, title="RaceTarget"))
@@ -439,7 +439,7 @@ class TestChannelBundle:
         active = await b.get_active_stats_task()
         assert active is not None
 
-        from src.models import CollectionTaskType
+        from tg_agent.models import CollectionTaskType
 
         claimed = await b.tasks.claim_next_due_generic_task(
             NOW, [CollectionTaskType.STATS_ALL.value]

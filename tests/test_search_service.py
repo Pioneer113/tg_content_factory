@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.models import SearchResult
-from src.services.search_service import SearchService
+from tg_agent.models import SearchResult
+from tg_agent.services.search_service import SearchService
 
 
 def _make_search_result(query="test"):

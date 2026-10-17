@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 
-from src.web.template_globals import (
+from tg_agent.web.template_globals import (
     FILTER_FLAG_EMOJI,
     FLASH_MESSAGES,
     configure_template_globals,
@@ -116,7 +116,7 @@ def test_fallback_text_present_for_string():
 
 def test_tme_channel_id_filter_registered_and_renders_link():
     """The tme_channel_id filter is wired up and builds a correct t.me/c link."""
-    from src.web.paths import TEMPLATES_DIR
+    from tg_agent.web.paths import TEMPLATES_DIR
 
     templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
     configure_template_globals(templates)

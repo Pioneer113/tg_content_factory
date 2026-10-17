@@ -49,8 +49,13 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.database.bundles import PipelineBundle
-from src.models import (
+# FakeClientPool is reused from the publish-service unit tests instead of being
+# re-rolled here: it routes get_client_by_phone / release_client /
+# resolve_dialog_entity to a FakeClient that records each send, so the real
+# PublishService._publish_to_target runs end-to-end with no network.
+from tests.test_publish_service import FakeClientPool
+from tg_agent.database.bundles import PipelineBundle
+from tg_agent.models import (
     Channel,
     CollectionTask,
     CollectionTaskStatus,
@@ -63,17 +68,11 @@ from src.models import (
     PipelineTarget,
     SearchResult,
 )
-from src.services.content_generation_service import ContentGenerationService
-from src.services.draft_notification_service import DraftNotificationService
-from src.services.publish_service import PublishService
-from src.services.task_handlers.base import TaskHandlerContext
-from src.services.task_handlers.content import ContentTaskHandler
-
-# FakeClientPool is reused from the publish-service unit tests instead of being
-# re-rolled here: it routes get_client_by_phone / release_client /
-# resolve_dialog_entity to a FakeClient that records each send, so the real
-# PublishService._publish_to_target runs end-to-end with no network.
-from tests.test_publish_service import FakeClientPool
+from tg_agent.services.content_generation_service import ContentGenerationService
+from tg_agent.services.draft_notification_service import DraftNotificationService
+from tg_agent.services.publish_service import PublishService
+from tg_agent.services.task_handlers.base import TaskHandlerContext
+from tg_agent.services.task_handlers.content import ContentTaskHandler
 
 # ---------------------------------------------------------------------------
 # Fakes for the two external edges only: LLM provider and the draft notifier.
@@ -226,7 +225,7 @@ def _patch_generation(monkeypatch, db, notifier=None) -> None:
         return _build_real_generation_service(db, ctx.search_engine, notifier=notifier)
 
     monkeypatch.setattr(
-        "src.services.task_handlers.content.build_content_generation_service",
+        "tg_agent.services.task_handlers.content.build_content_generation_service",
         _builder,
     )
 
@@ -601,8 +600,8 @@ async def test_moderated_cycle_via_real_web_approve_and_publish_command(
     404 check) or in the publish command handler would now fail the test, not slip
     through. Only the LLM provider and Telegram delivery stay faked.
     """
-    from src.services.telegram_command_dispatcher import TelegramCommandDispatcher
     from tests.helpers import build_web_app, make_auth_client, make_test_config
+    from tg_agent.services.telegram_command_dispatcher import TelegramCommandDispatcher
 
     # A real web app over the SAME :memory: db the harness uses (CLAUDE.md: the app
     # and harness must share one Database instance, so pass `db` through).

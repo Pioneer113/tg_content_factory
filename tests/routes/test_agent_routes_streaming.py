@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.database import DatabaseBusyError
+from tg_agent.database import DatabaseBusyError
 
 
 @pytest.fixture
@@ -32,7 +32,7 @@ async def test_inject_context_large_context_warning(client, db):
     """Test inject context logs warning for very large content (>200K chars)."""
     thread_id = await db.create_agent_thread("Context")
 
-    with patch("src.agent.context.format_context", return_value="x" * 250_000):
+    with patch("tg_agent.agent.context.format_context", return_value="x" * 250_000):
         resp = await client.post(
             f"/agent/threads/{thread_id}/context",
             content=json.dumps({"channel_id": 100, "limit": 50000}),
@@ -137,7 +137,7 @@ async def test_chat_rejects_malformed_json(client, db):
 
 @pytest.mark.anyio
 async def test_chat_streaming_total_timeout_cancels_with_bounded_wait(client, db, monkeypatch):
-    from src.web.agent import handlers
+    from tg_agent.web.agent import handlers
 
     thread_id = await db.create_agent_thread("Chat")
     mock_mgr = client._transport_app.state.agent_manager
@@ -187,7 +187,7 @@ async def test_chat_streaming_total_timeout_cancels_with_bounded_wait(client, db
 
 @pytest.mark.anyio
 async def test_chat_streaming_keepalive_does_not_cancel_active_stream(client, db, monkeypatch):
-    from src.web.agent import handlers
+    from tg_agent.web.agent import handlers
 
     thread_id = await db.create_agent_thread("Chat")
     mock_mgr = client._transport_app.state.agent_manager
@@ -220,7 +220,7 @@ async def test_chat_streaming_keepalive_does_not_cancel_active_stream(client, db
 
 @pytest.mark.anyio
 async def test_chat_streaming_second_message_survives_keepalive_after_first_turn(client, db, monkeypatch):
-    from src.web.agent import handlers
+    from tg_agent.web.agent import handlers
 
     thread_id = await db.create_agent_thread("Chat")
     mock_mgr = client._transport_app.state.agent_manager
@@ -268,7 +268,7 @@ async def test_chat_streaming_second_message_survives_keepalive_after_first_turn
 
 @pytest.mark.anyio
 async def test_chat_streaming_client_disconnect_closes_pending_stream(client, db, monkeypatch):
-    from src.web.agent import handlers
+    from tg_agent.web.agent import handlers
 
     thread_id = await db.create_agent_thread("Chat")
     mock_mgr = client._transport_app.state.agent_manager
@@ -307,7 +307,7 @@ async def test_chat_streaming_client_disconnect_closes_pending_stream(client, db
 
 @pytest.mark.anyio
 async def test_chat_permission_request_waits_without_idle_timeout(client, db, monkeypatch):
-    from src.web.agent import handlers
+    from tg_agent.web.agent import handlers
 
     thread_id = await db.create_agent_thread("Chat")
     mock_mgr = client._transport_app.state.agent_manager

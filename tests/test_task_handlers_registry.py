@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.models import CollectionTask, CollectionTaskStatus, CollectionTaskType
-from src.services.task_handlers import (
+from tg_agent.models import CollectionTask, CollectionTaskStatus, CollectionTaskType
+from tg_agent.services.task_handlers import (
     ContentTaskHandler,
     ExportTaskHandler,
     FilterAnalyzeTaskHandler,
@@ -16,7 +16,7 @@ from src.services.task_handlers import (
     TaskHandlerContext,
     TranslationTaskHandler,
 )
-from src.services.unified_dispatcher import HANDLED_TYPES, UnifiedDispatcher
+from tg_agent.services.unified_dispatcher import HANDLED_TYPES, UnifiedDispatcher
 
 
 def _context() -> TaskHandlerContext:

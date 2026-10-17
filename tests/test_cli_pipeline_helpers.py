@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.cli.commands.pipeline import _parse_target_refs, _preview_text
-from src.services.pipeline_service import PipelineValidationError
+from tg_agent.cli.commands.pipeline import _parse_target_refs, _preview_text
+from tg_agent.services.pipeline_service import PipelineValidationError
 
 # --- _parse_target_refs ---
 
@@ -78,7 +78,7 @@ def test_preview_text_whitespace_normalization():
 
 
 def test_cli_test_constants():
-    from src.cli.commands.test import (
+    from tg_agent.cli.commands.test import (
         _TG_CHECKS_AFTER_POOL,
         PARALLEL_SAFE_PYTEST_COMMAND,
         SERIAL_PYTEST_COMMAND,
@@ -97,7 +97,7 @@ def test_cli_test_constants():
 
 
 def test_cli_test_check_result():
-    from src.cli.commands.test import CheckResult, Status
+    from tg_agent.cli.commands.test import CheckResult, Status
 
     r = CheckResult("test_check", Status.PASS, "ok")
     assert r.name == "test_check"
@@ -106,7 +106,7 @@ def test_cli_test_check_result():
 
 
 def test_cli_test_status_enum():
-    from src.cli.commands.test import Status
+    from tg_agent.cli.commands.test import Status
 
     assert Status.PASS.value == "PASS"
     assert Status.FAIL.value == "FAIL"
@@ -117,7 +117,7 @@ def test_cli_test_status_enum():
 
 
 def test_cli_filter_parse_pks_more():
-    from src.cli.commands.filter import _parse_pks
+    from tg_agent.cli.commands.filter import _parse_pks
 
     assert _parse_pks("10,20,30") == [10, 20, 30]
     assert _parse_pks("0") == [0]
@@ -128,7 +128,7 @@ def test_cli_filter_parse_pks_more():
 
 
 def test_cli_scheduler_import():
-    from src.cli.commands import scheduler as mod
+    from tg_agent.cli.commands import scheduler as mod
 
     assert hasattr(mod, "run")
 
@@ -137,7 +137,7 @@ def test_cli_scheduler_import():
 
 
 def test_cli_collect_import():
-    from src.cli.commands import collect as mod
+    from tg_agent.cli.commands import collect as mod
 
     assert hasattr(mod, "run")
 
@@ -146,7 +146,7 @@ def test_cli_collect_import():
 
 
 def test_cli_messages_import():
-    from src.cli.commands import messages as mod
+    from tg_agent.cli.commands import messages as mod
 
     assert hasattr(mod, "run")
 
@@ -155,6 +155,6 @@ def test_cli_messages_import():
 
 
 def test_cli_account_import():
-    from src.cli.commands import account as mod
+    from tg_agent.cli.commands import account as mod
 
     assert hasattr(mod, "run")

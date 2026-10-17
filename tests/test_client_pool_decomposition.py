@@ -27,9 +27,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.telegram.client_pool import ClientPool
-from src.telegram.resolve_guard import ResolveGuardMixin
 from tests.helpers import FakeCliTelethonClient
+from tg_agent.telegram.client_pool import ClientPool
+from tg_agent.telegram.resolve_guard import ResolveGuardMixin
 
 # The frozen public surface of ClientPool. Every name here must remain a
 # callable attribute on the class after the decomposition. Losing one would
@@ -270,7 +270,7 @@ async def test_acquire_from_lease_direct_session_keeps_connection_on_release():
     """A pooled DIRECT session is registered with disconnect_on_release=False —
     releasing the lease must not kill the persistent connection (#mutation
     slice 5)."""
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = _lease_pool_mock()
     raw = MagicMock()
@@ -293,7 +293,7 @@ async def test_acquire_from_lease_teardown_race_releases_and_disconnects(caplog)
     'client pool is disconnecting' failure releases the account lease and
     disconnects the borrowed direct client instead of leasing it out
     (#mutation slice 5)."""
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     class _TeardownWhileWaitingLock:
         def __init__(self, pool):
@@ -312,7 +312,7 @@ async def test_acquire_from_lease_teardown_race_releases_and_disconnects(caplog)
     direct.with_flood_context = MagicMock(return_value=SimpleNamespace(raw_client=raw))
     pool._direct_session = MagicMock(return_value=direct)
 
-    with caplog.at_level("ERROR", logger="src.telegram.pool_lifecycle"):
+    with caplog.at_level("ERROR", logger="tg_agent.telegram.pool_lifecycle"):
         result = await ClientPool._acquire_from_lease(pool, _lease_stub())
 
     assert result is None
@@ -327,7 +327,7 @@ async def test_acquire_from_lease_teardown_race_releases_and_disconnects(caplog)
 async def test_acquire_from_lease_backend_install_pools_connection():
     """A fresh backend client is wrapped into the persistent pool session and
     its lease is marked disconnect_on_release=False (#mutation slice 5)."""
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = _lease_pool_mock()
     raw = MagicMock()
@@ -351,7 +351,7 @@ async def test_acquire_from_lease_failed_backend_acquire_evicts_pooled_session()
     re-acquires) and releases the account lease; a force_native acquire never
     owns self.clients, so the pooled session must survive (#1385, #mutation
     slice 5)."""
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = _lease_pool_mock()
     pool._backend_router.acquire_client = AsyncMock(side_effect=RuntimeError("no backend"))

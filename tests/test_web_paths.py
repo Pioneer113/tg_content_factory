@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.web.paths import DATA_IMAGE_DIR, PROJECT_ROOT, STATIC_DIR, TEMPLATES_DIR, WEB_DIR
+from tg_agent.web.paths import DATA_IMAGE_DIR, PROJECT_ROOT, STATIC_DIR, TEMPLATES_DIR, WEB_DIR
 
 
 def test_web_dir_is_web_package():

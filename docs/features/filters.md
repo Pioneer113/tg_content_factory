@@ -17,14 +17,14 @@
 
 === "CLI"
     ```bash
-    python -m src.main filter analyze       # анализ без изменений
-    python -m src.main filter apply         # применить фильтры
-    python -m src.main filter reset         # сбросить все фильтры
-    python -m src.main filter precheck      # pre-фильтр по кол-ву подписчиков
-    python -m src.main filter suspects      # whitelist↔blacklist противоречия (#1490)
-    python -m src.main filter toggle --channel-id ID  # ручное переключение
-    python -m src.main filter purge         # удалить сообщения отфильтрованных
-    python -m src.main filter hard-delete   # удалить каналы из БД
+    python -m tg_agent.main filter analyze       # анализ без изменений
+    python -m tg_agent.main filter apply         # применить фильтры
+    python -m tg_agent.main filter reset         # сбросить все фильтры
+    python -m tg_agent.main filter precheck      # pre-фильтр по кол-ву подписчиков
+    python -m tg_agent.main filter suspects      # whitelist↔blacklist противоречия (#1490)
+    python -m tg_agent.main filter toggle --channel-id ID  # ручное переключение
+    python -m tg_agent.main filter purge         # удалить сообщения отфильтрованных
+    python -m tg_agent.main filter hard-delete   # удалить каналы из БД
     ```
 
 Whitelist-подход (#1490): тег доверия «авторский контент» (через `channel tag set`) —

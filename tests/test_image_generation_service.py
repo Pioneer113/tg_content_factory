@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.services.image_generation_service import ImageGenerationService
+from tg_agent.services.image_generation_service import ImageGenerationService
 
 
 def _make_clean_service():
@@ -351,7 +351,7 @@ def test_init_s3_logs_when_configured(monkeypatch, caplog):
         def from_env(cls):
             return cls()
 
-    monkeypatch.setattr("src.services.s3_store.S3Store", FakeS3Store)
+    monkeypatch.setattr("tg_agent.services.s3_store.S3Store", FakeS3Store)
     monkeypatch.delenv("TOGETHER_API_KEY", raising=False)
     monkeypatch.delenv("HUGGINGFACE_API_KEY", raising=False)
     monkeypatch.delenv("HUGGINGFACE_TOKEN", raising=False)
@@ -372,7 +372,7 @@ def test_init_s3_no_log_when_not_configured(monkeypatch, caplog):
         def from_env(cls):
             return None
 
-    monkeypatch.setattr("src.services.s3_store.S3Store", FakeS3StoreNone)
+    monkeypatch.setattr("tg_agent.services.s3_store.S3Store", FakeS3StoreNone)
     monkeypatch.delenv("TOGETHER_API_KEY", raising=False)
     monkeypatch.delenv("HUGGINGFACE_API_KEY", raising=False)
     monkeypatch.delenv("HUGGINGFACE_TOKEN", raising=False)
@@ -620,7 +620,7 @@ def test_codex_available_false_without_sdk(monkeypatch):
     """The detection predicate returns False when the SDK is not importable."""
     import importlib.util
 
-    from src.services import provider_adapters
+    from tg_agent.services import provider_adapters
 
     real_find_spec = importlib.util.find_spec
 
@@ -637,7 +637,7 @@ def test_codex_available_false_without_sdk(monkeypatch):
 
 def test_codex_available_true_with_writable_codex_home(monkeypatch, tmp_path):
     """A usable Codex home needs SDK, auth, and writable runtime state."""
-    from src.services import provider_adapters
+    from tg_agent.services import provider_adapters
 
     codex_home = tmp_path / "codex-home"
     codex_home.mkdir()
@@ -655,7 +655,7 @@ def test_codex_available_true_with_writable_codex_home(monkeypatch, tmp_path):
 
 def test_codex_available_false_without_auth_in_codex_home(monkeypatch, tmp_path):
     """CODEX_HOME is authoritative; missing auth there means unavailable."""
-    from src.services import provider_adapters
+    from tg_agent.services import provider_adapters
 
     codex_home = tmp_path / "codex-home"
     codex_home.mkdir()
@@ -671,7 +671,7 @@ def test_codex_available_false_without_auth_in_codex_home(monkeypatch, tmp_path)
 
 def test_codex_available_false_when_codex_home_not_writable(monkeypatch, tmp_path):
     """Sandboxed readonly Codex homes should not register the provider."""
-    from src.services import provider_adapters
+    from tg_agent.services import provider_adapters
 
     codex_home = tmp_path / "codex-home"
     codex_home.mkdir()
@@ -689,7 +689,7 @@ def test_codex_available_false_when_codex_home_not_writable(monkeypatch, tmp_pat
 
 def test_codex_available_false_when_state_db_not_writable(monkeypatch, tmp_path):
     """Existing Codex state DB files must be writable before live SDK use."""
-    from src.services import provider_adapters
+    from tg_agent.services import provider_adapters
 
     codex_home = tmp_path / "codex-home"
     codex_home.mkdir()
@@ -803,7 +803,7 @@ async def test_search_models_openai_refresh_falls_back_on_empty(monkeypatch):
 @pytest.mark.anyio
 async def test_fetch_openai_image_models_filters_image_only(monkeypatch):
     """The image fetch helper keeps only gpt-image*/dall-e* ids from /v1/models."""
-    from src.services import provider_model_cache
+    from tg_agent.services import provider_model_cache
 
     async def _fake_ids(base_url, api_key):
         return ["gpt-4o", "gpt-image-1", "dall-e-3", "text-embedding-3-small", "gpt-image-1-mini"]
@@ -1024,7 +1024,7 @@ async def test_generate_invokes_adapter_exactly_once():
 async def test_generate_blocked_when_cost_cap_exceeded():
     """With production limits enabled and the cap already exceeded, generate is
     blocked BEFORE the (paid) adapter runs (#814)."""
-    from src.services.production_limits_service import (
+    from tg_agent.services.production_limits_service import (
         CostConfig,
         ProductionLimitsService,
         RateLimitConfig,
@@ -1059,7 +1059,7 @@ async def test_generate_blocked_when_cost_cap_exceeded():
 @pytest.mark.anyio
 async def test_generate_records_cost_when_allowed():
     """When within limits, generate proceeds and records the image cost (#814)."""
-    from src.services.production_limits_service import (
+    from tg_agent.services.production_limits_service import (
         CostConfig,
         ProductionLimitsService,
         RateLimitConfig,
@@ -1090,7 +1090,7 @@ async def test_generate_invokes_adapter_once_with_limits_configured():
     """Even on the limits-enabled path (acquire → adapter → record_cost), the paid
     adapter is invoked exactly once — the cost-cap wiring adds no retry around the
     non-idempotent billed call (#958 class, limits branch of generate())."""
-    from src.services.production_limits_service import (
+    from tg_agent.services.production_limits_service import (
         CostConfig,
         ProductionLimitsService,
         RateLimitConfig,
@@ -1122,7 +1122,7 @@ async def test_generate_invokes_adapter_once_with_limits_configured():
 
 
 def _make_limits(cost_config):
-    from src.services.production_limits_service import (
+    from tg_agent.services.production_limits_service import (
         ProductionLimitsService,
         RateLimitConfig,
     )
@@ -1150,7 +1150,7 @@ async def test_concurrent_generations_do_not_exceed_cost_cap():
     On the pre-#1250 check-then-record flow every generation passed the check
     against the same pre-spend total while the paid calls were still in flight,
     so all N adapters ran and the cap was exceeded by (N-1) x cost."""
-    from src.services.production_limits_service import CostConfig
+    from tg_agent.services.production_limits_service import CostConfig
 
     limits = _make_limits(CostConfig(cost_per_image=1.0, daily_cost_cap=1.0))
 
@@ -1192,7 +1192,7 @@ async def test_failed_generation_releases_reserved_budget(failure):
     """When the paid call fails (error, timeout, or empty result), the budget
     reserved by acquire() must be released — otherwise it stays claimed all day
     and blocks later generations (#1250)."""
-    from src.services.production_limits_service import CostConfig
+    from tg_agent.services.production_limits_service import CostConfig
 
     limits = _make_limits(CostConfig(cost_per_image=1.0, daily_cost_cap=1.0))
 

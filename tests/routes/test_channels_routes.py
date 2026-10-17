@@ -88,7 +88,7 @@ async def test_get_dialogs_json(route_client, db):
         [{"channel_id": 200, "title": "Test Dialog", "channel_type": "channel"}],
     )
 
-    with patch("src.web.channels.handlers.deps.channel_service") as mock_svc:
+    with patch("tg_agent.web.channels.handlers.deps.channel_service") as mock_svc:
         mock_svc.return_value.get_dialogs_with_added_flags = AsyncMock(
             return_value=[{"channel_id": 200, "title": "Test Dialog"}]
         )
@@ -102,7 +102,7 @@ async def test_get_dialogs_json(route_client, db):
 @pytest.mark.anyio
 async def test_add_bulk_channels(route_client):
     """Test add bulk channels."""
-    with patch("src.web.channels.handlers.deps.channel_service") as mock_svc:
+    with patch("tg_agent.web.channels.handlers.deps.channel_service") as mock_svc:
         mock_svc.return_value.add_bulk_by_dialog_ids = AsyncMock()
         resp = await route_client.post(
             "/channels/add-bulk",
@@ -116,7 +116,7 @@ async def test_add_bulk_channels(route_client):
 @pytest.mark.anyio
 async def test_toggle_channel(route_client):
     """Test toggle channel."""
-    with patch("src.web.channels.handlers.deps.channel_service") as mock_svc:
+    with patch("tg_agent.web.channels.handlers.deps.channel_service") as mock_svc:
         mock_svc.return_value.toggle = AsyncMock()
         resp = await route_client.post("/channels/1/toggle", follow_redirects=False)
         assert resp.status_code == 303
@@ -129,7 +129,7 @@ async def test_toggle_channel(route_client):
 @pytest.mark.anyio
 async def test_delete_channel(route_client):
     """Test delete channel."""
-    with patch("src.web.channels.handlers.deps.channel_service") as mock_svc:
+    with patch("tg_agent.web.channels.handlers.deps.channel_service") as mock_svc:
         mock_svc.return_value.delete = AsyncMock()
         resp = await route_client.post("/channels/1/delete", follow_redirects=False)
         assert resp.status_code == 303
@@ -139,7 +139,7 @@ async def test_delete_channel(route_client):
 @pytest.mark.anyio
 async def test_delete_channel_in_pipeline(route_client):
     """Test delete channel that is in pipeline."""
-    with patch("src.web.channels.handlers.deps.channel_service") as mock_svc:
+    with patch("tg_agent.web.channels.handlers.deps.channel_service") as mock_svc:
         import sqlite3
 
         mock_svc.return_value.delete = AsyncMock(
@@ -153,8 +153,8 @@ async def test_delete_channel_in_pipeline(route_client):
 @pytest.mark.anyio
 async def test_collect_all_redirect(route_client):
     """Test collect all redirects."""
-    with patch("src.web.routes.channel_collection.deps.collection_service") as mock_svc:
-        from src.services.collection_service import BulkEnqueueResult
+    with patch("tg_agent.web.routes.channel_collection.deps.collection_service") as mock_svc:
+        from tg_agent.services.collection_service import BulkEnqueueResult
         mock_svc.return_value.enqueue_all_channels = AsyncMock(
             return_value=BulkEnqueueResult(
                 queued_count=1,
@@ -169,8 +169,8 @@ async def test_collect_all_redirect(route_client):
 @pytest.mark.anyio
 async def test_collect_all_htmx(route_client):
     """Test collect all with HTMX header."""
-    with patch("src.web.routes.channel_collection.deps.collection_service") as mock_svc:
-        from src.services.collection_service import BulkEnqueueResult
+    with patch("tg_agent.web.routes.channel_collection.deps.collection_service") as mock_svc:
+        from tg_agent.services.collection_service import BulkEnqueueResult
         mock_svc.return_value.enqueue_all_channels = AsyncMock(
             return_value=BulkEnqueueResult(
                 queued_count=1,
@@ -212,7 +212,7 @@ async def test_collect_all_shutting_down_htmx(route_client):
 @pytest.mark.anyio
 async def test_collect_channel(route_client, db):
     """Test collect single channel."""
-    with patch("src.web.routes.channel_collection.deps.collection_service") as mock_svc:
+    with patch("tg_agent.web.routes.channel_collection.deps.collection_service") as mock_svc:
         svc = mock_svc.return_value
         svc.enqueue_channel_by_pk = AsyncMock(return_value="queued")
         resp = await route_client.post("/channels/1/collect", follow_redirects=False)
@@ -223,7 +223,7 @@ async def test_collect_channel(route_client, db):
 @pytest.mark.anyio
 async def test_collect_channel_htmx(route_client, db):
     """Test collect single channel with HTMX."""
-    with patch("src.web.routes.channel_collection.deps.collection_service") as mock_svc:
+    with patch("tg_agent.web.routes.channel_collection.deps.collection_service") as mock_svc:
         svc = mock_svc.return_value
         svc.enqueue_channel_by_pk = AsyncMock(return_value="queued")
         resp = await route_client.post(
@@ -239,7 +239,7 @@ async def test_collect_channel_htmx(route_client, db):
 @pytest.mark.anyio
 async def test_collect_channel_full(route_client, db):
     """Test explicit full backfill route."""
-    with patch("src.web.routes.channel_collection.deps.collection_service") as mock_svc:
+    with patch("tg_agent.web.routes.channel_collection.deps.collection_service") as mock_svc:
         svc = mock_svc.return_value
         svc.enqueue_channel_by_pk = AsyncMock(return_value="queued")
         resp = await route_client.post("/channels/1/collect/full", follow_redirects=False)
@@ -251,7 +251,7 @@ async def test_collect_channel_full(route_client, db):
 @pytest.mark.anyio
 async def test_collect_channel_full_htmx(route_client, db):
     """Explicit full backfill HTMX response updates desktop and mobile buttons."""
-    with patch("src.web.routes.channel_collection.deps.collection_service") as mock_svc:
+    with patch("tg_agent.web.routes.channel_collection.deps.collection_service") as mock_svc:
         svc = mock_svc.return_value
         svc.enqueue_channel_by_pk = AsyncMock(return_value="queued")
         resp = await route_client.post(
@@ -267,7 +267,7 @@ async def test_collect_channel_full_htmx(route_client, db):
 @pytest.mark.anyio
 async def test_collect_stats(route_client):
     """Test collect stats for all channels."""
-    with patch("src.web.routes.channel_collection.deps.get_collector") as mock_col:
+    with patch("tg_agent.web.routes.channel_collection.deps.get_collector") as mock_col:
         mock_collector = MagicMock()
         mock_collector.is_stats_running = False
         mock_col.return_value = mock_collector
@@ -362,7 +362,7 @@ async def test_channels_page_lazy_loads_list(route_client):
 async def test_channels_fragment_is_bare_partial_with_both_oob_copies(route_client, db):
     """#756: the list fragment is a bare partial and renders BOTH per-row collect
     button copies (desktop -{pk} and mobile -m-{pk}) so OOB swaps resolve."""
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     await db.add_channel(
         Channel(channel_id=-100777, title="OOB Chan", username="oobchan", channel_type="channel")

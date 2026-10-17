@@ -13,8 +13,6 @@ from pathlib import Path
 
 import pytest
 
-from src.cli.dotenv import load_cli_dotenv
-from src.config import load_config
 from tests.cli_real_tg_integration.command_manifest import (
     CLI_REAL_TG_CLEANUP_COMMAND_CASES,
     CLI_REAL_TG_COMMAND_CASES_BY_CATEGORY,
@@ -48,6 +46,8 @@ from tests.conftest import (
     _build_real_telegram_sandbox_config,
     _evaluate_real_tg_policy,
 )
+from tg_agent.cli.dotenv import load_cli_dotenv
+from tg_agent.config import load_config
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _TESTS_DIR = _REPO_ROOT / "tests"
@@ -764,7 +764,7 @@ import sys
 
 import typer
 
-from src.cli.typer_commands import app
+from tg_agent.cli.typer_commands import app
 
 leafs = []
 
@@ -1495,7 +1495,7 @@ def test_keyword_bad(run_cli):
 
 def test_cli_assert_ok_allows_only_named_failure_texts():
     allowed_result = subprocess.CompletedProcess(
-        args=("src.main", "scheduler", "trigger"),
+        args=("tg_agent.main", "scheduler", "trigger"),
         returncode=0,
         stdout="No connected accounts.",
         stderr="",
@@ -1503,7 +1503,7 @@ def test_cli_assert_ok_allows_only_named_failure_texts():
     _assert_cli_result_ok(allowed_result, allow_error_text=("No connected accounts",))
 
     mixed_failure_result = subprocess.CompletedProcess(
-        args=("src.main", "scheduler", "trigger"),
+        args=("tg_agent.main", "scheduler", "trigger"),
         returncode=0,
         stdout="No connected accounts.\nTraceback (most recent call last):",
         stderr="",
@@ -1569,7 +1569,7 @@ database:
         [
             sys.executable,
             "-m",
-            "src.main",
+            "tg_agent.main",
             "--config",
             str(config_path),
             "settings",

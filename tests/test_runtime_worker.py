@@ -7,10 +7,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.database.repositories.accounts import AccountSessionDecryptError
-from src.runtime.worker import _publish_snapshots, _publish_worker_down_snapshot, _run_worker_async
-from src.services.notification_target_service import NotificationTargetStatus
-from src.web.embedded_worker import EmbeddedWorker
+from tg_agent.database.repositories.accounts import AccountSessionDecryptError
+from tg_agent.runtime.worker import _publish_snapshots, _publish_worker_down_snapshot, _run_worker_async
+from tg_agent.services.notification_target_service import NotificationTargetStatus
+from tg_agent.web.embedded_worker import EmbeddedWorker
 
 
 def _make_container(**overrides):
@@ -60,7 +60,7 @@ def _make_container(**overrides):
 
 async def test_publish_snapshots_writes_heartbeat():
     container = _make_container()
-    with patch("src.runtime.worker.NotificationService") as mock_notif_svc:
+    with patch("tg_agent.runtime.worker.NotificationService") as mock_notif_svc:
         mock_notif = MagicMock()
         mock_notif.get_status = AsyncMock(return_value=None)
         mock_notif_svc.return_value = mock_notif
@@ -86,7 +86,7 @@ async def test_publish_snapshots_accounts_status():
             SimpleNamespace(phone="+222", flood_wait_until=future),
         ],
     )
-    with patch("src.runtime.worker.NotificationService") as mock_notif_svc:
+    with patch("tg_agent.runtime.worker.NotificationService") as mock_notif_svc:
         mock_notif_svc.return_value.get_status = AsyncMock(return_value=None)
         await _publish_snapshots(container)
 
@@ -102,7 +102,7 @@ async def test_publish_snapshots_accounts_status():
 
 async def test_publish_snapshots_collector_status():
     container = _make_container(collector_running=True, clients={"+1": MagicMock()})
-    with patch("src.runtime.worker.NotificationService") as mock_notif_svc:
+    with patch("tg_agent.runtime.worker.NotificationService") as mock_notif_svc:
         mock_notif_svc.return_value.get_status = AsyncMock(return_value=None)
         await _publish_snapshots(container)
 
@@ -115,7 +115,7 @@ async def test_publish_snapshots_collector_status():
 
 async def test_publish_snapshots_collector_no_accounts():
     container = _make_container(clients={}, collector_running=False)
-    with patch("src.runtime.worker.NotificationService") as mock_notif_svc:
+    with patch("tg_agent.runtime.worker.NotificationService") as mock_notif_svc:
         mock_notif_svc.return_value.get_status = AsyncMock(return_value=None)
         await _publish_snapshots(container)
 
@@ -127,7 +127,7 @@ async def test_publish_snapshots_collector_no_accounts():
 
 async def test_publish_snapshots_scheduler_status():
     container = _make_container(scheduler_running=True, scheduler_interval=30)
-    with patch("src.runtime.worker.NotificationService") as mock_notif_svc:
+    with patch("tg_agent.runtime.worker.NotificationService") as mock_notif_svc:
         mock_notif_svc.return_value.get_status = AsyncMock(return_value=None)
         await _publish_snapshots(container)
 
@@ -172,7 +172,7 @@ async def test_publish_snapshots_scheduler_jobs():
         [{"name": "collect_all", "job_id": "collect_all"}],
         {"collect_all": datetime(2026, 9, 23, 12, 0, tzinfo=timezone.utc)},
     )
-    with patch("src.runtime.worker.NotificationService") as mock_notif_svc:
+    with patch("tg_agent.runtime.worker.NotificationService") as mock_notif_svc:
         mock_notif_svc.return_value.get_status = AsyncMock(return_value=None)
         await _publish_snapshots(container)
 
@@ -191,7 +191,7 @@ async def test_publish_snapshots_scheduler_jobs_without_next_run_source():
     """A scheduler without get_all_jobs_next_run snapshots jobs with next_run=None."""
     container = _make_container()
     container.scheduler = _StubSchedulerNoNextRun([{"name": "collect_all", "job_id": "collect_all"}])
-    with patch("src.runtime.worker.NotificationService") as mock_notif_svc:
+    with patch("tg_agent.runtime.worker.NotificationService") as mock_notif_svc:
         mock_notif_svc.return_value.get_status = AsyncMock(return_value=None)
         await _publish_snapshots(container)
 
@@ -209,7 +209,7 @@ async def test_publish_snapshots_notification_bot():
     mock_bot.bot_id = 123
     mock_bot.created_at = datetime(2025, 1, 1, tzinfo=timezone.utc)
 
-    with patch("src.runtime.worker.NotificationService") as mock_notif_svc:
+    with patch("tg_agent.runtime.worker.NotificationService") as mock_notif_svc:
         mock_notif = MagicMock()
         mock_notif.get_status = AsyncMock(return_value=mock_bot)
         mock_notif_svc.return_value = mock_notif
@@ -224,7 +224,7 @@ async def test_publish_snapshots_notification_bot():
 
 async def test_publish_snapshots_notification_target_unavailable():
     container = _make_container(target_state="not_configured")
-    with patch("src.runtime.worker.NotificationService") as mock_notif_svc:
+    with patch("tg_agent.runtime.worker.NotificationService") as mock_notif_svc:
         mock_notif_svc.return_value.get_status = AsyncMock(return_value=None)
         await _publish_snapshots(container)
 
@@ -236,7 +236,7 @@ async def test_publish_snapshots_notification_target_unavailable():
 
 async def test_publish_snapshots_notification_bot_exception():
     container = _make_container(target_state="available")
-    with patch("src.runtime.worker.NotificationService") as mock_notif_svc:
+    with patch("tg_agent.runtime.worker.NotificationService") as mock_notif_svc:
         mock_notif = MagicMock()
         mock_notif.get_status = AsyncMock(side_effect=Exception("bot error"))
         mock_notif_svc.return_value = mock_notif
@@ -250,12 +250,12 @@ async def test_publish_snapshots_notification_bot_exception():
 
 async def test_publish_snapshots_notification_bot_cancelled_is_nonfatal(caplog):
     container = _make_container(target_state="available")
-    with patch("src.runtime.worker.NotificationService") as mock_notif_svc:
+    with patch("tg_agent.runtime.worker.NotificationService") as mock_notif_svc:
         mock_notif = MagicMock()
         mock_notif.get_status = AsyncMock(side_effect=asyncio.CancelledError)
         mock_notif_svc.return_value = mock_notif
 
-        caplog.set_level("WARNING", logger="src.runtime.worker")
+        caplog.set_level("WARNING", logger="tg_agent.runtime.worker")
         await _publish_snapshots(container)
 
     calls = container.db.repos.runtime_snapshots.upsert_snapshot.call_args_list
@@ -267,12 +267,12 @@ async def test_publish_snapshots_notification_bot_cancelled_is_nonfatal(caplog):
 
 async def test_publish_snapshots_notification_bot_timeout_is_nonfatal(caplog):
     container = _make_container(target_state="available")
-    with patch("src.runtime.worker.NotificationService") as mock_notif_svc:
+    with patch("tg_agent.runtime.worker.NotificationService") as mock_notif_svc:
         mock_notif = MagicMock()
         mock_notif.get_status = AsyncMock(side_effect=asyncio.TimeoutError("bot timeout"))
         mock_notif_svc.return_value = mock_notif
 
-        caplog.set_level("WARNING", logger="src.runtime.worker")
+        caplog.set_level("WARNING", logger="tg_agent.runtime.worker")
         await _publish_snapshots(container)
 
     calls = container.db.repos.runtime_snapshots.upsert_snapshot.call_args_list
@@ -291,7 +291,7 @@ async def test_publish_snapshots_dm_listener_status():
     container.db.repos.incoming_dms = MagicMock()
     container.db.repos.incoming_dms.prune_expired = AsyncMock(return_value=0)
     container.db.repos.incoming_dms.count_unprocessed = AsyncMock(return_value=3)
-    with patch("src.runtime.worker.NotificationService") as mock_notif_svc:
+    with patch("tg_agent.runtime.worker.NotificationService") as mock_notif_svc:
         mock_notif_svc.return_value.get_status = AsyncMock(return_value=None)
         await _publish_snapshots(container)
 
@@ -301,7 +301,7 @@ async def test_publish_snapshots_dm_listener_status():
     container.db.repos.incoming_dms.prune_expired.assert_awaited_once()
     calls = [name for name, *_ in container.db.repos.incoming_dms.mock_calls]
     assert calls.index("prune_expired") < calls.index("count_unprocessed")
-    with patch("src.runtime.worker.NotificationService") as mock_notif_svc:
+    with patch("tg_agent.runtime.worker.NotificationService") as mock_notif_svc:
         mock_notif_svc.return_value.get_status = AsyncMock(return_value=None)
         await _publish_snapshots(container)
 
@@ -315,7 +315,7 @@ async def test_publish_snapshots_dm_listener_status():
 
 async def test_publish_snapshots_without_dm_listener_skips_dm_snapshot():
     container = _make_container(dm_listener=None)
-    with patch("src.runtime.worker.NotificationService") as mock_notif_svc:
+    with patch("tg_agent.runtime.worker.NotificationService") as mock_notif_svc:
         mock_notif_svc.return_value.get_status = AsyncMock(return_value=None)
         await _publish_snapshots(container)
 
@@ -339,7 +339,7 @@ async def test_publish_worker_down_snapshot_for_decrypt_failure():
 
 
 async def test_worker_loop_continues_after_transient_snapshot_cancel():
-    from src.config import AppConfig
+    from tg_agent.config import AppConfig
 
     container = MagicMock()
     # The publish timeout is read from config now, so a real AppConfig is needed
@@ -358,11 +358,11 @@ async def test_worker_loop_continues_after_transient_snapshot_cancel():
         raise asyncio.CancelledError
 
     with (
-        patch("src.runtime.worker.build_worker_container", AsyncMock(return_value=container)),
-        patch("src.runtime.worker.start_container", AsyncMock()),
-        patch("src.runtime.worker.stop_container", AsyncMock()) as stop_container,
-        patch("src.runtime.worker._publish_snapshots", new=publish_snapshot),
-        patch("src.runtime.worker.HEARTBEAT_INTERVAL_SEC", 0.001),
+        patch("tg_agent.runtime.worker.build_worker_container", AsyncMock(return_value=container)),
+        patch("tg_agent.runtime.worker.start_container", AsyncMock()),
+        patch("tg_agent.runtime.worker.stop_container", AsyncMock()) as stop_container,
+        patch("tg_agent.runtime.worker._publish_snapshots", new=publish_snapshot),
+        patch("tg_agent.runtime.worker.HEARTBEAT_INTERVAL_SEC", 0.001),
     ):
         worker_task = asyncio.create_task(_run_worker_async(config))
         with pytest.raises(asyncio.CancelledError):
@@ -378,8 +378,8 @@ async def test_worker_loop_survives_database_busy_snapshot(caplog):
     loop should log and continue to the next heartbeat. Before the fix the while
     loop only caught CancelledError/TimeoutError, so a busy error propagated out
     of the loop, hit the finally, stopped the container and exited the process."""
-    from src.config import AppConfig
-    from src.database import DatabaseBusyError
+    from tg_agent.config import AppConfig
+    from tg_agent.database import DatabaseBusyError
 
     container = MagicMock()
     config = AppConfig()
@@ -398,13 +398,13 @@ async def test_worker_loop_survives_database_busy_snapshot(caplog):
         raise asyncio.CancelledError
 
     with (
-        patch("src.runtime.worker.build_worker_container", AsyncMock(return_value=container)),
-        patch("src.runtime.worker.start_container", AsyncMock()),
-        patch("src.runtime.worker.stop_container", AsyncMock()) as stop_container,
-        patch("src.runtime.worker._publish_snapshots", new=publish_snapshot),
-        patch("src.runtime.worker.HEARTBEAT_INTERVAL_SEC", 0.001),
+        patch("tg_agent.runtime.worker.build_worker_container", AsyncMock(return_value=container)),
+        patch("tg_agent.runtime.worker.start_container", AsyncMock()),
+        patch("tg_agent.runtime.worker.stop_container", AsyncMock()) as stop_container,
+        patch("tg_agent.runtime.worker._publish_snapshots", new=publish_snapshot),
+        patch("tg_agent.runtime.worker.HEARTBEAT_INTERVAL_SEC", 0.001),
     ):
-        caplog.set_level("WARNING", logger="src.runtime.worker")
+        caplog.set_level("WARNING", logger="tg_agent.runtime.worker")
         worker_task = asyncio.create_task(_run_worker_async(config))
         with pytest.raises(asyncio.CancelledError):
             await worker_task
@@ -416,7 +416,7 @@ async def test_worker_loop_survives_database_busy_snapshot(caplog):
 
 
 async def test_embedded_worker_stop_suppresses_cancelled_snapshot_publish():
-    from src.config import AppConfig
+    from tg_agent.config import AppConfig
 
     container = MagicMock()
     worker = EmbeddedWorker(AppConfig())
@@ -430,10 +430,10 @@ async def test_embedded_worker_stop_suppresses_cancelled_snapshot_publish():
         raise asyncio.CancelledError
 
     with (
-        patch("src.web.embedded_worker.build_worker_container", AsyncMock(return_value=container)),
-        patch("src.web.embedded_worker.start_container", AsyncMock()),
-        patch("src.web.embedded_worker.stop_container", AsyncMock()) as stop_container,
-        patch("src.web.embedded_worker._publish_snapshots", new=cancelled_publish),
+        patch("tg_agent.web.embedded_worker.build_worker_container", AsyncMock(return_value=container)),
+        patch("tg_agent.web.embedded_worker.start_container", AsyncMock()),
+        patch("tg_agent.web.embedded_worker.stop_container", AsyncMock()) as stop_container,
+        patch("tg_agent.web.embedded_worker._publish_snapshots", new=cancelled_publish),
     ):
         await worker.start()
         await asyncio.wait_for(publish_started.wait(), timeout=2.0)
@@ -446,7 +446,7 @@ async def test_embedded_worker_stop_suppresses_cancelled_snapshot_publish():
 
 
 async def test_embedded_worker_retries_after_hanging_snapshot_publish():
-    from src.config import AppConfig
+    from tg_agent.config import AppConfig
 
     container = MagicMock()
     # The publish timeout now comes from config, not a hard-coded module
@@ -469,11 +469,11 @@ async def test_embedded_worker_retries_after_hanging_snapshot_publish():
         await asyncio.Event().wait()
 
     with (
-        patch("src.web.embedded_worker.build_worker_container", AsyncMock(return_value=container)),
-        patch("src.web.embedded_worker.start_container", AsyncMock()),
-        patch("src.web.embedded_worker.stop_container", AsyncMock()) as stop_container,
-        patch("src.web.embedded_worker._publish_snapshots", new=hanging_publish),
-        patch("src.web.embedded_worker.HEARTBEAT_INTERVAL_SEC", 0.001),
+        patch("tg_agent.web.embedded_worker.build_worker_container", AsyncMock(return_value=container)),
+        patch("tg_agent.web.embedded_worker.start_container", AsyncMock()),
+        patch("tg_agent.web.embedded_worker.stop_container", AsyncMock()) as stop_container,
+        patch("tg_agent.web.embedded_worker._publish_snapshots", new=hanging_publish),
+        patch("tg_agent.web.embedded_worker.HEARTBEAT_INTERVAL_SEC", 0.001),
     ):
         await worker.start()
         try:
@@ -486,7 +486,7 @@ async def test_embedded_worker_retries_after_hanging_snapshot_publish():
 
 
 async def test_embedded_worker_happy_path_becomes_ready_then_stops_cleanly():
-    from src.config import AppConfig
+    from tg_agent.config import AppConfig
 
     container = MagicMock()
     published = asyncio.Event()
@@ -496,11 +496,11 @@ async def test_embedded_worker_happy_path_becomes_ready_then_stops_cleanly():
 
     worker = EmbeddedWorker(AppConfig())
     with (
-        patch("src.web.embedded_worker.build_worker_container", AsyncMock(return_value=container)),
-        patch("src.web.embedded_worker.start_container", AsyncMock()) as start_container,
-        patch("src.web.embedded_worker.stop_container", AsyncMock()) as stop_container,
-        patch("src.web.embedded_worker._publish_snapshots", new=publish_once),
-        patch("src.web.embedded_worker.HEARTBEAT_INTERVAL_SEC", 0.001),
+        patch("tg_agent.web.embedded_worker.build_worker_container", AsyncMock(return_value=container)),
+        patch("tg_agent.web.embedded_worker.start_container", AsyncMock()) as start_container,
+        patch("tg_agent.web.embedded_worker.stop_container", AsyncMock()) as stop_container,
+        patch("tg_agent.web.embedded_worker._publish_snapshots", new=publish_once),
+        patch("tg_agent.web.embedded_worker.HEARTBEAT_INTERVAL_SEC", 0.001),
     ):
         await worker.start()
         assert await worker.wait_ready(timeout=1.0) is True
@@ -517,19 +517,19 @@ async def test_embedded_worker_happy_path_becomes_ready_then_stops_cleanly():
 
 
 async def test_embedded_worker_startup_decrypt_error_publishes_worker_down():
-    from src.config import AppConfig
+    from tg_agent.config import AppConfig
 
     container = MagicMock()
     exc = AccountSessionDecryptError(phone="+1234", status="key_mismatch")
     worker = EmbeddedWorker(AppConfig())
     with (
-        patch("src.web.embedded_worker.build_worker_container", AsyncMock(return_value=container)),
-        patch("src.web.embedded_worker.start_container", AsyncMock(side_effect=exc)),
-        patch("src.web.embedded_worker.stop_container", AsyncMock()) as stop_container,
+        patch("tg_agent.web.embedded_worker.build_worker_container", AsyncMock(return_value=container)),
+        patch("tg_agent.web.embedded_worker.start_container", AsyncMock(side_effect=exc)),
+        patch("tg_agent.web.embedded_worker.stop_container", AsyncMock()) as stop_container,
         patch(
-            "src.web.embedded_worker._publish_worker_down_snapshot", AsyncMock()
+            "tg_agent.web.embedded_worker._publish_worker_down_snapshot", AsyncMock()
         ) as publish_down,
-        patch("src.web.embedded_worker._publish_snapshots", AsyncMock()) as publish_snapshots,
+        patch("tg_agent.web.embedded_worker._publish_snapshots", AsyncMock()) as publish_snapshots,
     ):
         await worker.start()
         await worker.stop(timeout=1.0)
@@ -543,15 +543,15 @@ async def test_embedded_worker_startup_decrypt_error_publishes_worker_down():
 
 
 async def test_embedded_worker_startup_generic_error_sets_banner():
-    from src.config import AppConfig
+    from tg_agent.config import AppConfig
 
     container = MagicMock()
     worker = EmbeddedWorker(AppConfig())
     with (
-        patch("src.web.embedded_worker.build_worker_container", AsyncMock(return_value=container)),
-        patch("src.web.embedded_worker.start_container", AsyncMock(side_effect=RuntimeError("boom"))),
-        patch("src.web.embedded_worker.stop_container", AsyncMock()) as stop_container,
-        patch("src.web.embedded_worker._publish_snapshots", AsyncMock()) as publish_snapshots,
+        patch("tg_agent.web.embedded_worker.build_worker_container", AsyncMock(return_value=container)),
+        patch("tg_agent.web.embedded_worker.start_container", AsyncMock(side_effect=RuntimeError("boom"))),
+        patch("tg_agent.web.embedded_worker.stop_container", AsyncMock()) as stop_container,
+        patch("tg_agent.web.embedded_worker._publish_snapshots", AsyncMock()) as publish_snapshots,
     ):
         await worker.start()
         await worker.stop(timeout=1.0)
@@ -564,18 +564,18 @@ async def test_embedded_worker_startup_generic_error_sets_banner():
 
 
 async def test_embedded_worker_start_twice_raises_and_stop_without_start_is_noop():
-    from src.config import AppConfig
+    from tg_agent.config import AppConfig
 
     worker = EmbeddedWorker(AppConfig())
     # stop() before start() is a no-op
     await worker.stop(timeout=1.0)
 
     with (
-        patch("src.web.embedded_worker.build_worker_container", AsyncMock(return_value=MagicMock())),
-        patch("src.web.embedded_worker.start_container", AsyncMock()),
-        patch("src.web.embedded_worker.stop_container", AsyncMock()),
-        patch("src.web.embedded_worker._publish_snapshots", AsyncMock()),
-        patch("src.web.embedded_worker.HEARTBEAT_INTERVAL_SEC", 0.001),
+        patch("tg_agent.web.embedded_worker.build_worker_container", AsyncMock(return_value=MagicMock())),
+        patch("tg_agent.web.embedded_worker.start_container", AsyncMock()),
+        patch("tg_agent.web.embedded_worker.stop_container", AsyncMock()),
+        patch("tg_agent.web.embedded_worker._publish_snapshots", AsyncMock()),
+        patch("tg_agent.web.embedded_worker.HEARTBEAT_INTERVAL_SEC", 0.001),
     ):
         await worker.start()
         try:

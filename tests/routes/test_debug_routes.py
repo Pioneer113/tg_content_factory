@@ -7,8 +7,8 @@ import base64
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.web.log_handler import LogBuffer
-from src.web.routes.debug import _read_log_tail
+from tg_agent.web.log_handler import LogBuffer
+from tg_agent.web.routes.debug import _read_log_tail
 
 
 @pytest.fixture
@@ -108,7 +108,7 @@ async def test_debug_page_reads_from_file(client, tmp_path, monkeypatch):
         "2024-01-01 12:00:00 [INFO] test.logger: Hello from file\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr("src.web.routes.debug.APP_LOG_PATH", log)
+    monkeypatch.setattr("tg_agent.web.routes.debug.APP_LOG_PATH", log)
     resp = await client.get("/debug/")
     assert resp.status_code == 200
     assert "Hello from file" in resp.text
@@ -117,7 +117,7 @@ async def test_debug_page_reads_from_file(client, tmp_path, monkeypatch):
 @pytest.mark.anyio
 async def test_debug_page_empty_when_no_file(client, tmp_path, monkeypatch):
     """Debug page renders without error when log file is absent."""
-    monkeypatch.setattr("src.web.routes.debug.APP_LOG_PATH", tmp_path / "missing.log")
+    monkeypatch.setattr("tg_agent.web.routes.debug.APP_LOG_PATH", tmp_path / "missing.log")
     resp = await client.get("/debug/")
     assert resp.status_code == 200
 
@@ -271,7 +271,7 @@ async def test_debug_memory_uses_snapshot_in_web_mode(client, base_app):
     """In web-mode, pool counters must come from runtime_snapshots.pool_counters."""
     from datetime import datetime, timezone
 
-    from src.models import RuntimeSnapshot
+    from tg_agent.models import RuntimeSnapshot
 
     app, db, _ = base_app
     app.state.runtime_mode = "web"
@@ -332,7 +332,7 @@ async def test_debug_errors_partial(client, monkeypatch):
     """HTMX partial renders aggregated stats across live instances."""
     import weakref
 
-    from src.services.error_recovery_service import ErrorCategory, ErrorRecoveryService
+    from tg_agent.services.error_recovery_service import ErrorCategory, ErrorRecoveryService
 
     fresh: weakref.WeakSet = weakref.WeakSet()
     a = ErrorRecoveryService()
@@ -357,7 +357,7 @@ async def test_debug_errors_json(client, monkeypatch):
     """REST JSON endpoint returns the aggregate payload."""
     import weakref
 
-    from src.services.error_recovery_service import ErrorCategory, ErrorRecoveryService
+    from tg_agent.services.error_recovery_service import ErrorCategory, ErrorRecoveryService
 
     fresh: weakref.WeakSet = weakref.WeakSet()
     a = ErrorRecoveryService()
@@ -379,7 +379,7 @@ async def test_debug_errors_json_empty(client, monkeypatch):
     """Empty registry → zeroed payload, not an error."""
     import weakref
 
-    from src.services.error_recovery_service import ErrorRecoveryService
+    from tg_agent.services.error_recovery_service import ErrorRecoveryService
 
     fresh: weakref.WeakSet = weakref.WeakSet()
     monkeypatch.setattr(ErrorRecoveryService, "_instances", fresh)

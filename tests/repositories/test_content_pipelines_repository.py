@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from src.models import ContentPipeline, PipelineTarget
+from tg_agent.models import ContentPipeline, PipelineTarget
 
 
 def make_pipeline(**kwargs) -> ContentPipeline:
@@ -118,7 +118,7 @@ async def test_malformed_pipeline_json_logs_and_falls_back(content_pipelines_rep
         ("{not valid json", pipeline_id),
     )
 
-    with caplog.at_level(logging.WARNING, logger="src.database.repositories.content_pipelines"):
+    with caplog.at_level(logging.WARNING, logger="tg_agent.database.repositories.content_pipelines"):
         pipeline = await content_pipelines_repo.get_by_id(pipeline_id)
 
     # Graceful fallback is preserved (graph is None -> legacy RAG)...

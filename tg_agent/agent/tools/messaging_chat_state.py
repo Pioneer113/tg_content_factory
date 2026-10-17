@@ -1,0 +1,333 @@
+from __future__ import annotations
+
+import inspect
+from typing import Any
+
+from claude_agent_sdk import tool
+from telethon_floodgate import HandledFloodWaitError, run_with_flood_wait_retry
+
+from tg_agent.agent.tools._formatters import format_sender_identity
+from tg_agent.agent.tools._registry import (
+    _text_response,
+    arg_bool,
+    require_confirmation,
+    resolve_entity,
+)
+from tg_agent.agent.tools._telegram_runtime import find_single_dialog_id_by_title
+from tg_agent.agent.tools.messaging_schemas import (
+    ARCHIVE_CHAT_SCHEMA,
+    GET_BROADCAST_STATS_SCHEMA,
+    MARK_READ_SCHEMA,
+    READ_MESSAGES_SCHEMA,
+    UNARCHIVE_CHAT_SCHEMA,
+)
+from tg_agent.services.telegram_actions import (
+    BROADCAST_STAT_FIELDS,
+    TelegramActionClientUnavailableError,
+    TelegramActionService,
+)
+from tg_agent.telegram.identity import extract_message_sender_identity
+from tg_agent.telegram.reactions import (
+    fetch_message_reaction_users,
+    format_message_reactions,
+    format_reaction_users_result,
+    normalize_reaction_users_limit,
+)
+
+
+def register_chat_state_read_tools(db: Any, ctx: Any, client_pool: Any) -> list[Any]:
+    tools: list[Any] = []
+
+    @tool(
+        "get_broadcast_stats",
+        "Get broadcast statistics (followers, views, reactions) for a Telegram channel. "
+        "Requires admin/owner rights on the channel.",
+        GET_BROADCAST_STATS_SCHEMA,
+    )
+    async def get_broadcast_stats(args):
+        live_gate = ctx.require_live_runtime("Получение статистики", tool_name="get_broadcast_stats")
+        if live_gate:
+            return live_gate
+        phone, err = await ctx.resolve_phone(args.get("phone", ""))
+        if err:
+            return err
+        perm_gate = await ctx.require_phone_permission(phone, "get_broadcast_stats")
+        if perm_gate:
+            return perm_gate
+        chat_id = args.get("chat_id", "")
+        if not chat_id:
+            return _text_response("Ошибка: chat_id обязателен.")
+        try:
+            result = await TelegramActionService(client_pool).get_broadcast_stats(
+                phone=phone,
+                chat_id=chat_id,
+            )
+            stats = result.stats
+            fields = {}
+            for attr in BROADCAST_STAT_FIELDS:
+                val = getattr(stats, attr, None)
+                if val is not None:
+                    current = getattr(val, "current", None)
+                    previous = getattr(val, "previous", None)
+                    if current is not None:
+                        fields[attr] = f"{current} (prev: {previous})"
+                    else:
+                        fields[attr] = str(val)
+            period = getattr(stats, "period", None)
+            if period is not None:
+                min_d = getattr(period, "min_date", None)
+                max_d = getattr(period, "max_date", None)
+                fields["period"] = f"{min_d} — {max_d}"
+            en = getattr(stats, "enabled_notifications", None)
+            if en is not None:
+                fields["enabled_notifications"] = str(en)
+            if not fields:
+                fields["raw"] = str(stats)
+            lines = [f"Статистика канала {chat_id}:"]
+            for k, v in fields.items():
+                lines.append(f"  {k}: {v}")
+            return _text_response("\n".join(lines))
+        except TelegramActionClientUnavailableError:
+            return _text_response(f"Клиент для {phone} не найден или flood-wait активен.")
+        except Exception as e:
+            return _text_response(f"Ошибка получения статистики: {e}")
+
+    tools.append(get_broadcast_stats)
+
+    @tool(
+        "archive_chat",
+        "Archive a Telegram dialog (move to archive folder). "
+        "Ask user for confirmation first.",
+        ARCHIVE_CHAT_SCHEMA,
+    )
+    async def archive_chat(args):
+        live_gate = ctx.require_live_runtime("Архивирование чата", tool_name="archive_chat")
+        if live_gate:
+            return live_gate
+        phone, err = await ctx.resolve_phone(args.get("phone", ""))
+        if err:
+            return err
+        perm_gate = await ctx.require_phone_permission(phone, "archive_chat")
+        if perm_gate:
+            return perm_gate
+        chat_id = args.get("chat_id", "")
+        if not chat_id:
+            return _text_response("Ошибка: chat_id обязателен.")
+        gate = require_confirmation(f"архивирует чат {chat_id}", args)
+        if gate:
+            return gate
+        try:
+            await TelegramActionService(client_pool).set_dialog_folder(
+                phone=phone,
+                chat_id=chat_id,
+                folder_id=1,
+            )
+            return _text_response(f"Чат {chat_id} архивирован.")
+        except TelegramActionClientUnavailableError:
+            return _text_response(f"Клиент для {phone} не найден или flood-wait активен.")
+        except Exception as e:
+            return _text_response(f"Ошибка архивирования: {e}")
+
+    tools.append(archive_chat)
+
+    @tool(
+        "unarchive_chat",
+        "Unarchive a Telegram dialog (move back to main folder). "
+        "Ask user for confirmation first.",
+        UNARCHIVE_CHAT_SCHEMA,
+    )
+    async def unarchive_chat(args):
+        live_gate = ctx.require_live_runtime("Разархивирование чата", tool_name="unarchive_chat")
+        if live_gate:
+            return live_gate
+        phone, err = await ctx.resolve_phone(args.get("phone", ""))
+        if err:
+            return err
+        perm_gate = await ctx.require_phone_permission(phone, "unarchive_chat")
+        if perm_gate:
+            return perm_gate
+        chat_id = args.get("chat_id", "")
+        if not chat_id:
+            return _text_response("Ошибка: chat_id обязателен.")
+        gate = require_confirmation(f"разархивирует чат {chat_id}", args)
+        if gate:
+            return gate
+        try:
+            await TelegramActionService(client_pool).set_dialog_folder(
+                phone=phone,
+                chat_id=chat_id,
+                folder_id=0,
+            )
+            return _text_response(f"Чат {chat_id} разархивирован.")
+        except TelegramActionClientUnavailableError:
+            return _text_response(f"Клиент для {phone} не найден или flood-wait активен.")
+        except Exception as e:
+            return _text_response(f"Ошибка разархивирования: {e}")
+
+    tools.append(unarchive_chat)
+
+    @tool(
+        "mark_read",
+        "Mark messages as read in a Telegram chat. "
+        "max_id marks all messages up to that ID as read; omit to mark all.",
+        MARK_READ_SCHEMA,
+    )
+    async def mark_read(args):
+        live_gate = ctx.require_live_runtime("Отметка сообщений как прочитанных", tool_name="mark_read")
+        if live_gate:
+            return live_gate
+        phone, err = await ctx.resolve_phone(args.get("phone", ""))
+        if err:
+            return err
+        perm_gate = await ctx.require_phone_permission(phone, "mark_read")
+        if perm_gate:
+            return perm_gate
+        chat_id = args.get("chat_id", "")
+        max_id = args.get("max_id") or None
+        if not chat_id:
+            return _text_response("Ошибка: chat_id обязателен.")
+        try:
+            await TelegramActionService(client_pool).mark_read(
+                phone=phone,
+                chat_id=chat_id,
+                max_id=max_id,
+            )
+            return _text_response(f"Сообщения отмечены как прочитанные в {chat_id}.")
+        except TelegramActionClientUnavailableError:
+            return _text_response(f"Клиент для {phone} не найден или flood-wait активен.")
+        except Exception as e:
+            return _text_response(f"Ошибка отметки сообщений: {e}")
+
+    tools.append(mark_read)
+
+    @tool(
+        "read_messages",
+        "Preview last N messages from any Telegram chat/channel (not stored in DB). "
+        "chat_id accepts @username, t.me link, numeric ID, or 'me'. "
+        "To save messages to DB for search, use add_channel + collect_channel instead.",
+        READ_MESSAGES_SCHEMA,
+    )
+    async def read_messages(args: dict[str, Any]) -> dict[str, Any]:
+        live_gate = ctx.require_live_runtime("Чтение сообщений", tool_name="read_messages")
+        if live_gate:
+            return live_gate
+        phone, err = await ctx.resolve_live_read_phone(args.get("phone", ""), tool_name="read_messages")
+        if err:
+            return err
+        perm_gate = await ctx.require_phone_permission(phone, "read_messages")
+        if perm_gate:
+            return perm_gate
+        chat_id = args.get("chat_id", "")
+        try:
+            limit = max(1, min(int(args.get("limit") or 100), 500))
+        except (TypeError, ValueError):
+            limit = 100
+        include_reaction_users = arg_bool(args, "include_reaction_users", False)
+        reaction_users_limit = normalize_reaction_users_limit(args.get("reaction_users_limit"))
+        if not chat_id:
+            return _text_response("Ошибка: chat_id обязателен.")
+        resolved_entity = None
+        try:
+            resolved_entity = await resolve_entity(client_pool, phone, chat_id)
+            client, entity, err = resolved_entity
+            if err:
+                fallback_chat_id, fallback_err = await find_single_dialog_id_by_title(db, client_pool, phone, chat_id)
+                if fallback_err:
+                    return fallback_err
+                if fallback_chat_id:
+                    await resolved_entity.release()
+                    resolved_entity = await resolve_entity(client_pool, phone, fallback_chat_id)
+                    client, entity, err = resolved_entity
+                    if not err:
+                        chat_id = fallback_chat_id
+                if err:
+                    return err
+            lines = [f"Последние {limit} сообщений из {chat_id}:\n"]
+            count = 0
+            total_chars = 0
+            budget = 50_000
+            sender_cache: dict[int, object | None] = {}
+
+            async def _resolve_message_sender(msg):
+                sender = getattr(msg, "sender", None)
+                if sender is not None:
+                    return sender
+
+                sender_id = getattr(msg, "sender_id", None)
+                if sender_id is not None:
+                    try:
+                        cache_key = int(sender_id)
+                    except (TypeError, ValueError):
+                        cache_key = None
+                    if cache_key is not None and cache_key in sender_cache:
+                        return sender_cache[cache_key]
+                else:
+                    cache_key = None
+
+                getter = getattr(msg, "get_sender", None)
+                if not callable(getter):
+                    return None
+                try:
+                    result = getter()
+                    sender = await result if inspect.isawaitable(result) else result
+                except Exception:
+                    sender = None
+                if cache_key is not None:
+                    sender_cache[cache_key] = sender
+                return sender
+
+            async def _read_recent() -> None:
+                nonlocal count, total_chars
+                async for msg in client.iter_messages(entity, limit=limit):
+                    if not msg.text:
+                        continue
+                    sender_entity = await _resolve_message_sender(msg)
+                    sender_identity = extract_message_sender_identity(msg, sender=sender_entity)
+                    sender = f" {format_sender_identity(sender_identity)}"
+                    date_str = msg.date.strftime("%Y-%m-%d %H:%M") if msg.date else ""
+                    preview = msg.text[:500]
+                    reactions = format_message_reactions(msg)
+                    reaction_suffix = f" | реакции: {reactions}" if reactions else ""
+                    reaction_users_suffix = ""
+                    if include_reaction_users and reactions:
+                        reaction_users = await fetch_message_reaction_users(
+                            client,
+                            entity,
+                            msg.id,
+                            limit=reaction_users_limit,
+                        )
+                        formatted_users = format_reaction_users_result(reaction_users)
+                        if formatted_users:
+                            if reaction_users.unavailable:
+                                reaction_users_suffix = f" | {formatted_users}"
+                            else:
+                                reaction_users_suffix = f" | поставили: {formatted_users}"
+                    line = f"#{msg.id} {date_str}{sender}: {preview}{reaction_suffix}{reaction_users_suffix}"
+                    lines.append(line)
+                    total_chars += len(line)
+                    count += 1
+                    if total_chars >= budget:
+                        lines.append(f"\n[Вывод обрезан после {count} сообщений, достигнут лимит символов]")
+                        break
+
+            try:
+                await run_with_flood_wait_retry(
+                    _read_recent,
+                    operation="agent_read_recent_messages",
+                    phone=phone,
+                    pool=client_pool,
+                )
+            except HandledFloodWaitError as exc:
+                return _text_response(f"Flood wait: {exc.info.detail}")
+            if count == 0:
+                return _text_response("Сообщений с текстом не найдено.")
+            lines.append(f"\nИтого: {count} сообщений.")
+            return _text_response("\n".join(lines))
+        except Exception as e:
+            return _text_response(f"Ошибка чтения сообщений: {e}")
+        finally:
+            if resolved_entity is not None:
+                await resolved_entity.release()
+
+    tools.append(read_messages)
+    return tools

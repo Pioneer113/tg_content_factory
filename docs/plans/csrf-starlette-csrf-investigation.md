@@ -2,7 +2,7 @@
 
 ## Резюме
 
-**Решение: оставить кастомный `src/web/csrf.py`. Замена на `starlette-csrf` отклонена.**
+**Решение: оставить кастомный `tg_agent/web/csrf.py`. Замена на `starlette-csrf` отклонена.**
 
 Часть эпика #782, sub-issue #957. Задача была оценить замену ручной CSRF-защиты
 (`OriginCSRFMiddleware`, 94 строки) на библиотеку
@@ -13,7 +13,7 @@ Investigation показал, что библиотека реализует **�
 
 ## Что делает текущий middleware
 
-`OriginCSRFMiddleware` (`src/web/csrf.py`) — это **проверка совпадения источника
+`OriginCSRFMiddleware` (`tg_agent/web/csrf.py`) — это **проверка совпадения источника
 (Origin/Referer matching)**:
 
 - для небезопасных методов (POST/PUT/PATCH/DELETE) сверяет `Origin` (или, при его
@@ -28,7 +28,7 @@ Investigation показал, что библиотека реализует **�
   передавать и хранить не нужно.
 
 Вспомогательные функции этого модуля (`is_secure_request`, `is_same_origin_url`)
-переиспользуются в `src/web/panel_auth.py` для выставления `Secure`-флага cookie и
+переиспользуются в `tg_agent/web/panel_auth.py` для выставления `Secure`-флага cookie и
 проверки safe-redirect — то есть прокси-логика нужна не только CSRF-проверке.
 
 ## Что делает `starlette-csrf`
@@ -63,7 +63,7 @@ issue: «если не покрывает — оставить кастомны�
 Замена была бы не «снять 94 строки», а смена всей архитектуры защиты:
 
 1. **Фронтенд:** во фронтенде сейчас **нет инфраструктуры CSRF-токенов**
-   (0 упоминаний `csrf`/`csrftoken` в `src/web/templates/` и `src/web/static/`).
+   (0 упоминаний `csrf`/`csrftoken` в `tg_agent/web/templates/` и `tg_agent/web/static/`).
    Пришлось бы внедрить чтение cookie и проброс заголовка `x-csrftoken` во все
    ~13 `fetch()`-вызовов и HTMX-формы — иначе каждый POST ломается на 403.
 2. **Прокси-логику всё равно нельзя удалить:** `is_secure_request` и

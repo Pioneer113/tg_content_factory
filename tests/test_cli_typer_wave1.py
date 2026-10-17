@@ -23,7 +23,7 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from src.cli.typer_app import app
+from tg_agent.cli.typer_app import app
 
 runner = CliRunner()
 
@@ -34,28 +34,28 @@ runner = CliRunner()
 
 
 def test_serve_delegates_with_defaults():
-    with patch("src.cli.typer_commands.serve_cmd.serve_web") as mock_serve:
+    with patch("tg_agent.cli.typer_commands.serve_cmd.serve_web") as mock_serve:
         result = runner.invoke(app, ["serve"])
     assert result.exit_code == 0
     mock_serve.assert_called_once_with("config.yaml", web_pass=None, no_worker=False)
 
 
 def test_serve_threads_web_pass_and_no_worker():
-    with patch("src.cli.typer_commands.serve_cmd.serve_web") as mock_serve:
+    with patch("tg_agent.cli.typer_commands.serve_cmd.serve_web") as mock_serve:
         result = runner.invoke(app, ["serve", "--web-pass", "s3cret", "--no-worker"])
     assert result.exit_code == 0
     mock_serve.assert_called_once_with("config.yaml", web_pass="s3cret", no_worker=True)
 
 
 def test_serve_honours_global_config_option():
-    with patch("src.cli.typer_commands.serve_cmd.serve_web") as mock_serve:
+    with patch("tg_agent.cli.typer_commands.serve_cmd.serve_web") as mock_serve:
         result = runner.invoke(app, ["--config", "prod.yaml", "serve"])
     assert result.exit_code == 0
     mock_serve.assert_called_once_with("prod.yaml", web_pass=None, no_worker=False)
 
 
 def test_worker_delegates():
-    with patch("src.cli.typer_commands.worker_cmd.serve_worker") as mock_worker:
+    with patch("tg_agent.cli.typer_commands.worker_cmd.serve_worker") as mock_worker:
         result = runner.invoke(app, ["worker"])
     assert result.exit_code == 0
     mock_worker.assert_called_once_with("config.yaml")
@@ -67,7 +67,7 @@ def test_worker_delegates():
 
 
 def test_stop_delegates():
-    with patch("src.cli.typer_commands.server_control_cmd.stop_web") as mock_stop:
+    with patch("tg_agent.cli.typer_commands.server_control_cmd.stop_web") as mock_stop:
         result = runner.invoke(app, ["stop"])
     assert result.exit_code == 0
     mock_stop.assert_called_once_with("config.yaml")
@@ -75,7 +75,7 @@ def test_stop_delegates():
 
 def test_restart_starts_worker_daemon_without_web_pass():
     """The managed daemon takes no web-pass: the worker has no web panel."""
-    with patch("src.cli.typer_commands.server_control_cmd.restart_web") as mock_restart:
+    with patch("tg_agent.cli.typer_commands.server_control_cmd.restart_web") as mock_restart:
         result = runner.invoke(app, ["restart"])
     assert result.exit_code == 0
     mock_restart.assert_called_once_with("config.yaml")
@@ -93,14 +93,14 @@ def test_restart_rejects_removed_web_pass_flag():
 
 
 def test_mcp_server_defaults_pool_on():
-    with patch("src.cli.typer_commands.mcp_server_cmd.serve_mcp") as mock_mcp:
+    with patch("tg_agent.cli.typer_commands.mcp_server_cmd.serve_mcp") as mock_mcp:
         result = runner.invoke(app, ["mcp-server"])
     assert result.exit_code == 0
     mock_mcp.assert_called_once_with("config.yaml", no_pool=False)
 
 
 def test_mcp_server_no_pool_flag():
-    with patch("src.cli.typer_commands.mcp_server_cmd.serve_mcp") as mock_mcp:
+    with patch("tg_agent.cli.typer_commands.mcp_server_cmd.serve_mcp") as mock_mcp:
         result = runner.invoke(app, ["mcp-server", "--no-pool"])
     assert result.exit_code == 0
     mock_mcp.assert_called_once_with("config.yaml", no_pool=True)
@@ -114,8 +114,8 @@ def test_mcp_server_no_pool_flag():
 def test_collect_all_channels_defaults():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.collect_cmd.collect_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async") as mock_run_async,
+        patch("tg_agent.cli.typer_commands.collect_cmd.collect_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async") as mock_run_async,
     ):
         result = runner.invoke(app, ["collect"])
     assert result.exit_code == 0
@@ -126,8 +126,8 @@ def test_collect_all_channels_defaults():
 def test_collect_single_channel_full():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.collect_cmd.collect_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.collect_cmd.collect_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["collect", "--channel-id", "12345", "--full"])
     assert result.exit_code == 0
@@ -137,8 +137,8 @@ def test_collect_single_channel_full():
 def test_collect_sample_positional_and_limit():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.collect_cmd.collect_sample_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.collect_cmd.collect_sample_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         # Negative channel ids must be passed after ``--`` (Click, unlike
         # argparse, treats a leading ``-`` as an option). The argparse→Typer
@@ -151,8 +151,8 @@ def test_collect_sample_positional_and_limit():
 def test_collect_sample_defaults_limit_to_ten():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.collect_cmd.collect_sample_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.collect_cmd.collect_sample_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["collect", "sample", "777"])
     assert result.exit_code == 0
@@ -167,8 +167,8 @@ def test_collect_sample_defaults_limit_to_ten():
 def test_search_defaults():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.search_cmd.search_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.search_cmd.search_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["search", "hello world"])
     assert result.exit_code == 0
@@ -191,8 +191,8 @@ def test_search_defaults():
 def test_search_limit_and_mode():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.search_cmd.search_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.search_cmd.search_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["search", "q", "--limit", "5", "--mode", "semantic"])
     assert result.exit_code == 0
@@ -205,8 +205,8 @@ def test_search_limit_and_mode():
 def test_search_all_maps_to_include_filtered():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.search_cmd.search_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.search_cmd.search_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["search", "q", "--all", "--fts"])
     assert result.exit_code == 0
@@ -218,8 +218,8 @@ def test_search_all_maps_to_include_filtered():
 def test_search_channel_mode_threads_channel_id():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.search_cmd.search_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.search_cmd.search_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["search", "q", "--mode", "channel", "--channel-id", "42"])
     assert result.exit_code == 0
@@ -237,8 +237,8 @@ def test_search_rejects_unknown_mode():
     """
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.search_cmd.search_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.search_cmd.search_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["search", "q", "--mode", "bogus"])
     assert result.exit_code == 2
@@ -249,8 +249,8 @@ def test_search_mode_value_is_plain_str():
     """The Enum subclasses ``str`` so the body still receives a plain string."""
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.search_cmd.search_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.search_cmd.search_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["search", "q", "--mode", "semantic"])
     assert result.exit_code == 0
@@ -262,8 +262,8 @@ def test_messages_read_rejects_unknown_format():
     """--format keeps argparse's text/json/csv choice set (rejects others)."""
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.messages_cmd.messages_read_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.messages_cmd.messages_read_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["messages", "read", "100", "--format", "bogus"])
     assert result.exit_code == 2
@@ -278,8 +278,8 @@ def test_messages_read_rejects_unknown_format():
 def test_messages_read_defaults():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.messages_cmd.messages_read_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.messages_cmd.messages_read_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["messages", "read", "100"])
     assert result.exit_code == 0
@@ -303,8 +303,8 @@ def test_messages_read_defaults():
 def test_messages_read_format_json():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.messages_cmd.messages_read_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.messages_cmd.messages_read_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["messages", "read", "@chan", "--format", "json"])
     assert result.exit_code == 0
@@ -314,8 +314,8 @@ def test_messages_read_format_json():
 def test_messages_read_live_flags():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.messages_cmd.messages_read_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.messages_cmd.messages_read_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(
             app,
@@ -336,8 +336,8 @@ def test_messages_read_live_flags():
 def test_messages_read_date_filters_db_mode():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.messages_cmd.messages_read_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.messages_cmd.messages_read_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(
             app,
@@ -364,10 +364,10 @@ def test_messages_read_date_filters_db_mode():
 
 
 def test_messages_without_subcommand_clean_via_full_cli(capsys):
-    """End-to-end: `python -m src.main messages` prints help, exits 0, no traceback."""
+    """End-to-end: `python -m tg_agent.main messages` prints help, exits 0, no traceback."""
     import pytest
 
-    from src.cli.main import main
+    from tg_agent.cli.main import main
 
     with patch("sys.argv", ["main.py", "messages"]):
         with pytest.raises(SystemExit) as exc_info:

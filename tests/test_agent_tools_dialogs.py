@@ -34,7 +34,7 @@ class TestDialogsToolSearchDialogs:
         mock_pool = MagicMock()
         ch_svc = MagicMock()
         ch_svc.get_my_dialogs = AsyncMock(return_value=[])
-        with patch("src.services.channel_service.ChannelService", return_value=ch_svc):
+        with patch("tg_agent.services.channel_service.ChannelService", return_value=ch_svc):
             handlers = _get_tool_handlers(mock_db, client_pool=mock_pool)
             result = await handlers["search_dialogs"]({"phone": "+79001234567"})
         assert "не найдены" in _text(result)
@@ -52,7 +52,7 @@ class TestDialogsToolSearchDialogs:
         ]
         ch_svc = MagicMock()
         ch_svc.get_my_dialogs = AsyncMock(return_value=dialogs)
-        with patch("src.services.channel_service.ChannelService", return_value=ch_svc):
+        with patch("tg_agent.services.channel_service.ChannelService", return_value=ch_svc):
             handlers = _get_tool_handlers(mock_db, client_pool=mock_pool)
             result = await handlers["search_dialogs"]({"phone": "+79001234567"})
         text = _text(result)
@@ -72,7 +72,7 @@ class TestDialogsToolSearchDialogs:
         ]
         ch_svc = MagicMock()
         ch_svc.get_my_dialogs = AsyncMock(return_value=dialogs)
-        with patch("src.services.channel_service.ChannelService", return_value=ch_svc):
+        with patch("tg_agent.services.channel_service.ChannelService", return_value=ch_svc):
             handlers = _get_tool_handlers(mock_db, client_pool=mock_pool)
             result = await handlers["search_dialogs"]({
                 "phone": "+79001234567",
@@ -106,7 +106,7 @@ class TestDialogsToolSearchDialogs:
         dialogs = [{"title": "Available", "channel_id": 222, "channel_type": "channel"}]
         ch_svc = MagicMock()
         ch_svc.get_my_dialogs = AsyncMock(return_value=dialogs)
-        with patch("src.services.channel_service.ChannelService", return_value=ch_svc):
+        with patch("tg_agent.services.channel_service.ChannelService", return_value=ch_svc):
             handlers = _get_tool_handlers(mock_db, client_pool=mock_pool)
             result = await handlers["search_dialogs"]({"phone": None})
         text = _text(result)
@@ -129,7 +129,7 @@ class TestDialogsToolSearchDialogs:
             {"title": "Cached Snapshot", "channel_id": 10, "channel_type": "channel"}
         ])
 
-        with patch("src.services.channel_service.ChannelService", return_value=ch_svc):
+        with patch("tg_agent.services.channel_service.ChannelService", return_value=ch_svc):
             handlers = _get_tool_handlers(mock_db, client_pool=SnapshotClientPool())
             result = await handlers["search_dialogs"]({"phone": "+79001234567"})
 
@@ -156,7 +156,7 @@ class TestDialogsToolRefreshDialogs:
         ch_svc.get_my_dialogs = AsyncMock(
             return_value=[{"title": "X", "channel_id": 1, "channel_type": "channel"}]
         )
-        with patch("src.services.channel_service.ChannelService", return_value=ch_svc):
+        with patch("tg_agent.services.channel_service.ChannelService", return_value=ch_svc):
             handlers = _get_tool_handlers(mock_db, client_pool=mock_pool)
             result = await handlers["refresh_dialogs"]({"phone": "+79001234567"})
         text = _text(result)
@@ -225,8 +225,8 @@ class TestDialogsToolLeaveDialogs:
             return_value=SimpleNamespace(success_count=2, results={777: True, -100123: True})
         )
         with (
-            patch("src.services.channel_service.ChannelService", return_value=ch_svc),
-            patch("src.agent.tools.dialogs.TelegramActionService", return_value=action),
+            patch("tg_agent.services.channel_service.ChannelService", return_value=ch_svc),
+            patch("tg_agent.agent.tools.dialogs.TelegramActionService", return_value=action),
         ):
             handlers = _get_tool_handlers(mock_db, client_pool=MagicMock())
             await handlers["leave_dialogs"](
@@ -281,8 +281,8 @@ class TestDialogsToolDeleteDialogs:
             return_value=SimpleNamespace(success_count=2, results={777: True, -100123: True})
         )
         with (
-            patch("src.services.channel_service.ChannelService", return_value=ch_svc),
-            patch("src.agent.tools.dialogs.TelegramActionService", return_value=action),
+            patch("tg_agent.services.channel_service.ChannelService", return_value=ch_svc),
+            patch("tg_agent.agent.tools.dialogs.TelegramActionService", return_value=action),
         ):
             handlers = _get_tool_handlers(mock_db, client_pool=MagicMock())
             await handlers["delete_dialogs"](

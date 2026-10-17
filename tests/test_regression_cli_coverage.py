@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 class TestSchedulerSyncJobState:
     async def test_sync_job_disable(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
         mgr = SchedulerManager()
         mgr._scheduler = MagicMock()
         mgr._scheduler.running = True
@@ -24,7 +24,7 @@ class TestSchedulerSyncJobState:
         mgr._scheduler.remove_job.assert_called_once_with("collect")
 
     async def test_sync_job_enable_collection(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
         mgr = SchedulerManager()
         mgr._scheduler = MagicMock()
         mgr._scheduler.running = True
@@ -34,7 +34,7 @@ class TestSchedulerSyncJobState:
         mgr._scheduler.add_job.assert_called_once()
 
     async def test_sync_job_enable_photo_due(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
         mgr = SchedulerManager()
         mgr._scheduler = MagicMock()
         mgr._scheduler.running = True
@@ -43,7 +43,7 @@ class TestSchedulerSyncJobState:
         mgr._scheduler.add_job.assert_called_once()
 
     async def test_sync_job_enable_photo_auto(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
         mgr = SchedulerManager()
         mgr._scheduler = MagicMock()
         mgr._scheduler.running = True
@@ -61,7 +61,7 @@ class TestSchedulerSyncJobState:
         mgr._scheduler.add_job.assert_called_once()
 
     async def test_sync_job_enable_sq_prefix(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
         mgr = SchedulerManager()
         mgr._scheduler = MagicMock()
         mgr._scheduler.running = True
@@ -70,7 +70,7 @@ class TestSchedulerSyncJobState:
             mgr.sync_search_query_jobs.assert_called_once()
 
     async def test_sync_job_enable_pipeline_prefix(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
         mgr = SchedulerManager()
         mgr._scheduler = MagicMock()
         mgr._scheduler.running = True
@@ -79,7 +79,7 @@ class TestSchedulerSyncJobState:
             mgr.sync_pipeline_jobs.assert_called_once()
 
     async def test_get_job_next_run_fallback(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
         mgr = SchedulerManager()
         job = SimpleNamespace(id="test_job", next_run_time="2025-01-01")
         mgr._scheduler = MagicMock()
@@ -89,7 +89,7 @@ class TestSchedulerSyncJobState:
         assert result == "2025-01-01"
 
     async def test_get_all_jobs_cache(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
         mgr = SchedulerManager()
         mgr._scheduler = MagicMock()
         mgr._scheduler.get_jobs = MagicMock(return_value=[])

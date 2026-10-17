@@ -1,4 +1,4 @@
-"""`python -m src.main collect` (no args) — enqueue all eligible channels.
+"""`python -m tg_agent.main collect` (no args) — enqueue all eligible channels.
 
 The bare `collect` invocation (no `--channel-id`, no `sample` sub) calls
 `TaskEnqueuer.enqueue_all_channels()` which writes pending rows into the

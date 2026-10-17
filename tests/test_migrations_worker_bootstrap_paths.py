@@ -22,16 +22,16 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiosqlite
 import pytest
 
-from src.config import AppConfig
-from src.database.migrations import (
+from tg_agent.config import AppConfig
+from tg_agent.database.migrations import (
     _migrate_tool_permission_key,
     _migrate_vec_to_portable,
     run_migrations,
 )
-from src.database.repositories.messages import MessageSearchPage
-from src.models import Message, SearchParams
-from src.search.local_search import LocalSearch
-from src.services.provider_service import RuntimeProviderRegistry, build_provider_service
+from tg_agent.database.repositories.messages import MessageSearchPage
+from tg_agent.models import Message, SearchParams
+from tg_agent.search.local_search import LocalSearch
+from tg_agent.services.provider_service import RuntimeProviderRegistry, build_provider_service
 
 # ============================================================================
 # 1. src/database/migrations.py -- edge-case paths
@@ -525,7 +525,7 @@ async def test_run_migrations_adds_translation_columns_on_bare_messages(fresh_db
 @pytest.mark.anyio
 async def test_publish_snapshots_basic():
     """Covers _publish_snapshots happy path with mocked container."""
-    from src.runtime.worker import _publish_snapshots
+    from tg_agent.runtime.worker import _publish_snapshots
 
     container = MagicMock()
 
@@ -558,7 +558,7 @@ async def test_publish_snapshots_basic():
     container.scheduler.get_potential_jobs = AsyncMock(return_value=[])
 
     # notification target service -- use real dataclass
-    from src.services.notification_target_service import NotificationTargetStatus
+    from tg_agent.services.notification_target_service import NotificationTargetStatus
 
     target_status = NotificationTargetStatus(
         mode="auto", state="unavailable", message="no accounts"
@@ -580,8 +580,8 @@ async def test_publish_snapshots_basic():
 @pytest.mark.anyio
 async def test_publish_snapshots_with_available_notification():
     """Covers the notification bot snapshot path when target is available."""
-    from src.runtime.worker import _publish_snapshots
-    from src.services.notification_target_service import NotificationTargetStatus
+    from tg_agent.runtime.worker import _publish_snapshots
+    from tg_agent.services.notification_target_service import NotificationTargetStatus
 
     container = MagicMock()
     mock_runtime_snapshots = MagicMock()
@@ -615,7 +615,7 @@ async def test_publish_snapshots_with_available_notification():
     container.config.notifications.bot_name_prefix = "Bot"
     container.config.notifications.bot_username_prefix = ""
 
-    with patch("src.runtime.worker.NotificationService") as mock_notif_svc:
+    with patch("tg_agent.runtime.worker.NotificationService") as mock_notif_svc:
         mock_notif_svc.return_value.get_status = AsyncMock(return_value=None)
         await _publish_snapshots(container)
 
@@ -625,8 +625,8 @@ async def test_publish_snapshots_with_available_notification():
 @pytest.mark.anyio
 async def test_publish_snapshots_notification_exception():
     """Covers the exception path when NotificationService.get_status() fails."""
-    from src.runtime.worker import _publish_snapshots
-    from src.services.notification_target_service import NotificationTargetStatus
+    from tg_agent.runtime.worker import _publish_snapshots
+    from tg_agent.services.notification_target_service import NotificationTargetStatus
 
     container = MagicMock()
     mock_runtime_snapshots = MagicMock()
@@ -660,7 +660,7 @@ async def test_publish_snapshots_notification_exception():
     container.config.notifications.bot_name_prefix = "Bot"
     container.config.notifications.bot_username_prefix = ""
 
-    with patch("src.runtime.worker.NotificationService") as mock_notif_svc:
+    with patch("tg_agent.runtime.worker.NotificationService") as mock_notif_svc:
         mock_notif_svc.return_value.get_status = AsyncMock(side_effect=Exception("bot error"))
         await _publish_snapshots(container)
 
@@ -699,7 +699,7 @@ async def test_generate_image_url_result(mock_db, tmp_path):
     mock_httpx_transport = httpx.MockTransport(_handler)
 
     with (
-        patch("src.services.image_generation_service.ImageGenerationService") as mock_svc,
+        patch("tg_agent.services.image_generation_service.ImageGenerationService") as mock_svc,
     ):
         mock_svc.return_value.is_available = AsyncMock(return_value=True)
         mock_svc.return_value.generate = AsyncMock(return_value="https://example.com/image.png")
@@ -715,7 +715,7 @@ async def test_generate_image_url_result(mock_db, tmp_path):
                 return c
 
         try:
-            with patch("src.agent.tools.images.DATA_IMAGE_DIR", tmp_path):
+            with patch("tg_agent.agent.tools.images.DATA_IMAGE_DIR", tmp_path):
                 with patch("httpx.AsyncClient", _TrackingAsyncClient):
                     handlers = _get_tool_handlers(mock_db)
                     result = await handlers["generate_image"]({"prompt": "a cat", "model": "test:model"})
@@ -772,12 +772,12 @@ async def test_load_db_providers_db_exception():
     svc = RuntimeProviderRegistry(db=mock_db, config=mock_config)
 
     with patch(
-        "src.services.provider_service.RuntimeProviderRegistry._build_adapter_for_config",
+        "tg_agent.services.provider_service.RuntimeProviderRegistry._build_adapter_for_config",
         side_effect=Exception("err"),
     ):
         # The inner import will fail
         with patch(
-            "src.services.agent_provider_service.ProviderConfigService.load_provider_configs",
+            "tg_agent.services.agent_provider_service.ProviderConfigService.load_provider_configs",
             side_effect=Exception("db err"),
         ):
             result = await svc.load_db_providers()
@@ -826,7 +826,7 @@ async def test_get_provider_status_list_with_configs():
     disabled_cfg.enabled = False
 
     with patch(
-        "src.services.agent_provider_service.ProviderConfigService",
+        "tg_agent.services.agent_provider_service.ProviderConfigService",
     ) as mock_db_provider_svc:
         mock_db_svc = MagicMock()
         mock_db_svc.load_provider_configs = AsyncMock(return_value=[active_cfg, disabled_cfg])
@@ -993,7 +993,7 @@ def test_has_valid_secrets_with_empty_secrets():
 @pytest.mark.anyio
 async def test_load_telegram_credentials_from_config():
     """Covers load_telegram_credentials with config values."""
-    from src.web.bootstrap import load_telegram_credentials
+    from tg_agent.web.bootstrap import load_telegram_credentials
 
     config = AppConfig()
     config.telegram.api_id = 12345
@@ -1009,7 +1009,7 @@ async def test_load_telegram_credentials_from_config():
 @pytest.mark.anyio
 async def test_load_telegram_credentials_from_db():
     """Covers load_telegram_credentials falling back to DB settings."""
-    from src.web.bootstrap import load_telegram_credentials
+    from tg_agent.web.bootstrap import load_telegram_credentials
 
     config = AppConfig()
     config.telegram.api_id = 0
@@ -1025,7 +1025,7 @@ async def test_load_telegram_credentials_from_db():
 @pytest.mark.anyio
 async def test_load_telegram_credentials_no_db_fallback():
     """Covers load_telegram_credentials with no DB values."""
-    from src.web.bootstrap import load_telegram_credentials
+    from tg_agent.web.bootstrap import load_telegram_credentials
 
     config = AppConfig()
     config.telegram.api_id = 0
@@ -1045,7 +1045,7 @@ async def test_load_telegram_credentials_no_db_fallback():
 
 def test_message_bubble_compose_user():
     """Covers MessageBubble compose for user role."""
-    from src.cli.commands.agent_tui import MessageBubble
+    from tg_agent.cli.commands.agent_tui import MessageBubble
 
     bubble = MessageBubble("user", "hello")
     assert "user-bubble" in bubble.classes
@@ -1054,7 +1054,7 @@ def test_message_bubble_compose_user():
 
 def test_message_bubble_compose_assistant():
     """Covers MessageBubble compose for assistant role."""
-    from src.cli.commands.agent_tui import MessageBubble
+    from tg_agent.cli.commands.agent_tui import MessageBubble
 
     bubble = MessageBubble("assistant", "response")
     assert "assistant-bubble" in bubble.classes
@@ -1063,7 +1063,7 @@ def test_message_bubble_compose_assistant():
 
 def test_streaming_message_replace_pending_status():
     """Covers replace_pending_status without flushing."""
-    from src.cli.commands.agent_tui import StreamingMessage
+    from tg_agent.cli.commands.agent_tui import StreamingMessage
 
     widget = StreamingMessage()
     widget._elapsed_label = MagicMock()
@@ -1075,7 +1075,7 @@ def test_streaming_message_replace_pending_status():
 
 def test_streaming_message_set_pending_status_duplicate():
     """Covers set_pending_status skipping duplicate labels."""
-    from src.cli.commands.agent_tui import StreamingMessage
+    from tg_agent.cli.commands.agent_tui import StreamingMessage
 
     widget = StreamingMessage()
     widget._elapsed_label = MagicMock()
@@ -1087,7 +1087,7 @@ def test_streaming_message_set_pending_status_duplicate():
 
 def test_streaming_message_do_render():
     """Covers _do_render updates markdown widget."""
-    from src.cli.commands.agent_tui import StreamingMessage
+    from tg_agent.cli.commands.agent_tui import StreamingMessage
 
     widget = StreamingMessage()
     widget._pending_render = True
@@ -1101,7 +1101,7 @@ def test_streaming_message_do_render():
 
 def test_streaming_message_tick_elapsed_loading_false():
     """Covers _tick_elapsed when loading is False (early return)."""
-    from src.cli.commands.agent_tui import StreamingMessage
+    from tg_agent.cli.commands.agent_tui import StreamingMessage
 
     widget = StreamingMessage()
     widget._elapsed_label = MagicMock()
@@ -1114,7 +1114,7 @@ def test_streaming_message_tick_elapsed_default():
     """Covers _tick_elapsed with default status (no status label, no tool)."""
     import time as _time
 
-    from src.cli.commands.agent_tui import StreamingMessage
+    from tg_agent.cli.commands.agent_tui import StreamingMessage
 
     widget = StreamingMessage()
     widget._elapsed_label = MagicMock()
@@ -1129,14 +1129,14 @@ def test_streaming_message_tick_elapsed_default():
 
 def test_chat_input_class_exists():
     """Covers ChatInput import and class definition."""
-    from src.cli.commands.agent_tui import ChatInput
+    from tg_agent.cli.commands.agent_tui import ChatInput
 
     assert ChatInput is not None
 
 
 def test_permission_dialog_class():
     """Covers PermissionDialog class definition and compose."""
-    from src.cli.commands.agent_tui import PermissionDialog
+    from tg_agent.cli.commands.agent_tui import PermissionDialog
 
     dialog = PermissionDialog("test_tool", "+123456")
     assert dialog._tool_name == "test_tool"
@@ -1145,7 +1145,7 @@ def test_permission_dialog_class():
 
 def test_permission_dialog_no_phone():
     """Covers PermissionDialog with empty phone."""
-    from src.cli.commands.agent_tui import PermissionDialog
+    from tg_agent.cli.commands.agent_tui import PermissionDialog
 
     dialog = PermissionDialog("test_tool", "")
     assert dialog._phone == ""
@@ -1153,14 +1153,14 @@ def test_permission_dialog_no_phone():
 
 def test_thread_sidebar_class():
     """Covers ThreadSidebar class definition."""
-    from src.cli.commands.agent_tui import ThreadSidebar
+    from tg_agent.cli.commands.agent_tui import ThreadSidebar
 
     assert ThreadSidebar is not None
 
 
 def test_thread_selected_message():
     """Covers ThreadSelected message."""
-    from src.cli.commands.agent_tui import ThreadSelected
+    from tg_agent.cli.commands.agent_tui import ThreadSelected
 
     msg = ThreadSelected(42)
     assert msg.thread_id == 42
@@ -1213,7 +1213,7 @@ async def test_search_semantic_numpy_empty_index():
     mock_embedding = MagicMock()
     mock_embedding.embed_query = AsyncMock(return_value=[0.1, 0.2, 0.3])
 
-    with patch("src.search.local_search.NumpySemanticIndex") as mock_index:
+    with patch("tg_agent.search.local_search.NumpySemanticIndex") as mock_index:
         mock_idx = MagicMock()
         mock_idx.size = 0
         mock_index.return_value.load = MagicMock()
@@ -1272,7 +1272,7 @@ def mock_search_bundle_for_local():
 @pytest.mark.anyio
 async def test_cancel_bg_tasks_empty():
     """Covers _cancel_bg_tasks with empty set."""
-    from src.web.bootstrap import _cancel_bg_tasks
+    from tg_agent.web.bootstrap import _cancel_bg_tasks
 
     tasks: set = set()
     await _cancel_bg_tasks(tasks)
@@ -1282,7 +1282,7 @@ async def test_cancel_bg_tasks_empty():
 @pytest.mark.anyio
 async def test_cancel_bg_tasks_with_tasks():
     """Covers _cancel_bg_tasks cancelling active tasks."""
-    from src.web.bootstrap import _cancel_bg_tasks
+    from tg_agent.web.bootstrap import _cancel_bg_tasks
 
     async def _long_task():
         await asyncio.sleep(100)

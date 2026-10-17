@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.services.trend_service import TrendingChannel, TrendingEmoji, TrendingTopic
+from tg_agent.services.trend_service import TrendingChannel, TrendingEmoji, TrendingTopic
 
 # ── Trends page ─────────────────────────────────────────────────────
 
@@ -34,7 +34,7 @@ async def test_trends_page_invalid_days(route_client):
 @pytest.mark.anyio
 async def test_api_trending_topics(route_client):
     """GET /analytics/trends/topics returns topic JSON."""
-    with patch("src.web.routes.analytics.TrendService") as mock_svc:
+    with patch("tg_agent.web.routes.analytics.TrendService") as mock_svc:
         instance = mock_svc.return_value
         instance.get_trending_topics = AsyncMock(return_value=[TrendingTopic(keyword="ai", count=3)])
         resp = await route_client.get("/analytics/trends/topics?days=7&limit=5")
@@ -47,7 +47,7 @@ async def test_api_trending_topics(route_client):
 @pytest.mark.anyio
 async def test_api_trending_topics_clamps_days_and_limit(route_client):
     """GET /analytics/trends/topics clamps expensive query bounds."""
-    with patch("src.web.routes.analytics.TrendService") as mock_svc:
+    with patch("tg_agent.web.routes.analytics.TrendService") as mock_svc:
         instance = mock_svc.return_value
         instance.get_trending_topics = AsyncMock(return_value=[])
         resp = await route_client.get("/analytics/trends/topics?days=999999&limit=999999")
@@ -59,7 +59,7 @@ async def test_api_trending_topics_clamps_days_and_limit(route_client):
 @pytest.mark.anyio
 async def test_api_trending_channels(route_client):
     """GET /analytics/trends/channels returns channel JSON."""
-    with patch("src.web.routes.analytics.TrendService") as mock_svc:
+    with patch("tg_agent.web.routes.analytics.TrendService") as mock_svc:
         instance = mock_svc.return_value
         instance.get_trending_channels = AsyncMock(
             return_value=[
@@ -82,7 +82,7 @@ async def test_api_trending_channels(route_client):
 @pytest.mark.anyio
 async def test_api_trending_channels_clamps_floor(route_client):
     """GET /analytics/trends/channels clamps lower bounds to one."""
-    with patch("src.web.routes.analytics.TrendService") as mock_svc:
+    with patch("tg_agent.web.routes.analytics.TrendService") as mock_svc:
         instance = mock_svc.return_value
         instance.get_trending_channels = AsyncMock(return_value=[])
         resp = await route_client.get("/analytics/trends/channels?days=-5&limit=0")
@@ -94,7 +94,7 @@ async def test_api_trending_channels_clamps_floor(route_client):
 @pytest.mark.anyio
 async def test_api_trending_emojis(route_client):
     """GET /analytics/trends/emojis returns reaction emoji JSON."""
-    with patch("src.web.routes.analytics.TrendService") as mock_svc:
+    with patch("tg_agent.web.routes.analytics.TrendService") as mock_svc:
         instance = mock_svc.return_value
         instance.get_trending_emojis = AsyncMock(return_value=[TrendingEmoji(emoji="🔥", count=9)])
         resp = await route_client.get("/analytics/trends/emojis?days=14&limit=3")
@@ -107,7 +107,7 @@ async def test_api_trending_emojis(route_client):
 @pytest.mark.anyio
 async def test_api_trending_emojis_clamps_days_and_limit(route_client):
     """GET /analytics/trends/emojis clamps expensive query bounds."""
-    with patch("src.web.routes.analytics.TrendService") as mock_svc:
+    with patch("tg_agent.web.routes.analytics.TrendService") as mock_svc:
         instance = mock_svc.return_value
         instance.get_trending_emojis = AsyncMock(return_value=[])
         resp = await route_client.get("/analytics/trends/emojis?days=999999&limit=999999")
@@ -163,13 +163,13 @@ async def test_channel_selector_fragment_returns_partial(route_client):
 @pytest.mark.anyio
 async def test_channel_selector_fragment_lists_channels(route_client):
     """#951: selector fragment renders an <option> per active channel and marks the selected one."""
-    from src.services.channel_analytics_service import ChannelListItem
+    from tg_agent.services.channel_analytics_service import ChannelListItem
 
     channels = [
         ChannelListItem(channel_id=100, title="Alpha", username="alpha"),
         ChannelListItem(channel_id=200, title="Beta", username="beta"),
     ]
-    with patch("src.web.routes.analytics.ChannelAnalyticsService") as mock_svc:
+    with patch("tg_agent.web.routes.analytics.ChannelAnalyticsService") as mock_svc:
         instance = mock_svc.return_value
         instance.get_active_channels = AsyncMock(return_value=channels)
         resp = await route_client.get("/analytics/channels/fragments/selector?channel_id=100")
@@ -186,7 +186,7 @@ async def test_channel_selector_fragment_lists_channels(route_client):
 @pytest.mark.anyio
 async def test_api_channel_overview(route_client):
     """Test channel overview API returns JSON."""
-    from src.services.channel_analytics_service import ChannelOverview
+    from tg_agent.services.channel_analytics_service import ChannelOverview
 
     overview = ChannelOverview(
         channel_id=100,
@@ -196,7 +196,7 @@ async def test_api_channel_overview(route_client):
         err=2.5,
         err24=3.1,
     )
-    with patch("src.web.routes.analytics.ChannelAnalyticsService") as mock_svc:
+    with patch("tg_agent.web.routes.analytics.ChannelAnalyticsService") as mock_svc:
         instance = mock_svc.return_value
         instance.get_channel_overview = AsyncMock(return_value=overview)
         resp = await route_client.get("/analytics/channels/api/overview?channel_id=100&days=14")
@@ -210,7 +210,7 @@ async def test_api_channel_overview(route_client):
 @pytest.mark.anyio
 async def test_api_subscriber_history(route_client):
     """Test subscriber history API returns JSON."""
-    with patch("src.web.routes.analytics.ChannelAnalyticsService") as mock_svc:
+    with patch("tg_agent.web.routes.analytics.ChannelAnalyticsService") as mock_svc:
         instance = mock_svc.return_value
         instance.get_subscriber_history = AsyncMock(
             return_value=[{"date": "2025-01-01", "count": 100}]
@@ -224,7 +224,7 @@ async def test_api_subscriber_history(route_client):
 @pytest.mark.anyio
 async def test_api_views_timeseries(route_client):
     """Test views timeseries API returns JSON."""
-    with patch("src.web.routes.analytics.ChannelAnalyticsService") as mock_svc:
+    with patch("tg_agent.web.routes.analytics.ChannelAnalyticsService") as mock_svc:
         instance = mock_svc.return_value
         instance.get_views_timeseries = AsyncMock(
             return_value=[{"date": "2025-01-01", "avg_views": 50.0, "msg_count": 10}]
@@ -238,7 +238,7 @@ async def test_api_views_timeseries(route_client):
 @pytest.mark.anyio
 async def test_api_post_frequency(route_client):
     """Test post frequency API returns JSON."""
-    with patch("src.web.routes.analytics.ChannelAnalyticsService") as mock_svc:
+    with patch("tg_agent.web.routes.analytics.ChannelAnalyticsService") as mock_svc:
         instance = mock_svc.return_value
         instance.get_post_frequency = AsyncMock(
             return_value=[{"date": "2025-01-01", "count": 5}]
@@ -252,7 +252,7 @@ async def test_api_post_frequency(route_client):
 @pytest.mark.anyio
 async def test_api_err(route_client):
     """Test ERR API returns JSON."""
-    with patch("src.web.routes.analytics.ChannelAnalyticsService") as mock_svc:
+    with patch("tg_agent.web.routes.analytics.ChannelAnalyticsService") as mock_svc:
         instance = mock_svc.return_value
         instance.get_err = AsyncMock(return_value=2.5)
         instance.get_err24 = AsyncMock(return_value=3.1)
@@ -266,7 +266,7 @@ async def test_api_err(route_client):
 @pytest.mark.anyio
 async def test_api_hourly_activity(route_client):
     """Test hourly activity API returns JSON."""
-    with patch("src.web.routes.analytics.ChannelAnalyticsService") as mock_svc:
+    with patch("tg_agent.web.routes.analytics.ChannelAnalyticsService") as mock_svc:
         instance = mock_svc.return_value
         instance.get_hourly_activity = AsyncMock(
             return_value=[{"hour": 12, "count": 42}]
@@ -280,9 +280,9 @@ async def test_api_hourly_activity(route_client):
 @pytest.mark.anyio
 async def test_api_citation_stats(route_client):
     """Test citation stats API returns JSON."""
-    from src.services.channel_analytics_service import CitationStats
+    from tg_agent.services.channel_analytics_service import CitationStats
 
-    with patch("src.web.routes.analytics.ChannelAnalyticsService") as mock_svc:
+    with patch("tg_agent.web.routes.analytics.ChannelAnalyticsService") as mock_svc:
         instance = mock_svc.return_value
         instance.get_citation_stats = AsyncMock(
             return_value=CitationStats(total_forwards=100, post_count=50, avg_forwards=2.0)
@@ -296,7 +296,7 @@ async def test_api_citation_stats(route_client):
 @pytest.mark.anyio
 async def test_api_heatmap(route_client):
     """Test heatmap API returns JSON."""
-    with patch("src.web.routes.analytics.ChannelAnalyticsService") as mock_svc:
+    with patch("tg_agent.web.routes.analytics.ChannelAnalyticsService") as mock_svc:
         instance = mock_svc.return_value
         instance.get_heatmap = AsyncMock(
             return_value=[{"hour": 12, "weekday": 1, "count": 10}]
@@ -310,7 +310,7 @@ async def test_api_heatmap(route_client):
 @pytest.mark.anyio
 async def test_api_cross_citations(route_client):
     """Test cross-citations API returns JSON."""
-    with patch("src.web.routes.analytics.ChannelAnalyticsService") as mock_svc:
+    with patch("tg_agent.web.routes.analytics.ChannelAnalyticsService") as mock_svc:
         instance = mock_svc.return_value
         instance.get_cross_channel_citations = AsyncMock(
             return_value=[{"source_channel_id": 200, "count": 5}]
@@ -328,7 +328,7 @@ async def test_api_cross_citations(route_client):
 
 @pytest.mark.anyio
 async def test_channel_ratings_api_and_filter(route_client):
-    from src.models import ChannelRating
+    from tg_agent.models import ChannelRating
 
     db = route_client._transport_app.state.db
     await db.repos.channel_ratings.upsert(
@@ -354,7 +354,7 @@ async def test_channel_ratings_api_and_filter(route_client):
 
 @pytest.mark.anyio
 async def test_channel_ratings_page_renders(route_client):
-    from src.models import ChannelRating
+    from tg_agent.models import ChannelRating
 
     db = route_client._transport_app.state.db
     await db.repos.channel_ratings.upsert(

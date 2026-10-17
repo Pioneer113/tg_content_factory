@@ -9,8 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.database import Database
-from src.models import SearchParams
+from tg_agent.database import Database
+from tg_agent.models import SearchParams
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -27,10 +27,10 @@ def mock_db():
 def _get_tool_handlers(mock_db, client_pool=None, config=None, **kwargs):
     captured = []
     with patch(
-        "src.agent.tools.create_sdk_mcp_server",
+        "tg_agent.agent.tools.create_sdk_mcp_server",
         side_effect=lambda **kw: captured.extend(kw.get("tools", [])),
     ):
-        from src.agent.tools import make_mcp_server
+        from tg_agent.agent.tools import make_mcp_server
 
         make_mcp_server(mock_db, client_pool=client_pool, config=config, **kwargs)
     return {t.name: t.handler for t in captured}
@@ -400,7 +400,7 @@ class TestSearchMyTelegram:
             {"channel_id": 100, "title": "Test Chan", "channel_type": "channel"},
             {"channel_id": 200, "title": "Group X", "channel_type": "supergroup"},
         ]
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.get_my_dialogs = AsyncMock(return_value=dialogs)
             handlers = _get_tool_handlers(mock_db, client_pool=pool)
             result = await handlers["search_dialogs"]({"phone": "+79001234567"})
@@ -413,7 +413,7 @@ class TestSearchMyTelegram:
         mock_db.get_accounts = AsyncMock(
             return_value=[SimpleNamespace(phone="+79001234567", is_primary=True)]
         )
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.get_my_dialogs = AsyncMock(return_value=[])
             handlers = _get_tool_handlers(mock_db, client_pool=pool)
             result = await handlers["search_dialogs"]({"phone": "+79001234567"})
@@ -428,7 +428,7 @@ class TestSearchMyTelegram:
         dialogs = [
             {"channel_id": i, "title": f"Chan{i}", "channel_type": "channel"} for i in range(105)
         ]
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.get_my_dialogs = AsyncMock(return_value=dialogs)
             handlers = _get_tool_handlers(mock_db, client_pool=pool)
             result = await handlers["search_dialogs"]({"phone": "+79001234567"})
@@ -445,7 +445,7 @@ class TestSearchMyTelegram:
         dialogs = [
             {"channel_id": 1, "title": "Test", "channel_type": "channel"},
         ]
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.get_my_dialogs = AsyncMock(return_value=dialogs)
             handlers = _get_tool_handlers(mock_db, client_pool=pool)
             result = await handlers["search_dialogs"]({"phone": "+79001234567", "type": "dm"})
@@ -463,7 +463,7 @@ class TestSearchMyTelegram:
         dialogs = [
             {"channel_id": i, "title": f"Chan{i}", "channel_type": "channel"} for i in range(10)
         ]
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.get_my_dialogs = AsyncMock(return_value=dialogs)
             handlers = _get_tool_handlers(mock_db, client_pool=pool)
             result = await handlers["search_dialogs"]({"phone": "+79001234567", "limit": 3})
@@ -481,7 +481,7 @@ class TestSearchMyTelegram:
             {"channel_id": 2, "title": "Golang Daily", "channel_type": "channel"},
             {"channel_id": 3, "title": "Python Weekly", "channel_type": "channel"},
         ]
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.get_my_dialogs = AsyncMock(return_value=dialogs)
             handlers = _get_tool_handlers(mock_db, client_pool=pool)
             result = await handlers["search_dialogs"]({"phone": "+79001234567", "search": "python"})
@@ -502,7 +502,7 @@ class TestSearchMyTelegram:
             {"channel_id": 2, "title": "Group", "channel_type": "supergroup"},
             {"channel_id": 3, "title": "DM", "channel_type": "dm"},
         ]
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.get_my_dialogs = AsyncMock(return_value=dialogs)
             handlers = _get_tool_handlers(mock_db, client_pool=pool)
             result = await handlers["search_dialogs"]({"phone": "+79001234567", "type": "channels"})
@@ -522,7 +522,7 @@ class TestSearchMyTelegram:
             {"channel_id": 2, "title": "SuperG", "channel_type": "supergroup"},
             {"channel_id": 3, "title": "Forum", "channel_type": "forum"},
         ]
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.get_my_dialogs = AsyncMock(return_value=dialogs)
             handlers = _get_tool_handlers(mock_db, client_pool=pool)
             result = await handlers["search_dialogs"]({"phone": "+79001234567", "type": "groups"})
@@ -540,7 +540,7 @@ class TestSearchMyTelegram:
             {"channel_id": 1, "title": "Chan", "channel_type": "channel"},
             {"channel_id": 2, "title": "Bot1", "channel_type": "bot"},
         ]
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.get_my_dialogs = AsyncMock(return_value=dialogs)
             handlers = _get_tool_handlers(mock_db, client_pool=pool)
             result = await handlers["search_dialogs"]({"phone": "+79001234567", "type": "bot"})
@@ -554,7 +554,7 @@ class TestSearchMyTelegram:
         mock_db.get_accounts = AsyncMock(
             return_value=[SimpleNamespace(phone="+79001234567", is_primary=True)]
         )
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.get_my_dialogs = AsyncMock(side_effect=Exception("fail"))
             handlers = _get_tool_handlers(mock_db, client_pool=pool)
             result = await handlers["search_dialogs"]({"phone": "+79001234567"})
@@ -599,7 +599,7 @@ class TestLeaveDialogs:
         # (audit #837/7); mock it so the resolution does not hit a bare MagicMock.
         ch_svc = MagicMock()
         ch_svc.get_my_dialogs = AsyncMock(return_value=[])
-        with patch("src.services.channel_service.ChannelService", return_value=ch_svc):
+        with patch("tg_agent.services.channel_service.ChannelService", return_value=ch_svc):
             handlers = _get_tool_handlers(mock_db, client_pool=pool)
             result = await handlers["leave_dialogs"](
                 {"phone": "+79001234567", "dialog_ids": "100,200", "confirm": True}
@@ -615,7 +615,7 @@ class TestLeaveDialogs:
         pool.leave_channels = AsyncMock(side_effect=Exception("net"))
         ch_svc = MagicMock()
         ch_svc.get_my_dialogs = AsyncMock(return_value=[])
-        with patch("src.services.channel_service.ChannelService", return_value=ch_svc):
+        with patch("tg_agent.services.channel_service.ChannelService", return_value=ch_svc):
             handlers = _get_tool_handlers(mock_db, client_pool=pool)
             result = await handlers["leave_dialogs"](
                 {"phone": "+79001234567", "dialog_ids": "100", "confirm": True}
@@ -732,10 +732,10 @@ def _make_photo_services():
 
 def _photo_patches(photo_task_svc, auto_upload_svc):
     return (
-        patch("src.services.photo_task_service.PhotoTaskService", return_value=photo_task_svc),
-        patch("src.services.photo_auto_upload_service.PhotoAutoUploadService", return_value=auto_upload_svc),
-        patch("src.database.bundles.PhotoLoaderBundle"),
-        patch("src.services.photo_publish_service.PhotoPublishService"),
+        patch("tg_agent.services.photo_task_service.PhotoTaskService", return_value=photo_task_svc),
+        patch("tg_agent.services.photo_auto_upload_service.PhotoAutoUploadService", return_value=auto_upload_svc),
+        patch("tg_agent.database.bundles.PhotoLoaderBundle"),
+        patch("tg_agent.services.photo_publish_service.PhotoPublishService"),
     )
 
 
@@ -885,8 +885,8 @@ class TestRunPhotoDue:
     @pytest.mark.anyio
     async def test_exception(self, mock_db):
         pool = _make_pool_with_account()
-        with patch("src.database.bundles.PhotoLoaderBundle"):
-            with patch("src.services.photo_task_service.PhotoTaskService") as mock_task:
+        with patch("tg_agent.database.bundles.PhotoLoaderBundle"):
+            with patch("tg_agent.services.photo_task_service.PhotoTaskService") as mock_task:
                 mock_task.side_effect = Exception("db error")
                 handlers = _get_tool_handlers(mock_db, client_pool=pool)
                 result = await handlers["run_photo_due"]({"confirm": True})
@@ -900,7 +900,7 @@ class TestRunPhotoDue:
 
 class TestImageGenerationService:
     def test_init_with_adapters(self):
-        from src.services.image_generation_service import ImageGenerationService
+        from tg_agent.services.image_generation_service import ImageGenerationService
 
         async def fake_adapter(prompt, model_id):
             return "http://example.com/img.png"
@@ -909,48 +909,48 @@ class TestImageGenerationService:
         assert "myprovider" in svc.adapter_names
 
     def test_init_no_adapters_empty(self):
-        from src.services.image_generation_service import ImageGenerationService
+        from tg_agent.services.image_generation_service import ImageGenerationService
 
         svc = ImageGenerationService(adapters={})
         assert svc.adapter_names == []
 
     @pytest.mark.anyio
     async def test_is_available_false_no_adapters(self):
-        from src.services.image_generation_service import ImageGenerationService
+        from tg_agent.services.image_generation_service import ImageGenerationService
 
         svc = ImageGenerationService(adapters={})
         assert not await svc.is_available()
 
     @pytest.mark.anyio
     async def test_is_available_true_with_adapter(self):
-        from src.services.image_generation_service import ImageGenerationService
+        from tg_agent.services.image_generation_service import ImageGenerationService
 
         svc = ImageGenerationService(adapters={"x": AsyncMock(return_value=None)})
         assert await svc.is_available()
 
     def test_register_adapter(self):
-        from src.services.image_generation_service import ImageGenerationService
+        from tg_agent.services.image_generation_service import ImageGenerationService
 
         svc = ImageGenerationService(adapters={})
         svc.register_adapter("test", AsyncMock())
         assert "test" in svc.adapter_names
 
     def test_parse_model_string_with_colon(self):
-        from src.services.image_generation_service import ImageGenerationService
+        from tg_agent.services.image_generation_service import ImageGenerationService
 
         provider, model_id = ImageGenerationService._parse_model_string("together:FLUX.1-schnell")
         assert provider == "together"
         assert model_id == "FLUX.1-schnell"
 
     def test_parse_model_string_no_colon(self):
-        from src.services.image_generation_service import ImageGenerationService
+        from tg_agent.services.image_generation_service import ImageGenerationService
 
         provider, model_id = ImageGenerationService._parse_model_string("some-model")
         assert provider is None
         assert model_id == "some-model"
 
     def test_parse_model_string_none(self):
-        from src.services.image_generation_service import ImageGenerationService
+        from tg_agent.services.image_generation_service import ImageGenerationService
 
         provider, model_id = ImageGenerationService._parse_model_string(None)
         assert provider is None
@@ -958,7 +958,7 @@ class TestImageGenerationService:
 
     @pytest.mark.anyio
     async def test_generate_no_text_returns_none(self):
-        from src.services.image_generation_service import ImageGenerationService
+        from tg_agent.services.image_generation_service import ImageGenerationService
 
         svc = ImageGenerationService(adapters={"x": AsyncMock(return_value="url")})
         result = await svc.generate("together:model", "")
@@ -966,7 +966,7 @@ class TestImageGenerationService:
 
     @pytest.mark.anyio
     async def test_generate_no_adapters_returns_none(self):
-        from src.services.image_generation_service import ImageGenerationService
+        from tg_agent.services.image_generation_service import ImageGenerationService
 
         svc = ImageGenerationService(adapters={})
         result = await svc.generate("together:model", "some text")
@@ -974,7 +974,7 @@ class TestImageGenerationService:
 
     @pytest.mark.anyio
     async def test_generate_success(self):
-        from src.services.image_generation_service import ImageGenerationService
+        from tg_agent.services.image_generation_service import ImageGenerationService
 
         adapter = AsyncMock(return_value="http://img.example.com/x.png")
         svc = ImageGenerationService(adapters={"together": adapter})
@@ -983,7 +983,7 @@ class TestImageGenerationService:
 
     @pytest.mark.anyio
     async def test_generate_unknown_explicit_provider_returns_none(self):
-        from src.services.image_generation_service import ImageGenerationService
+        from tg_agent.services.image_generation_service import ImageGenerationService
 
         adapter = AsyncMock(return_value="http://fallback.example.com/img.png")
         svc = ImageGenerationService(adapters={"together": adapter})
@@ -996,7 +996,7 @@ class TestImageGenerationService:
 
     @pytest.mark.anyio
     async def test_generate_os_error_returns_none(self):
-        from src.services.image_generation_service import ImageGenerationService
+        from tg_agent.services.image_generation_service import ImageGenerationService
 
         adapter = AsyncMock(side_effect=OSError("connection refused"))
         svc = ImageGenerationService(adapters={"x": adapter})
@@ -1005,7 +1005,7 @@ class TestImageGenerationService:
 
     @pytest.mark.anyio
     async def test_generate_unexpected_error_returns_none(self):
-        from src.services.image_generation_service import ImageGenerationService
+        from tg_agent.services.image_generation_service import ImageGenerationService
 
         adapter = AsyncMock(side_effect=RuntimeError("unexpected"))
         svc = ImageGenerationService(adapters={"x": adapter})
@@ -1014,7 +1014,7 @@ class TestImageGenerationService:
 
     @pytest.mark.anyio
     async def test_search_models_together(self):
-        from src.services.image_generation_service import ImageGenerationService
+        from tg_agent.services.image_generation_service import ImageGenerationService
 
         svc = ImageGenerationService(adapters={})
         models = await svc.search_models("together")
@@ -1023,7 +1023,7 @@ class TestImageGenerationService:
 
     @pytest.mark.anyio
     async def test_search_models_openai(self):
-        from src.services.image_generation_service import ImageGenerationService
+        from tg_agent.services.image_generation_service import ImageGenerationService
 
         svc = ImageGenerationService(adapters={})
         models = await svc.search_models("openai")
@@ -1032,7 +1032,7 @@ class TestImageGenerationService:
 
     @pytest.mark.anyio
     async def test_search_models_with_query_filter(self):
-        from src.services.image_generation_service import ImageGenerationService
+        from tg_agent.services.image_generation_service import ImageGenerationService
 
         svc = ImageGenerationService(adapters={})
         models = await svc.search_models("openai", query="dall-e-3")
@@ -1040,7 +1040,7 @@ class TestImageGenerationService:
 
     @pytest.mark.anyio
     async def test_search_models_unknown_provider_empty(self):
-        from src.services.image_generation_service import ImageGenerationService
+        from tg_agent.services.image_generation_service import ImageGenerationService
 
         svc = ImageGenerationService(adapters={})
         models = await svc.search_models("unknown_provider")
@@ -1048,7 +1048,7 @@ class TestImageGenerationService:
 
     @pytest.mark.anyio
     async def test_search_models_replicate_no_token(self):
-        from src.services.image_generation_service import ImageGenerationService
+        from tg_agent.services.image_generation_service import ImageGenerationService
 
         svc = ImageGenerationService(adapters={})
         with patch.dict("os.environ", {}, clear=True):
@@ -1069,7 +1069,7 @@ async def test_messages_insert_and_count_embeddings(db):
     """Test insert_message + count_embeddings basic flow."""
     from datetime import datetime
 
-    from src.models import Message
+    from tg_agent.models import Message
 
     msg = Message(
         channel_id=111,
@@ -1086,7 +1086,7 @@ async def test_messages_insert_duplicate_returns_false(db):
     """Duplicate inserts should return False."""
     from datetime import datetime
 
-    from src.models import Message
+    from tg_agent.models import Message
 
     msg = Message(
         channel_id=111,
@@ -1105,7 +1105,7 @@ async def test_messages_insert_with_reactions(db):
     """Messages with reactions_json should populate message_reactions."""
     from datetime import datetime
 
-    from src.models import Message
+    from tg_agent.models import Message
 
     reactions = json.dumps([{"emoji": "👍", "count": 5}, {"emoji": "❤️", "count": 2}])
     msg = Message(
@@ -1124,7 +1124,7 @@ async def test_messages_insert_batch(db):
     """insert_messages_batch should return count of inserted rows."""
     from datetime import datetime
 
-    from src.models import Message
+    from tg_agent.models import Message
 
     msgs = [
         Message(
@@ -1175,7 +1175,7 @@ async def test_messages_ensure_embeddings_table_dimension_mismatch(db):
 async def test_messages_upsert_embeddings(db):
     from datetime import datetime
 
-    from src.models import Message
+    from tg_agent.models import Message
 
     # Insert a message first
     msg = Message(
@@ -1203,7 +1203,7 @@ async def test_messages_upsert_embeddings(db):
 async def test_messages_upsert_embedding_json(db):
     from datetime import datetime
 
-    from src.models import Message
+    from tg_agent.models import Message
 
     msg = Message(
         channel_id=888,
@@ -1235,7 +1235,7 @@ async def test_messages_search_no_query(db):
 
 @pytest.mark.anyio
 async def test_messages_normalize_date_to_date_only():
-    from src.database.repositories.messages import MessagesRepository
+    from tg_agent.database.repositories.messages import MessagesRepository
 
     val, op = MessagesRepository._normalize_date_to("2025-01-15")
     assert op == "<"
@@ -1244,7 +1244,7 @@ async def test_messages_normalize_date_to_date_only():
 
 @pytest.mark.anyio
 async def test_messages_normalize_date_to_datetime():
-    from src.database.repositories.messages import MessagesRepository
+    from tg_agent.database.repositories.messages import MessagesRepository
 
     val, op = MessagesRepository._normalize_date_to("2025-01-15T12:00:00")
     assert op == "<="
@@ -1253,7 +1253,7 @@ async def test_messages_normalize_date_to_datetime():
 
 @pytest.mark.anyio
 async def test_messages_normalize_date_to_none():
-    from src.database.repositories.messages import MessagesRepository
+    from tg_agent.database.repositories.messages import MessagesRepository
 
     val, op = MessagesRepository._normalize_date_to(None)
     assert val is None
@@ -1270,12 +1270,12 @@ async def test_migrations_idempotent(db):
     """Running migrations again on an initialized DB should not raise."""
     import aiosqlite
 
-    from src.database.migrations import run_migrations
+    from tg_agent.database.migrations import run_migrations
 
     async with aiosqlite.connect(":memory:") as conn:
         conn.row_factory = aiosqlite.Row
         # Create minimal schema
-        from src.database.schema import SCHEMA_SQL
+        from tg_agent.database.schema import SCHEMA_SQL
 
         await conn.executescript(SCHEMA_SQL)
         await conn.commit()
@@ -1291,8 +1291,8 @@ async def test_migrations_adds_missing_columns():
     """If columns are missing, migrations should add them."""
     import aiosqlite
 
-    from src.database.migrations import run_migrations
-    from src.database.schema import SCHEMA_SQL
+    from tg_agent.database.migrations import run_migrations
+    from tg_agent.database.schema import SCHEMA_SQL
 
     async with aiosqlite.connect(":memory:") as conn:
         conn.row_factory = aiosqlite.Row
@@ -1316,8 +1316,8 @@ async def test_migrations_remaps_legacy_dialog_search_permission_key():
 
     import aiosqlite
 
-    from src.database.migrations import run_migrations
-    from src.database.schema import SCHEMA_SQL
+    from tg_agent.database.migrations import run_migrations
+    from tg_agent.database.schema import SCHEMA_SQL
 
     legacy_key = "_".join(("search", "my", "telegram"))
 
@@ -1371,8 +1371,8 @@ def _make_task_enqueuer():
 
 @pytest.mark.anyio
 async def test_scheduler_start_with_task_enqueuer():
-    from src.config import SchedulerConfig
-    from src.scheduler.service import SchedulerManager
+    from tg_agent.config import SchedulerConfig
+    from tg_agent.scheduler.service import SchedulerManager
 
     bundle = _make_mock_bundle()
     bundle.get_setting = AsyncMock(return_value=None)
@@ -1395,8 +1395,8 @@ async def test_scheduler_start_with_task_enqueuer():
 @pytest.mark.anyio
 async def test_scheduler_stop_without_start():
     """Stop on non-running scheduler should not raise."""
-    from src.config import SchedulerConfig
-    from src.scheduler.service import SchedulerManager
+    from tg_agent.config import SchedulerConfig
+    from tg_agent.scheduler.service import SchedulerManager
 
     mgr = SchedulerManager(SchedulerConfig())
     await mgr.stop()  # Should be a no-op
@@ -1404,8 +1404,8 @@ async def test_scheduler_stop_without_start():
 
 @pytest.mark.anyio
 async def test_scheduler_stop_cancels_bg_task():
-    from src.config import SchedulerConfig
-    from src.scheduler.service import SchedulerManager
+    from tg_agent.config import SchedulerConfig
+    from tg_agent.scheduler.service import SchedulerManager
 
     bundle = _make_mock_bundle()
     enqueuer = _make_task_enqueuer()
@@ -1421,8 +1421,8 @@ async def test_scheduler_trigger_background_idempotent():
     """Second trigger_background call should not create another task if first is running."""
     import asyncio
 
-    from src.config import SchedulerConfig
-    from src.scheduler.service import SchedulerManager
+    from tg_agent.config import SchedulerConfig
+    from tg_agent.scheduler.service import SchedulerManager
 
     bundle = _make_mock_bundle()
     enqueuer = _make_task_enqueuer()
@@ -1447,8 +1447,8 @@ async def test_scheduler_trigger_background_idempotent():
 
 @pytest.mark.anyio
 async def test_scheduler_run_photo_due_no_enqueuer():
-    from src.config import SchedulerConfig
-    from src.scheduler.service import SchedulerManager
+    from tg_agent.config import SchedulerConfig
+    from tg_agent.scheduler.service import SchedulerManager
 
     mgr = SchedulerManager(SchedulerConfig())
     result = await mgr._run_photo_due()
@@ -1457,8 +1457,8 @@ async def test_scheduler_run_photo_due_no_enqueuer():
 
 @pytest.mark.anyio
 async def test_scheduler_run_photo_auto_no_enqueuer():
-    from src.config import SchedulerConfig
-    from src.scheduler.service import SchedulerManager
+    from tg_agent.config import SchedulerConfig
+    from tg_agent.scheduler.service import SchedulerManager
 
     mgr = SchedulerManager(SchedulerConfig())
     result = await mgr._run_photo_auto()
@@ -1467,8 +1467,8 @@ async def test_scheduler_run_photo_auto_no_enqueuer():
 
 @pytest.mark.anyio
 async def test_scheduler_run_photo_due_with_enqueuer():
-    from src.config import SchedulerConfig
-    from src.scheduler.service import SchedulerManager
+    from tg_agent.config import SchedulerConfig
+    from tg_agent.scheduler.service import SchedulerManager
 
     enqueuer = _make_task_enqueuer()
     mgr = SchedulerManager(SchedulerConfig(), task_enqueuer=enqueuer)
@@ -1479,8 +1479,8 @@ async def test_scheduler_run_photo_due_with_enqueuer():
 
 @pytest.mark.anyio
 async def test_scheduler_run_photo_auto_with_enqueuer():
-    from src.config import SchedulerConfig
-    from src.scheduler.service import SchedulerManager
+    from tg_agent.config import SchedulerConfig
+    from tg_agent.scheduler.service import SchedulerManager
 
     enqueuer = _make_task_enqueuer()
     mgr = SchedulerManager(SchedulerConfig(), task_enqueuer=enqueuer)
@@ -1491,8 +1491,8 @@ async def test_scheduler_run_photo_auto_with_enqueuer():
 
 @pytest.mark.anyio
 async def test_scheduler_run_photo_due_exception():
-    from src.config import SchedulerConfig
-    from src.scheduler.service import SchedulerManager
+    from tg_agent.config import SchedulerConfig
+    from tg_agent.scheduler.service import SchedulerManager
 
     enqueuer = _make_task_enqueuer()
     enqueuer.enqueue_photo_due = AsyncMock(side_effect=Exception("fail"))
@@ -1504,8 +1504,8 @@ async def test_scheduler_run_photo_due_exception():
 
 @pytest.mark.anyio
 async def test_scheduler_run_pipeline_job():
-    from src.config import SchedulerConfig
-    from src.scheduler.service import SchedulerManager
+    from tg_agent.config import SchedulerConfig
+    from tg_agent.scheduler.service import SchedulerManager
 
     enqueuer = _make_task_enqueuer()
     mgr = SchedulerManager(SchedulerConfig(), task_enqueuer=enqueuer)
@@ -1515,8 +1515,8 @@ async def test_scheduler_run_pipeline_job():
 
 @pytest.mark.anyio
 async def test_scheduler_run_content_generate_job():
-    from src.config import SchedulerConfig
-    from src.scheduler.service import SchedulerManager
+    from tg_agent.config import SchedulerConfig
+    from tg_agent.scheduler.service import SchedulerManager
 
     enqueuer = _make_task_enqueuer()
     mgr = SchedulerManager(SchedulerConfig(), task_enqueuer=enqueuer)
@@ -1526,8 +1526,8 @@ async def test_scheduler_run_content_generate_job():
 
 @pytest.mark.anyio
 async def test_scheduler_run_search_query():
-    from src.config import SchedulerConfig
-    from src.scheduler.service import SchedulerManager
+    from tg_agent.config import SchedulerConfig
+    from tg_agent.scheduler.service import SchedulerManager
 
     enqueuer = _make_task_enqueuer()
     mgr = SchedulerManager(SchedulerConfig(), task_enqueuer=enqueuer)
@@ -1537,8 +1537,8 @@ async def test_scheduler_run_search_query():
 
 @pytest.mark.anyio
 async def test_scheduler_get_job_next_run_no_scheduler():
-    from src.config import SchedulerConfig
-    from src.scheduler.service import SchedulerManager
+    from tg_agent.config import SchedulerConfig
+    from tg_agent.scheduler.service import SchedulerManager
 
     mgr = SchedulerManager(SchedulerConfig())
     result = mgr.get_job_next_run("collect_all")
@@ -1547,8 +1547,8 @@ async def test_scheduler_get_job_next_run_no_scheduler():
 
 @pytest.mark.anyio
 async def test_scheduler_get_all_jobs_no_scheduler():
-    from src.config import SchedulerConfig
-    from src.scheduler.service import SchedulerManager
+    from tg_agent.config import SchedulerConfig
+    from tg_agent.scheduler.service import SchedulerManager
 
     mgr = SchedulerManager(SchedulerConfig())
     result = mgr.get_all_jobs_next_run()
@@ -1557,8 +1557,8 @@ async def test_scheduler_get_all_jobs_no_scheduler():
 
 @pytest.mark.anyio
 async def test_scheduler_get_potential_jobs_no_bundles():
-    from src.config import SchedulerConfig
-    from src.scheduler.service import SchedulerManager
+    from tg_agent.config import SchedulerConfig
+    from tg_agent.scheduler.service import SchedulerManager
 
     mgr = SchedulerManager(SchedulerConfig())
     jobs = await mgr.get_potential_jobs()
@@ -1568,8 +1568,8 @@ async def test_scheduler_get_potential_jobs_no_bundles():
 @pytest.mark.anyio
 async def test_scheduler_load_settings_no_bundle():
     """load_settings with no bundle should be a no-op."""
-    from src.config import SchedulerConfig
-    from src.scheduler.service import SchedulerManager
+    from tg_agent.config import SchedulerConfig
+    from tg_agent.scheduler.service import SchedulerManager
 
     mgr = SchedulerManager(SchedulerConfig(collect_interval_minutes=45))
     await mgr.load_settings()
@@ -1578,8 +1578,8 @@ async def test_scheduler_load_settings_no_bundle():
 
 @pytest.mark.anyio
 async def test_scheduler_is_job_enabled_no_bundle():
-    from src.config import SchedulerConfig
-    from src.scheduler.service import SchedulerManager
+    from tg_agent.config import SchedulerConfig
+    from tg_agent.scheduler.service import SchedulerManager
 
     mgr = SchedulerManager(SchedulerConfig())
     assert await mgr.is_job_enabled("collect_all")
@@ -1588,8 +1588,8 @@ async def test_scheduler_is_job_enabled_no_bundle():
 @pytest.mark.anyio
 async def test_scheduler_sync_job_state_not_running():
     """sync_job_state should be a no-op when scheduler is not running."""
-    from src.config import SchedulerConfig
-    from src.scheduler.service import SchedulerManager
+    from tg_agent.config import SchedulerConfig
+    from tg_agent.scheduler.service import SchedulerManager
 
     mgr = SchedulerManager(SchedulerConfig())
     await mgr.sync_job_state("collect_all", True)  # Should not raise
@@ -1598,8 +1598,8 @@ async def test_scheduler_sync_job_state_not_running():
 @pytest.mark.anyio
 async def test_scheduler_update_interval_no_job():
     """update_interval when job is disabled should just store the value."""
-    from src.config import SchedulerConfig
-    from src.scheduler.service import SchedulerManager
+    from tg_agent.config import SchedulerConfig
+    from tg_agent.scheduler.service import SchedulerManager
 
     bundle = _make_mock_bundle()
     bundle.get_setting = AsyncMock(return_value="1")  # job disabled
@@ -1617,7 +1617,7 @@ async def test_scheduler_update_interval_no_job():
 
 @pytest.mark.anyio
 async def test_telegram_search_no_pool():
-    from src.search.telegram_search import TelegramSearch
+    from tg_agent.search.telegram_search import TelegramSearch
 
     persistence = MagicMock()
     svc = TelegramSearch(pool=None, persistence=persistence)
@@ -1629,7 +1629,7 @@ async def test_telegram_search_no_pool():
 
 @pytest.mark.anyio
 async def test_telegram_search_no_premium_client():
-    from src.search.telegram_search import TelegramSearch
+    from tg_agent.search.telegram_search import TelegramSearch
 
     pool = MagicMock()
     pool.get_premium_client = AsyncMock(return_value=None)
@@ -1647,7 +1647,7 @@ async def test_telegram_search_no_premium_client():
 
 @pytest.mark.anyio
 async def test_telegram_search_my_chats_no_pool():
-    from src.search.telegram_search import TelegramSearch
+    from tg_agent.search.telegram_search import TelegramSearch
 
     persistence = MagicMock()
     svc = TelegramSearch(pool=None, persistence=persistence)
@@ -1658,7 +1658,7 @@ async def test_telegram_search_my_chats_no_pool():
 
 @pytest.mark.anyio
 async def test_telegram_search_my_chats_no_client():
-    from src.search.telegram_search import TelegramSearch
+    from tg_agent.search.telegram_search import TelegramSearch
 
     pool = MagicMock()
     pool.get_available_client = AsyncMock(return_value=None)
@@ -1673,7 +1673,7 @@ async def test_telegram_search_my_chats_no_client():
 
 @pytest.mark.anyio
 async def test_telegram_search_in_channel_no_pool():
-    from src.search.telegram_search import TelegramSearch
+    from tg_agent.search.telegram_search import TelegramSearch
 
     persistence = MagicMock()
     svc = TelegramSearch(pool=None, persistence=persistence)
@@ -1684,7 +1684,7 @@ async def test_telegram_search_in_channel_no_pool():
 
 @pytest.mark.anyio
 async def test_telegram_search_in_channel_no_client():
-    from src.search.telegram_search import TelegramSearch
+    from tg_agent.search.telegram_search import TelegramSearch
 
     pool = MagicMock()
     pool.get_available_client = AsyncMock(return_value=None)
@@ -1698,7 +1698,7 @@ async def test_telegram_search_in_channel_no_client():
 
 @pytest.mark.anyio
 async def test_check_search_quota_no_pool():
-    from src.search.telegram_search import TelegramSearch
+    from tg_agent.search.telegram_search import TelegramSearch
 
     persistence = MagicMock()
     svc = TelegramSearch(pool=None, persistence=persistence)
@@ -1709,7 +1709,7 @@ async def test_check_search_quota_no_pool():
 
 @pytest.mark.anyio
 async def test_check_search_quota_no_premium():
-    from src.search.telegram_search import TelegramSearch
+    from tg_agent.search.telegram_search import TelegramSearch
 
     pool = MagicMock()
     pool.get_premium_client = AsyncMock(return_value=None)
@@ -1723,7 +1723,7 @@ async def test_check_search_quota_no_premium():
 
 @pytest.mark.anyio
 async def test_get_premium_unavailability_reason_no_pool():
-    from src.search.telegram_search import TelegramSearch
+    from tg_agent.search.telegram_search import TelegramSearch
 
     persistence = MagicMock()
     svc = TelegramSearch(pool=None, persistence=persistence)
@@ -1734,7 +1734,7 @@ async def test_get_premium_unavailability_reason_no_pool():
 
 @pytest.mark.anyio
 async def test_get_premium_unavailability_reason_no_method():
-    from src.search.telegram_search import TelegramSearch
+    from tg_agent.search.telegram_search import TelegramSearch
 
     pool = MagicMock(spec=[])  # Empty spec — no methods
     persistence = MagicMock()
@@ -1774,7 +1774,7 @@ def _make_channel_bundle():
 
 
 def _make_task(task_type, payload=None, task_id=1):
-    from src.models import CollectionTask, CollectionTaskStatus
+    from tg_agent.models import CollectionTask, CollectionTaskStatus
 
     task = MagicMock(spec=CollectionTask)
     task.id = task_id
@@ -1787,7 +1787,7 @@ def _make_task(task_type, payload=None, task_id=1):
 
 @pytest.mark.anyio
 async def test_dispatcher_start_recovers_tasks():
-    from src.services.unified_dispatcher import UnifiedDispatcher
+    from tg_agent.services.unified_dispatcher import UnifiedDispatcher
 
     tasks_repo = _make_tasks_repo()
     tasks_repo.requeue_running_generic_tasks_on_startup = AsyncMock(return_value=3)
@@ -1805,7 +1805,7 @@ async def test_dispatcher_start_recovers_tasks():
 
 @pytest.mark.anyio
 async def test_dispatcher_start_idempotent():
-    from src.services.unified_dispatcher import UnifiedDispatcher
+    from tg_agent.services.unified_dispatcher import UnifiedDispatcher
 
     tasks_repo = _make_tasks_repo()
     dispatcher = UnifiedDispatcher(
@@ -1824,8 +1824,8 @@ async def test_dispatcher_start_idempotent():
 
 @pytest.mark.anyio
 async def test_dispatcher_handle_photo_due_no_service():
-    from src.models import CollectionTaskStatus, CollectionTaskType
-    from src.services.unified_dispatcher import UnifiedDispatcher
+    from tg_agent.models import CollectionTaskStatus, CollectionTaskType
+    from tg_agent.services.unified_dispatcher import UnifiedDispatcher
 
     tasks_repo = _make_tasks_repo()
     dispatcher = UnifiedDispatcher(
@@ -1843,8 +1843,8 @@ async def test_dispatcher_handle_photo_due_no_service():
 
 @pytest.mark.anyio
 async def test_dispatcher_handle_photo_due_with_service():
-    from src.models import CollectionTaskStatus, CollectionTaskType
-    from src.services.unified_dispatcher import UnifiedDispatcher
+    from tg_agent.models import CollectionTaskStatus, CollectionTaskType
+    from tg_agent.services.unified_dispatcher import UnifiedDispatcher
 
     tasks_repo = _make_tasks_repo()
     photo_svc = MagicMock()
@@ -1864,8 +1864,8 @@ async def test_dispatcher_handle_photo_due_with_service():
 
 @pytest.mark.anyio
 async def test_dispatcher_handle_photo_auto_no_service():
-    from src.models import CollectionTaskStatus, CollectionTaskType
-    from src.services.unified_dispatcher import UnifiedDispatcher
+    from tg_agent.models import CollectionTaskStatus, CollectionTaskType
+    from tg_agent.services.unified_dispatcher import UnifiedDispatcher
 
     tasks_repo = _make_tasks_repo()
     dispatcher = UnifiedDispatcher(
@@ -1883,8 +1883,8 @@ async def test_dispatcher_handle_photo_auto_no_service():
 
 @pytest.mark.anyio
 async def test_dispatcher_handle_photo_auto_with_service():
-    from src.models import CollectionTaskStatus, CollectionTaskType
-    from src.services.unified_dispatcher import UnifiedDispatcher
+    from tg_agent.models import CollectionTaskStatus, CollectionTaskType
+    from tg_agent.services.unified_dispatcher import UnifiedDispatcher
 
     tasks_repo = _make_tasks_repo()
     auto_svc = MagicMock()
@@ -1904,8 +1904,8 @@ async def test_dispatcher_handle_photo_auto_with_service():
 
 @pytest.mark.anyio
 async def test_dispatcher_handle_sq_stats_no_bundle():
-    from src.models import CollectionTaskStatus, CollectionTaskType
-    from src.services.unified_dispatcher import UnifiedDispatcher
+    from tg_agent.models import CollectionTaskStatus, CollectionTaskType
+    from tg_agent.services.unified_dispatcher import UnifiedDispatcher
 
     tasks_repo = _make_tasks_repo()
     dispatcher = UnifiedDispatcher(
@@ -1925,8 +1925,8 @@ async def test_dispatcher_handle_sq_stats_no_bundle():
 
 @pytest.mark.anyio
 async def test_dispatcher_handle_sq_stats_invalid_payload():
-    from src.models import CollectionTaskStatus, CollectionTaskType
-    from src.services.unified_dispatcher import UnifiedDispatcher
+    from tg_agent.models import CollectionTaskStatus, CollectionTaskType
+    from tg_agent.services.unified_dispatcher import UnifiedDispatcher
 
     tasks_repo = _make_tasks_repo()
     sq_bundle = MagicMock()
@@ -1947,8 +1947,8 @@ async def test_dispatcher_handle_sq_stats_invalid_payload():
 
 @pytest.mark.anyio
 async def test_dispatcher_dispatch_unknown_task_type():
-    from src.models import CollectionTaskStatus
-    from src.services.unified_dispatcher import UnifiedDispatcher
+    from tg_agent.models import CollectionTaskStatus
+    from tg_agent.services.unified_dispatcher import UnifiedDispatcher
 
     tasks_repo = _make_tasks_repo()
     dispatcher = UnifiedDispatcher(
@@ -1970,8 +1970,8 @@ async def test_dispatcher_dispatch_unknown_task_type():
 
 @pytest.mark.anyio
 async def test_dispatcher_handle_photo_due_exception():
-    from src.models import CollectionTaskStatus, CollectionTaskType
-    from src.services.unified_dispatcher import UnifiedDispatcher
+    from tg_agent.models import CollectionTaskStatus, CollectionTaskType
+    from tg_agent.services.unified_dispatcher import UnifiedDispatcher
 
     tasks_repo = _make_tasks_repo()
     photo_svc = MagicMock()
@@ -1991,8 +1991,8 @@ async def test_dispatcher_handle_photo_due_exception():
 
 @pytest.mark.anyio
 async def test_dispatcher_handle_stats_all_empty_channels():
-    from src.models import CollectionTaskStatus, CollectionTaskType, StatsAllTaskPayload
-    from src.services.unified_dispatcher import UnifiedDispatcher
+    from tg_agent.models import CollectionTaskStatus, CollectionTaskType, StatsAllTaskPayload
+    from tg_agent.services.unified_dispatcher import UnifiedDispatcher
 
     tasks_repo = _make_tasks_repo()
     dispatcher = UnifiedDispatcher(

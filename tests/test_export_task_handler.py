@@ -11,15 +11,15 @@ from unittest.mock import MagicMock
 import pytest
 from pydantic import ValidationError
 
-from src.models import (
+from tg_agent.models import (
     Channel,
     CollectionTaskStatus,
     CollectionTaskType,
     ExportTaskPayload,
     Message,
 )
-from src.services.task_handlers.base import TaskHandlerContext
-from src.services.task_handlers.export import ExportTaskHandler
+from tg_agent.services.task_handlers.base import TaskHandlerContext
+from tg_agent.services.task_handlers.export import ExportTaskHandler
 
 
 async def _seed(db, channel_id=900, *, with_media_msg=False, username="chan", **channel_kw):
@@ -118,7 +118,7 @@ async def test_handle_with_media_no_pool_falls_back_offline(db, tmp_path):
 async def test_handle_with_media_downloads_via_action_service(db, tmp_path, monkeypatch):
     await _seed(db, 902, with_media_msg=True)
 
-    from src.services.telegram_actions import MediaDownloadOutcome
+    from tg_agent.services.telegram_actions import MediaDownloadOutcome
 
     class FakeActionService:
         def __init__(self, pool):
@@ -131,7 +131,7 @@ async def test_handle_with_media_downloads_via_action_service(db, tmp_path, monk
                 rel_path=f"photos/{message_id}.jpg", size_bytes=100,
             )
 
-    monkeypatch.setattr("src.services.telegram_actions.TelegramActionService", FakeActionService)
+    monkeypatch.setattr("tg_agent.services.telegram_actions.TelegramActionService", FakeActionService)
     pool = MagicMock()
     pool.clients = {"+15550001111": object()}
 
@@ -153,7 +153,7 @@ def test_export_payload_rejects_invalid_fmt():
 async def test_handle_with_media_uses_username_for_resolve(db, tmp_path, monkeypatch):
     await _seed(db, 905, with_media_msg=True, username="publicchan")
 
-    from src.services.telegram_actions import MediaDownloadOutcome
+    from tg_agent.services.telegram_actions import MediaDownloadOutcome
 
     captured = {}
 
@@ -168,7 +168,7 @@ async def test_handle_with_media_uses_username_for_resolve(db, tmp_path, monkeyp
                 rel_path=f"photos/{message_id}.jpg", size_bytes=100,
             )
 
-    monkeypatch.setattr("src.services.telegram_actions.TelegramActionService", FakeActionService)
+    monkeypatch.setattr("tg_agent.services.telegram_actions.TelegramActionService", FakeActionService)
     pool = MagicMock()
     pool.clients = {"+1": object()}
     task = await _make_task(db, ExportTaskPayload(channel_id=905, with_media=True, out_dir=str(tmp_path)))
@@ -190,7 +190,7 @@ async def test_handle_with_media_stops_on_stop_event(db, tmp_path, monkeypatch):
             called["n"] += 1
             raise AssertionError("should not download after stop_event")
 
-    monkeypatch.setattr("src.services.telegram_actions.TelegramActionService", FakeActionService)
+    monkeypatch.setattr("tg_agent.services.telegram_actions.TelegramActionService", FakeActionService)
     pool = MagicMock()
     pool.clients = {"+1": object()}
     ctx = _context(db, client_pool=pool)
@@ -204,7 +204,7 @@ async def test_handle_with_media_stops_on_stop_event(db, tmp_path, monkeypatch):
 
 
 async def test_poll_export_task_exits_nonzero_on_failure(db):
-    from src.cli.commands.export import _poll_export_task
+    from tg_agent.cli.commands.export import _poll_export_task
 
     task_id = await db.repos.tasks.create_generic_task(
         CollectionTaskType.EXPORT, title="x", payload=ExportTaskPayload(channel_id=1)
@@ -216,7 +216,7 @@ async def test_poll_export_task_exits_nonzero_on_failure(db):
 
 
 async def test_poll_export_task_times_out_with_exit_2(db):
-    from src.cli.commands.export import _poll_export_task
+    from tg_agent.cli.commands.export import _poll_export_task
 
     # Task stays PENDING (no worker) → --wait should time out with a distinct code.
     task_id = await db.repos.tasks.create_generic_task(
@@ -230,7 +230,7 @@ async def test_poll_export_task_times_out_with_exit_2(db):
 async def test_handle_with_media_skips_oversized_and_records(db, tmp_path, monkeypatch):
     await _seed(db, 903, with_media_msg=True)
 
-    from src.services.telegram_actions import MediaDownloadOutcome
+    from tg_agent.services.telegram_actions import MediaDownloadOutcome
 
     class FakeActionService:
         def __init__(self, pool):
@@ -242,7 +242,7 @@ async def test_handle_with_media_skips_oversized_and_records(db, tmp_path, monke
                 size_bytes=9_000_000, skipped=True, reason="exceeds_max_size",
             )
 
-    monkeypatch.setattr("src.services.telegram_actions.TelegramActionService", FakeActionService)
+    monkeypatch.setattr("tg_agent.services.telegram_actions.TelegramActionService", FakeActionService)
     pool = MagicMock()
     pool.clients = {"+15550001111": object()}
 

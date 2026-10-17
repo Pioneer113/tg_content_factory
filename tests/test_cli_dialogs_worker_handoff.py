@@ -17,12 +17,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.cli.commands import dialogs as dialogs_cli
-from src.cli.commands.dialogs import run_with_dependencies
-from src.cli.worker_handoff import serve_is_running as _real_serve_is_running
-from src.config import AppConfig
-from src.models import TelegramCommandStatus
 from tests.helpers import cli_ns as _ns
+from tg_agent.cli.commands import dialogs as dialogs_cli
+from tg_agent.cli.commands.dialogs import run_with_dependencies
+from tg_agent.cli.worker_handoff import serve_is_running as _real_serve_is_running
+from tg_agent.config import AppConfig
+from tg_agent.models import TelegramCommandStatus
 
 pytestmark = pytest.mark.aiosqlite_serial
 
@@ -42,15 +42,15 @@ def _run(args, cli_db, *, serve_running: bool, pool=None):
         return config, cli_db
 
     async def fake_init_pool(_, __):
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         return TelegramAuth(0, ""), used_pool
 
     with (
-        patch("src.cli.commands.dialogs.runtime.init_db", side_effect=fake_init_db),
-        patch("src.cli.commands.dialogs.runtime.init_pool", side_effect=fake_init_pool) as init_pool,
+        patch("tg_agent.cli.commands.dialogs.runtime.init_db", side_effect=fake_init_db),
+        patch("tg_agent.cli.commands.dialogs.runtime.init_pool", side_effect=fake_init_pool) as init_pool,
         patch(
-            "src.cli.commands.dialogs.worker_handoff.serve_is_running",
+            "tg_agent.cli.commands.dialogs.worker_handoff.serve_is_running",
             return_value=serve_running,
         ),
     ):
@@ -443,7 +443,7 @@ def test_handoff_resolves_phone_when_not_given(cli_db):
     primary — `+70000000002` is both primary and sorted *after*
     `+70000000001`, so the old sorted-first pick fails this test.
     """
-    from src.models import Account
+    from tg_agent.models import Account
 
     asyncio.run(cli_db.add_account(Account(phone="+70000000002", session_string="sess-b", is_primary=True)))
     asyncio.run(cli_db.add_account(Account(phone="+70000000001", session_string="sess-a")))
@@ -483,7 +483,7 @@ def test_confirmation_is_still_required_before_enqueue(cli_db):
 
 def test_direct_env_var_is_honoured(monkeypatch):
     """`dialogs` shares one bridge across 27 leaves, so its escape hatch is env-based."""
-    from src.cli import worker_handoff
+    from tg_agent.cli import worker_handoff
 
     monkeypatch.delenv(worker_handoff.DIRECT_ENV_VAR, raising=False)
     assert worker_handoff.direct_requested() is False
@@ -498,7 +498,7 @@ def test_direct_env_var_is_honoured(monkeypatch):
 
 def test_serve_is_running_survives_a_broken_pid_file(tmp_path, monkeypatch):
     """A malformed PID file must degrade to "no server", never crash the command."""
-    from src.cli import worker_handoff
+    from tg_agent.cli import worker_handoff
 
     config = AppConfig()
     bad_pid = tmp_path / "broken.pid"
@@ -512,7 +512,7 @@ def test_serve_is_running_is_false_for_no_worker_split_deployment(tmp_path, monk
     """`serve --no-worker` must not look like a valid hand-off target.
 
     Regression (Codex, PR #1324 round 2): `serve_is_running` only checked the
-    command line for `src.main serve`, not whether `--no-worker` was passed.
+    command line for `tg_agent.main serve`, not whether `--no-worker` was passed.
     In the documented split-deployment mode ("For split deployments (Docker/k8s)
     pass --no-worker and run `worker` separately" — CLAUDE.md), a CLI process
     that hands off while only a workerless `serve` is running would queue
@@ -525,7 +525,7 @@ def test_serve_is_running_is_false_for_no_worker_split_deployment(tmp_path, monk
     attribute) — that fixture exists precisely to stop tests from exercising
     this logic by accident, so it must be bypassed here on purpose.
     """
-    from src.cli import process_control, worker_handoff
+    from tg_agent.cli import process_control, worker_handoff
 
     config = AppConfig()
     pid_path = tmp_path / "serve.pid"
@@ -534,14 +534,14 @@ def test_serve_is_running_is_false_for_no_worker_split_deployment(tmp_path, monk
 
     with (
         patch.object(process_control, "is_process_alive", return_value=True),
-        patch.object(process_control, "_process_command", return_value="python -m src.main serve --no-worker"),
+        patch.object(process_control, "_process_command", return_value="python -m tg_agent.main serve --no-worker"),
     ):
         assert _real_serve_is_running(config) is False
 
 
 def test_serve_is_running_is_true_for_plain_serve(tmp_path, monkeypatch):
     """Plain `serve` (the documented default: web + embedded worker) still hands off."""
-    from src.cli import process_control, worker_handoff
+    from tg_agent.cli import process_control, worker_handoff
 
     config = AppConfig()
     pid_path = tmp_path / "serve.pid"
@@ -550,7 +550,7 @@ def test_serve_is_running_is_true_for_plain_serve(tmp_path, monkeypatch):
 
     with (
         patch.object(process_control, "is_process_alive", return_value=True),
-        patch.object(process_control, "_process_command", return_value="python -m src.main serve"),
+        patch.object(process_control, "_process_command", return_value="python -m tg_agent.main serve"),
     ):
         assert _real_serve_is_running(config) is True
 
@@ -566,7 +566,7 @@ def test_serve_is_running_survives_process_command_raising(tmp_path, monkeypatch
     every platform) would propagate uncaught, contradicting the
     docstring's "Never raises" guarantee.
     """
-    from src.cli import process_control, worker_handoff
+    from tg_agent.cli import process_control, worker_handoff
 
     config = AppConfig()
     pid_path = tmp_path / "serve.pid"

@@ -36,20 +36,20 @@ python -m pip show tg-agent
 # Managed daemon (automation-first default) — stop any previous daemon and
 # run the worker runtime in this process. No web panel, no WEB_PASS; the
 # PID file makes `stop`/`restart` and the CLI worker hand-off work.
-python -m src.main restart
+python -m tg_agent.main restart
 
 # Same worker runtime without the stop-first step (e.g. under tmux/systemd).
-python -m src.main worker
+python -m tg_agent.main worker
 
 # Legacy web panel (deprecated) — uvicorn + embedded worker by default.
 # For split deployments (Docker/k8s) pass --no-worker and run `worker`.
-python -m src.main serve [--web-pass PASS] [--no-worker]
+python -m tg_agent.main serve [--web-pass PASS] [--no-worker]
 
 # Lint
-ruff check src/ tests/ conftest.py
+ruff check tg_agent/ tests/ conftest.py
 
 # Auto-fix lint issues
-ruff check --fix src/ tests/ conftest.py
+ruff check --fix tg_agent/ tests/ conftest.py
 
 # Run parallel-safe tests (-n auto is capped at 4 workers by root conftest.py;
 # override via TGCF_PYTEST_XDIST_WORKERS; single-test runs with :: force 1 worker)
@@ -62,12 +62,13 @@ pytest tests/ -v -m aiosqlite_serial
 pytest tests/test_web.py::test_health_endpoint -v
 
 # Benchmark serial vs safe mixed-mode suite execution
-python -m src.main test benchmark
+python -m tg_agent.main test benchmark
 
 # Mutation testing (run only after the editable install above).
-# NOTE: stock PyPI mutmut asserts out on the flat `src` layout — the
-# strip_src_prefix fork is required (branch fix/strip-src-prefix-knob,
-# PR to boxed/mutmut). Setup + sandbox details: [tool.mutmut] in
+# NOTE: the flat-`src` layout that broke stock PyPI mutmut is gone (the import
+# package was renamed to tg_agent, #1448); the strip_src_prefix fork is still
+# the installed tool until the upstream PR (boxed/mutmut,
+# fix/strip-src-prefix-knob) lands. Setup + sandbox details: [tool.mutmut] in
 # pyproject.toml. `rm -rf mutants` before a rerun (mutmut never prunes).
 mutmut run
 ```
@@ -75,34 +76,34 @@ mutmut run
 Full CLI reference:
 
 ```bash
-python -m src.main [--config CONFIG] serve [--web-pass PASS]
-python -m src.main [--config CONFIG] worker
-python -m src.main [--config CONFIG] collect [--channel-id ID] | collect sample
-python -m src.main [--config CONFIG] search "query" [--limit N] [--mode MODE]
+python -m tg_agent.main [--config CONFIG] serve [--web-pass PASS]
+python -m tg_agent.main [--config CONFIG] worker
+python -m tg_agent.main [--config CONFIG] collect [--channel-id ID] | collect sample
+python -m tg_agent.main [--config CONFIG] search "query" [--limit N] [--mode MODE]
 
-python -m src.main messages read <identifier> [--limit N] [--live] [--phone PHONE] [--query TEXT] [--date-from DATE] [--date-to DATE] [--topic-id ID] [--offset-id ID] [--format text|json|csv]
-python -m src.main channel list|add|delete|toggle|collect|stats|refresh-types|refresh-meta|import|add-bulk|list-for-import|tag (tag list|add|delete|set|get)
-python -m src.main filter analyze|apply|reset|precheck|toggle|purge|purge-messages|hard-delete
-python -m src.main account list|info|toggle|set-primary|delete|send-code|verify-code|add|flood-status|flood-clear
-python -m src.main scheduler start|trigger|status|stop|job-toggle|set-interval|task-cancel|clear-pending|queue-pause|queue-resume
-python -m src.main notification setup|status|delete|test|dry-run|set-account
-python -m src.main test all|read|write|telegram|benchmark
+python -m tg_agent.main messages read <identifier> [--limit N] [--live] [--phone PHONE] [--query TEXT] [--date-from DATE] [--date-to DATE] [--topic-id ID] [--offset-id ID] [--format text|json|csv]
+python -m tg_agent.main channel list|add|delete|toggle|collect|stats|refresh-types|refresh-meta|import|add-bulk|list-for-import|tag (tag list|add|delete|set|get)
+python -m tg_agent.main filter analyze|apply|reset|precheck|toggle|purge|purge-messages|hard-delete
+python -m tg_agent.main account list|info|toggle|set-primary|delete|send-code|verify-code|add|flood-status|flood-clear
+python -m tg_agent.main scheduler start|trigger|status|stop|job-toggle|set-interval|task-cancel|clear-pending|queue-pause|queue-resume
+python -m tg_agent.main notification setup|status|delete|test|dry-run|set-account
+python -m tg_agent.main test all|read|write|telegram|benchmark
 
-python -m src.main stop|restart   # restart = worker daemon, no web panel
-python -m src.main search-query list|get|add|edit|delete|toggle|run|stats
-python -m src.main pipeline list|show|add|dry-run-count|edit|delete|toggle|run|generate|generate-stream|runs|run-show|queue|moderation-list|moderation-view|publish|approve|reject|bulk-approve|bulk-reject|refinement-steps|export|import|templates|from-template|ai-edit|filter|node|edge|graph
-python -m src.main photo-loader dialogs|refresh|send|schedule-send|batch-create|batch-list|items|batch-cancel|auto-create|auto-list|auto-update|auto-toggle|auto-delete|run-due
-python -m src.main dialogs list|refresh|resolve|leave|join|topics|cache-clear|cache-status|send|forward|edit-message|delete-message|create-channel|create-group|pin-message|react|unpin-message|download-media|transcribe|participants|edit-admin|edit-permissions|kick|broadcast-stats|archive|unarchive|mark-read|queue|status|cancel|clear-pending
-python -m src.main dm drafts list|create|approve|reject|send
-python -m src.main agent threads|thread-create|thread-delete|chat|thread-rename|thread-stop|messages|context|test-escaping|test-tools
-python -m src.main analytics top|content-types|hourly|summary|daily|pipeline-stats|trending-topics|trending-channels|velocity|peak-hours|calendar|trending-emojis|channel
-python -m src.main provider list|add|delete|probe|refresh|test-all
-python -m src.main export json|csv|rss
-python -m src.main translate stats|detect|run|message
-python -m src.main settings get|set|info|server-time|agent|filter-criteria|reactions|semantic
-python -m src.main debug logs|memory|timing
-python -m src.main image generate|models|providers|generated
-python -m src.main mcp-server [--no-pool]   # LEGACY: stdio MCP bridge over the agent tool registry (frozen)
+python -m tg_agent.main stop|restart   # restart = worker daemon, no web panel
+python -m tg_agent.main search-query list|get|add|edit|delete|toggle|run|stats
+python -m tg_agent.main pipeline list|show|add|dry-run-count|edit|delete|toggle|run|generate|generate-stream|runs|run-show|queue|moderation-list|moderation-view|publish|approve|reject|bulk-approve|bulk-reject|refinement-steps|export|import|templates|from-template|ai-edit|filter|node|edge|graph
+python -m tg_agent.main photo-loader dialogs|refresh|send|schedule-send|batch-create|batch-list|items|batch-cancel|auto-create|auto-list|auto-update|auto-toggle|auto-delete|run-due
+python -m tg_agent.main dialogs list|refresh|resolve|leave|join|topics|cache-clear|cache-status|send|forward|edit-message|delete-message|create-channel|create-group|pin-message|react|unpin-message|download-media|transcribe|participants|edit-admin|edit-permissions|kick|broadcast-stats|archive|unarchive|mark-read|queue|status|cancel|clear-pending
+python -m tg_agent.main dm drafts list|create|approve|reject|send
+python -m tg_agent.main agent threads|thread-create|thread-delete|chat|thread-rename|thread-stop|messages|context|test-escaping|test-tools
+python -m tg_agent.main analytics top|content-types|hourly|summary|daily|pipeline-stats|trending-topics|trending-channels|velocity|peak-hours|calendar|trending-emojis|channel
+python -m tg_agent.main provider list|add|delete|probe|refresh|test-all
+python -m tg_agent.main export json|csv|rss
+python -m tg_agent.main translate stats|detect|run|message
+python -m tg_agent.main settings get|set|info|server-time|agent|filter-criteria|reactions|semantic
+python -m tg_agent.main debug logs|memory|timing
+python -m tg_agent.main image generate|models|providers|generated
+python -m tg_agent.main mcp-server [--no-pool]   # LEGACY: stdio MCP bridge over the agent tool registry (frozen)
 ```
 
 CLI command for Telegram dialogs management is `dialogs`.
@@ -111,29 +112,29 @@ CLI command for Telegram dialogs management is `dialogs`.
 
 Three layers: **CLI (native surface; web/TUI/agent-chat/MCP are legacy)** → **Telegram + Search + Scheduler + Agent/Pipeline** → **SQLite**
 
-- **Runtime split (web ↔ worker)**: since #444 the runtime consists of two `AppContainer` flavours keyed on `runtime_mode` ("web" vs "worker") in `src/web/bootstrap.py`. The **default daemon is worker-only** (automation-first): `restart`/`worker` run the standalone worker (`src/runtime/worker.py` — functionally identical to the embedded one) with the managed PID file and no web surface. `serve` is the legacy panel entry: it hosts uvicorn and spawns an `EmbeddedWorker` (`src/web/embedded_worker.py`) next to the web container; `--no-worker` runs only the web side (Docker/k8s split deployments).
-  - Web container (`runtime_mode="web"`) uses snapshot shims (`SnapshotClientPool`, `SnapshotCollector`, `SnapshotSchedulerManager` in `src/web/runtime_shims.py`). It does NOT open Telegram connections; UI actions enqueue work into `collection_tasks` / `telegram_commands` / task tables and read `runtime_snapshots` to render status.
-  - Worker container (`runtime_mode="worker"`, either embedded or standalone via `src/runtime/worker.py`) owns the live `ClientPool`, `CollectionQueue`, `UnifiedDispatcher`, `TelegramCommandDispatcher`, and `SchedulerManager`, and publishes `runtime_snapshots` (heartbeat, accounts_status, scheduler_status, …) that the web side reads.
+- **Runtime split (web ↔ worker)**: since #444 the runtime consists of two `AppContainer` flavours keyed on `runtime_mode` ("web" vs "worker") in `tg_agent/web/bootstrap.py`. The **default daemon is worker-only** (automation-first): `restart`/`worker` run the standalone worker (`tg_agent/runtime/worker.py` — functionally identical to the embedded one) with the managed PID file and no web surface. `serve` is the legacy panel entry: it hosts uvicorn and spawns an `EmbeddedWorker` (`tg_agent/web/embedded_worker.py`) next to the web container; `--no-worker` runs only the web side (Docker/k8s split deployments).
+  - Web container (`runtime_mode="web"`) uses snapshot shims (`SnapshotClientPool`, `SnapshotCollector`, `SnapshotSchedulerManager` in `tg_agent/web/runtime_shims.py`). It does NOT open Telegram connections; UI actions enqueue work into `collection_tasks` / `telegram_commands` / task tables and read `runtime_snapshots` to render status.
+  - Worker container (`runtime_mode="worker"`, either embedded or standalone via `tg_agent/runtime/worker.py`) owns the live `ClientPool`, `CollectionQueue`, `UnifiedDispatcher`, `TelegramCommandDispatcher`, and `SchedulerManager`, and publishes `runtime_snapshots` (heartbeat, accounts_status, scheduler_status, …) that the web side reads.
   - In web-mode `collection_queue = None` and `CollectionService` falls back to writing a PENDING row — the worker picks those up at startup via `CollectionQueue.requeue_startup_tasks()`.
-- CLI (`src/main.py` → `src/cli/commands/`) is the primary entry point and the product contract for coding agents (see Positioning); Web (`src/web/`) is a legacy parallel entry to the same logic — keep it working, do not extend
+- CLI (`tg_agent/main.py` → `tg_agent/cli/commands/`) is the primary entry point and the product contract for coding agents (see Positioning); Web (`tg_agent/web/`) is a legacy parallel entry to the same logic — keep it working, do not extend
 - Telegram layer: `ClientPool` manages multi-account connections, `Collector` fetches messages, `Notifier` sends alerts
 - Search layer: `SearchEngine` (local DB), `AISearchEngine` (LLM-powered)
-- Scheduler: APScheduler wrapper (`src/scheduler/manager.py`) triggers periodic collection
-- DB: single SQLite file via aiosqlite; schema in `src/database/schema.py`, migrations in `src/database/migrations.py`, connection in `src/database/connection.py`
-- Filters: `ChannelAnalyzer` (`src/filters/analyzer.py`) scores channels by uniqueness, subscriber ratio, cross-channel spam, language; thresholds in `src/filters/criteria.py`
-- Collection service (`src/services/collection_service.py`): orchestration layer between web/CLI and Collector/Queue — handles enqueue logic, stats collection
-- Parsers (`src/parsers.py`): identifier extraction for channel import — t.me links, @usernames, negative IDs; file parsing (txt/csv/xlsx)
-- Notification bot: personal bot created via BotFather through a connected account (`src/telegram/notifier.py`)
-- **Agent system**: four backends selected in `AgentManager.get_runtime_status()` (`src/agent/manager.py`) — auto-selection prefers `deepagents` when usable DB provider configs exist, then `claude-agent-sdk` (needs `ANTHROPIC_API_KEY` / `CLAUDE_CODE_OAUTH_TOKEN`), then `deepagents` again; the Codex SDK backend (`src/agent/codex_backend.py`) and the Google ADK backend (`src/agent/adk_backend.py`, Gemini models, needs `GOOGLE_API_KEY` / `GEMINI_API_KEY`) are intentionally NOT in the auto-fallback chain (each spawns a blocking out-of-process `mcp-server` subprocess) and are opt-in only via the dev-mode `agent_backend_override` setting. Both Codex and ADK reach the project tools over the same stdio MCP server (`python -m src.main mcp-server`) the in-process path serves
+- Scheduler: APScheduler wrapper (`tg_agent/scheduler/manager.py`) triggers periodic collection
+- DB: single SQLite file via aiosqlite; schema in `tg_agent/database/schema.py`, migrations in `tg_agent/database/migrations.py`, connection in `tg_agent/database/connection.py`
+- Filters: `ChannelAnalyzer` (`tg_agent/filters/analyzer.py`) scores channels by uniqueness, subscriber ratio, cross-channel spam, language; thresholds in `tg_agent/filters/criteria.py`
+- Collection service (`tg_agent/services/collection_service.py`): orchestration layer between web/CLI and Collector/Queue — handles enqueue logic, stats collection
+- Parsers (`tg_agent/parsers.py`): identifier extraction for channel import — t.me links, @usernames, negative IDs; file parsing (txt/csv/xlsx)
+- Notification bot: personal bot created via BotFather through a connected account (`tg_agent/telegram/notifier.py`)
+- **Agent system**: four backends selected in `AgentManager.get_runtime_status()` (`tg_agent/agent/manager.py`) — auto-selection prefers `deepagents` when usable DB provider configs exist, then `claude-agent-sdk` (needs `ANTHROPIC_API_KEY` / `CLAUDE_CODE_OAUTH_TOKEN`), then `deepagents` again; the Codex SDK backend (`tg_agent/agent/codex_backend.py`) and the Google ADK backend (`tg_agent/agent/adk_backend.py`, Gemini models, needs `GOOGLE_API_KEY` / `GEMINI_API_KEY`) are intentionally NOT in the auto-fallback chain (each spawns a blocking out-of-process `mcp-server` subprocess) and are opt-in only via the dev-mode `agent_backend_override` setting. Both Codex and ADK reach the project tools over the same stdio MCP server (`python -m tg_agent.main mcp-server`) the in-process path serves
 - **Agent system is legacy** (2026-09, see Positioning): in-process agent chat (`agent chat`, TUI, web `/agent`), SDK backends and MCP — frozen: keep functional, no new features
-- **Provider system**: `ProviderService` auto-registers LLM providers from env vars (`OPENAI_API_KEY`, `COHERE_API_KEY`, `OLLAMA_BASE`, etc.); the text/LLM adapters in `src/services/provider_adapters.py` are lightweight HTTP wrappers (no heavy SDK deps). The image adapters in the same file use official SDKs where they are cheap and clearer (see Image generation below) — the principle is "no *heavy* SDK", not "no SDK at all"
+- **Provider system**: `ProviderService` auto-registers LLM providers from env vars (`OPENAI_API_KEY`, `COHERE_API_KEY`, `OLLAMA_BASE`, etc.); the text/LLM adapters in `tg_agent/services/provider_adapters.py` are lightweight HTTP wrappers (no heavy SDK deps). The image adapters in the same file use official SDKs where they are cheap and clearer (see Image generation below) — the principle is "no *heavy* SDK", not "no SDK at all"
 - **Content pipelines**: `PipelineService` + `ContentGenerationService` orchestrate generate → image → draft → notify → publish flow; tracked via `generation_runs` DB table
-- **Image generation**: `ImageGenerationService` routes to provider-specific adapters (Together/HuggingFace/OpenAI/Replicate/Codex) via `provider:model_id` convention; auto-registers from env vars; adapters defined in `src/services/provider_adapters.py`. Since #958 the OpenAI/Together/Replicate adapters drive official SDKs (`openai` for both OpenAI and Together's OpenAI-compatible endpoint; `replicate` `async_run` replacing the manual poll loop); HuggingFace stays on raw aiohttp on purpose (its SDK returns a `PIL.Image`, pulling Pillow, vs saving the raw bytes); Codex uses the `openai_codex` SDK. `openai` is a direct dep (already transitive via langchain-openai); `replicate` is lightweight (httpx+pydantic)
-- **UnifiedDispatcher** (`src/services/unified_dispatcher.py`): polls DB for generic tasks (CONTENT_GENERATE, CONTENT_PUBLISH, PIPELINE_RUN, PHOTO_DUE, etc.) and dispatches to handler methods; recovers interrupted tasks on startup
+- **Image generation**: `ImageGenerationService` routes to provider-specific adapters (Together/HuggingFace/OpenAI/Replicate/Codex) via `provider:model_id` convention; auto-registers from env vars; adapters defined in `tg_agent/services/provider_adapters.py`. Since #958 the OpenAI/Together/Replicate adapters drive official SDKs (`openai` for both OpenAI and Together's OpenAI-compatible endpoint; `replicate` `async_run` replacing the manual poll loop); HuggingFace stays on raw aiohttp on purpose (its SDK returns a `PIL.Image`, pulling Pillow, vs saving the raw bytes); Codex uses the `openai_codex` SDK. `openai` is a direct dep (already transitive via langchain-openai); `replicate` is lightweight (httpx+pydantic)
+- **UnifiedDispatcher** (`tg_agent/services/unified_dispatcher.py`): polls DB for generic tasks (CONTENT_GENERATE, CONTENT_PUBLISH, PIPELINE_RUN, PHOTO_DUE, etc.) and dispatches to handler methods; recovers interrupted tasks on startup
 - **Photo publishing**: `PhotoAutoUploadService` / `PhotoPublishService` / `PhotoTaskService` — separate upload, schedule, publish tasks tracked in DB
-- **Agent tools**: `src/agent/tools/` — modular tool files (channels, search, pipelines, images, etc.); `_registry.py` provides `require_confirmation()` gate for destructive ops and `normalize_phone()`; `react_agent.py` is ReAct fallback when claude-agent-sdk is unavailable; `manager.py` orchestrates backend selection
-- **Agent tool permissions**: `TOOL_CATEGORIES` in `src/agent/tools/permissions.py` classifies every tool as read/write/delete; per-phone ACL overrides stored in DB setting `agent_tool_permissions` (JSON); `get_all_allowed_tools()` derives MCP-prefixed allow-list
-- **S3 storage**: `src/services/s3_store.py` — optional S3-compatible backend for media (images); used by `ImageGenerationService` when S3 config is present
+- **Agent tools**: `tg_agent/agent/tools/` — modular tool files (channels, search, pipelines, images, etc.); `_registry.py` provides `require_confirmation()` gate for destructive ops and `normalize_phone()`; `react_agent.py` is ReAct fallback when claude-agent-sdk is unavailable; `manager.py` orchestrates backend selection
+- **Agent tool permissions**: `TOOL_CATEGORIES` in `tg_agent/agent/tools/permissions.py` classifies every tool as read/write/delete; per-phone ACL overrides stored in DB setting `agent_tool_permissions` (JSON); `get_all_allowed_tools()` derives MCP-prefixed allow-list
+- **S3 storage**: `tg_agent/services/s3_store.py` — optional S3-compatible backend for media (images); used by `ImageGenerationService` when S3 config is present
 
 ### Database access pattern
 
@@ -156,8 +157,8 @@ Reads (`SELECT`) stay lock-free. Repositories accept `database: Database | None 
 
 ### Web app wiring
 
-- `src/web/assembly.py` — `register_routes()` imports and mounts all routers; `configure_app()` binds the `AppContainer` to `app.state.*`
-- `src/web/container.py` — `AppContainer` dataclass aggregates all services; injected into FastAPI `app.state` at startup; accessed in routes via `src/web/deps.py` helpers (`deps.get_db()`, `deps.get_templates()`, etc.)
+- `tg_agent/web/assembly.py` — `register_routes()` imports and mounts all routers; `configure_app()` binds the `AppContainer` to `app.state.*`
+- `tg_agent/web/container.py` — `AppContainer` dataclass aggregates all services; injected into FastAPI `app.state` at startup; accessed in routes via `tg_agent/web/deps.py` helpers (`deps.get_db()`, `deps.get_templates()`, etc.)
 
 ## Key Patterns
 
@@ -167,9 +168,9 @@ Reads (`SELECT`) stay lock-free. Repositories accept `database: Database | None 
 - **Incremental collection**: `min_id = channel.last_collected_id`, `reverse=True`; after the loop, `last_collected_id` is updated to `max(seen message_ids)`
 - **Batch insert**: `INSERT OR IGNORE` + `UNIQUE(channel_id, message_id)` — duplicates silently skipped
 - **Cancellation**: `Collector._cancel_event` is an `asyncio.Event`, checked every 10 messages in the iter loop and at each channel boundary
-- **Session tokens**: custom HMAC-SHA256 signed tokens in `src/web/session.py` — payload is `{user, exp}`, secret persisted in DB settings table, cookie max-age 30 days (`Secure` on HTTPS)
-- **CollectionQueue** (`src/collection_queue.py`): `asyncio.Queue` + single worker task, task status (`pending/running/completed/failed/cancelled`) tracked in DB
-- **DB migrations**: `_migrate()` in `src/database/migrations.py` uses `PRAGMA table_info` to detect missing columns and issues `ALTER TABLE ADD COLUMN` as needed
+- **Session tokens**: custom HMAC-SHA256 signed tokens in `tg_agent/web/session.py` — payload is `{user, exp}`, secret persisted in DB settings table, cookie max-age 30 days (`Secure` on HTTPS)
+- **CollectionQueue** (`tg_agent/collection_queue.py`): `asyncio.Queue` + single worker task, task status (`pending/running/completed/failed/cancelled`) tracked in DB
+- **DB migrations**: `_migrate()` in `tg_agent/database/migrations.py` uses `PRAGMA table_info` to detect missing columns and issues `ALTER TABLE ADD COLUMN` as needed
 - **Keyword matching**: plain text (case-insensitive substring) and regex (`re.IGNORECASE`)
 - **Channel filters**: `ChannelAnalyzer` checks `low_uniqueness`, `low_subscriber_ratio`, `cross_channel_spam`, `non_cyrillic`, `chat_noise`, `auto_feed`; filtered channels skipped during collection unless `force=True`
 - **Channel creation date**: `channels.created_at` stores Telegram `entity.date` (channel creation timestamp); captured via `resolve_channel()` and `get_dialogs_for_phone()`; distinct from `added_at` (when added to the system)

@@ -5,9 +5,9 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 
-from src.database import Database
-from src.database.repositories.collection_tasks import CollectionTasksRepository
-from src.models import (
+from tg_agent.database import Database
+from tg_agent.database.repositories.collection_tasks import CollectionTasksRepository
+from tg_agent.models import (
     CollectionTaskStatus,
     CollectionTaskType,
     ContentPublishTaskPayload,

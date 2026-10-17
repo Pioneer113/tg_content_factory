@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.models import Account
-from src.services.notification_target_service import NotificationTargetService
+from tg_agent.models import Account
+from tg_agent.services.notification_target_service import NotificationTargetService
 
 
 def _make_account(

@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.agent.manager import (
+from tg_agent.agent.manager import (
     AgentManager,
     AgentRuntimeStatus,
     DeepagentsBackend,
@@ -22,9 +22,9 @@ from src.agent.manager import (
     _SettingsCache,
     _ToolTracker,
 )
-from src.agent.provider_registry import ZAI_CODING_BASE_URL, ProviderRuntimeConfig
-from src.config import AppConfig
-from src.database import Database
+from tg_agent.agent.provider_registry import ZAI_CODING_BASE_URL, ProviderRuntimeConfig
+from tg_agent.config import AppConfig
+from tg_agent.database import Database
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -53,7 +53,7 @@ class TestAgentRuntimeContextPlumbing:
         config = AppConfig()
         backend = DeepagentsBackend(db, config, client_pool=pool)
 
-        with patch("src.agent.tools.deepagents_sync.build_deepagents_tools", return_value=[]) as build:
+        with patch("tg_agent.agent.tools.deepagents_sync.build_deepagents_tools", return_value=[]) as build:
             backend._default_tools()
 
         assert build.call_args.kwargs["client_pool"] is pool
@@ -61,7 +61,7 @@ class TestAgentRuntimeContextPlumbing:
         assert build.call_args.kwargs["runtime_context"].runtime_kind == "live"
 
     def test_deepagents_default_tools_keeps_requestable_tools_when_gate_active(self):
-        from src.agent.tools.permissions import ToolAccessState
+        from tg_agent.agent.tools.permissions import ToolAccessState
 
         def named_tool(name):
             def _tool():
@@ -83,7 +83,7 @@ class TestAgentRuntimeContextPlumbing:
             "list_channels": ToolAccessState.ALLOWED,
         }
 
-        with patch("src.agent.tools.deepagents_sync.build_deepagents_tools", return_value=fake_tools):
+        with patch("tg_agent.agent.tools.deepagents_sync.build_deepagents_tools", return_value=fake_tools):
             with_gate = backend._default_tools(access_policy=policy, gate_active=True)
             without_gate = backend._default_tools(access_policy=policy, gate_active=False)
 
@@ -430,7 +430,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -458,7 +458,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -483,7 +483,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -509,7 +509,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -536,7 +536,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -564,7 +564,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -589,7 +589,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -620,7 +620,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -646,7 +646,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -676,7 +676,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -696,7 +696,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -728,7 +728,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -760,7 +760,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -790,7 +790,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -821,7 +821,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -849,7 +849,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -883,7 +883,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -911,7 +911,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -938,7 +938,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -959,7 +959,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -999,7 +999,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -1026,7 +1026,7 @@ class TestClaudeSdkBackendChatStreamErrors:
         mgr.initialize()
 
         chunks = []
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             async for chunk in mgr.chat_stream(thread_id, "test"):
                 chunks.append(chunk)
 
@@ -1259,7 +1259,7 @@ class TestDeepagentsBackendBuildAgent:
             secret_fields={"api_key": ""},
         )
 
-        with patch("src.agent.react_agent.OllamaReActAgent") as mock_react:
+        with patch("tg_agent.agent.react_agent.OllamaReActAgent") as mock_react:
             mock_react.return_value = MagicMock()
             backend._build_agent(cfg, record_last_used=True)
             mock_react.assert_called_once()
@@ -1643,7 +1643,7 @@ class TestDeepagentsProbeAndRun:
             secret_fields={"api_key": "test"},
         )
 
-        import src.agent.backends.deepagents as deepagents_module
+        import tg_agent.agent.backends.deepagents as deepagents_module
 
         original_timeout = deepagents_module._DEEPAGENTS_PROBE_TIMEOUT_SECONDS
         deepagents_module._DEEPAGENTS_PROBE_TIMEOUT_SECONDS = 0.01
@@ -2010,7 +2010,7 @@ class TestAgentManagerChatStreamErrors:
         mgr = AgentManager(db)
         mgr.initialize()
 
-        with patch("src.agent.backends.claude_sdk.query", mock_query):
+        with patch("tg_agent.agent.backends.claude_sdk.query", mock_query):
             chunks = [
                 c async for c in mgr.chat_stream(thread_id, "test", model="invalid-model")
             ]
@@ -2085,7 +2085,7 @@ class TestAgentManagerPermissionGate:
         """enable_permission_gate sets the global gate."""
         mgr = AgentManager(db)
         mgr.enable_permission_gate()
-        from src.agent.permission_gate import get_gate
+        from tg_agent.agent.permission_gate import get_gate
 
         assert get_gate() is not None
         mgr.disable_permission_gate()
@@ -2095,7 +2095,7 @@ class TestAgentManagerPermissionGate:
         mgr = AgentManager(db)
         mgr.enable_permission_gate()
         mgr.disable_permission_gate()
-        from src.agent.permission_gate import get_gate
+        from tg_agent.agent.permission_gate import get_gate
 
         assert get_gate() is None
 
@@ -2106,8 +2106,8 @@ class TestAgentManagerPermissionGate:
 
     @pytest.mark.anyio
     async def test_interactive_permissions_exposes_requestable_deepagents_tool(self, db):
-        from src.agent.permission_gate import get_gate, set_gate
-        from src.agent.tools.permissions import save_tool_permissions
+        from tg_agent.agent.permission_gate import get_gate, set_gate
+        from tg_agent.agent.tools.permissions import save_tool_permissions
 
         def named_tool(name: str):
             def _tool():
@@ -2166,7 +2166,7 @@ class TestAgentManagerPermissionGate:
         await db.save_agent_message(thread_id, "user", "test")
         try:
             with (
-                patch("src.agent.tools.deepagents_sync.build_deepagents_tools", return_value=fake_tools),
+                patch("tg_agent.agent.tools.deepagents_sync.build_deepagents_tools", return_value=fake_tools),
                 patch.object(mgr._deepagents_backend, "_candidate_configs", AsyncMock(return_value=configs)),
                 patch.object(mgr._deepagents_backend, "_validation_error", return_value=""),
                 patch.object(mgr._deepagents_backend, "_run_agent", side_effect=fake_run_agent),
@@ -2189,8 +2189,8 @@ class TestAgentManagerPermissionGate:
 
     @pytest.mark.anyio
     async def test_noninteractive_permissions_hide_requestable_deepagents_tool(self, db):
-        from src.agent.permission_gate import set_gate
-        from src.agent.tools.permissions import save_tool_permissions
+        from tg_agent.agent.permission_gate import set_gate
+        from tg_agent.agent.tools.permissions import save_tool_permissions
 
         def named_tool(name: str):
             def _tool():
@@ -2248,7 +2248,7 @@ class TestAgentManagerPermissionGate:
         await db.save_agent_message(thread_id, "user", "test")
         try:
             with (
-                patch("src.agent.tools.deepagents_sync.build_deepagents_tools", return_value=fake_tools),
+                patch("tg_agent.agent.tools.deepagents_sync.build_deepagents_tools", return_value=fake_tools),
                 patch.object(mgr._deepagents_backend, "_candidate_configs", AsyncMock(return_value=configs)),
                 patch.object(mgr._deepagents_backend, "_validation_error", return_value=""),
                 patch.object(mgr._deepagents_backend, "_run_agent", side_effect=fake_run_agent),
@@ -2546,7 +2546,7 @@ class TestDeepagentsRefreshSettingsCache:
 class TestDiagnoseConnection:
     def test_diagnose_no_cli_no_key(self):
         """Diagnosis reports missing CLI and API key."""
-        from src.agent.manager import _diagnose_connection
+        from tg_agent.agent.manager import _diagnose_connection
 
         with patch.dict(os.environ, {}, clear=True):
             os.environ.pop("ANTHROPIC_API_KEY", None)
@@ -2557,7 +2557,7 @@ class TestDiagnoseConnection:
 
     def test_diagnose_invalid_key(self):
         """Diagnosis reports invalid API key from stderr."""
-        from src.agent.manager import _diagnose_connection
+        from tg_agent.agent.manager import _diagnose_connection
 
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "bad-key"}):
             result = _diagnose_connection("/usr/bin/claude", ["Invalid API key provided"])
@@ -2565,7 +2565,7 @@ class TestDiagnoseConnection:
 
     def test_diagnose_rate_limit(self):
         """Diagnosis reports rate limit from stderr."""
-        from src.agent.manager import _diagnose_connection
+        from tg_agent.agent.manager import _diagnose_connection
 
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "key"}):
             result = _diagnose_connection("/usr/bin/claude", ["rate limit exceeded"])
@@ -2573,7 +2573,7 @@ class TestDiagnoseConnection:
 
     def test_diagnose_network_error(self):
         """Diagnosis reports network issues from stderr."""
-        from src.agent.manager import _diagnose_connection
+        from tg_agent.agent.manager import _diagnose_connection
 
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "key"}):
             result = _diagnose_connection("/usr/bin/claude", ["ECONNREFUSED connection failed"])
@@ -2581,7 +2581,7 @@ class TestDiagnoseConnection:
 
     def test_diagnose_permission_error(self):
         """Diagnosis reports permission denied from stderr."""
-        from src.agent.manager import _diagnose_connection
+        from tg_agent.agent.manager import _diagnose_connection
 
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "key"}):
             result = _diagnose_connection("/usr/bin/claude", ["Permission denied 403"])
@@ -2589,7 +2589,7 @@ class TestDiagnoseConnection:
 
     def test_diagnose_unauthorized(self):
         """Diagnosis reports unauthorized from stderr."""
-        from src.agent.manager import _diagnose_connection
+        from tg_agent.agent.manager import _diagnose_connection
 
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "key"}):
             result = _diagnose_connection("/usr/bin/claude", ["Unauthorized 401"])
@@ -2597,7 +2597,7 @@ class TestDiagnoseConnection:
 
     def test_diagnose_fallback_message(self):
         """Diagnosis returns generic message when no specific issue found."""
-        from src.agent.manager import _diagnose_connection
+        from tg_agent.agent.manager import _diagnose_connection
 
         with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "key"}):
             result = _diagnose_connection("/usr/bin/claude", [])
@@ -2606,25 +2606,25 @@ class TestDiagnoseConnection:
 
 class TestSummarizeToolArgs:
     def test_empty_args(self):
-        from src.agent.manager import _summarize_tool_args
+        from tg_agent.agent.manager import _summarize_tool_args
 
         assert _summarize_tool_args({}) == ""
 
     def test_single_arg(self):
-        from src.agent.manager import _summarize_tool_args
+        from tg_agent.agent.manager import _summarize_tool_args
 
         result = _summarize_tool_args({"query": "test"})
         assert "query" in result
         assert "test" in result
 
     def test_long_value_truncated(self):
-        from src.agent.manager import _summarize_tool_args
+        from tg_agent.agent.manager import _summarize_tool_args
 
         result = _summarize_tool_args({"text": "x" * 100})
         assert "..." in result
 
     def test_multiple_args(self):
-        from src.agent.manager import _summarize_tool_args
+        from tg_agent.agent.manager import _summarize_tool_args
 
         result = _summarize_tool_args({"a": "1", "b": "2"})
         assert "+1" in result
@@ -2632,12 +2632,12 @@ class TestSummarizeToolArgs:
 
 class TestTruncate:
     def test_short_string_unchanged(self):
-        from src.agent.manager import _truncate
+        from tg_agent.agent.manager import _truncate
 
         assert _truncate("short") == "short"
 
     def test_long_string_truncated(self):
-        from src.agent.manager import _truncate
+        from tg_agent.agent.manager import _truncate
 
         long_str = "x" * 200
         result = _truncate(long_str)
@@ -2648,7 +2648,7 @@ class TestTruncate:
 class TestAsPromptStream:
     @pytest.mark.anyio
     async def test_yields_single_message(self):
-        from src.agent.manager import _as_prompt_stream
+        from tg_agent.agent.manager import _as_prompt_stream
 
         chunks = []
         async for chunk in _as_prompt_stream("hello"):
@@ -2664,7 +2664,7 @@ class TestAutoApproveTool:
     async def test_returns_allow_for_mcp_tools(self):
         from claude_agent_sdk import PermissionResultAllow
 
-        from src.agent.manager import _auto_approve_tool
+        from tg_agent.agent.manager import _auto_approve_tool
 
         result = await _auto_approve_tool("mcp__telegram_db__send_reaction", {}, MagicMock())
         assert isinstance(result, PermissionResultAllow)
@@ -2673,15 +2673,15 @@ class TestAutoApproveTool:
     async def test_builtin_requestable_asks_permission_gate(self):
         from claude_agent_sdk import PermissionResultDeny
 
-        from src.agent.manager import _auto_approve_tool
-        from src.agent.permission_gate import (
+        from tg_agent.agent.manager import _auto_approve_tool
+        from tg_agent.agent.permission_gate import (
             AgentRequestContext,
             PermissionGate,
             reset_request_context,
             set_gate,
             set_request_context,
         )
-        from src.agent.tools.permissions import ToolAccessState
+        from tg_agent.agent.tools.permissions import ToolAccessState
 
         gate = PermissionGate()
         queue: asyncio.Queue[str] = asyncio.Queue()
@@ -2715,15 +2715,15 @@ class TestAutoApproveTool:
     async def test_builtin_session_allow_reuses_permission_gate_approval(self):
         from claude_agent_sdk import PermissionResultAllow
 
-        from src.agent.manager import _auto_approve_tool
-        from src.agent.permission_gate import (
+        from tg_agent.agent.manager import _auto_approve_tool
+        from tg_agent.agent.permission_gate import (
             AgentRequestContext,
             PermissionGate,
             reset_request_context,
             set_gate,
             set_request_context,
         )
-        from src.agent.tools.permissions import ToolAccessState
+        from tg_agent.agent.tools.permissions import ToolAccessState
 
         gate = PermissionGate()
         queue: asyncio.Queue[str] = asyncio.Queue()
@@ -2756,15 +2756,15 @@ class TestAutoApproveTool:
     async def test_builtin_denied_does_not_prompt(self):
         from claude_agent_sdk import PermissionResultDeny
 
-        from src.agent.manager import _auto_approve_tool
-        from src.agent.permission_gate import (
+        from tg_agent.agent.manager import _auto_approve_tool
+        from tg_agent.agent.permission_gate import (
             AgentRequestContext,
             PermissionGate,
             reset_request_context,
             set_gate,
             set_request_context,
         )
-        from src.agent.tools.permissions import ToolAccessState
+        from tg_agent.agent.tools.permissions import ToolAccessState
 
         gate = PermissionGate()
         queue: asyncio.Queue[str] = asyncio.Queue()

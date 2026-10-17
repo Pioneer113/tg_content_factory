@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.telegram.dm_history import read_dialog_history
+from tg_agent.telegram.dm_history import read_dialog_history
 
 
 def _fail(*_args, **_kwargs):
@@ -123,7 +123,7 @@ async def test_read_dialog_history_empty():
 
 
 def test_client_factory_ignores_args_returns_fixed_client():
-    from src.telegram.dm_history import _client_factory
+    from tg_agent.telegram.dm_history import _client_factory
 
     sentinel = MagicMock()
     factory = _client_factory(sentinel)

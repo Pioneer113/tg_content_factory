@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from src.models import Message
+from tg_agent.models import Message
 
 
 async def _seed_messages(db, channel_id=100, count=3):
@@ -24,7 +24,7 @@ async def _seed_messages(db, channel_id=100, count=3):
 @pytest.mark.anyio
 async def test_export_channel_writes_tree(route_client, base_app, tmp_path, monkeypatch):
     _, db, _ = base_app
-    monkeypatch.setattr("src.services.export_service.EXPORT_ROOT", tmp_path)
+    monkeypatch.setattr("tg_agent.services.export_service.EXPORT_ROOT", tmp_path)
     await _seed_messages(db)  # base_app already seeded channel 100
 
     resp = await route_client.post("/channels/100/export", data={"format": "both"})
@@ -40,7 +40,7 @@ async def test_export_channel_writes_tree(route_client, base_app, tmp_path, monk
 
 @pytest.mark.anyio
 async def test_export_channel_no_messages_returns_404(route_client, base_app, tmp_path, monkeypatch):
-    monkeypatch.setattr("src.services.export_service.EXPORT_ROOT", tmp_path)
+    monkeypatch.setattr("tg_agent.services.export_service.EXPORT_ROOT", tmp_path)
     # channel 100 exists but has no messages
     resp = await route_client.post("/channels/100/export", data={"format": "json"})
     assert resp.status_code == 404
@@ -50,7 +50,7 @@ async def test_export_channel_no_messages_returns_404(route_client, base_app, tm
 @pytest.mark.anyio
 async def test_export_channel_with_media_enqueues_task(route_client, base_app, tmp_path, monkeypatch):
     _, db, _ = base_app
-    monkeypatch.setattr("src.services.export_service.EXPORT_ROOT", tmp_path)
+    monkeypatch.setattr("tg_agent.services.export_service.EXPORT_ROOT", tmp_path)
     await _seed_messages(db)
 
     # with_media needs the worker's live clients → the route enqueues a task.

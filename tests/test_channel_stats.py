@@ -5,10 +5,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from telethon.errors import FloodWaitError
 
-from src.config import SchedulerConfig
-from src.models import Channel, ChannelStats
-from src.telegram.collector import Collector
 from tests.helpers import make_mock_pool
+from tg_agent.config import SchedulerConfig
+from tg_agent.models import Channel, ChannelStats
+from tg_agent.telegram.collector import Collector
 
 
 @pytest.mark.anyio
@@ -149,13 +149,13 @@ async def _wait_for_task_status(db, task_id: int, status: str, *, timeout: float
 
 
 async def _create_stats_web_test_context(tmp_path, collector):
-    from src.database import Database
-    from src.scheduler.service import SchedulerManager
-    from src.search.ai_search import AISearchEngine
-    from src.search.engine import SearchEngine
-    from src.telegram.auth import TelegramAuth
-    from src.web.app import create_app
     from tests.helpers import make_test_config
+    from tg_agent.database import Database
+    from tg_agent.scheduler.service import SchedulerManager
+    from tg_agent.search.ai_search import AISearchEngine
+    from tg_agent.search.engine import SearchEngine
+    from tg_agent.telegram.auth import TelegramAuth
+    from tg_agent.web.app import create_app
 
     config = make_test_config(tmp_path)
     app = create_app(config)
@@ -417,7 +417,7 @@ def test_cli_channel_stats_no_args(cli_init_patch, capsys):
     """Calling `channel stats` without identifier or --all should not crash."""
     from unittest.mock import AsyncMock, MagicMock, patch
 
-    from src.cli.commands import channel as channel_cmd
+    from tg_agent.cli.commands import channel as channel_cmd
 
     mock_db = AsyncMock()
     mock_db.close = AsyncMock()
@@ -430,8 +430,8 @@ def test_cli_channel_stats_no_args(cli_init_patch, capsys):
         return config, mock_pool
 
     with (
-        cli_init_patch(mock_db, "src.cli.runtime.init_db"),
-        patch("src.cli.runtime.init_pool", fake_init_pool),
+        cli_init_patch(mock_db, "tg_agent.cli.runtime.init_db"),
+        patch("tg_agent.cli.runtime.init_pool", fake_init_pool),
     ):
         asyncio.run(
             channel_cmd.stats_impl(

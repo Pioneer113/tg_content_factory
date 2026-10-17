@@ -5,7 +5,8 @@ from types import SimpleNamespace
 import pytest
 from telethon.tl.types import ReactionPaid
 
-from src.telegram.reactions import (
+from tests.helpers import make_mock_reactions
+from tg_agent.telegram.reactions import (
     SUPPORTED_REACTION_EMOJIS_DISPLAY,
     TelegramReactionInvalidError,
     extract_message_reactions,
@@ -21,7 +22,6 @@ from src.telegram.reactions import (
     normalize_reaction_users_limit,
     parse_reactions_json,
 )
-from tests.helpers import make_mock_reactions
 
 
 def test_extract_message_reactions_none():
@@ -203,13 +203,13 @@ async def test_fetch_message_reaction_users_returns_unavailable_on_error():
 
 from unittest.mock import AsyncMock, MagicMock, patch  # noqa: E402
 
-from src.telegram.reactions import ReactionUsersResult  # noqa: E402
+from tg_agent.telegram.reactions import ReactionUsersResult  # noqa: E402
 
 
 def test_peer_key_maps_all_peer_shapes():
     """Peer id objects resolve to (kind, id) in user → channel → chat → bare
     order (#mutation slice 6)."""
-    from src.telegram.reactions import _peer_key
+    from tg_agent.telegram.reactions import _peer_key
 
     assert _peer_key(SimpleNamespace(user_id=5)) == ("user", 5)
     assert _peer_key(SimpleNamespace(channel_id=-100)) == ("channel", -100)
@@ -221,7 +221,7 @@ def test_peer_key_maps_all_peer_shapes():
 def test_display_peer_prefers_username_then_name_then_title():
     """@usernames are normalized, then full name, then channel title, then the
     bare id, then 'unknown' (#mutation slice 6)."""
-    from src.telegram.reactions import _display_peer
+    from tg_agent.telegram.reactions import _display_peer
 
     assert _display_peer(SimpleNamespace(username=" @ann "), 5) == "@ann"
     assert _display_peer(SimpleNamespace(first_name="Ann", last_name="Lee"), 5) == "Ann Lee"
@@ -257,16 +257,16 @@ async def test_fetch_reaction_users_flood_propagates_and_failure_degrades():
     other failure degrades to an unavailable result (#mutation slice 6)."""
     from telethon.errors import FloodWaitError
 
-    with patch("src.telegram.backends.fetch_message_reaction_users_raw", AsyncMock()):
+    with patch("tg_agent.telegram.backends.fetch_message_reaction_users_raw", AsyncMock()):
         with patch(
-            "src.telegram.backends.fetch_message_reaction_users_raw",
+            "tg_agent.telegram.backends.fetch_message_reaction_users_raw",
             AsyncMock(side_effect=FloodWaitError(request=None)),
         ):
             with pytest.raises(FloodWaitError):
                 await fetch_message_reaction_users(MagicMock(), "@chan", 5)
 
         with patch(
-            "src.telegram.backends.fetch_message_reaction_users_raw",
+            "tg_agent.telegram.backends.fetch_message_reaction_users_raw",
             AsyncMock(side_effect=RuntimeError("boom")),
         ):
             degraded = await fetch_message_reaction_users(MagicMock(), "@chan", 5)
@@ -285,7 +285,7 @@ async def test_fetch_reaction_users_limited_flag_and_count_fallback():
         count=50,
         next_offset="offset-2",
     )
-    with patch("src.telegram.backends.fetch_message_reaction_users_raw", AsyncMock(return_value=raw)):
+    with patch("tg_agent.telegram.backends.fetch_message_reaction_users_raw", AsyncMock(return_value=raw)):
         result = await fetch_message_reaction_users(MagicMock(), "@chan", 5)
     assert result.limited is True
 
@@ -297,7 +297,7 @@ async def test_fetch_reaction_users_limited_flag_and_count_fallback():
         next_offset="offset-3",
     )
     with patch(
-        "src.telegram.backends.fetch_message_reaction_users_raw",
+        "tg_agent.telegram.backends.fetch_message_reaction_users_raw",
         AsyncMock(return_value=raw_offset_only),
     ):
         result = await fetch_message_reaction_users(MagicMock(), "@chan", 5)
@@ -311,7 +311,7 @@ async def test_fetch_reaction_users_limited_flag_and_count_fallback():
         next_offset=None,
     )
     with patch(
-        "src.telegram.backends.fetch_message_reaction_users_raw",
+        "tg_agent.telegram.backends.fetch_message_reaction_users_raw",
         AsyncMock(return_value=raw_no_offset),
     ):
         result = await fetch_message_reaction_users(MagicMock(), "@chan", 5)

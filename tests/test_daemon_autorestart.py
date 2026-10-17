@@ -13,7 +13,7 @@ import os
 import time
 from pathlib import Path
 
-from src.cli.daemon_autorestart import is_stale
+from tg_agent.cli.daemon_autorestart import is_stale
 
 
 def _touch(path: Path) -> None:
@@ -74,7 +74,7 @@ def test_is_stale_ignores_non_python_files(tmp_path):
 def test_pid_file_mtime_is_the_daemon_start_proxy(tmp_path):
     """The staleness contract: the PID file is (re)written fresh at worker
     startup, so its mtime is the daemon build time."""
-    from src.cli.process_control import register_current_process
+    from tg_agent.cli.process_control import register_current_process
 
     pid_file = tmp_path / "tg_search.pid"
     register_current_process(pid_file)

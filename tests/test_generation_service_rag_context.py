@@ -16,15 +16,15 @@ from datetime import datetime, timezone
 
 import pytest
 
-from src.models import (
+from tg_agent.models import (
     ContentPipeline,
     Message,
     PipelineGenerationBackend,
     PipelinePublishMode,
     SearchResult,
 )
-from src.services.generation_service import GenerationService
-from src.services.pipeline_service import resolve_retrieval_scope
+from tg_agent.services.generation_service import GenerationService
+from tg_agent.services.pipeline_service import resolve_retrieval_scope
 
 
 class DummySearchEngine:
@@ -177,7 +177,7 @@ async def test_scope_lookup_error_fails_closed():
     degrade to channel_id=None (which is unscoped retrieval across ALL channels,
     a content-isolation breach). #1077 changes the old swallow-and-widen
     behaviour this test previously documented."""
-    from src.services.pipeline_service import PipelineScopeError
+    from tg_agent.services.pipeline_service import PipelineScopeError
 
     async def failing_list_sources(pipeline_id: int):
         raise RuntimeError("DB scope lookup failed")

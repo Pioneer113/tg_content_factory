@@ -1,11 +1,11 @@
 import asyncio
 from types import SimpleNamespace
 
-from src.config import SchedulerConfig
-from src.live_runtime_pause import LiveRuntimePauseGate
-from src.scheduler.service import SchedulerManager
-from src.services.telegram_command_dispatcher import TelegramCommandDispatcher
 from tests.helpers import drain_loop
+from tg_agent.config import SchedulerConfig
+from tg_agent.live_runtime_pause import LiveRuntimePauseGate
+from tg_agent.scheduler.service import SchedulerManager
+from tg_agent.services.telegram_command_dispatcher import TelegramCommandDispatcher
 
 
 def test_live_runtime_pause_gate_waits_until_all_agent_requests_release():

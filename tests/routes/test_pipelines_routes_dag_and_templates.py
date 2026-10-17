@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.models import (
+from tg_agent.models import (
     ContentPipeline,
     Message,
     PipelineEdge,
@@ -16,7 +16,7 @@ from src.models import (
     PipelineNode,
     PipelineNodeType,
 )
-from src.services.pipeline_service import PipelineValidationError
+from tg_agent.services.pipeline_service import PipelineValidationError
 
 _ADD_DATA = {
     "name": "Test Pipeline",
@@ -94,7 +94,9 @@ def _make_pipeline(pipeline_id=1, *, name="Test", dag=None, backend=PipelineGene
 async def test_api_channels_search_short_query(route_client, base_app):
     """Short query (< 2 chars) returns top 50 channels."""
     _, db, _ = base_app
-    await db.add_channel(__import__("src.models", fromlist=["Channel"]).Channel(channel_id=999, title="Alpha Chan"))
+    await db.add_channel(
+        __import__("tg_agent.models", fromlist=["Channel"]).Channel(channel_id=999, title="Alpha Chan")
+    )
     resp = await route_client.get("/pipelines/api/channels/search?q=a")
     assert resp.status_code == 200
     data = resp.json()
@@ -114,7 +116,7 @@ async def test_api_channels_search_empty_query(route_client, base_app):
 async def test_api_channels_search_with_query(route_client, base_app):
     """Query >= 2 chars searches by title/username/channel_id."""
     _, db, _ = base_app
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     await db.add_channel(Channel(channel_id=777, title="UniqueSearchTerm", username="searchuser"))
     resp = await route_client.get("/pipelines/api/channels/search?q=UniqueSearch")
@@ -127,7 +129,7 @@ async def test_api_channels_search_with_query(route_client, base_app):
 async def test_api_channels_search_by_channel_id(route_client, base_app):
     """Search by numeric channel_id substring."""
     _, db, _ = base_app
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     await db.add_channel(Channel(channel_id=123456, title="IdChannel"))
     resp = await route_client.get("/pipelines/api/channels/search?q=12345")
@@ -140,7 +142,7 @@ async def test_api_channels_search_by_channel_id(route_client, base_app):
 async def test_api_channels_search_result_fields(route_client, base_app):
     """Each result has value, title, username, group keys."""
     _, db, _ = base_app
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     await db.add_channel(Channel(channel_id=555, title="FieldTest", username="ft"))
     resp = await route_client.get("/pipelines/api/channels/search?q=Fi")
@@ -214,7 +216,7 @@ async def test_create_wizard_submit_with_run_after(client_with_dialog, base_app)
         "edges": [],
     }
 
-    with patch("src.web.pipelines.handlers.deps.get_task_enqueuer") as mock_enq:
+    with patch("tg_agent.web.pipelines.handlers.deps.get_task_enqueuer") as mock_enq:
         mock_enq.return_value.enqueue_pipeline_run = AsyncMock()
         resp = await client_with_dialog.post(
             "/pipelines/create-wizard",
@@ -317,7 +319,7 @@ async def test_add_pipeline_validation_error(route_client, base_app):
     app, _, _ = base_app
     app.state.llm_provider_service = _make_provider_svc(has=True)
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.add = AsyncMock(side_effect=PipelineValidationError("Bad"))
         resp = await route_client.post(
             "/pipelines/add",
@@ -371,7 +373,7 @@ async def test_edit_pipeline_dag_preserves_backend(client_with_dialog, base_app)
         edges=[PipelineEdge(from_node="src", to_node="pub")],
     )
     pipeline = _make_pipeline(1, dag=dag, backend=PipelineGenerationBackend.AGENT)
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.get = AsyncMock(return_value=pipeline)
         mock_svc.return_value.update = AsyncMock(return_value=True)
         resp = await client_with_dialog.post(
@@ -406,7 +408,7 @@ async def test_edit_pipeline_dag_preserves_prompt(client_with_dialog, base_app):
     pipeline = _make_pipeline(1, dag=dag)
     pipeline.prompt_template = "original prompt"
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.get = AsyncMock(return_value=pipeline)
         mock_svc.return_value.update = AsyncMock(return_value=True)
         resp = await client_with_dialog.post(
@@ -463,7 +465,7 @@ async def test_edit_pipeline_validation_error(route_client, base_app):
     app.state.llm_provider_service = _make_provider_svc(has=True)
     pipeline = _make_pipeline(1)
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.get = AsyncMock(return_value=pipeline)
         mock_svc.return_value.update = AsyncMock(side_effect=PipelineValidationError("Bad data"))
         resp = await route_client.post(
@@ -493,7 +495,7 @@ async def test_edit_pipeline_update_returns_false(route_client, base_app):
     app.state.llm_provider_service = _make_provider_svc(has=True)
     pipeline = _make_pipeline(1)
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.get = AsyncMock(return_value=pipeline)
         mock_svc.return_value.update = AsyncMock(return_value=False)
         resp = await route_client.post(
@@ -522,7 +524,7 @@ async def test_edit_pipeline_with_phone_query_param(route_client, base_app):
     app, _, _ = base_app
     app.state.llm_provider_service = _make_provider_svc(has=True)
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.get = AsyncMock(return_value=None)
         resp = await route_client.post(
             "/pipelines/1/edit?phone=%2B1234567890",
@@ -561,7 +563,7 @@ async def test_generate_stream_no_llm_nodes(route_client, base_app):
         edges=[PipelineEdge(from_node="src", to_node="pub")],
     )
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.get = AsyncMock(return_value=_make_pipeline(1, dag=dag))
         resp = await route_client.get("/pipelines/1/generate-stream", follow_redirects=False)
     assert resp.status_code == 303
@@ -619,9 +621,9 @@ async def test_generate_pipeline_no_llm_nodes_runs_graph(route_client, base_app)
         }
 
     with (
-        patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc,
+        patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc,
         patch(
-            "src.services.content_generation_service.ContentGenerationService._run_generation",
+            "tg_agent.services.content_generation_service.ContentGenerationService._run_generation",
             fake_run_generation,
         ),
     ):
@@ -664,9 +666,9 @@ async def test_dry_run_pipeline_success(client_with_dialog, base_app):
     app.state.llm_provider_service = _make_provider_svc(has=True)
     await client_with_dialog.post("/pipelines/add", data=_ADD_DATA)
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.get = AsyncMock(return_value=_make_pipeline(1))
-        with patch("src.web.pipelines.handlers.deps.get_task_enqueuer") as mock_enq:
+        with patch("tg_agent.web.pipelines.handlers.deps.get_task_enqueuer") as mock_enq:
             mock_enq.return_value.enqueue_pipeline_run = AsyncMock()
             resp = await client_with_dialog.post("/pipelines/1/dry-run", follow_redirects=False)
     assert resp.status_code == 303
@@ -679,7 +681,7 @@ async def test_dry_run_pipeline_not_found(route_client, base_app):
     app, _, _ = base_app
     app.state.llm_provider_service = _make_provider_svc(has=True)
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.get = AsyncMock(return_value=None)
         resp = await route_client.post("/pipelines/999/dry-run", follow_redirects=False)
     assert resp.status_code == 303
@@ -706,9 +708,9 @@ async def test_dry_run_pipeline_enqueue_failure(client_with_dialog, base_app):
     app.state.llm_provider_service = _make_provider_svc(has=True)
     await client_with_dialog.post("/pipelines/add", data=_ADD_DATA)
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.get = AsyncMock(return_value=_make_pipeline(1))
-        with patch("src.web.pipelines.handlers.deps.get_task_enqueuer") as mock_enq:
+        with patch("tg_agent.web.pipelines.handlers.deps.get_task_enqueuer") as mock_enq:
             mock_enq.return_value.enqueue_pipeline_run = AsyncMock(side_effect=Exception("fail"))
             resp = await client_with_dialog.post("/pipelines/1/dry-run", follow_redirects=False)
     assert resp.status_code == 303
@@ -724,7 +726,7 @@ async def test_dry_run_count_not_found(route_client, base_app):
     app, _, _ = base_app
     app.state.llm_provider_service = _make_provider_svc()
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.get = AsyncMock(return_value=None)
         resp = await route_client.get("/pipelines/999/dry-run-count")
     assert resp.status_code == 404
@@ -737,7 +739,7 @@ async def test_dry_run_count_legacy_pipeline(route_client, base_app):
     app.state.llm_provider_service = _make_provider_svc()
     pipeline = _make_pipeline(1)  # legacy — no pipeline_json
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.get = AsyncMock(return_value=pipeline)
         resp = await route_client.get("/pipelines/1/dry-run-count")
     assert resp.status_code == 200
@@ -764,7 +766,7 @@ async def test_dry_run_count_dag_pipeline(route_client, base_app):
     )
     pipeline = _make_pipeline(1, dag=dag)
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.get = AsyncMock(return_value=pipeline)
         resp = await route_client.get("/pipelines/1/dry-run-count")
     assert resp.status_code == 200
@@ -875,7 +877,7 @@ async def test_dry_run_count_new_empty_ids(route_client, base_app):
 
 def test_apply_pipeline_filter_no_pipeline_json():
     """Filter returns all messages when no pipeline_json."""
-    from src.web.pipelines.handlers import _apply_pipeline_filter
+    from tg_agent.web.pipelines.handlers import _apply_pipeline_filter
 
     pipeline = MagicMock()
     pipeline.pipeline_json = None
@@ -885,7 +887,7 @@ def test_apply_pipeline_filter_no_pipeline_json():
 
 def test_apply_pipeline_filter_no_filter_node():
     """Filter returns all messages when no filter node in graph."""
-    from src.web.pipelines.handlers import _apply_pipeline_filter
+    from tg_agent.web.pipelines.handlers import _apply_pipeline_filter
 
     pipeline = MagicMock()
     pipeline.pipeline_json = PipelineGraph(
@@ -898,7 +900,7 @@ def test_apply_pipeline_filter_no_filter_node():
 
 def test_apply_pipeline_filter_keywords():
     """Filter node with keywords filters correctly."""
-    from src.web.pipelines.handlers import _apply_pipeline_filter
+    from tg_agent.web.pipelines.handlers import _apply_pipeline_filter
 
     pipeline = MagicMock()
     pipeline.pipeline_json = PipelineGraph(
@@ -920,7 +922,7 @@ def test_apply_pipeline_filter_keywords():
 
 def test_apply_pipeline_filter_regex():
     """Filter node with regex pattern filters correctly."""
-    from src.web.pipelines.handlers import _apply_pipeline_filter
+    from tg_agent.web.pipelines.handlers import _apply_pipeline_filter
 
     pipeline = MagicMock()
     pipeline.pipeline_json = PipelineGraph(
@@ -941,7 +943,7 @@ def test_apply_pipeline_filter_regex():
 
 def test_apply_pipeline_filter_regex_invalid():
     """Invalid regex pattern is treated as non-matching."""
-    from src.web.pipelines.handlers import _apply_pipeline_filter
+    from tg_agent.web.pipelines.handlers import _apply_pipeline_filter
 
     pipeline = MagicMock()
     pipeline.pipeline_json = PipelineGraph(
@@ -959,7 +961,7 @@ def test_apply_pipeline_filter_regex_invalid():
 
 def test_apply_pipeline_filter_anonymous_sender():
     """Filter node with anonymous_sender checks sender_id."""
-    from src.web.pipelines.handlers import _apply_pipeline_filter
+    from tg_agent.web.pipelines.handlers import _apply_pipeline_filter
 
     pipeline = MagicMock()
     pipeline.pipeline_json = PipelineGraph(
@@ -980,7 +982,7 @@ def test_apply_pipeline_filter_anonymous_sender():
 
 def test_apply_pipeline_filter_unknown_type():
     """Unknown filter type counts all messages."""
-    from src.web.pipelines.handlers import _apply_pipeline_filter
+    from tg_agent.web.pipelines.handlers import _apply_pipeline_filter
 
     pipeline = MagicMock()
     pipeline.pipeline_json = PipelineGraph(
@@ -1021,7 +1023,7 @@ async def test_export_pipeline_not_found(route_client, base_app):
     app, _, _ = base_app
     app.state.llm_provider_service = _make_provider_svc()
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.export_json = AsyncMock(return_value=None)
         resp = await route_client.get("/pipelines/999/export", follow_redirects=False)
     assert resp.status_code == 303
@@ -1101,7 +1103,7 @@ async def test_import_pipeline_validation_error(route_client, base_app):
     app, _, _ = base_app
     app.state.llm_provider_service = _make_provider_svc()
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.import_json = AsyncMock(side_effect=PipelineValidationError("Bad"))
         resp = await route_client.post(
             "/pipelines/import",
@@ -1118,7 +1120,7 @@ async def test_import_pipeline_general_exception(route_client, base_app):
     app, _, _ = base_app
     app.state.llm_provider_service = _make_provider_svc()
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.import_json = AsyncMock(side_effect=Exception("Unexpected"))
         resp = await route_client.post(
             "/pipelines/import",
@@ -1138,7 +1140,7 @@ async def test_create_from_template_success(route_client, base_app):
     app, db, _ = base_app
     app.state.llm_provider_service = _make_provider_svc(has=True)
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.create_from_template = AsyncMock(return_value=42)
         resp = await route_client.post(
             "/pipelines/from-template",
@@ -1163,7 +1165,7 @@ async def test_create_from_template_validation_error(route_client, base_app):
     app, db, _ = base_app
     app.state.llm_provider_service = _make_provider_svc(has=True)
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.create_from_template = AsyncMock(
             side_effect=PipelineValidationError("Template not found")
         )
@@ -1204,7 +1206,7 @@ async def test_templates_json(route_client, base_app):
     app, db, _ = base_app
     app.state.llm_provider_service = _make_provider_svc()
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         tpl = MagicMock()
         tpl.id = 1
         tpl.name = "Test Template"
@@ -1233,9 +1235,9 @@ async def test_templates_page_renders(route_client, base_app):
     app, db, _ = base_app
     app.state.llm_provider_service = _make_provider_svc(has=True)
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc, \
-         patch("src.web.pipelines.handlers.deps.get_channel_bundle") as mock_ch, \
-         patch("src.web.pipelines.handlers.deps.get_account_bundle") as mock_acct:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc, \
+         patch("tg_agent.web.pipelines.handlers.deps.get_channel_bundle") as mock_ch, \
+         patch("tg_agent.web.pipelines.handlers.deps.get_account_bundle") as mock_acct:
         mock_svc.return_value.list_templates = AsyncMock(return_value=[])
         mock_svc.return_value.list_cached_dialogs_by_phone = AsyncMock(return_value={})
         mock_ch.return_value.list_channels = AsyncMock(return_value=[])
@@ -1281,7 +1283,7 @@ async def test_ai_edit_pipeline_success(route_client, base_app):
     app, db, _ = base_app
     app.state.llm_provider_service = _make_provider_svc(has=True)
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.edit_via_llm = AsyncMock(
             return_value={"ok": True, "pipeline_json": {"nodes": [], "edges": []}}
         )
@@ -1300,7 +1302,7 @@ async def test_ai_edit_pipeline_exception(route_client, base_app):
     app, db, _ = base_app
     app.state.llm_provider_service = _make_provider_svc(has=True)
 
-    with patch("src.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
+    with patch("tg_agent.web.pipelines.handlers.deps.pipeline_service") as mock_svc:
         mock_svc.return_value.edit_via_llm = AsyncMock(side_effect=Exception("LLM error"))
         resp = await route_client.post(
             "/pipelines/1/ai-edit",
@@ -1397,7 +1399,7 @@ async def test_set_refinement_steps_empty_prompt_filtered(client_with_dialog, ba
     await client_with_dialog.post("/pipelines/add", data=_ADD_DATA)
 
     # Mock pipeline exists in DB
-    with patch("src.web.pipelines.handlers.deps.get_db") as mock_get_db:
+    with patch("tg_agent.web.pipelines.handlers.deps.get_db") as mock_get_db:
         mock_pipeline = MagicMock()
         mock_pipeline.id = 1
         mock_pipeline.refinement_steps = []
@@ -1493,7 +1495,7 @@ async def test_delete_pipeline_handles_scheduler(client_with_dialog, base_app):
 
 def test_apply_pipeline_filter_service_message():
     """Filter node with service_message type checks service types."""
-    from src.web.pipelines.handlers import _apply_pipeline_filter
+    from tg_agent.web.pipelines.handlers import _apply_pipeline_filter
 
     pipeline = MagicMock()
     pipeline.pipeline_json = PipelineGraph(
@@ -1515,7 +1517,7 @@ def test_apply_pipeline_filter_service_message():
 
 def test_apply_pipeline_filter_message_filter_semantic_service():
     """Structured message_filter should use semantic service fields, not text."""
-    from src.web.pipelines.handlers import _apply_pipeline_filter
+    from tg_agent.web.pipelines.handlers import _apply_pipeline_filter
 
     pipeline = MagicMock()
     pipeline.pipeline_json = PipelineGraph(

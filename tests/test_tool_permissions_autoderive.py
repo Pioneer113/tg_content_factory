@@ -18,8 +18,8 @@ import json
 import re
 from pathlib import Path
 
-from src.agent.tools._categories import TOOL_MODULE_ORDER
-from src.agent.tools.permissions import (
+from tg_agent.agent.tools._categories import TOOL_MODULE_ORDER
+from tg_agent.agent.tools.permissions import (
     BUILTIN_TOOLS,
     MODULE_GROUPS,
     PHONE_BINDED_TOOLS,
@@ -121,7 +121,7 @@ def test_derived_mappings_are_immutable():
 
 def test_lazy_attributes_are_importable_directly():
     """PEP 562 module __getattr__ must serve the legacy attribute names."""
-    import src.agent.tools.permissions as permissions
+    import tg_agent.agent.tools.permissions as permissions
 
     assert permissions.TOOL_CATEGORIES
     assert permissions.MODULE_GROUPS

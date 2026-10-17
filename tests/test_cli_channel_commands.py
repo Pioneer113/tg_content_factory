@@ -10,10 +10,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.cli.commands.channel import _handle_tag, run
 from tests.helpers import cli_add_channel as _add_channel
 from tests.helpers import cli_ns as _ns
 from tests.helpers import fake_asyncio_run, make_cli_config, make_cli_db
+from tg_agent.cli.commands.channel import _handle_tag, run
 
 # ---------------------------------------------------------------------------
 # _handle_tag (pure logic + db mock)
@@ -243,13 +243,13 @@ class TestChannelListForImport:
             return_value=self._DIALOGS if dialogs is None else dialogs
         )
         with patch(
-            "src.cli.commands.channel.runtime.init_db",
+            "tg_agent.cli.commands.channel.runtime.init_db",
             AsyncMock(return_value=(config, db)),
         ), patch(
-            "src.cli.commands.channel.runtime.init_pool",
+            "tg_agent.cli.commands.channel.runtime.init_pool",
             AsyncMock(return_value=(MagicMock(), pool)),
         ), patch(
-            "src.cli.commands.channel.ChannelService", return_value=svc
+            "tg_agent.cli.commands.channel.ChannelService", return_value=svc
         ), patch("asyncio.run", fake_asyncio_run):
             run(args)
         return svc
@@ -282,7 +282,7 @@ class TestChannelListForImport:
 
 
 def _seed_messages(db, *, channel_id: int, n: int, query: str | None, start_id: int = 1) -> None:
-    from src.models import Message
+    from tg_agent.models import Message
 
     msgs = [
         Message(

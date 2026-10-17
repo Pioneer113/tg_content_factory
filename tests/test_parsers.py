@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.parsers import (
+from tg_agent.parsers import (
     bare_channel_id,
     deduplicate_identifiers,
     extract_identifiers,

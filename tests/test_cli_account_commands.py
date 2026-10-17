@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from src.cli.commands.filter import _parse_pks, _print_result
+from tg_agent.cli.commands.filter import _parse_pks, _print_result
 
 
 def test_parse_pks_single():

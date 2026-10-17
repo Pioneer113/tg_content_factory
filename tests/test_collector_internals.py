@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from telethon_floodgate import FloodWaitInfo, HandledFloodWaitError
 
-from src.config import SchedulerConfig
-from src.telegram.collector import Collector
+from tg_agent.config import SchedulerConfig
+from tg_agent.telegram.collector import Collector
 
 
 def _collector() -> Collector:
@@ -55,7 +55,7 @@ async def test_discover_phone_handles_handled_flood_wait():
     pool.is_dialogs_fetched = MagicMock(return_value=True)
     pool.release_client = AsyncMock()
 
-    with patch("src.telegram.collector_mixins.collection.adapt_transport_session", lambda s, **k: s):
+    with patch("tg_agent.telegram.collector_mixins.collection.adapt_transport_session", lambda s, **k: s):
         result = await c._discover_phone_for_channel(123, exclude="+2")
 
     assert result is None
@@ -90,7 +90,7 @@ async def test_stream_passes_incremental_args_to_stream_messages():
     """The stream must be opened reverse=True with the incremental min_id and
     the pacing wait_time — dropping any of them silently breaks incremental
     collection (#mutation slice 5)."""
-    from src.telegram.collector_types import _StreamOutcome
+    from tg_agent.telegram.collector_types import _StreamOutcome
 
     c = _collector()
     session = MagicMock()
@@ -124,8 +124,8 @@ async def test_stream_passes_incremental_args_to_stream_messages():
 async def test_stream_flush_failure_sets_persistence_stop_and_keeps_batch():
     """A failed flush flags the outcome (the pass stops) but does NOT clear the
     batch — partial progress survives for the next cycle (#mutation slice 5)."""
-    from src.telegram.collector_mixins.stream import MESSAGE_FLUSH_BATCH_SIZE
-    from src.telegram.collector_types import _StreamOutcome
+    from tg_agent.telegram.collector_mixins.stream import MESSAGE_FLUSH_BATCH_SIZE
+    from tg_agent.telegram.collector_types import _StreamOutcome
 
     c = _collector()
     c._channel_still_exists = AsyncMock(return_value=True)
@@ -165,7 +165,7 @@ async def test_stream_close_awaits_aclose_under_cleanup_timeout():
     or dropped close leaks the async generator (#mutation slice 5)."""
     from inspect import isawaitable
 
-    from src.telegram.collector_types import _StreamOutcome
+    from tg_agent.telegram.collector_types import _StreamOutcome
 
     c = _collector()
     session = MagicMock()

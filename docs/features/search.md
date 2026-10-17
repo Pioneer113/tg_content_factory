@@ -8,15 +8,15 @@
 Полнотекстовый поиск с поддержкой wildcard. Индекс хранится в SQLite FTS5 таблице.
 
 ```bash
-python -m src.main search "ключевое слово"
-python -m src.main search "искусственный интелл*"
+python -m tg_agent.main search "ключевое слово"
+python -m tg_agent.main search "искусственный интелл*"
 ```
 
 ### Семантический
 Векторные эмбеддинги через NumPy KNN (без внешних зависимостей). Находит семантически близкие сообщения.
 
 ```bash
-python -m src.main search "запрос" --mode semantic
+python -m tg_agent.main search "запрос" --mode semantic
 ```
 
 Для активации нужно сначала проиндексировать:
@@ -31,7 +31,7 @@ python -m src.main search "запрос" --mode semantic
 LLM-powered поиск через AI-агента:
 
 ```bash
-python -m src.main agent chat "найди сообщения про блокчейн за последний месяц"
+python -m tg_agent.main agent chat "найди сообщения про блокчейн за последний месяц"
 ```
 
 ## Поисковые запросы (уведомления)
@@ -40,11 +40,11 @@ python -m src.main agent chat "найди сообщения про блокче
 
 === "CLI"
     ```bash
-    python -m src.main search-query list
-    python -m src.main search-query add "ключевое слово"
-    python -m src.main search-query add "ключевое слово" --chats "@chat1, -1001234567890"
-    python -m src.main search-query run 1         # разовый запуск
-    python -m src.main search-query stats 1       # статистика совпадений
+    python -m tg_agent.main search-query list
+    python -m tg_agent.main search-query add "ключевое слово"
+    python -m tg_agent.main search-query add "ключевое слово" --chats "@chat1, -1001234567890"
+    python -m tg_agent.main search-query run 1         # разовый запуск
+    python -m tg_agent.main search-query stats 1       # статистика совпадений
     ```
 
 === "Web"

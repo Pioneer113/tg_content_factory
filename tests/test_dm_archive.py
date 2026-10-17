@@ -21,8 +21,8 @@ from telethon_floodgate import (
     TelegramRateLimitGate,
 )
 
-from src.telegram import dm_archive
-from src.telegram.dm_archive import backfill_account
+from tg_agent.telegram import dm_archive
+from tg_agent.telegram.dm_archive import backfill_account
 
 
 def _utc(**kwargs) -> datetime:
@@ -118,7 +118,7 @@ def _stub_history_since(messages_by_chat: dict[int, list[_FakeMessage]]):
 
 
 async def _make_db(tmp_path):
-    from src.database import Database
+    from tg_agent.database import Database
 
     db = Database(str(tmp_path / "dm_archive.db"))
     await db.initialize()

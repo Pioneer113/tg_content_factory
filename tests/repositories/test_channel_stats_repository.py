@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from src.models import Channel, ChannelStats
+from tg_agent.models import Channel, ChannelStats
 
 
 async def _create_channel(db, channel_id):

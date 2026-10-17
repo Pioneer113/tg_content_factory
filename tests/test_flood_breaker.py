@@ -24,8 +24,8 @@ async def test_transport_session_suspends_operation_after_repeated_floods():
 
     from telethon.errors import FloodWaitError
 
-    from src.telegram.backends import TelegramTransportSession
     from tests.helpers import FakeCliTelethonClient
+    from tg_agent.telegram.backends import TelegramTransportSession
 
     err = FloodWaitError(request=None, capture=0)
     err.seconds = 23
@@ -66,8 +66,8 @@ async def test_transport_session_success_clears_the_breaker():
     from telethon.errors import FloodWaitError
     from telethon_floodgate import HandledFloodWaitError
 
-    from src.telegram.backends import TelegramTransportSession
     from tests.helpers import FakeCliTelethonClient
+    from tg_agent.telegram.backends import TelegramTransportSession
 
     err = FloodWaitError(request=None, capture=0)
     err.seconds = 23

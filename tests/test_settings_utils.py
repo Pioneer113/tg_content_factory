@@ -1,6 +1,6 @@
 import logging
 
-from src.settings_utils import parse_float_setting, parse_int_setting
+from tg_agent.settings_utils import parse_float_setting, parse_int_setting
 
 logger = logging.getLogger("test_settings_utils")
 

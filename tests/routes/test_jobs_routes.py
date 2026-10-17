@@ -11,7 +11,7 @@ pytestmark = pytest.mark.anyio
 async def _seed_jobs(db):
     # One collection task (PENDING) + one telegram command (succeeded).
     await db.repos.tasks.create_collection_task(700900, "Jobs Chan")
-    from src.models import TelegramCommand, TelegramCommandStatus
+    from tg_agent.models import TelegramCommand, TelegramCommandStatus
 
     await db.repos.telegram_commands.create_command(
         TelegramCommand(command_type="get_profile", status=TelegramCommandStatus.SUCCEEDED)
@@ -143,7 +143,7 @@ async def test_jobs_fragment_shows_pause_gate_state(route_client):
     # pause_gate in the fragment with the warning badge (#770 LiveRuntimePauseGate).
     from datetime import datetime, timezone
 
-    from src.models import RuntimeSnapshot
+    from tg_agent.models import RuntimeSnapshot
 
     db = route_client._transport_app.state.db
     await db.repos.tasks.create_collection_task(700904, "Held By Pause Gate")
@@ -332,7 +332,7 @@ async def test_jobs_fragment_collection_actions_are_source_scoped(route_client):
 
 
 async def test_jobs_cancel_route_delegates_and_preserves_filters(route_client):
-    from src.models import CollectionTaskStatus
+    from tg_agent.models import CollectionTaskStatus
 
     db = route_client._transport_app.state.db
     task_id = await db.repos.tasks.create_collection_task(700910, "Cancel Me")
@@ -353,7 +353,7 @@ async def test_jobs_cancel_route_delegates_and_preserves_filters(route_client):
 
 
 async def test_jobs_clear_pending_route_deletes_only_pending_collect(route_client):
-    from src.models import CollectionTaskStatus, StatsAllTaskPayload
+    from tg_agent.models import CollectionTaskStatus, StatsAllTaskPayload
 
     db = route_client._transport_app.state.db
     pending_id = await db.repos.tasks.create_collection_task(700920, "Pending")
@@ -430,7 +430,7 @@ async def test_jobs_fragment_with_many_pending_tasks(route_client):
 
 
 async def test_jobs_fragment_renders_collection_result_and_type_label(route_client):
-    from src.models import CollectionTaskStatus
+    from tg_agent.models import CollectionTaskStatus
 
     db = route_client._transport_app.state.db
     task_id = await db.repos.tasks.create_collection_task(
@@ -455,7 +455,7 @@ async def test_jobs_fragment_renders_collection_result_and_type_label(route_clie
 
 
 async def test_jobs_fragment_renders_pipeline_result_metadata(route_client):
-    from src.models import CollectionTaskStatus, ContentPipeline
+    from tg_agent.models import CollectionTaskStatus, ContentPipeline
 
     db = route_client._transport_app.state.db
     pipeline_id = await db.repos.content_pipelines.add(
@@ -504,7 +504,7 @@ async def test_jobs_fragment_renders_pipeline_result_metadata(route_client):
 
 
 async def test_jobs_fragment_renders_stats_progress_counter(route_client):
-    from src.models import CollectionTaskStatus, StatsAllTaskPayload
+    from tg_agent.models import CollectionTaskStatus, StatsAllTaskPayload
 
     db = route_client._transport_app.state.db
     task_id = await db.repos.tasks.create_stats_task(

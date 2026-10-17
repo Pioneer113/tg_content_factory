@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from src.models import IncomingDm
+from tg_agent.models import IncomingDm
 
 
 def _dm(
@@ -29,7 +29,7 @@ def _dm(
 
 @pytest.fixture
 async def dms_repo(db):
-    from src.database.repositories.incoming_dms import IncomingDmsRepository
+    from tg_agent.database.repositories.incoming_dms import IncomingDmsRepository
 
     return IncomingDmsRepository(db.db, database=db)
 

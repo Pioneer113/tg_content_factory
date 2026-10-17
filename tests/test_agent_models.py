@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.agent.models import (
+from tg_agent.agent.models import (
     ADK_MODEL_IDS,
     CLAUDE_MODEL_IDS,
     CODEX_MODEL_IDS,

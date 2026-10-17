@@ -9,10 +9,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.agent.tools import _PIPELINE_SAFE_TOOLS, build_agent_tools_dict
-from src.agent.tools.deepagents_sync import build_deepagents_tools
-from src.models import Channel, ChannelStats, Message
 from tests.agent_tools_helpers import _get_tool_handlers, _text
+from tg_agent.agent.tools import _PIPELINE_SAFE_TOOLS, build_agent_tools_dict
+from tg_agent.agent.tools.deepagents_sync import build_deepagents_tools
+from tg_agent.models import Channel, ChannelStats, Message
 
 
 def _assert_no_formatter_contract_error(tool_name: str, text: str) -> None:
@@ -24,7 +24,7 @@ def _assert_no_formatter_contract_error(tool_name: str, text: str) -> None:
 
 
 def _minimal_deepagents_kwargs(tool_name: str) -> dict[str, object]:
-    from src.agent.tools.deepagents_sync import _REQUIRED_ARGS_BY_TOOL
+    from tg_agent.agent.tools.deepagents_sync import _REQUIRED_ARGS_BY_TOOL
 
     samples: dict[str, object] = {
         "account_id": 1,
@@ -89,8 +89,8 @@ async def _seed_read_only_contract_data(db) -> None:
 
 
 def test_agent_registry_matches_permission_contract(mock_db):
-    from src.agent.tools import build_agent_tool_registry
-    from src.agent.tools.permissions import BUILTIN_TOOLS, TOOL_CATEGORIES
+    from tg_agent.agent.tools import build_agent_tool_registry
+    from tg_agent.agent.tools.permissions import BUILTIN_TOOLS, TOOL_CATEGORIES
 
     registry_names = {
         tool.name for tool in build_agent_tool_registry(mock_db, client_pool=MagicMock(), wrap_session_gate=False)
@@ -102,7 +102,7 @@ def test_agent_registry_matches_permission_contract(mock_db):
 
 
 def test_agent_tools_reference_docs_cover_registry(mock_db):
-    from src.agent.tools import build_agent_tool_registry
+    from tg_agent.agent.tools import build_agent_tool_registry
 
     doc = Path("docs/reference/agent-tools.md").read_text(encoding="utf-8")
     missing = [

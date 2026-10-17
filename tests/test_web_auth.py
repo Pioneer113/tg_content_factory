@@ -10,10 +10,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.config import AppConfig
-from src.models import Account, TelegramCommand, TelegramCommandStatus
-from src.telegram.auth import TelegramAuth
 from tests.helpers import build_web_app, make_auth_client
+from tg_agent.config import AppConfig
+from tg_agent.models import Account, TelegramCommand, TelegramCommandStatus
+from tg_agent.telegram.auth import TelegramAuth
 
 
 class TestLoginPage:

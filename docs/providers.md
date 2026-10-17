@@ -16,7 +16,7 @@ Supported env vars (examples)
 
 Env-based registration
 
-- On startup, src/services/provider_service.py auto-registers lightweight adapters for providers with appropriate env vars set. This is convenient for single-provider deployments or CI testing.
+- On startup, tg_agent/services/provider_service.py auto-registers lightweight adapters for providers with appropriate env vars set. This is convenient for single-provider deployments or CI testing.
 
 Settings UI
 

@@ -18,7 +18,7 @@ class TestClientPoolCachedDialogs:
     """Cover _get_cached_dialogs, _store_cached_dialogs, channels_only filter."""
 
     def test_store_and_get_cached(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._dialogs_cache = {}
@@ -31,7 +31,7 @@ class TestClientPoolCachedDialogs:
         assert len(result) == 1
 
     def test_get_cached_expired(self):
-        from src.telegram.client_pool import ClientPool, DialogCacheEntry
+        from tg_agent.telegram.client_pool import ClientPool, DialogCacheEntry
 
         pool = ClientPool.__new__(ClientPool)
         pool._dialogs_cache = {}
@@ -45,7 +45,7 @@ class TestClientPoolCachedDialogs:
         assert result is None
 
     def test_get_cached_missing(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._dialogs_cache = {}
@@ -54,7 +54,7 @@ class TestClientPoolCachedDialogs:
         assert result is None
 
     def test_invalidate_dialogs_cache_by_phone(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._dialogs_cache = {}
@@ -66,7 +66,7 @@ class TestClientPoolCachedDialogs:
         assert pool._get_cached_dialogs("+2", "full") is not None
 
     def test_invalidate_dialogs_cache_all(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._dialogs_cache = {}
@@ -78,7 +78,7 @@ class TestClientPoolCachedDialogs:
 
     def test_get_cached_channels_only_from_full(self):
         """Cover lines 142-155: channels_only derived from full cache."""
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._dialogs_cache = {}
@@ -102,7 +102,7 @@ class TestClientPoolFlood:
 
     @pytest.mark.anyio
     async def test_report_flood(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._db = MagicMock()
@@ -112,7 +112,7 @@ class TestClientPoolFlood:
 
     @pytest.mark.anyio
     async def test_report_premium_flood(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._premium_flood_wait_until = {}
@@ -121,7 +121,7 @@ class TestClientPoolFlood:
 
     @pytest.mark.anyio
     async def test_report_premium_flood_cleans_expired(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._premium_flood_wait_until = {
@@ -133,7 +133,7 @@ class TestClientPoolFlood:
 
     @pytest.mark.anyio
     async def test_clear_flood(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._db = MagicMock()
@@ -142,7 +142,7 @@ class TestClientPoolFlood:
         pool._db.update_account_flood.assert_called_once_with("+1", None)
 
     def test_clear_premium_flood(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._premium_flood_wait_until = {"+1": datetime.now(timezone.utc)}
@@ -150,7 +150,7 @@ class TestClientPoolFlood:
         assert "+1" not in pool._premium_flood_wait_until
 
     def test_clear_premium_flood_missing(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._premium_flood_wait_until = {}
@@ -162,7 +162,7 @@ class TestClientPoolDisconnect:
 
     @pytest.mark.anyio
     async def test_disconnect_all_empty(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool.clients = {}
@@ -171,7 +171,7 @@ class TestClientPoolDisconnect:
 
     @pytest.mark.anyio
     async def test_disconnect_all_with_clients(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool.remove_client = AsyncMock()
@@ -184,14 +184,14 @@ class TestClientPoolNormalizeConfig:
     """Cover _normalize_runtime_config."""
 
     def test_normalize_none(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         result = ClientPool._normalize_runtime_config(None)
         assert result.backend_mode == "auto"
         assert result.cli_transport == "hybrid"
 
     def test_normalize_invalid_backend(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         cfg = MagicMock()
         cfg.backend_mode = "invalid"
@@ -200,7 +200,7 @@ class TestClientPoolNormalizeConfig:
         assert result.backend_mode == "auto"
 
     def test_normalize_invalid_transport(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         cfg = MagicMock()
         cfg.backend_mode = "auto"
@@ -209,7 +209,7 @@ class TestClientPoolNormalizeConfig:
         assert result.cli_transport == "hybrid"
 
     def test_normalize_valid(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         cfg = MagicMock()
         cfg.backend_mode = "native"
@@ -223,7 +223,7 @@ class TestClientPoolProperties:
     """Cover connected_phones, mark_dialogs_fetched, etc."""
 
     def test_connected_phones(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool.clients = {"+1": MagicMock(), "+2": MagicMock()}
@@ -232,7 +232,7 @@ class TestClientPoolProperties:
         assert "+2" in result
 
     def test_mark_dialogs_fetched(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._dialogs_fetched = set()
@@ -240,14 +240,14 @@ class TestClientPoolProperties:
         assert "+1" in pool._dialogs_fetched
 
     def test_is_dialogs_fetched_true(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._dialogs_fetched = {"+1"}
         assert pool.is_dialogs_fetched("+1") is True
 
     def test_is_dialogs_fetched_false(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._dialogs_fetched = set()
@@ -255,7 +255,7 @@ class TestClientPoolProperties:
 
     @pytest.mark.anyio
     async def test_reconnect_phone_not_found(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool.clients = {}
@@ -264,7 +264,7 @@ class TestClientPoolProperties:
 
     @pytest.mark.anyio
     async def test_reconnect_phone_already_connected(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         mock_session = MagicMock()
@@ -276,7 +276,7 @@ class TestClientPoolProperties:
 
     @pytest.mark.anyio
     async def test_reconnect_phone_disconnected(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         mock_session = MagicMock()
@@ -291,7 +291,7 @@ class TestClientPoolProperties:
 
     @pytest.mark.anyio
     async def test_reconnect_phone_exception(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         mock_session = MagicMock()
@@ -303,7 +303,7 @@ class TestClientPoolProperties:
 
     @pytest.mark.anyio
     async def test_remove_client(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._session_overrides = {"+1": "s"}
@@ -325,7 +325,7 @@ class TestClientPoolProperties:
 
     @pytest.mark.anyio
     async def test_get_db_cached_dialogs_empty(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._dialogs_cache = {}
@@ -339,7 +339,7 @@ class TestClientPoolProperties:
 
     @pytest.mark.anyio
     async def test_get_db_cached_dialogs_full(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._dialogs_cache = {}
@@ -358,7 +358,7 @@ class TestClientPoolProperties:
 
     @pytest.mark.anyio
     async def test_get_db_cached_dialogs_channels_only(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._dialogs_cache = {}
@@ -379,8 +379,8 @@ class TestClientPoolProperties:
     async def test_get_db_cached_dialogs_survives_naive_cached_at(self, tmp_path):
         """Regression #1291: schema DEFAULT datetime('now') gives naive cached_at;
         _get_db_cached_dialogs must not raise TypeError on age subtraction."""
-        from src.database import Database
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.database import Database
+        from tg_agent.telegram.client_pool import ClientPool
 
         db = Database(str(tmp_path / "test.db"))
         await db.initialize()
@@ -408,7 +408,7 @@ class TestClientPoolProperties:
 
     @pytest.mark.anyio
     async def test_get_cached_dialog_found(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._dialogs_cache = {}
@@ -420,7 +420,7 @@ class TestClientPoolProperties:
 
     @pytest.mark.anyio
     async def test_get_cached_dialog_not_found(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._dialogs_cache = {}
@@ -435,7 +435,7 @@ class TestClientPoolProperties:
 
     @pytest.mark.anyio
     async def test_get_cached_dialog_no_cache(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._dialogs_cache = {}
@@ -457,14 +457,14 @@ class TestCollectorProperties:
     """Cover collector property lines."""
 
     def test_is_cancelled_false(self):
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         c = Collector.__new__(Collector)
         c._cancel_event = asyncio.Event()
         assert c.is_cancelled is False
 
     def test_is_cancelled_true(self):
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         c = Collector.__new__(Collector)
         c._cancel_event = asyncio.Event()
@@ -473,7 +473,7 @@ class TestCollectorProperties:
 
     @pytest.mark.anyio
     async def test_cancel(self):
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         c = Collector.__new__(Collector)
         c._cancel_event = asyncio.Event()
@@ -481,7 +481,7 @@ class TestCollectorProperties:
         assert c._cancel_event.is_set()
 
     def test_delay_between_channels(self):
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         c = Collector.__new__(Collector)
         c._config = MagicMock()
@@ -494,7 +494,7 @@ class TestCollectorAutoDelete:
 
     @pytest.mark.anyio
     async def test_auto_delete_not_enabled(self):
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         c = Collector.__new__(Collector)
         c._db = MagicMock()
@@ -508,7 +508,7 @@ class TestCollectorAutoDelete:
 
     @pytest.mark.anyio
     async def test_auto_delete_enabled(self):
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         c = Collector.__new__(Collector)
         c._db = MagicMock()
@@ -521,7 +521,7 @@ class TestCollectorAutoDelete:
 
     @pytest.mark.anyio
     async def test_auto_delete_cached(self):
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         c = Collector.__new__(Collector)
         c._auto_delete_cached = True
@@ -530,7 +530,7 @@ class TestCollectorAutoDelete:
 
     @pytest.mark.anyio
     async def test_maybe_auto_delete_disabled(self):
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         c = Collector.__new__(Collector)
         c._auto_delete_cached = False
@@ -539,7 +539,7 @@ class TestCollectorAutoDelete:
 
     @pytest.mark.anyio
     async def test_maybe_auto_delete_success(self):
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         c = Collector.__new__(Collector)
         c._auto_delete_cached = True
@@ -550,7 +550,7 @@ class TestCollectorAutoDelete:
 
     @pytest.mark.anyio
     async def test_maybe_auto_delete_exception(self):
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         c = Collector.__new__(Collector)
         c._auto_delete_cached = True
@@ -564,7 +564,7 @@ class TestCollectorMediaType:
     """Cover remaining _get_media_type branches."""
 
     def test_media_type_none(self):
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         c = Collector.__new__(Collector)
         msg = MagicMock()
@@ -574,7 +574,7 @@ class TestCollectorMediaType:
     def test_media_type_photo(self):
         from telethon.tl.types import MessageMediaPhoto
 
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         c = Collector.__new__(Collector)
         msg = MagicMock()
@@ -584,7 +584,7 @@ class TestCollectorMediaType:
     def test_media_type_document_sticker(self):
         from telethon.tl.types import MessageMediaDocument
 
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         c = Collector.__new__(Collector)
         msg = MagicMock()
@@ -610,14 +610,14 @@ class TestTelegramAuth:
     """Cover auth edge cases."""
 
     def test_auth_init(self):
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         auth = TelegramAuth(12345, "test_hash")
         assert auth.api_id == 12345
         assert auth.api_hash == "test_hash"
 
     def test_auth_init_no_credentials(self):
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         auth = TelegramAuth(0, "")
         assert auth.api_id == 0
@@ -625,7 +625,7 @@ class TestTelegramAuth:
     @pytest.mark.anyio
     async def test_verify_code_no_pending(self):
         """Line 165: no pending auth raises ValueError."""
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         auth = TelegramAuth(12345, "test")
         with pytest.raises(ValueError, match="No pending auth"):
@@ -634,7 +634,7 @@ class TestTelegramAuth:
     def test_describe_code_type_app(self):
         from telethon.tl.types.auth import SentCodeTypeApp
 
-        from src.telegram.auth import _describe_code_type
+        from tg_agent.telegram.auth import _describe_code_type
 
         result = _describe_code_type(SentCodeTypeApp(length=5))
         assert result == "приложение Telegram"
@@ -642,19 +642,19 @@ class TestTelegramAuth:
     def test_describe_code_type_sms(self):
         from telethon.tl.types.auth import SentCodeTypeSms
 
-        from src.telegram.auth import _describe_code_type
+        from tg_agent.telegram.auth import _describe_code_type
 
         result = _describe_code_type(SentCodeTypeSms(length=5))
         assert result == "SMS"
 
     def test_describe_code_type_unknown(self):
-        from src.telegram.auth import _describe_code_type
+        from tg_agent.telegram.auth import _describe_code_type
 
         result = _describe_code_type("unknown_type")
         assert result == "Telegram"
 
     def test_describe_next_type_none(self):
-        from src.telegram.auth import _describe_next_type
+        from tg_agent.telegram.auth import _describe_next_type
 
         result = _describe_next_type(None)
         assert result is None
@@ -662,7 +662,7 @@ class TestTelegramAuth:
     def test_describe_next_type_sms(self):
         from telethon.tl.types.auth import CodeTypeSms
 
-        from src.telegram.auth import _describe_next_type
+        from tg_agent.telegram.auth import _describe_next_type
 
         result = _describe_next_type(CodeTypeSms())
         assert result == "SMS"
@@ -670,13 +670,13 @@ class TestTelegramAuth:
     def test_describe_next_type_call(self):
         from telethon.tl.types.auth import CodeTypeCall
 
-        from src.telegram.auth import _describe_next_type
+        from tg_agent.telegram.auth import _describe_next_type
 
         result = _describe_next_type(CodeTypeCall())
         assert result == "звонок"
 
     def test_describe_next_type_unknown(self):
-        from src.telegram.auth import _describe_next_type
+        from tg_agent.telegram.auth import _describe_next_type
 
         result = _describe_next_type("unknown")
         assert result is None
@@ -692,7 +692,7 @@ class TestClientPoolResolveChannel:
 
     @pytest.mark.anyio
     async def test_resolve_no_client(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool.get_available_client = AsyncMock(return_value=None)
@@ -701,7 +701,7 @@ class TestClientPoolResolveChannel:
 
     @pytest.mark.anyio
     async def test_resolve_numeric_id(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         entity = MagicMock()
@@ -724,8 +724,8 @@ class TestClientPoolResolveChannel:
         async def fake_run_with_flood_wait(coro, **kw):
             return await coro
 
-        with patch("src.telegram.pool_dialogs.adapt_transport_session", return_value=mock_session), \
-             patch("src.telegram.pool_dialogs.run_with_flood_wait", side_effect=fake_run_with_flood_wait):
+        with patch("tg_agent.telegram.pool_dialogs.adapt_transport_session", return_value=mock_session), \
+             patch("tg_agent.telegram.pool_dialogs.run_with_flood_wait", side_effect=fake_run_with_flood_wait):
             result = await pool.resolve_channel("-12345")
 
         assert result is not None
@@ -733,7 +733,7 @@ class TestClientPoolResolveChannel:
 
     @pytest.mark.anyio
     async def test_resolve_user_not_channel(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         entity = MagicMock(spec=[])  # no 'title' attr
@@ -745,15 +745,15 @@ class TestClientPoolResolveChannel:
         async def fake_run_with_flood_wait(coro, **kw):
             return coro
 
-        with patch("src.telegram.pool_dialogs.adapt_transport_session", return_value=mock_session), \
-             patch("src.telegram.pool_dialogs.run_with_flood_wait", side_effect=fake_run_with_flood_wait):
+        with patch("tg_agent.telegram.pool_dialogs.adapt_transport_session", return_value=mock_session), \
+             patch("tg_agent.telegram.pool_dialogs.run_with_flood_wait", side_effect=fake_run_with_flood_wait):
             result = await pool.resolve_channel("@some_user")
 
         assert result is None
 
     @pytest.mark.anyio
     async def test_resolve_timeout(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         mock_session = MagicMock()
@@ -761,8 +761,8 @@ class TestClientPoolResolveChannel:
         pool.get_available_client = AsyncMock(return_value=(mock_session, "+1"))
         pool.release_client = AsyncMock()
 
-        with patch("src.telegram.pool_dialogs.adapt_transport_session", return_value=mock_session), \
-             patch("src.telegram.pool_dialogs.run_with_flood_wait", side_effect=asyncio.TimeoutError):
+        with patch("tg_agent.telegram.pool_dialogs.adapt_transport_session", return_value=mock_session), \
+             patch("tg_agent.telegram.pool_dialogs.run_with_flood_wait", side_effect=asyncio.TimeoutError):
             result = await pool.resolve_channel("@test")
 
         assert result is None
@@ -773,8 +773,8 @@ class TestClientPoolGetAccountForPhone:
 
     @pytest.mark.anyio
     async def test_account_from_db(self):
-        from src.models import Account
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.models import Account
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._session_overrides = {}
@@ -787,7 +787,7 @@ class TestClientPoolGetAccountForPhone:
 
     @pytest.mark.anyio
     async def test_account_from_overrides(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._session_overrides = {"+1": "override_session"}
@@ -799,7 +799,7 @@ class TestClientPoolGetAccountForPhone:
 
     @pytest.mark.anyio
     async def test_account_not_found(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._session_overrides = {}
@@ -814,7 +814,7 @@ class TestClientPoolAcquirePhoneLease:
 
     @pytest.mark.anyio
     async def test_acquire_phone_lease_from_pool(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool.clients = {"+1": MagicMock()}
@@ -826,7 +826,7 @@ class TestClientPoolAcquirePhoneLease:
 
     @pytest.mark.anyio
     async def test_acquire_phone_not_connected(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool.clients = {}
@@ -837,7 +837,7 @@ class TestClientPoolAcquirePhoneLease:
 
     @pytest.mark.anyio
     async def test_acquire_phone_no_account(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool.clients = {"+1": MagicMock()}
@@ -849,8 +849,8 @@ class TestClientPoolAcquirePhoneLease:
 
     @pytest.mark.anyio
     async def test_acquire_phone_flood_waited(self):
-        from src.models import Account
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.models import Account
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool.clients = {"+1": MagicMock()}
@@ -866,8 +866,8 @@ class TestClientPoolAcquirePhoneLease:
 
     @pytest.mark.anyio
     async def test_acquire_phone_exclusive(self):
-        from src.models import Account
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.models import Account
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool.clients = {"+1": MagicMock()}
@@ -883,8 +883,8 @@ class TestClientPoolAcquirePhoneLease:
 
     @pytest.mark.anyio
     async def test_acquire_phone_shared(self):
-        from src.models import Account
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.models import Account
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool.clients = {"+1": MagicMock()}
@@ -903,7 +903,7 @@ class TestClientPoolClassifyEntity:
     """Cover _classify_entity static method (lines 764-782)."""
 
     def test_classify_scam(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         entity = MagicMock(scam=True, fake=False, restricted=False, monoforum=False,
                            forum=False, gigagroup=False, megagroup=False, broadcast=False)
@@ -912,7 +912,7 @@ class TestClientPoolClassifyEntity:
         assert deactivate is True
 
     def test_classify_fake(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         entity = MagicMock(scam=False, fake=True, restricted=False, monoforum=False,
                            forum=False, gigagroup=False, megagroup=False, broadcast=False)
@@ -921,7 +921,7 @@ class TestClientPoolClassifyEntity:
         assert deactivate is True
 
     def test_classify_restricted(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         entity = MagicMock(scam=False, fake=False, restricted=True, monoforum=False,
                            forum=False, gigagroup=False, megagroup=False, broadcast=False)
@@ -930,7 +930,7 @@ class TestClientPoolClassifyEntity:
         assert deactivate is True
 
     def test_classify_monoforum(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         entity = MagicMock(scam=False, fake=False, restricted=False, monoforum=True,
                            forum=False, gigagroup=False, megagroup=False, broadcast=False)
@@ -939,7 +939,7 @@ class TestClientPoolClassifyEntity:
         assert deactivate is False
 
     def test_classify_forum(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         entity = MagicMock(scam=False, fake=False, restricted=False, monoforum=False,
                            forum=True, gigagroup=False, megagroup=False, broadcast=False)
@@ -948,7 +948,7 @@ class TestClientPoolClassifyEntity:
         assert deactivate is False
 
     def test_classify_gigagroup(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         entity = MagicMock(scam=False, fake=False, restricted=False, monoforum=False,
                            forum=False, gigagroup=True, megagroup=False, broadcast=False)
@@ -957,7 +957,7 @@ class TestClientPoolClassifyEntity:
         assert deactivate is False
 
     def test_classify_supergroup(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         entity = MagicMock(scam=False, fake=False, restricted=False, monoforum=False,
                            forum=False, gigagroup=False, megagroup=True, broadcast=False)
@@ -966,7 +966,7 @@ class TestClientPoolClassifyEntity:
         assert deactivate is False
 
     def test_classify_channel(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         entity = MagicMock(scam=False, fake=False, restricted=False, monoforum=False,
                            forum=False, gigagroup=False, megagroup=False, broadcast=True)
@@ -975,7 +975,7 @@ class TestClientPoolClassifyEntity:
         assert deactivate is False
 
     def test_classify_group_default(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         entity = MagicMock(scam=False, fake=False, restricted=False, monoforum=False,
                            forum=False, gigagroup=False, megagroup=False, broadcast=False)
@@ -990,7 +990,7 @@ class TestCollectorCollectSingle:
     @pytest.mark.anyio
     async def test_collect_filtered_no_force(self):
         """Line 154-159: filtered channel without force → skip."""
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         c = Collector.__new__(Collector)
         c._lock = asyncio.Lock()
@@ -1007,7 +1007,7 @@ class TestCollectorCollectSingle:
     @pytest.mark.anyio
     async def test_collect_full_resets_min_id(self):
         """Line 165-166: full=True resets last_collected_id."""
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         c = Collector.__new__(Collector)
         c._lock = asyncio.Lock()
@@ -1033,7 +1033,7 @@ class TestCollectorLoadMinSubs:
 
     @pytest.mark.anyio
     async def test_load_min_subs_default(self):
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         c = Collector.__new__(Collector)
         c._db = MagicMock()
@@ -1043,7 +1043,7 @@ class TestCollectorLoadMinSubs:
 
     @pytest.mark.anyio
     async def test_load_min_subs_from_db(self):
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         c = Collector.__new__(Collector)
         c._db = MagicMock()
@@ -1057,7 +1057,7 @@ class TestCollectorMaybeAutoDelete:
 
     @pytest.mark.anyio
     async def test_maybe_auto_delete_with_count(self):
-        from src.telegram.collector import Collector
+        from tg_agent.telegram.collector import Collector
 
         c = Collector.__new__(Collector)
         c._auto_delete_cached = True
@@ -1073,7 +1073,7 @@ class TestClientPoolGetStatsAvail:
 
     @pytest.mark.anyio
     async def test_premium_stats_avail_has_premium(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._premium_flood_wait_until = {}
@@ -1086,7 +1086,7 @@ class TestClientPoolGetStatsAvail:
         assert result.state == "available"
 
     def test_clean_expired_premium_flood(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool._premium_flood_wait_until = {
@@ -1106,7 +1106,7 @@ class TestSessionMaterializerCacheHit:
     """Cover cached session return path (line 32) and cache_dir property (line 18)."""
 
     def test_cache_dir_property(self, tmp_path):
-        from src.telegram.session_materializer import SessionMaterializer
+        from tg_agent.telegram.session_materializer import SessionMaterializer
 
         mat = SessionMaterializer(tmp_path / "sess_cache")
         assert mat.cache_dir == tmp_path / "sess_cache"
@@ -1116,7 +1116,7 @@ class TestSessionMaterializerCacheHit:
         """Line 32: session file + matching hash → return cached path."""
         import hashlib
 
-        from src.telegram.session_materializer import SessionMaterializer
+        from tg_agent.telegram.session_materializer import SessionMaterializer
 
         mat = SessionMaterializer(tmp_path)
         phone = "+cache_hit"
@@ -1140,7 +1140,7 @@ class TestSessionMaterializerCacheHit:
         # This is hard to test directly as NativeBackend.acquire_client creates
         # a real TelegramClient. Instead, test through a mock that simulates
         # the authorization check path.
-        from src.telegram.backends import BackendAcquireError
+        from tg_agent.telegram.backends import BackendAcquireError
 
         assert issubclass(BackendAcquireError, RuntimeError)
 
@@ -1150,7 +1150,7 @@ class TestBackendsAbstract:
 
     @pytest.mark.anyio
     async def test_acquire_client_abstract(self):
-        from src.telegram.backends import TelegramBackend
+        from tg_agent.telegram.backends import TelegramBackend
 
         # Create a concrete subclass that calls super
         class TestBackend(TelegramBackend):
@@ -1168,7 +1168,7 @@ class TestLeasePoolEdge:
 
     @pytest.mark.anyio
     async def test_acquire_available_no_active(self):
-        from src.telegram.account_lease_pool import AccountLeasePool
+        from tg_agent.telegram.account_lease_pool import AccountLeasePool
 
         mock_db = MagicMock()
         mock_db.get_accounts = AsyncMock(return_value=[])
@@ -1178,7 +1178,7 @@ class TestLeasePoolEdge:
 
     @pytest.mark.anyio
     async def test_acquire_by_phone_not_found(self):
-        from src.telegram.account_lease_pool import AccountLeasePool
+        from tg_agent.telegram.account_lease_pool import AccountLeasePool
 
         mock_db = MagicMock()
         mock_db.get_accounts = AsyncMock(return_value=[])
@@ -1189,8 +1189,8 @@ class TestLeasePoolEdge:
     @pytest.mark.anyio
     async def test_acquire_available_all_in_use_flood_waited(self):
         """Line 45: in-use account but flood-waited → skip, return None."""
-        from src.models import Account
-        from src.telegram.account_lease_pool import AccountLeasePool
+        from tg_agent.models import Account
+        from tg_agent.telegram.account_lease_pool import AccountLeasePool
 
         mock_db = MagicMock()
         acc = Account(

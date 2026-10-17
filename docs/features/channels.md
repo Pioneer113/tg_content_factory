@@ -6,9 +6,9 @@
 
 === "CLI"
     ```bash
-    python -m src.main channel add @channel_username
-    python -m src.main channel add -1001234567890
-    python -m src.main channel import channels.txt
+    python -m tg_agent.main channel add @channel_username
+    python -m tg_agent.main channel add -1001234567890
+    python -m tg_agent.main channel import channels.txt
     ```
 
 === "Web"
@@ -20,9 +20,9 @@
 
 === "CLI"
     ```bash
-    python -m src.main collect                          # все каналы
-    python -m src.main channel collect --channel-id ID  # один канал
-    python -m src.main collect sample --limit 10        # превью без сохранения
+    python -m tg_agent.main collect                          # все каналы
+    python -m tg_agent.main channel collect --channel-id ID  # один канал
+    python -m tg_agent.main collect sample --limit 10        # превью без сохранения
     ```
 
 === "Web"
@@ -32,12 +32,12 @@
 
 === "CLI"
     ```bash
-    python -m src.main channel list
-    python -m src.main channel toggle --channel-id ID
-    python -m src.main channel delete --channel-id ID
-    python -m src.main channel stats --channel-id ID
-    python -m src.main channel refresh-types
-    python -m src.main channel refresh-meta         # about, linked_chat_id
+    python -m tg_agent.main channel list
+    python -m tg_agent.main channel toggle --channel-id ID
+    python -m tg_agent.main channel delete --channel-id ID
+    python -m tg_agent.main channel stats --channel-id ID
+    python -m tg_agent.main channel refresh-types
+    python -m tg_agent.main channel refresh-meta         # about, linked_chat_id
     ```
 
 === "Web"

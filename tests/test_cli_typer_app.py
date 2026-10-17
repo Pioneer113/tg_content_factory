@@ -30,9 +30,9 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from src import __version__
-from src.cli import typer_app
-from src.cli.typer_app import DEFAULT_CONFIG, app, apply_startup, main_callback, run_async
+from tg_agent import __version__
+from tg_agent.cli import typer_app
+from tg_agent.cli.typer_app import DEFAULT_CONFIG, app, apply_startup, main_callback, run_async
 
 runner = CliRunner()
 

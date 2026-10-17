@@ -6,7 +6,7 @@ from pathlib import Path
 import aiohttp
 import pytest
 
-from src.services.provider_adapters import (
+from tg_agent.services.provider_adapters import (
     _parse_json_for_text,
     make_context7_adapter,
     make_generic_http_adapter,
@@ -538,7 +538,7 @@ async def test_generic_http_adapter_no_retry_on_5xx(monkeypatch):
 async def test_generic_http_adapter_passes_http_timeout(monkeypatch):
     """The adapter wires the shared 120s budget into ClientSession so a stalled
     upstream surfaces a timeout instead of hanging the coroutine (#633 bug #10)."""
-    from src.services.provider_adapters import _HTTP_TIMEOUT
+    from tg_agent.services.provider_adapters import _HTTP_TIMEOUT
 
     resp = FakeResp(status=200, json_data={"text": "ok"})
     session = _CountingSession(resp=resp)
@@ -634,7 +634,7 @@ async def test_parse_json_result_non_dict_non_string():
 
 @pytest.mark.anyio
 async def test_together_image_adapter_success(monkeypatch):
-    from src.services.provider_adapters import make_together_image_adapter
+    from tg_agent.services.provider_adapters import make_together_image_adapter
 
     cap = patch_async_openai(
         monkeypatch, response=[_FakeImage(url="https://img.example.com/1.png")], capture={}
@@ -655,7 +655,7 @@ async def test_together_image_adapter_success(monkeypatch):
 
 @pytest.mark.anyio
 async def test_together_image_adapter_default_model(monkeypatch):
-    from src.services.provider_adapters import make_together_image_adapter
+    from tg_agent.services.provider_adapters import make_together_image_adapter
 
     cap = patch_async_openai(
         monkeypatch, response=[_FakeImage(url="https://img.example.com/1.png")], capture={}
@@ -667,7 +667,7 @@ async def test_together_image_adapter_default_model(monkeypatch):
 
 @pytest.mark.anyio
 async def test_together_image_adapter_error_status(monkeypatch):
-    from src.services.provider_adapters import make_together_image_adapter
+    from tg_agent.services.provider_adapters import make_together_image_adapter
 
     patch_async_openai(monkeypatch, error=RuntimeError("500 Server error"))
     adapter = make_together_image_adapter("fake-key")
@@ -677,7 +677,7 @@ async def test_together_image_adapter_error_status(monkeypatch):
 
 @pytest.mark.anyio
 async def test_together_image_adapter_empty_data(monkeypatch):
-    from src.services.provider_adapters import make_together_image_adapter
+    from tg_agent.services.provider_adapters import make_together_image_adapter
 
     patch_async_openai(monkeypatch, response=[])
     adapter = make_together_image_adapter("fake-key")
@@ -690,7 +690,7 @@ async def test_together_image_adapter_wraps_non_runtime_crash(monkeypatch):
     """A provider crash that surfaces as a non-RuntimeError (e.g. ConnectionError)
     must still be wrapped in a RuntimeError carrying provider context, so callers
     get a uniform error type and a single billed POST is not retried (#958)."""
-    from src.services.provider_adapters import make_together_image_adapter
+    from tg_agent.services.provider_adapters import make_together_image_adapter
 
     patch_async_openai(monkeypatch, error=ConnectionError("upstream dropped"))
     adapter = make_together_image_adapter("fake-key")
@@ -704,7 +704,7 @@ async def test_together_image_adapter_wraps_non_runtime_crash(monkeypatch):
 async def test_huggingface_image_adapter_warns_no_slash(monkeypatch, caplog):
     import logging
 
-    from src.services.provider_adapters import make_huggingface_image_adapter
+    from tg_agent.services.provider_adapters import make_huggingface_image_adapter
 
     # Provide an image-like response with content_type
     class ImageResp(FakeResp):
@@ -734,7 +734,7 @@ async def test_huggingface_image_adapter_warns_no_slash(monkeypatch, caplog):
 
 @pytest.mark.anyio
 async def test_huggingface_image_adapter_error_status(monkeypatch):
-    from src.services.provider_adapters import make_huggingface_image_adapter
+    from tg_agent.services.provider_adapters import make_huggingface_image_adapter
 
     resp = FakeResp(status=403, text_data="Forbidden")
     monkeypatch.setattr("aiohttp.ClientSession", fake_client_session_factory(resp))
@@ -749,7 +749,7 @@ async def test_huggingface_image_adapter_error_status(monkeypatch):
 
 @pytest.mark.anyio
 async def test_huggingface_image_adapter_non_image_content_type(monkeypatch):
-    from src.services.provider_adapters import make_huggingface_image_adapter
+    from tg_agent.services.provider_adapters import make_huggingface_image_adapter
 
     class JsonResp(FakeResp):
         content_type = "application/json"
@@ -778,7 +778,7 @@ async def test_huggingface_image_adapter_non_image_content_type(monkeypatch):
 async def test_huggingface_image_adapter_no_retry_on_network_error(monkeypatch):
     """A transient connection error surfaces after exactly ONE POST — the billed
     image request is never silently replayed (the #958 double-billing class)."""
-    from src.services.provider_adapters import make_huggingface_image_adapter
+    from tg_agent.services.provider_adapters import make_huggingface_image_adapter
 
     session = _CountingSession(raise_exc=aiohttp.ClientConnectionError("connection reset"))
     monkeypatch.setattr("aiohttp.ClientSession", counting_session_factory(session))
@@ -796,7 +796,7 @@ async def test_huggingface_image_adapter_no_retry_on_network_error(monkeypatch):
 async def test_huggingface_image_adapter_no_retry_on_timeout(monkeypatch):
     """A timeout (the openai SDK's prime retry trigger) is propagated after a
     single POST — the raw HF adapter must not auto-retry a billed request."""
-    from src.services.provider_adapters import make_huggingface_image_adapter
+    from tg_agent.services.provider_adapters import make_huggingface_image_adapter
 
     session = _CountingSession(raise_exc=asyncio.TimeoutError())
     monkeypatch.setattr("aiohttp.ClientSession", counting_session_factory(session))
@@ -813,7 +813,7 @@ async def test_huggingface_image_adapter_no_retry_on_timeout(monkeypatch):
 @pytest.mark.anyio
 async def test_huggingface_image_adapter_passes_http_timeout(monkeypatch):
     """The HF adapter wires the shared 120s budget into ClientSession (#633 bug #10)."""
-    from src.services.provider_adapters import _HTTP_TIMEOUT, make_huggingface_image_adapter
+    from tg_agent.services.provider_adapters import _HTTP_TIMEOUT, make_huggingface_image_adapter
 
     class ImageResp(FakeResp):
         content_type = "image/png"
@@ -838,7 +838,7 @@ async def test_huggingface_image_adapter_passes_http_timeout(monkeypatch):
 
 @pytest.mark.anyio
 async def test_openai_image_adapter_success(monkeypatch):
-    from src.services.provider_adapters import make_openai_image_adapter
+    from tg_agent.services.provider_adapters import make_openai_image_adapter
 
     cap = patch_async_openai(
         monkeypatch, response=[_FakeImage(url="https://img.example.com/dalle.png")], capture={}
@@ -855,7 +855,7 @@ async def test_openai_image_adapter_success(monkeypatch):
 
 @pytest.mark.anyio
 async def test_openai_image_adapter_honours_api_base_env(monkeypatch):
-    from src.services.provider_adapters import make_openai_image_adapter
+    from tg_agent.services.provider_adapters import make_openai_image_adapter
 
     monkeypatch.setenv("OPENAI_API_BASE", "https://gateway.internal/v1/")
     cap = patch_async_openai(monkeypatch, response=[_FakeImage(url="https://x/y.png")], capture={})
@@ -867,7 +867,7 @@ async def test_openai_image_adapter_honours_api_base_env(monkeypatch):
 
 @pytest.mark.anyio
 async def test_openai_image_adapter_error_status(monkeypatch):
-    from src.services.provider_adapters import make_openai_image_adapter
+    from tg_agent.services.provider_adapters import make_openai_image_adapter
 
     patch_async_openai(monkeypatch, error=RuntimeError("401 Unauthorized"))
     adapter = make_openai_image_adapter("fake-key")
@@ -877,7 +877,7 @@ async def test_openai_image_adapter_error_status(monkeypatch):
 
 @pytest.mark.anyio
 async def test_openai_image_adapter_empty_data(monkeypatch):
-    from src.services.provider_adapters import make_openai_image_adapter
+    from tg_agent.services.provider_adapters import make_openai_image_adapter
 
     patch_async_openai(monkeypatch, response=[])
     adapter = make_openai_image_adapter("fake-key")
@@ -889,7 +889,7 @@ async def test_openai_image_adapter_empty_data(monkeypatch):
 async def test_openai_image_adapter_wraps_non_runtime_crash(monkeypatch):
     """A non-RuntimeError SDK crash is wrapped in a RuntimeError with provider
     context and the original cause chained (uniform error type, no retry)."""
-    from src.services.provider_adapters import make_openai_image_adapter
+    from tg_agent.services.provider_adapters import make_openai_image_adapter
 
     patch_async_openai(monkeypatch, error=ConnectionError("upstream dropped"))
     adapter = make_openai_image_adapter("fake-key")
@@ -902,7 +902,7 @@ async def test_openai_image_adapter_wraps_non_runtime_crash(monkeypatch):
 async def test_openai_image_adapter_single_generate_call(monkeypatch):
     """The billed images.generate POST is issued exactly once — no service- or
     adapter-level auto-retry on the non-idempotent paid request (#958 class)."""
-    from src.services.provider_adapters import make_openai_image_adapter
+    from tg_agent.services.provider_adapters import make_openai_image_adapter
 
     calls = {"n": 0}
 
@@ -934,8 +934,8 @@ async def test_openai_image_adapter_gpt_image_saves_b64(monkeypatch, tmp_path):
     """gpt-image-1 returns b64_json — adapter must decode and persist it to a file."""
     import base64
 
-    from src.services import provider_adapters
-    from src.services.provider_adapters import make_openai_image_adapter
+    from tg_agent.services import provider_adapters
+    from tg_agent.services.provider_adapters import make_openai_image_adapter
 
     fake_png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
     b64 = base64.b64encode(fake_png).decode()
@@ -956,7 +956,7 @@ async def test_openai_image_adapter_gpt_image_saves_b64(monkeypatch, tmp_path):
 
 
 def test_openai_params_gpt_image_omits_dalle_only_params():
-    from src.services.provider_adapters import _openai_image_params
+    from tg_agent.services.provider_adapters import _openai_image_params
 
     params = _openai_image_params("p", "gpt-image-1")
     assert params["model"] == "gpt-image-1"
@@ -967,7 +967,7 @@ def test_openai_params_gpt_image_omits_dalle_only_params():
 
 
 def test_openai_params_legacy_dalle_uses_fixed_size():
-    from src.services.provider_adapters import _openai_image_params
+    from tg_agent.services.provider_adapters import _openai_image_params
 
     params = _openai_image_params("p", "dall-e-3")
     assert params["model"] == "dall-e-3"
@@ -977,7 +977,7 @@ def test_openai_params_legacy_dalle_uses_fixed_size():
 
 @pytest.mark.anyio
 async def test_finalize_image_result_prefers_url():
-    from src.services.provider_adapters import finalize_image_result
+    from tg_agent.services.provider_adapters import finalize_image_result
 
     result = await finalize_image_result({"url": "https://x/y.png", "b64_json": "ignored"})
     assert result == "https://x/y.png"
@@ -985,7 +985,7 @@ async def test_finalize_image_result_prefers_url():
 
 @pytest.mark.anyio
 async def test_finalize_image_result_none_when_empty():
-    from src.services.provider_adapters import finalize_image_result
+    from tg_agent.services.provider_adapters import finalize_image_result
 
     assert await finalize_image_result({}) is None
 
@@ -993,7 +993,7 @@ async def test_finalize_image_result_none_when_empty():
 @pytest.mark.anyio
 async def test_finalize_image_result_accepts_sdk_image_object():
     """finalize_image_result also accepts an SDK Image (url/b64_json attributes)."""
-    from src.services.provider_adapters import finalize_image_result
+    from tg_agent.services.provider_adapters import finalize_image_result
 
     result = await finalize_image_result(_FakeImage(url="https://x/sdk.png"))
     assert result == "https://x/sdk.png"
@@ -1001,7 +1001,7 @@ async def test_finalize_image_result_accepts_sdk_image_object():
 
 @pytest.mark.anyio
 async def test_save_image_b64_rejects_invalid_payload(tmp_path):
-    from src.services.provider_adapters import save_image_b64
+    from tg_agent.services.provider_adapters import save_image_b64
 
     with pytest.raises(RuntimeError, match="invalid base64"):
         await save_image_b64("not-valid-base64!!!", output_dir=str(tmp_path))
@@ -1009,7 +1009,7 @@ async def test_save_image_b64_rejects_invalid_payload(tmp_path):
 
 @pytest.mark.anyio
 async def test_replicate_image_adapter_success(monkeypatch):
-    from src.services.provider_adapters import make_replicate_image_adapter
+    from tg_agent.services.provider_adapters import make_replicate_image_adapter
 
     cap = patch_replicate_client(
         monkeypatch, output=_FakeFileOutput("https://img.example.com/replicate.png"), capture={}
@@ -1028,7 +1028,7 @@ async def test_replicate_image_adapter_success(monkeypatch):
 @pytest.mark.anyio
 async def test_replicate_image_adapter_string_output(monkeypatch):
     """A bare URL-string output is returned as-is."""
-    from src.services.provider_adapters import make_replicate_image_adapter
+    from tg_agent.services.provider_adapters import make_replicate_image_adapter
 
     patch_replicate_client(monkeypatch, output="https://img.example.com/str.png")
     adapter = make_replicate_image_adapter("fake-token", timeout=10.0)
@@ -1038,7 +1038,7 @@ async def test_replicate_image_adapter_string_output(monkeypatch):
 
 @pytest.mark.anyio
 async def test_replicate_image_adapter_error(monkeypatch):
-    from src.services.provider_adapters import make_replicate_image_adapter
+    from tg_agent.services.provider_adapters import make_replicate_image_adapter
 
     cap = patch_replicate_client(monkeypatch, error=RuntimeError("model load error"), capture={})
     adapter = make_replicate_image_adapter("fake-token")
@@ -1052,7 +1052,7 @@ async def test_replicate_image_adapter_error(monkeypatch):
 async def test_replicate_image_adapter_warns_no_slash(monkeypatch, caplog):
     import logging
 
-    from src.services.provider_adapters import make_replicate_image_adapter
+    from tg_agent.services.provider_adapters import make_replicate_image_adapter
 
     cap = patch_replicate_client(
         monkeypatch, output=_FakeFileOutput("https://img.example.com/img.png"), capture={}
@@ -1070,7 +1070,7 @@ async def test_replicate_image_adapter_warns_no_slash(monkeypatch, caplog):
 @pytest.mark.anyio
 async def test_replicate_image_adapter_list_output(monkeypatch):
     """Replicate adapter returns first item when output is a list of FileOutputs."""
-    from src.services.provider_adapters import make_replicate_image_adapter
+    from tg_agent.services.provider_adapters import make_replicate_image_adapter
 
     patch_replicate_client(
         monkeypatch,
@@ -1087,7 +1087,7 @@ async def test_replicate_image_adapter_list_output(monkeypatch):
 @pytest.mark.anyio
 async def test_replicate_image_adapter_timeout(monkeypatch):
     """Replicate adapter raises RuntimeError when the prediction never resolves."""
-    from src.services.provider_adapters import make_replicate_image_adapter
+    from tg_agent.services.provider_adapters import make_replicate_image_adapter
 
     patch_replicate_client(monkeypatch, hang=True)
     adapter = make_replicate_image_adapter("fake-token", timeout=0.05)
@@ -1099,7 +1099,7 @@ async def test_replicate_image_adapter_timeout(monkeypatch):
 
 
 def test_build_codex_image_prompt_has_imagegen_and_path():
-    from src.services.provider_adapters import _build_codex_image_prompt
+    from tg_agent.services.provider_adapters import _build_codex_image_prompt
 
     prompt = _build_codex_image_prompt("a sunset", "/tmp/out/abc.png")
     assert "$imagegen" in prompt
@@ -1110,7 +1110,7 @@ def test_build_codex_image_prompt_has_imagegen_and_path():
 def test_codex_saved_path_from_image_generation_item():
     from types import SimpleNamespace
 
-    from src.services.provider_adapters import _codex_saved_path_from_result
+    from tg_agent.services.provider_adapters import _codex_saved_path_from_result
 
     result = SimpleNamespace(
         items=[SimpleNamespace(type="imageGeneration", saved_path="/tmp/img.png")]
@@ -1121,7 +1121,7 @@ def test_codex_saved_path_from_image_generation_item():
 def test_codex_saved_path_from_image_view_item():
     from types import SimpleNamespace
 
-    from src.services.provider_adapters import _codex_saved_path_from_result
+    from tg_agent.services.provider_adapters import _codex_saved_path_from_result
 
     result = SimpleNamespace(items=[SimpleNamespace(type="imageView", path="/tmp/view.png")])
     assert _codex_saved_path_from_result(result) == "/tmp/view.png"
@@ -1130,7 +1130,7 @@ def test_codex_saved_path_from_image_view_item():
 def test_codex_saved_path_none_when_no_image_item():
     from types import SimpleNamespace
 
-    from src.services.provider_adapters import _codex_saved_path_from_result
+    from tg_agent.services.provider_adapters import _codex_saved_path_from_result
 
     result = SimpleNamespace(items=[SimpleNamespace(type="agentMessage")])
     assert _codex_saved_path_from_result(result) is None
@@ -1220,7 +1220,7 @@ def _install_fake_codex(
 
 @pytest.mark.anyio
 async def test_codex_image_adapter_returns_saved_path(monkeypatch, tmp_path):
-    from src.services.provider_adapters import make_codex_image_adapter
+    from tg_agent.services.provider_adapters import make_codex_image_adapter
 
     captured = _install_fake_codex(monkeypatch)
     adapter = make_codex_image_adapter(output_dir=str(tmp_path))
@@ -1237,7 +1237,7 @@ async def test_codex_image_adapter_returns_saved_path(monkeypatch, tmp_path):
 
 @pytest.mark.anyio
 async def test_codex_image_adapter_default_model(monkeypatch, tmp_path):
-    from src.services.provider_adapters import CODEX_DEFAULT_IMAGE_MODEL, make_codex_image_adapter
+    from tg_agent.services.provider_adapters import CODEX_DEFAULT_IMAGE_MODEL, make_codex_image_adapter
 
     captured = _install_fake_codex(monkeypatch)
     adapter = make_codex_image_adapter(output_dir=str(tmp_path))
@@ -1249,7 +1249,7 @@ async def test_codex_image_adapter_default_model(monkeypatch, tmp_path):
 @pytest.mark.anyio
 async def test_codex_image_adapter_falls_back_to_target_when_no_item(monkeypatch, tmp_path):
     """Codex wrote the file but did not echo the path in items → use the target."""
-    from src.services.provider_adapters import make_codex_image_adapter
+    from tg_agent.services.provider_adapters import make_codex_image_adapter
 
     _install_fake_codex(monkeypatch, item_path=False)
     adapter = make_codex_image_adapter(output_dir=str(tmp_path))
@@ -1264,7 +1264,7 @@ async def test_codex_image_adapter_times_out_and_kills_subprocess(monkeypatch, t
     """A stalled Codex turn times out AND closes the subprocess to free the thread."""
     import asyncio
 
-    from src.services.provider_adapters import make_codex_image_adapter
+    from tg_agent.services.provider_adapters import make_codex_image_adapter
 
     captured = _install_fake_codex(monkeypatch, hang_seconds=5.0)
     adapter = make_codex_image_adapter(output_dir=str(tmp_path), image_timeout=0.05)
@@ -1279,7 +1279,7 @@ async def test_codex_image_adapter_cancel_closes_subprocess(monkeypatch, tmp_pat
     """Caller cancellation also closes the Codex subprocess."""
     import asyncio
 
-    from src.services.provider_adapters import make_codex_image_adapter
+    from tg_agent.services.provider_adapters import make_codex_image_adapter
 
     captured = _install_fake_codex(monkeypatch, hang_seconds=5.0)
     adapter = make_codex_image_adapter(output_dir=str(tmp_path), image_timeout=5.0)
@@ -1302,7 +1302,7 @@ async def test_codex_image_adapter_rejects_path_outside_output_dir(monkeypatch, 
     in a sibling dir and writes no file to the target → the adapter rejects the
     rogue path and, with no target file, raises rather than leaking it.
     """
-    from src.services.provider_adapters import make_codex_image_adapter
+    from tg_agent.services.provider_adapters import make_codex_image_adapter
 
     rogue = tmp_path.parent / "rogue.png"
     out = tmp_path / "out"
@@ -1319,7 +1319,7 @@ async def test_codex_image_adapter_rejects_path_outside_output_dir(monkeypatch, 
 
 @pytest.mark.anyio
 async def test_codex_image_adapter_raises_on_failed_status(monkeypatch, tmp_path):
-    from src.services.provider_adapters import make_codex_image_adapter
+    from tg_agent.services.provider_adapters import make_codex_image_adapter
 
     _install_fake_codex(monkeypatch, status="failed", write_target=False)
     adapter = make_codex_image_adapter(output_dir=str(tmp_path))
@@ -1330,7 +1330,7 @@ async def test_codex_image_adapter_raises_on_failed_status(monkeypatch, tmp_path
 @pytest.mark.anyio
 async def test_codex_image_adapter_raises_when_no_file(monkeypatch, tmp_path):
     """Status completed but no file written and no item path → error, not silent None."""
-    from src.services.provider_adapters import make_codex_image_adapter
+    from tg_agent.services.provider_adapters import make_codex_image_adapter
 
     _install_fake_codex(monkeypatch, write_target=False, item_path=False)
     adapter = make_codex_image_adapter(output_dir=str(tmp_path))

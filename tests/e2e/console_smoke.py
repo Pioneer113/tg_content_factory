@@ -15,7 +15,7 @@ Design notes (issue #1014 — migrated off the external ``playwright-cli`` binar
   stdout: console errors are read directly off ``page.on("console")`` /
   ``page.on("pageerror")`` and the landed path off ``page.url`` — no regex over
   CLI output. This check is run **locally** (gate ``RUN_E2E_CONSOLE_SMOKE=1``
-  against a server started with ``python -m src.main serve``); it is not wired
+  against a server started with ``python -m tg_agent.main serve``); it is not wired
   into CI.
 - Console capture: Playwright does NOT buffer console events across navigations
   the way the CLI did, so we attach a listener once per page and ``goto`` with
@@ -339,7 +339,7 @@ def main(argv: list[str] | None = None) -> int:
 
     Usage::
 
-        python -m src.main serve --web-pass PASS   # in another terminal
+        python -m tg_agent.main serve --web-pass PASS   # in another terminal
         python -m tests.e2e.console_smoke --base-url http://localhost:8080 --web-pass PASS
 
     The password also reads from ``WEB_PASS`` if ``--web-pass`` is omitted.

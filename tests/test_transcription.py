@@ -15,9 +15,9 @@ from unittest.mock import AsyncMock
 import pytest
 from telethon.tl.types import PeerChannel
 
-from src.database import Database
-from src.telegram import transcription
-from src.telegram.transcription import (
+from tg_agent.database import Database
+from tg_agent.telegram import transcription
+from tg_agent.telegram.transcription import (
     ENGINES,
     TranscribeBudget,
     _download_audio,
@@ -464,7 +464,7 @@ def _transcribe_pool(client):
 
 
 async def test_service_transcribe_voice_ok_and_cached(db: Database, monkeypatch):
-    from src.services.telegram_actions import TelegramActionService
+    from tg_agent.services.telegram_actions import TelegramActionService
 
     _no_stt_env(monkeypatch)
     monkeypatch.setenv("GROQ_API_KEY", "test-key")
@@ -499,7 +499,7 @@ async def test_service_transcribe_voice_ok_and_cached(db: Database, monkeypatch)
 async def test_service_transcribe_voice_rejects_unknown_engine_and_misconfig(
     db: Database, monkeypatch
 ):
-    from src.services.telegram_actions import TelegramActionService
+    from tg_agent.services.telegram_actions import TelegramActionService
 
     _no_stt_env(monkeypatch)
     pool = _transcribe_pool(AsyncMock())
@@ -519,7 +519,7 @@ async def test_service_transcribe_voice_rejects_unknown_engine_and_misconfig(
 
 
 async def test_service_transcribe_voice_rejects_non_voice_message(db: Database, monkeypatch):
-    from src.services.telegram_actions import TelegramActionService
+    from tg_agent.services.telegram_actions import TelegramActionService
 
     _no_stt_env(monkeypatch)
     client = AsyncMock()
@@ -538,7 +538,7 @@ async def test_service_transcribe_voice_runs_under_flood_wait_wrapper(
 ):
     """The engine call is wrapped in run_with_flood_wait: a native-RPC flood is
     reported to the pool and re-raised as HandledFloodWaitError (review #1561)."""
-    import src.services.telegram_actions as ta
+    import tg_agent.services.telegram_actions as ta
 
     _no_stt_env(monkeypatch)
     monkeypatch.setenv("GROQ_API_KEY", "test-key")
@@ -572,7 +572,7 @@ async def test_service_transcribe_voice_runs_under_flood_wait_wrapper(
 
 
 async def test_service_transcribe_voice_telegram_picks_premium_lease(db: Database, monkeypatch):
-    from src.services.telegram_actions import TelegramActionService
+    from tg_agent.services.telegram_actions import TelegramActionService
 
     _no_stt_env(monkeypatch)
     message = _voice_msg()
@@ -601,7 +601,7 @@ async def test_service_transcribe_voice_telegram_picks_premium_lease(db: Databas
 
 
 async def test_service_transcribe_voice_telegram_without_premium_account(db: Database, monkeypatch):
-    from src.services.telegram_actions import TelegramActionService
+    from tg_agent.services.telegram_actions import TelegramActionService
 
     _no_stt_env(monkeypatch)
     pool = _transcribe_pool(AsyncMock())
@@ -618,7 +618,7 @@ async def test_service_transcribe_voice_telegram_without_premium_account(db: Dat
 
 
 async def test_service_transcribe_voice_missing_message(db: Database, monkeypatch):
-    from src.services.telegram_actions import (
+    from tg_agent.services.telegram_actions import (
         TelegramActionMessageNotFoundError,
         TelegramActionService,
     )

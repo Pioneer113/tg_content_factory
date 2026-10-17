@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.agent.react_agent import (
+from tg_agent.agent.react_agent import (
     _REACT_SUFFIX,
     _TOOL_CALL_RE,
     _chat_sync,
@@ -17,7 +17,7 @@ from src.agent.react_agent import (
     _MockMessage,
     _try_call_tool,
 )
-from src.services.s3_store import S3Store
+from tg_agent.services.s3_store import S3Store
 
 # ---------------------------------------------------------------------------
 # Helper functions for react_agent tests
@@ -255,7 +255,7 @@ class TestOllamaReActAgent:
 
     def test_init_system_prompt_includes_tools(self):
         """System prompt includes tool descriptions."""
-        from src.agent.react_agent import OllamaReActAgent
+        from tg_agent.agent.react_agent import OllamaReActAgent
 
         def tool_a():
             """Tool A."""
@@ -274,7 +274,7 @@ class TestOllamaReActAgent:
 
     def test_init_empty_tools(self):
         """Agent initializes with empty tools list."""
-        from src.agent.react_agent import OllamaReActAgent
+        from tg_agent.agent.react_agent import OllamaReActAgent
 
         agent = OllamaReActAgent(
             base_url="http://localhost",
@@ -288,7 +288,7 @@ class TestOllamaReActAgent:
 
     def test_invoke_no_tool_call(self):
         """Invoke without tool call returns final response."""
-        from src.agent.react_agent import OllamaReActAgent
+        from tg_agent.agent.react_agent import OllamaReActAgent
 
         mock_response = MagicMock()
         mock_response.read.return_value = b'{"message": {"content": "Final answer"}}'
@@ -308,7 +308,7 @@ class TestOllamaReActAgent:
 
     def test_invoke_with_tool_call(self):
         """Invoke with tool call executes tool and continues."""
-        from src.agent.react_agent import OllamaReActAgent
+        from tg_agent.agent.react_agent import OllamaReActAgent
 
         def test_tool(x: int) -> str:
             return f"tool result: {x}"
@@ -338,7 +338,7 @@ class TestOllamaReActAgent:
 
     def test_invoke_unknown_tool(self):
         """Invoke with unknown tool returns error message."""
-        from src.agent.react_agent import OllamaReActAgent
+        from tg_agent.agent.react_agent import OllamaReActAgent
 
         responses = [
             b'{"message": {"content": "```json\\n{\\"tool\\": \\"unknown\\", \\"args\\": {}}\\n```"}}',
@@ -364,7 +364,7 @@ class TestOllamaReActAgent:
 
     def test_invoke_max_steps_limit(self):
         """Max steps limit is enforced."""
-        from src.agent.react_agent import OllamaReActAgent
+        from tg_agent.agent.react_agent import OllamaReActAgent
 
         def dummy_tool() -> str:
             return "ok"
@@ -393,7 +393,7 @@ class TestOllamaReActAgent:
 
     def test_invoke_invalid_json_in_block(self):
         """Invalid JSON in tool call block returns response as-is."""
-        from src.agent.react_agent import OllamaReActAgent
+        from tg_agent.agent.react_agent import OllamaReActAgent
 
         mock_response = MagicMock()
         mock_response.read.return_value = b'{"message": {"content": "```json\\n{invalid json}\\n```"}}'

@@ -6,13 +6,13 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.web.routes import dialogs as dialogs_mod
+from tg_agent.web.routes import dialogs as dialogs_mod
 
 # --- panel_auth behavior tests ---
 
 
 def test_panel_auth_is_public_path():
-    from src.web.panel_auth import is_public_path
+    from tg_agent.web.panel_auth import is_public_path
 
     assert is_public_path("/health")
     assert is_public_path("/static/css/style.css")
@@ -22,7 +22,7 @@ def test_panel_auth_is_public_path():
 
 
 def test_panel_auth_sanitize_next():
-    from src.web.panel_auth import sanitize_next
+    from tg_agent.web.panel_auth import sanitize_next
 
     assert sanitize_next(None) == "/"
     assert sanitize_next("") == "/"
@@ -32,7 +32,7 @@ def test_panel_auth_sanitize_next():
 
 
 def test_panel_auth_login_redirect_url():
-    from src.web.panel_auth import login_redirect_url
+    from tg_agent.web.panel_auth import login_redirect_url
 
     url = login_redirect_url("/settings")
     assert "next=" in url
@@ -51,7 +51,7 @@ def test_dialogs_router_has_routes():
 
 
 def test_web_app_create_app_returns_asgi():
-    from src.web.app import create_app
+    from tg_agent.web.app import create_app
 
     app = create_app()
     assert hasattr(app, "router")
@@ -61,7 +61,7 @@ def test_web_app_create_app_returns_asgi():
 
 
 async def test_collection_queue_status_enum():
-    from src.collection_queue import CollectionTaskStatus
+    from tg_agent.collection_queue import CollectionTaskStatus
 
     assert CollectionTaskStatus.PENDING.value == "pending"
     assert CollectionTaskStatus.COMPLETED.value == "completed"
@@ -71,7 +71,7 @@ async def test_collection_queue_status_enum():
 
 
 def test_redirect_target_get_request():
-    from src.web.panel_auth import redirect_target_from_request
+    from tg_agent.web.panel_auth import redirect_target_from_request
 
     request = MagicMock()
     request.method = "GET"
@@ -83,7 +83,7 @@ def test_redirect_target_get_request():
 
 
 def test_redirect_target_post_no_referer():
-    from src.web.panel_auth import redirect_target_from_request
+    from tg_agent.web.panel_auth import redirect_target_from_request
 
     request = MagicMock()
     request.method = "POST"
@@ -97,7 +97,7 @@ def test_redirect_target_post_no_referer():
 
 
 def test_see_other_returns_303_redirect():
-    from src.web.responses import see_other
+    from tg_agent.web.responses import see_other
 
     response = see_other("/settings")
 
@@ -106,7 +106,7 @@ def test_see_other_returns_303_redirect():
 
 
 def test_flash_redirect_adds_message_code():
-    from src.web.responses import flash_redirect
+    from tg_agent.web.responses import flash_redirect
 
     response = flash_redirect("/search-queries", msg="sq_added")
 
@@ -115,7 +115,7 @@ def test_flash_redirect_adds_message_code():
 
 
 def test_flash_redirect_encodes_values_and_skips_none_extras():
-    from src.web.responses import flash_redirect
+    from tg_agent.web.responses import flash_redirect
 
     response = flash_redirect(
         "/pipelines?phone=%2B123",
@@ -128,7 +128,7 @@ def test_flash_redirect_encodes_values_and_skips_none_extras():
 
 
 def test_flash_redirect_rejects_message_and_error_together():
-    from src.web.responses import flash_redirect
+    from tg_agent.web.responses import flash_redirect
 
     with pytest.raises(ValueError, match="either msg or error"):
         flash_redirect("/settings", msg="saved", error="invalid")
@@ -136,14 +136,14 @@ def test_flash_redirect_rejects_message_and_error_together():
 
 @pytest.mark.parametrize("target", ["https://evil.example/path", "//evil.example/path"])
 def test_flash_redirect_rejects_absolute_targets(target):
-    from src.web.responses import flash_redirect
+    from tg_agent.web.responses import flash_redirect
 
     with pytest.raises(ValueError, match="relative path"):
         flash_redirect(target, msg="saved")
 
 
 def test_json_response_helpers():
-    from src.web.responses import json_error, json_ok, json_response
+    from tg_agent.web.responses import json_error, json_ok, json_response
 
     plain = json_response({"items": []}, status_code=202)
     ok = json_ok(started=True)
@@ -158,7 +158,7 @@ def test_json_response_helpers():
 
 
 def test_json_helpers_reject_reserved_payload_keys():
-    from src.web.responses import json_error, json_ok
+    from tg_agent.web.responses import json_error, json_ok
 
     with pytest.raises(ValueError, match="reserved key"):
         json_ok(**{"ok": False})

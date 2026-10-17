@@ -58,7 +58,7 @@ _ALLOWLIST: dict[str, tuple[str, ...]] = {
 
 
 def test_web_routes_do_not_call_live_pool_methods() -> None:
-    routes_dir = Path("src/web/routes")
+    routes_dir = Path("tg_agent/web/routes")
     offenders: list[str] = []
     for path in sorted(routes_dir.glob("*.py")):
         if path.name == "__init__.py":
@@ -76,7 +76,7 @@ def test_web_routes_do_not_call_live_pool_methods() -> None:
 
 def test_web_services_do_not_call_live_pool_methods() -> None:
     """Services consumed by web routes must also stay off the live pool."""
-    services_dir = Path("src/web")
+    services_dir = Path("tg_agent/web")
     offenders: list[str] = []
     skip_dirs = {"templates", "static", "routes", "__pycache__"}
     for path in services_dir.rglob("*.py"):
@@ -127,8 +127,8 @@ def test_account_service_not_imported_by_web() -> None:
     CLI `account` command). Any re-introduction of the import into src/web/
     would re-open the HTTP 500 regression fixed for #453.
     """
-    token = "src.services.account_service"
-    web_dir = Path("src/web")
+    token = "tg_agent.services.account_service"
+    web_dir = Path("tg_agent/web")
     offenders: list[str] = []
     for path in web_dir.rglob("*.py"):
         if "__pycache__" in path.parts:
@@ -142,7 +142,7 @@ def test_account_service_not_imported_by_web() -> None:
 
 def test_web_consumed_services_do_not_call_live_pool_methods() -> None:
     """Services imported by web routes/deps must stay off the live pool."""
-    services_dir = Path("src/services")
+    services_dir = Path("tg_agent/services")
     offenders: list[str] = []
     for name in _WEB_CONSUMED_SERVICES:
         path = services_dir / name

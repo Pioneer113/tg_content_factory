@@ -7,10 +7,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from telethon.errors import FloodWaitError
 
-from src.database.repositories.accounts import AccountSessionDecryptError
-from src.models import Account
-from src.telegram.client_pool import ClientPool
 from tests.helpers import FakeCliTelethonClient, make_channel_entity
+from tg_agent.database.repositories.accounts import AccountSessionDecryptError
+from tg_agent.models import Account
+from tg_agent.telegram.client_pool import ClientPool
 
 
 def _channel_entity(
@@ -473,8 +473,8 @@ async def test_warm_flood_wait_fail_fast(real_pool_harness_factory, monkeypatch,
     """FloodWait on one phone should NOT sleep+retry — fail fast, move to next."""
     import time
 
-    monkeypatch.setattr("src.telegram.pool_dialogs.WARM_SINGLE_PHONE_TIMEOUT_SEC", 5.0)
-    monkeypatch.setattr("src.telegram.pool_dialogs.WARM_STAGGER_DELAY_SEC", 0.0)
+    monkeypatch.setattr("tg_agent.telegram.pool_dialogs.WARM_SINGLE_PHONE_TIMEOUT_SEC", 5.0)
+    monkeypatch.setattr("tg_agent.telegram.pool_dialogs.WARM_STAGGER_DELAY_SEC", 0.0)
 
     harness = real_pool_harness_factory()
     fw_client = FakeCliTelethonClient(dialogs=FloodWaitError(24))
@@ -499,7 +499,7 @@ async def test_warm_flood_wait_fail_fast(real_pool_harness_factory, monkeypatch,
 @pytest.mark.anyio
 async def test_warm_rate_limit_gate_skips_phone_and_continues(real_pool_harness_factory, monkeypatch, caplog):
     """#1330: a proactive dialogs rejection must rotate without calling Telegram."""
-    monkeypatch.setattr("src.telegram.pool_dialogs.WARM_STAGGER_DELAY_SEC", 0.0)
+    monkeypatch.setattr("tg_agent.telegram.pool_dialogs.WARM_STAGGER_DELAY_SEC", 0.0)
     harness = real_pool_harness_factory()
     limited_client = FakeCliTelethonClient(dialogs=[])
     ok_client = FakeCliTelethonClient(dialogs=[])
@@ -517,7 +517,7 @@ async def test_warm_rate_limit_gate_skips_phone_and_continues(real_pool_harness_
     assert limited_client.get_dialogs.await_count == 1
 
     caplog.clear()
-    with caplog.at_level("INFO", logger="src.telegram.pool_dialogs"):
+    with caplog.at_level("INFO", logger="tg_agent.telegram.pool_dialogs"):
         await harness.pool.warm_all_dialogs()
 
     assert limited_client.get_dialogs.await_count == 1
@@ -531,8 +531,8 @@ async def test_warm_single_phone_timeout(real_pool_harness_factory, monkeypatch)
     import asyncio
     import time
 
-    monkeypatch.setattr("src.telegram.pool_dialogs.WARM_SINGLE_PHONE_TIMEOUT_SEC", 1.0)
-    monkeypatch.setattr("src.telegram.pool_dialogs.WARM_STAGGER_DELAY_SEC", 0.0)
+    monkeypatch.setattr("tg_agent.telegram.pool_dialogs.WARM_SINGLE_PHONE_TIMEOUT_SEC", 1.0)
+    monkeypatch.setattr("tg_agent.telegram.pool_dialogs.WARM_STAGGER_DELAY_SEC", 0.0)
 
     harness = real_pool_harness_factory()
 
@@ -569,9 +569,9 @@ async def test_warm_overall_budget_exhausted(real_pool_harness_factory, monkeypa
     # overall budget between 1× and 2× that — so the first phone consumes the
     # budget and the second is the last to start before it runs out. Smaller
     # absolute values keep the same assertions while cutting ~4s → ~0.4s.
-    monkeypatch.setattr("src.telegram.pool_dialogs.WARM_SINGLE_PHONE_TIMEOUT_SEC", 0.2)
-    monkeypatch.setattr("src.telegram.pool_dialogs.WARM_ALL_PHONES_TOTAL_SEC", 0.3)
-    monkeypatch.setattr("src.telegram.pool_dialogs.WARM_STAGGER_DELAY_SEC", 0.0)
+    monkeypatch.setattr("tg_agent.telegram.pool_dialogs.WARM_SINGLE_PHONE_TIMEOUT_SEC", 0.2)
+    monkeypatch.setattr("tg_agent.telegram.pool_dialogs.WARM_ALL_PHONES_TOTAL_SEC", 0.3)
+    monkeypatch.setattr("tg_agent.telegram.pool_dialogs.WARM_STAGGER_DELAY_SEC", 0.0)
 
     harness = real_pool_harness_factory()
 
@@ -606,8 +606,8 @@ async def test_warm_stagger_between_phones(real_pool_harness_factory, monkeypatc
     # 0.15s stagger (was 0.3s, #1091): 3× tolerance floor (0.05s) keeps
     # margin at 33% — robust on loaded CI runners without adding wall-clock.
     stagger = 0.15
-    monkeypatch.setattr("src.telegram.pool_dialogs.WARM_STAGGER_DELAY_SEC", stagger)
-    monkeypatch.setattr("src.telegram.pool_dialogs.WARM_SINGLE_PHONE_TIMEOUT_SEC", 5.0)
+    monkeypatch.setattr("tg_agent.telegram.pool_dialogs.WARM_STAGGER_DELAY_SEC", stagger)
+    monkeypatch.setattr("tg_agent.telegram.pool_dialogs.WARM_SINGLE_PHONE_TIMEOUT_SEC", 5.0)
 
     harness = real_pool_harness_factory()
 
@@ -651,7 +651,7 @@ async def test_warm_skips_phone_with_a_completed_sweep(real_pool_harness_factory
     re-ran on every start: 67 times in one day, which flood-waited an account
     into a 14.8h ban. dialog_cache records a completed sweep persistently.
     """
-    monkeypatch.setattr("src.telegram.pool_dialogs.WARM_STAGGER_DELAY_SEC", 0.0)
+    monkeypatch.setattr("tg_agent.telegram.pool_dialogs.WARM_STAGGER_DELAY_SEC", 0.0)
 
     harness = real_pool_harness_factory()
     swept_client = FakeCliTelethonClient(dialogs=[])
@@ -688,7 +688,7 @@ async def test_warm_runs_for_a_fresh_session_holding_only_its_self_entity(
     self-user, so a fresh session's entity table is NOT empty. Inferring "warm"
     from table non-emptiness skipped discovery exactly where it is needed most.
     """
-    monkeypatch.setattr("src.telegram.pool_dialogs.WARM_STAGGER_DELAY_SEC", 0.0)
+    monkeypatch.setattr("tg_agent.telegram.pool_dialogs.WARM_STAGGER_DELAY_SEC", 0.0)
 
     harness = real_pool_harness_factory()
     client = FakeCliTelethonClient(dialogs=[])
@@ -710,8 +710,8 @@ def test_startup_opts_into_the_skip_but_the_scheduler_does_not():
     """
     import inspect
 
-    from src.scheduler import service as scheduler_service
-    from src.web import bootstrap
+    from tg_agent.scheduler import service as scheduler_service
+    from tg_agent.web import bootstrap
 
     bootstrap_src = inspect.getsource(bootstrap)
     assert "warm_all_dialogs(skip_already_swept=True)" in bootstrap_src
@@ -732,7 +732,7 @@ async def test_periodic_warm_never_skips_even_with_a_fresh_snapshot(
     snapshot — silently disabling the very job that keeps routing current. Only
     the startup call passes skip_already_swept.
     """
-    monkeypatch.setattr("src.telegram.pool_dialogs.WARM_STAGGER_DELAY_SEC", 0.0)
+    monkeypatch.setattr("tg_agent.telegram.pool_dialogs.WARM_STAGGER_DELAY_SEC", 0.0)
 
     harness = real_pool_harness_factory()
     client = FakeCliTelethonClient(dialogs=[])
@@ -759,7 +759,7 @@ async def test_warm_runs_again_after_a_partial_sweep(real_pool_harness_factory, 
     fragment written over an old snapshot stays stale — and the warm-up must
     still run instead of treating the incomplete rows as a done sweep.
     """
-    monkeypatch.setattr("src.telegram.pool_dialogs.WARM_STAGGER_DELAY_SEC", 0.0)
+    monkeypatch.setattr("tg_agent.telegram.pool_dialogs.WARM_STAGGER_DELAY_SEC", 0.0)
 
     harness = real_pool_harness_factory()
     client = FakeCliTelethonClient(dialogs=[])

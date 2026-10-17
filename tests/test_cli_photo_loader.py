@@ -7,12 +7,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.database import Database
-from src.models import Account, PhotoSendMode
+from tg_agent.database import Database
+from tg_agent.models import Account, PhotoSendMode
 
 pytestmark = pytest.mark.aiosqlite_serial
 
-_PHOTO_LOADER_INIT_DB_TARGET = "src.cli.commands.photo_loader.runtime.init_db"
+_PHOTO_LOADER_INIT_DB_TARGET = "tg_agent.cli.commands.photo_loader.runtime.init_db"
 
 
 def _ns(**kwargs) -> argparse.Namespace:
@@ -28,7 +28,7 @@ def _setup_photo_db(db: Database) -> None:
 
 def test_resolve_target_numeric(tmp_path, capsys):
     """Test _resolve_target with numeric ID."""
-    from src.cli.commands.photo_loader import _resolve_target
+    from tg_agent.cli.commands.photo_loader import _resolve_target
 
     pool = MagicMock()
     result = asyncio.run(_resolve_target("-1001234567890", pool))
@@ -37,7 +37,7 @@ def test_resolve_target_numeric(tmp_path, capsys):
 
 def test_resolve_target_username(tmp_path, capsys):
     """Test _resolve_target with username."""
-    from src.cli.commands.photo_loader import _resolve_target
+    from tg_agent.cli.commands.photo_loader import _resolve_target
 
     pool = MagicMock()
     pool.resolve_channel = AsyncMock(
@@ -54,7 +54,7 @@ def test_resolve_target_username(tmp_path, capsys):
 
 def test_resolve_target_not_found(tmp_path, capsys):
     """Test _resolve_target when target cannot be resolved."""
-    from src.cli.commands.photo_loader import _resolve_target
+    from tg_agent.cli.commands.photo_loader import _resolve_target
 
     pool = MagicMock()
     pool.resolve_channel = AsyncMock(return_value=None)
@@ -68,7 +68,7 @@ def test_resolve_target_not_found(tmp_path, capsys):
 
 def test_parse_schedule_at_with_tz():
     """Test _parse_schedule_at with timezone."""
-    from src.cli.commands.photo_loader import _parse_schedule_at
+    from tg_agent.cli.commands.photo_loader import _parse_schedule_at
 
     dt = _parse_schedule_at("2024-01-15T10:30:00+03:00")
     assert dt.tzinfo is not None
@@ -76,7 +76,7 @@ def test_parse_schedule_at_with_tz():
 
 def test_parse_schedule_at_without_tz():
     """Test _parse_schedule_at without timezone (local)."""
-    from src.cli.commands.photo_loader import _parse_schedule_at
+    from tg_agent.cli.commands.photo_loader import _parse_schedule_at
 
     dt = _parse_schedule_at("2024-01-15T10:30:00")
     assert dt.tzinfo is not None
@@ -96,11 +96,11 @@ def test_dialogs_action(tmp_path, cli_init_patch, capsys):
 
     with (
         cli_init_patch(db, _PHOTO_LOADER_INIT_DB_TARGET),
-        patch("src.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
     ):
-        from src.cli.commands.photo_loader import run
+        from tg_agent.cli.commands.photo_loader import run
 
-        with patch("src.cli.commands.photo_loader.ChannelService") as mock_channel_service:
+        with patch("tg_agent.cli.commands.photo_loader.ChannelService") as mock_channel_service:
             mock_instance = MagicMock()
             mock_instance.get_my_dialogs = AsyncMock(
                 return_value=[
@@ -124,7 +124,7 @@ def test_refresh_action_warns_on_partial_sweep(tmp_path, cli_init_patch, capsys)
     printed "Dialogs refreshed: N total." unconditionally, reproducing the exact
     silent success on `photo-loader refresh`.
     """
-    from src.telegram.pool_dialogs import DialogFetchResult
+    from tg_agent.telegram.pool_dialogs import DialogFetchResult
 
     db_path = str(tmp_path / "photo_refresh_partial.db")
     db = Database(db_path)
@@ -138,11 +138,11 @@ def test_refresh_action_warns_on_partial_sweep(tmp_path, cli_init_patch, capsys)
 
     with (
         cli_init_patch(db, _PHOTO_LOADER_INIT_DB_TARGET),
-        patch("src.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
     ):
-        from src.cli.commands.photo_loader import run
+        from tg_agent.cli.commands.photo_loader import run
 
-        with patch("src.cli.commands.photo_loader.ChannelService") as mock_channel_service:
+        with patch("tg_agent.cli.commands.photo_loader.ChannelService") as mock_channel_service:
             mock_instance = MagicMock()
             mock_instance.get_my_dialogs = AsyncMock(
                 return_value=DialogFetchResult(
@@ -174,11 +174,11 @@ def test_refresh_action_reports_success_on_complete_sweep(tmp_path, cli_init_pat
 
     with (
         cli_init_patch(db, _PHOTO_LOADER_INIT_DB_TARGET),
-        patch("src.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
     ):
-        from src.cli.commands.photo_loader import run
+        from tg_agent.cli.commands.photo_loader import run
 
-        with patch("src.cli.commands.photo_loader.ChannelService") as mock_channel_service:
+        with patch("tg_agent.cli.commands.photo_loader.ChannelService") as mock_channel_service:
             mock_instance = MagicMock()
             mock_instance.get_my_dialogs = AsyncMock(
                 return_value=[{"channel_id": 100, "channel_type": "channel", "title": "T"}]
@@ -235,11 +235,11 @@ def test_send_action(tmp_path, cli_init_patch, capsys):
 
     with (
         cli_init_patch(db, _PHOTO_LOADER_INIT_DB_TARGET),
-        patch("src.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
-        patch("src.cli.commands.photo_loader.PhotoTaskService", fake_task),
-        patch("src.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
+        patch("tg_agent.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.photo_loader.PhotoTaskService", fake_task),
+        patch("tg_agent.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
     ):
-        from src.cli.commands.photo_loader import run
+        from tg_agent.cli.commands.photo_loader import run
 
         run(
             _ns(
@@ -277,11 +277,11 @@ def test_schedule_send_action(tmp_path, cli_init_patch, capsys):
 
     with (
         cli_init_patch(db, _PHOTO_LOADER_INIT_DB_TARGET),
-        patch("src.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
-        patch("src.cli.commands.photo_loader.PhotoTaskService", fake_task),
-        patch("src.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
+        patch("tg_agent.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.photo_loader.PhotoTaskService", fake_task),
+        patch("tg_agent.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
     ):
-        from src.cli.commands.photo_loader import run
+        from tg_agent.cli.commands.photo_loader import run
 
         run(
             _ns(
@@ -323,11 +323,11 @@ def test_batch_create_action(tmp_path, cli_init_patch, capsys):
 
     with (
         cli_init_patch(db, _PHOTO_LOADER_INIT_DB_TARGET),
-        patch("src.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
-        patch("src.cli.commands.photo_loader.PhotoTaskService", fake_task),
-        patch("src.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
+        patch("tg_agent.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.photo_loader.PhotoTaskService", fake_task),
+        patch("tg_agent.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
     ):
-        from src.cli.commands.photo_loader import run
+        from tg_agent.cli.commands.photo_loader import run
 
         run(
             _ns(
@@ -362,11 +362,11 @@ def test_publish_action(tmp_path, cli_init_patch, capsys):
 
     with (
         cli_init_patch(db, _PHOTO_LOADER_INIT_DB_TARGET),
-        patch("src.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
-        patch("src.cli.commands.photo_loader.PhotoTaskService", fake_task),
-        patch("src.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
+        patch("tg_agent.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.photo_loader.PhotoTaskService", fake_task),
+        patch("tg_agent.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
     ):
-        from src.cli.commands.photo_loader import run
+        from tg_agent.cli.commands.photo_loader import run
 
         run(_ns(photo_loader_action="publish", id=3))
 
@@ -400,11 +400,11 @@ def test_batch_list_action(tmp_path, cli_init_patch, capsys):
 
     with (
         cli_init_patch(db, _PHOTO_LOADER_INIT_DB_TARGET),
-        patch("src.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
-        patch("src.cli.commands.photo_loader.PhotoTaskService", fake_task),
-        patch("src.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
+        patch("tg_agent.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.photo_loader.PhotoTaskService", fake_task),
+        patch("tg_agent.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
     ):
-        from src.cli.commands.photo_loader import run
+        from tg_agent.cli.commands.photo_loader import run
 
         run(_ns(photo_loader_action="batch-list"))
 
@@ -432,11 +432,11 @@ def test_auto_create_action(tmp_path, cli_init_patch, capsys):
 
     with (
         cli_init_patch(db, _PHOTO_LOADER_INIT_DB_TARGET),
-        patch("src.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
-        patch("src.cli.commands.photo_loader.PhotoTaskService", fake_task),
-        patch("src.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
+        patch("tg_agent.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.photo_loader.PhotoTaskService", fake_task),
+        patch("tg_agent.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
     ):
-        from src.cli.commands.photo_loader import run
+        from tg_agent.cli.commands.photo_loader import run
 
         run(
             _ns(
@@ -484,11 +484,11 @@ def test_auto_list_action(tmp_path, cli_init_patch, capsys):
 
     with (
         cli_init_patch(db, _PHOTO_LOADER_INIT_DB_TARGET),
-        patch("src.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
-        patch("src.cli.commands.photo_loader.PhotoTaskService", fake_task),
-        patch("src.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
+        patch("tg_agent.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.photo_loader.PhotoTaskService", fake_task),
+        patch("tg_agent.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
     ):
-        from src.cli.commands.photo_loader import run
+        from tg_agent.cli.commands.photo_loader import run
 
         run(_ns(photo_loader_action="auto-list"))
 
@@ -518,11 +518,11 @@ def test_auto_toggle_action(tmp_path, cli_init_patch, capsys):
 
     with (
         cli_init_patch(db, _PHOTO_LOADER_INIT_DB_TARGET),
-        patch("src.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
-        patch("src.cli.commands.photo_loader.PhotoTaskService", fake_task),
-        patch("src.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
+        patch("tg_agent.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.photo_loader.PhotoTaskService", fake_task),
+        patch("tg_agent.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
     ):
-        from src.cli.commands.photo_loader import run
+        from tg_agent.cli.commands.photo_loader import run
 
         run(_ns(photo_loader_action="auto-toggle", id=1))
 
@@ -546,11 +546,11 @@ def test_auto_toggle_not_found(tmp_path, cli_init_patch, capsys):
 
     with (
         cli_init_patch(db, _PHOTO_LOADER_INIT_DB_TARGET),
-        patch("src.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
-        patch("src.cli.commands.photo_loader.PhotoTaskService", fake_task),
-        patch("src.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
+        patch("tg_agent.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.photo_loader.PhotoTaskService", fake_task),
+        patch("tg_agent.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
     ):
-        from src.cli.commands.photo_loader import run
+        from tg_agent.cli.commands.photo_loader import run
 
         run(_ns(photo_loader_action="auto-toggle", id=999))
 
@@ -577,11 +577,11 @@ def test_run_due_action(tmp_path, cli_init_patch, capsys):
 
     with (
         cli_init_patch(db, _PHOTO_LOADER_INIT_DB_TARGET),
-        patch("src.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
-        patch("src.cli.commands.photo_loader.PhotoTaskService", fake_task),
-        patch("src.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
+        patch("tg_agent.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.photo_loader.PhotoTaskService", fake_task),
+        patch("tg_agent.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
     ):
-        from src.cli.commands.photo_loader import run
+        from tg_agent.cli.commands.photo_loader import run
 
         run(_ns(photo_loader_action="run-due"))
 
@@ -622,11 +622,11 @@ def test_run_due_action_prints_progress(tmp_path, cli_init_patch, capsys):
 
     with (
         cli_init_patch(db, _PHOTO_LOADER_INIT_DB_TARGET),
-        patch("src.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
-        patch("src.cli.commands.photo_loader.PhotoTaskService", fake_task),
-        patch("src.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
+        patch("tg_agent.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.photo_loader.PhotoTaskService", fake_task),
+        patch("tg_agent.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
     ):
-        from src.cli.commands.photo_loader import run
+        from tg_agent.cli.commands.photo_loader import run
 
         run(_ns(photo_loader_action="run-due"))
 
@@ -659,11 +659,11 @@ def test_run_due_action_with_item_id_skips_auto_jobs(tmp_path, cli_init_patch, c
 
     with (
         cli_init_patch(db, _PHOTO_LOADER_INIT_DB_TARGET),
-        patch("src.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
-        patch("src.cli.commands.photo_loader.PhotoTaskService", fake_task),
-        patch("src.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
+        patch("tg_agent.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.photo_loader.PhotoTaskService", fake_task),
+        patch("tg_agent.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
     ):
-        from src.cli.commands.photo_loader import run
+        from tg_agent.cli.commands.photo_loader import run
 
         run(_ns(photo_loader_action="run-due", item_id=77))
 
@@ -679,7 +679,7 @@ def test_run_due_action_with_item_id_skips_auto_jobs(tmp_path, cli_init_patch, c
 def test_run_due_dry_run_previews_without_running_items(tmp_path, cli_init_patch, capsys):
     """run-due --dry-run prints the auto-job plan, asks auto.run_due(dry_run=True),
     and never touches the photo-item path (which has no dry-run)."""
-    from src.services.photo_auto_upload_service import PhotoAutoPreview
+    from tg_agent.services.photo_auto_upload_service import PhotoAutoPreview
 
     db_path = str(tmp_path / "photo_run_due_dry.db")
     db = Database(db_path)
@@ -708,11 +708,11 @@ def test_run_due_dry_run_previews_without_running_items(tmp_path, cli_init_patch
 
     with (
         cli_init_patch(db, _PHOTO_LOADER_INIT_DB_TARGET),
-        patch("src.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
-        patch("src.cli.commands.photo_loader.PhotoTaskService", fake_task),
-        patch("src.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
+        patch("tg_agent.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.photo_loader.PhotoTaskService", fake_task),
+        patch("tg_agent.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
     ):
-        from src.cli.commands.photo_loader import run
+        from tg_agent.cli.commands.photo_loader import run
 
         run(_ns(photo_loader_action="run-due", dry_run=True))
 
@@ -744,11 +744,11 @@ def test_auto_delete_action(tmp_path, cli_init_patch, capsys):
 
     with (
         cli_init_patch(db, _PHOTO_LOADER_INIT_DB_TARGET),
-        patch("src.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
-        patch("src.cli.commands.photo_loader.PhotoTaskService", fake_task),
-        patch("src.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
+        patch("tg_agent.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.photo_loader.PhotoTaskService", fake_task),
+        patch("tg_agent.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
     ):
-        from src.cli.commands.photo_loader import run
+        from tg_agent.cli.commands.photo_loader import run
 
         run(_ns(photo_loader_action="auto-delete", id=1))
 
@@ -772,11 +772,11 @@ def test_batch_cancel_action(tmp_path, cli_init_patch, capsys):
 
     with (
         cli_init_patch(db, _PHOTO_LOADER_INIT_DB_TARGET),
-        patch("src.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
-        patch("src.cli.commands.photo_loader.PhotoTaskService", fake_task),
-        patch("src.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
+        patch("tg_agent.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.photo_loader.PhotoTaskService", fake_task),
+        patch("tg_agent.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
     ):
-        from src.cli.commands.photo_loader import run
+        from tg_agent.cli.commands.photo_loader import run
 
         run(_ns(photo_loader_action="batch-cancel", id=1))
 
@@ -800,11 +800,11 @@ def test_auto_update_action(tmp_path, cli_init_patch, capsys):
 
     with (
         cli_init_patch(db, _PHOTO_LOADER_INIT_DB_TARGET),
-        patch("src.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
-        patch("src.cli.commands.photo_loader.PhotoTaskService", fake_task),
-        patch("src.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
+        patch("tg_agent.cli.commands.photo_loader.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.photo_loader.PhotoTaskService", fake_task),
+        patch("tg_agent.cli.commands.photo_loader.PhotoAutoUploadService", fake_auto),
     ):
-        from src.cli.commands.photo_loader import run
+        from tg_agent.cli.commands.photo_loader import run
 
         run(
             _ns(

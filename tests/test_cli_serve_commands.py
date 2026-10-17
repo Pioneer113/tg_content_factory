@@ -5,8 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.cli.commands.server_control import run_restart, run_stop
 from tests.helpers import cli_ns
+from tg_agent.cli.commands.server_control import run_restart, run_stop
 
 
 def _args(**overrides):
@@ -30,33 +30,33 @@ def make_app_config():
 
 
 def test_serve_no_password():
-    from src.cli.commands.serve import run
+    from tg_agent.cli.commands.serve import run
     cfg = make_app_config()
     cfg.web.password = ""
-    with patch("src.cli.commands.serve.load_config", return_value=cfg):
+    with patch("tg_agent.cli.commands.serve.load_config", return_value=cfg):
         with pytest.raises(SystemExit):
             run(_args(web_pass=None))
 
 
 def test_serve_register_fails():
-    from src.cli.commands.serve import run
+    from tg_agent.cli.commands.serve import run
     cfg = make_app_config()
-    with patch("src.cli.commands.serve.load_config", return_value=cfg), \
-         patch("src.cli.commands.serve.create_app", return_value=MagicMock()), \
-         patch("src.cli.commands.serve.register_current_process", side_effect=RuntimeError("already running")):
+    with patch("tg_agent.cli.commands.serve.load_config", return_value=cfg), \
+         patch("tg_agent.cli.commands.serve.create_app", return_value=MagicMock()), \
+         patch("tg_agent.cli.commands.serve.register_current_process", side_effect=RuntimeError("already running")):
         with pytest.raises(SystemExit):
             run(_args(web_pass=None))
 
 
 def test_serve_starts_server():
-    from src.cli.commands.serve import run
+    from tg_agent.cli.commands.serve import run
     cfg = make_app_config()
     app = MagicMock()
-    with patch("src.cli.commands.serve.load_config", return_value=cfg), \
-         patch("src.cli.commands.serve.create_app", return_value=app), \
-         patch("src.cli.commands.serve.register_current_process"), \
-         patch("src.cli.commands.serve.uvicorn") as mock_uv, \
-         patch("src.cli.commands.serve.unregister_current_process") as mock_unreg:
+    with patch("tg_agent.cli.commands.serve.load_config", return_value=cfg), \
+         patch("tg_agent.cli.commands.serve.create_app", return_value=app), \
+         patch("tg_agent.cli.commands.serve.register_current_process"), \
+         patch("tg_agent.cli.commands.serve.uvicorn") as mock_uv, \
+         patch("tg_agent.cli.commands.serve.unregister_current_process") as mock_unreg:
         mock_uv.run = MagicMock(side_effect=KeyboardInterrupt)
         run(_args(web_pass=None))
         assert app.state.embed_worker is True
@@ -64,14 +64,14 @@ def test_serve_starts_server():
 
 
 def test_serve_no_worker_disables_embedded_worker():
-    from src.cli.commands.serve import run
+    from tg_agent.cli.commands.serve import run
     cfg = make_app_config()
     app = MagicMock()
-    with patch("src.cli.commands.serve.load_config", return_value=cfg), \
-         patch("src.cli.commands.serve.create_app", return_value=app), \
-         patch("src.cli.commands.serve.register_current_process"), \
-         patch("src.cli.commands.serve.uvicorn") as mock_uv, \
-         patch("src.cli.commands.serve.unregister_current_process") as mock_unreg:
+    with patch("tg_agent.cli.commands.serve.load_config", return_value=cfg), \
+         patch("tg_agent.cli.commands.serve.create_app", return_value=app), \
+         patch("tg_agent.cli.commands.serve.register_current_process"), \
+         patch("tg_agent.cli.commands.serve.uvicorn") as mock_uv, \
+         patch("tg_agent.cli.commands.serve.unregister_current_process") as mock_unreg:
         mock_uv.run = MagicMock()
         run(_args(web_pass=None, no_worker=True))
 
@@ -80,13 +80,13 @@ def test_serve_no_worker_disables_embedded_worker():
 
 
 def test_serve_with_web_pass_override():
-    from src.cli.commands.serve import run
+    from tg_agent.cli.commands.serve import run
     cfg = make_app_config()
-    with patch("src.cli.commands.serve.load_config", return_value=cfg), \
-         patch("src.cli.commands.serve.create_app", return_value=MagicMock()), \
-         patch("src.cli.commands.serve.register_current_process"), \
-         patch("src.cli.commands.serve.uvicorn") as mock_uv, \
-         patch("src.cli.commands.serve.unregister_current_process"):
+    with patch("tg_agent.cli.commands.serve.load_config", return_value=cfg), \
+         patch("tg_agent.cli.commands.serve.create_app", return_value=MagicMock()), \
+         patch("tg_agent.cli.commands.serve.register_current_process"), \
+         patch("tg_agent.cli.commands.serve.uvicorn") as mock_uv, \
+         patch("tg_agent.cli.commands.serve.unregister_current_process"):
         mock_uv.run = MagicMock()
         run(_args(web_pass="newpass-strong-enough"))
     assert cfg.web.password == "newpass-strong-enough"
@@ -99,13 +99,13 @@ def test_serve_with_web_pass_override():
 
 def test_serve_non_loopback_with_weak_password_exits():
     """A non-loopback host with a known-weak password must refuse to start."""
-    from src.cli.commands.serve import run
+    from tg_agent.cli.commands.serve import run
     cfg = make_app_config()
     cfg.web.host = "0.0.0.0"
     cfg.web.password = "changeme"
-    with patch("src.cli.commands.serve.load_config", return_value=cfg), \
-         patch("src.cli.commands.serve.create_app") as mock_create_app, \
-         patch("src.cli.commands.serve.uvicorn") as mock_uv:
+    with patch("tg_agent.cli.commands.serve.load_config", return_value=cfg), \
+         patch("tg_agent.cli.commands.serve.create_app") as mock_create_app, \
+         patch("tg_agent.cli.commands.serve.uvicorn") as mock_uv:
         with pytest.raises(SystemExit):
             run(_args(web_pass=None))
     mock_create_app.assert_not_called()
@@ -114,16 +114,16 @@ def test_serve_non_loopback_with_weak_password_exits():
 
 def test_serve_loopback_with_weak_password_still_starts():
     """Local dev on 127.0.0.1 must keep working even with a weak password."""
-    from src.cli.commands.serve import run
+    from tg_agent.cli.commands.serve import run
     cfg = make_app_config()
     cfg.web.host = "127.0.0.1"
     cfg.web.password = "changeme"
     app = MagicMock()
-    with patch("src.cli.commands.serve.load_config", return_value=cfg), \
-         patch("src.cli.commands.serve.create_app", return_value=app), \
-         patch("src.cli.commands.serve.register_current_process"), \
-         patch("src.cli.commands.serve.uvicorn") as mock_uv, \
-         patch("src.cli.commands.serve.unregister_current_process") as mock_unreg:
+    with patch("tg_agent.cli.commands.serve.load_config", return_value=cfg), \
+         patch("tg_agent.cli.commands.serve.create_app", return_value=app), \
+         patch("tg_agent.cli.commands.serve.register_current_process"), \
+         patch("tg_agent.cli.commands.serve.uvicorn") as mock_uv, \
+         patch("tg_agent.cli.commands.serve.unregister_current_process") as mock_unreg:
         mock_uv.run = MagicMock(side_effect=KeyboardInterrupt)
         run(_args(web_pass=None))
     assert app.state.embed_worker is True
@@ -136,13 +136,13 @@ def test_serve_non_loopback_with_short_password_exits():
     Round-2 review finding (#1305): the denylist alone let '123456', 'x',
     etc. through as "strong" once the panel is actually network-reachable.
     """
-    from src.cli.commands.serve import run
+    from tg_agent.cli.commands.serve import run
     cfg = make_app_config()
     cfg.web.host = "0.0.0.0"
     cfg.web.password = "1234567"  # 7 chars — below the minimum, not in the denylist
-    with patch("src.cli.commands.serve.load_config", return_value=cfg), \
-         patch("src.cli.commands.serve.create_app") as mock_create_app, \
-         patch("src.cli.commands.serve.uvicorn") as mock_uv:
+    with patch("tg_agent.cli.commands.serve.load_config", return_value=cfg), \
+         patch("tg_agent.cli.commands.serve.create_app") as mock_create_app, \
+         patch("tg_agent.cli.commands.serve.uvicorn") as mock_uv:
         with pytest.raises(SystemExit):
             run(_args(web_pass=None))
     mock_create_app.assert_not_called()
@@ -157,13 +157,13 @@ def test_serve_non_loopback_with_low_entropy_password_exits(weak_password):
     Round-3 review finding (#1305): the length-8 minimum alone let
     '12345678', 'aaaaaaaa', and whitespace-only values through as "strong".
     """
-    from src.cli.commands.serve import run
+    from tg_agent.cli.commands.serve import run
     cfg = make_app_config()
     cfg.web.host = "0.0.0.0"
     cfg.web.password = weak_password
-    with patch("src.cli.commands.serve.load_config", return_value=cfg), \
-         patch("src.cli.commands.serve.create_app") as mock_create_app, \
-         patch("src.cli.commands.serve.uvicorn") as mock_uv:
+    with patch("tg_agent.cli.commands.serve.load_config", return_value=cfg), \
+         patch("tg_agent.cli.commands.serve.create_app") as mock_create_app, \
+         patch("tg_agent.cli.commands.serve.uvicorn") as mock_uv:
         with pytest.raises(SystemExit):
             run(_args(web_pass=None))
     mock_create_app.assert_not_called()
@@ -172,14 +172,14 @@ def test_serve_non_loopback_with_low_entropy_password_exits(weak_password):
 
 @pytest.mark.parametrize("weak_password", ["Aa1!b", "abcdefgh", "hgfedcba"])
 def test_serve_non_loopback_rejects_short_or_partial_sequences(weak_password):
-    from src.cli.commands.serve import run
+    from tg_agent.cli.commands.serve import run
 
     cfg = make_app_config()
     cfg.web.host = "0.0.0.0"
     cfg.web.password = weak_password
-    with patch("src.cli.commands.serve.load_config", return_value=cfg), \
-         patch("src.cli.commands.serve.create_app") as mock_create_app, \
-         patch("src.cli.commands.serve.uvicorn") as mock_uv:
+    with patch("tg_agent.cli.commands.serve.load_config", return_value=cfg), \
+         patch("tg_agent.cli.commands.serve.create_app") as mock_create_app, \
+         patch("tg_agent.cli.commands.serve.uvicorn") as mock_uv:
         with pytest.raises(SystemExit):
             run(_args(web_pass=None))
     mock_create_app.assert_not_called()
@@ -188,16 +188,16 @@ def test_serve_non_loopback_rejects_short_or_partial_sequences(weak_password):
 
 def test_serve_non_loopback_with_strong_password_starts_with_warning(caplog):
     """A non-loopback host with a strong password should start but warn."""
-    from src.cli.commands.serve import run
+    from tg_agent.cli.commands.serve import run
     cfg = make_app_config()
     cfg.web.host = "0.0.0.0"
     cfg.web.password = "a-strong-unique-password"
     app = MagicMock()
-    with patch("src.cli.commands.serve.load_config", return_value=cfg), \
-         patch("src.cli.commands.serve.create_app", return_value=app), \
-         patch("src.cli.commands.serve.register_current_process"), \
-         patch("src.cli.commands.serve.uvicorn") as mock_uv, \
-         patch("src.cli.commands.serve.unregister_current_process") as mock_unreg:
+    with patch("tg_agent.cli.commands.serve.load_config", return_value=cfg), \
+         patch("tg_agent.cli.commands.serve.create_app", return_value=app), \
+         patch("tg_agent.cli.commands.serve.register_current_process"), \
+         patch("tg_agent.cli.commands.serve.uvicorn") as mock_uv, \
+         patch("tg_agent.cli.commands.serve.unregister_current_process") as mock_unreg:
         mock_uv.run = MagicMock(side_effect=KeyboardInterrupt)
         with caplog.at_level("WARNING"):
             run(_args(web_pass=None))
@@ -207,13 +207,13 @@ def test_serve_non_loopback_with_strong_password_starts_with_warning(caplog):
 
 
 def test_worker_starts_runtime():
-    from src.cli.commands.worker import run
+    from tg_agent.cli.commands.worker import run
 
     cfg = make_app_config()
-    with patch("src.cli.commands.worker.load_config", return_value=cfg), \
-         patch("src.cli.commands.worker.register_current_process"), \
-         patch("src.cli.commands.worker.run_worker") as mock_run_worker, \
-         patch("src.cli.commands.worker.unregister_current_process") as mock_unreg:
+    with patch("tg_agent.cli.commands.worker.load_config", return_value=cfg), \
+         patch("tg_agent.cli.commands.worker.register_current_process"), \
+         patch("tg_agent.cli.commands.worker.run_worker") as mock_run_worker, \
+         patch("tg_agent.cli.commands.worker.unregister_current_process") as mock_unreg:
         run(_args())
 
     mock_run_worker.assert_called_once_with(cfg)
@@ -222,14 +222,14 @@ def test_worker_starts_runtime():
 
 def test_worker_registers_pid_and_survives_keyboard_interrupt():
     """The managed worker daemon registers the PID file and unregisters on exit."""
-    from src.cli.commands.worker import run
+    from tg_agent.cli.commands.worker import run
 
     cfg = make_app_config()
-    with patch("src.cli.commands.worker.load_config", return_value=cfg), \
-         patch("src.cli.commands.worker.pid_file_path", return_value="/tmp/test.pid"), \
-         patch("src.cli.commands.worker.register_current_process") as mock_reg, \
-         patch("src.cli.commands.worker.run_worker", side_effect=KeyboardInterrupt), \
-         patch("src.cli.commands.worker.unregister_current_process") as mock_unreg:
+    with patch("tg_agent.cli.commands.worker.load_config", return_value=cfg), \
+         patch("tg_agent.cli.commands.worker.pid_file_path", return_value="/tmp/test.pid"), \
+         patch("tg_agent.cli.commands.worker.register_current_process") as mock_reg, \
+         patch("tg_agent.cli.commands.worker.run_worker", side_effect=KeyboardInterrupt), \
+         patch("tg_agent.cli.commands.worker.unregister_current_process") as mock_unreg:
         run(_args())  # KeyboardInterrupt is swallowed — same as serve
 
     mock_reg.assert_called_once()
@@ -237,11 +237,11 @@ def test_worker_registers_pid_and_survives_keyboard_interrupt():
 
 
 def test_worker_register_failure_exits():
-    from src.cli.commands.worker import run
+    from tg_agent.cli.commands.worker import run
 
     cfg = make_app_config()
-    with patch("src.cli.commands.worker.load_config", return_value=cfg), \
-         patch("src.cli.commands.worker.register_current_process",
+    with patch("tg_agent.cli.commands.worker.load_config", return_value=cfg), \
+         patch("tg_agent.cli.commands.worker.register_current_process",
                side_effect=RuntimeError("already running")):
         with pytest.raises(SystemExit):
             run(_args())
@@ -256,11 +256,11 @@ def test_stop_success(capsys):
     cfg = make_app_config()
     outcome = MagicMock()
     outcome.message = "Server stopped."
-    from src.cli.commands.server_control import StopResult
+    from tg_agent.cli.commands.server_control import StopResult
     outcome.result = StopResult.STOPPED
-    with patch("src.cli.commands.server_control.load_config", return_value=cfg), \
-         patch("src.cli.commands.server_control.stop_server", return_value=outcome), \
-         patch("src.cli.commands.server_control.pid_file_path", return_value="/tmp/test.pid"):
+    with patch("tg_agent.cli.commands.server_control.load_config", return_value=cfg), \
+         patch("tg_agent.cli.commands.server_control.stop_server", return_value=outcome), \
+         patch("tg_agent.cli.commands.server_control.pid_file_path", return_value="/tmp/test.pid"):
         run_stop(_args())
     out = capsys.readouterr().out
     assert "подожду завершения активной задачи" in out
@@ -269,10 +269,10 @@ def test_stop_success(capsys):
 
 def test_stop_process_control_error():
     cfg = make_app_config()
-    from src.cli.commands.server_control import ProcessControlError
-    with patch("src.cli.commands.server_control.load_config", return_value=cfg), \
-         patch("src.cli.commands.server_control.stop_server", side_effect=ProcessControlError("no pid")), \
-         patch("src.cli.commands.server_control.pid_file_path", return_value="/tmp/test.pid"):
+    from tg_agent.cli.commands.server_control import ProcessControlError
+    with patch("tg_agent.cli.commands.server_control.load_config", return_value=cfg), \
+         patch("tg_agent.cli.commands.server_control.stop_server", side_effect=ProcessControlError("no pid")), \
+         patch("tg_agent.cli.commands.server_control.pid_file_path", return_value="/tmp/test.pid"):
         with pytest.raises(SystemExit):
             run_stop(_args())
 
@@ -281,11 +281,11 @@ def test_stop_timeout():
     cfg = make_app_config()
     outcome = MagicMock()
     outcome.message = "Timeout"
-    from src.cli.commands.server_control import StopResult
+    from tg_agent.cli.commands.server_control import StopResult
     outcome.result = StopResult.TIMEOUT
-    with patch("src.cli.commands.server_control.load_config", return_value=cfg), \
-         patch("src.cli.commands.server_control.stop_server", return_value=outcome), \
-         patch("src.cli.commands.server_control.pid_file_path", return_value="/tmp/test.pid"):
+    with patch("tg_agent.cli.commands.server_control.load_config", return_value=cfg), \
+         patch("tg_agent.cli.commands.server_control.stop_server", return_value=outcome), \
+         patch("tg_agent.cli.commands.server_control.pid_file_path", return_value="/tmp/test.pid"):
         with pytest.raises(SystemExit):
             run_stop(_args())
 
@@ -299,12 +299,12 @@ def test_restart_success(capsys):
     cfg = make_app_config()
     outcome = MagicMock()
     outcome.message = "Stopped."
-    from src.cli.commands.server_control import StopResult
+    from tg_agent.cli.commands.server_control import StopResult
     outcome.result = StopResult.STOPPED
-    with patch("src.cli.commands.server_control.load_config", return_value=cfg), \
-         patch("src.cli.commands.server_control.stop_server", return_value=outcome), \
-         patch("src.cli.commands.server_control.pid_file_path", return_value="/tmp/test.pid"), \
-         patch("src.cli.commands.worker.serve_worker") as mock_worker:
+    with patch("tg_agent.cli.commands.server_control.load_config", return_value=cfg), \
+         patch("tg_agent.cli.commands.server_control.stop_server", return_value=outcome), \
+         patch("tg_agent.cli.commands.server_control.pid_file_path", return_value="/tmp/test.pid"), \
+         patch("tg_agent.cli.commands.worker.serve_worker") as mock_worker:
         run_restart(_args())
     out = capsys.readouterr().out
     assert "подожду завершения активной задачи" in out
@@ -322,7 +322,7 @@ def test_restart_path_has_no_web_server():
     """
     from pathlib import Path
 
-    from src.cli.commands import server_control
+    from tg_agent.cli.commands import server_control
 
     source = Path(server_control.__file__).read_text(encoding="utf-8")
     assert "uvicorn" not in source, "restart path must not host a web server"

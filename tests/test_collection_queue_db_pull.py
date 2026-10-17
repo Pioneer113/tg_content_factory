@@ -21,18 +21,18 @@ from telethon.errors import (
 )
 from telethon_floodgate import TelegramRateLimitedError
 
-from src.collection_queue import CollectionQueue
-from src.database import Database
-from src.models import Channel
-from src.telegram.collector import (
+from tests.helpers import wait_until
+from tg_agent.collection_queue import CollectionQueue
+from tg_agent.database import Database
+from tg_agent.models import Channel
+from tg_agent.telegram.collector import (
     UsernameResolveFloodWaitDeferredError,
     UsernameResolveRateLimitedError,
 )
-from tests.helpers import wait_until
 
 if TYPE_CHECKING:
-    from src.models import CollectionTask
-    from src.telegram.collector import Collector
+    from tg_agent.models import CollectionTask
+    from tg_agent.telegram.collector import Collector
 
 
 def _make_queue(collector: object, db: Database) -> CollectionQueue:
@@ -273,7 +273,7 @@ async def test_db_pull_does_not_ingest_when_no_clients(tmp_path, caplog):
         queue = _make_queue(collector, db)
         task_id = await _create_pending_task(db)
 
-        caplog.set_level(logging.WARNING, logger="src.collection_queue")
+        caplog.set_level(logging.WARNING, logger="tg_agent.collection_queue")
         assert await queue._ingest_pending_tasks() == 0
 
         task = await _get_task(db, task_id)
@@ -645,7 +645,7 @@ async def test_shutdown_waits_for_active_collection_and_leaves_queued_pending(tm
         second_id = await queue.enqueue(by_id[-1002])
         await asyncio.wait_for(collector.started.wait(), timeout=1.0)
 
-        caplog.set_level(logging.WARNING, logger="src.collection_queue")
+        caplog.set_level(logging.WARNING, logger="tg_agent.collection_queue")
         shutdown_task = asyncio.create_task(queue.shutdown(grace_timeout=2.0))
         await asyncio.sleep(0.05)
         assert not shutdown_task.done()
@@ -950,7 +950,7 @@ async def test_unknown_tl_type_is_skipped_with_warning_not_traceback(tmp_path, c
         task_id = await _create_pending_task(db)
         await db.repos.tasks.update_collection_task(task_id, "running")
 
-        with caplog.at_level(logging.WARNING, logger="src.collection_queue"):
+        with caplog.at_level(logging.WARNING, logger="tg_agent.collection_queue"):
             outcome = await queue._handle_collection_exception(
                 TypeNotFoundError(0x1C32B11C, b"\x1c\xb12\x1c"),
                 task_id=task_id,
@@ -962,7 +962,7 @@ async def test_unknown_tl_type_is_skipped_with_warning_not_traceback(tmp_path, c
         # Retryable failure: the delayed requeue owns the task (flood-branch contract).
         assert outcome == (True, False)
 
-        records = [r for r in caplog.records if r.name == "src.collection_queue"]
+        records = [r for r in caplog.records if r.name == "tg_agent.collection_queue"]
         assert any(
             "waiting for Telethon update" in r.getMessage() and "0x1c32b11c" in r.getMessage() for r in records
         )
@@ -989,7 +989,7 @@ async def test_other_collection_errors_still_log_error_with_traceback(tmp_path, 
         task_id = await _create_pending_task(db)
         await db.repos.tasks.update_collection_task(task_id, "running")
 
-        with caplog.at_level(logging.WARNING, logger="src.collection_queue"):
+        with caplog.at_level(logging.WARNING, logger="tg_agent.collection_queue"):
             try:
                 raise RuntimeError("boom")
             except RuntimeError as exc:
@@ -1249,12 +1249,12 @@ async def test_retry_pass_unknown_tl_type_warns_without_traceback(tmp_path, monk
         collector = _RaisingCollector(TypeNotFoundError(0x1C32B11C, b"\x1c\xb12\x1c"))
         queue = _make_queue(collector, db)
         channel = (await db.get_channels(active_only=True))[0]
-        with caplog.at_level(logging.WARNING, logger="src.collection_queue"):
+        with caplog.at_level(logging.WARNING, logger="tg_agent.collection_queue"):
             task_id = await queue.enqueue(channel)
             await _wait_for_status(db, task_id, "failed")
             await asyncio.sleep(0.25)
 
-        records = [r for r in caplog.records if r.name == "src.collection_queue"]
+        records = [r for r in caplog.records if r.name == "tg_agent.collection_queue"]
         assert any("waiting for Telethon update" in r.getMessage() for r in records)
         assert not [r for r in records if r.levelno >= logging.ERROR or r.exc_info]
         task = await _get_task(db, task_id)

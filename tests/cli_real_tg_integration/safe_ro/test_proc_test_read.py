@@ -1,4 +1,4 @@
-"""`python -m src.main test read` — runs the built-in read-only DB self-check.
+"""`python -m tg_agent.main test read` — runs the built-in read-only DB self-check.
 
 The handler copies the live DB into a tempfile and exercises a fixed set of
 SELECT/aggregation operations there, then removes the tempfile. Nothing is

@@ -3,7 +3,7 @@ from __future__ import annotations
 import aiosqlite
 import pytest
 
-from src.database.migrations import ensure_columns, ensure_indexes, run_migrations, table_columns
+from tg_agent.database.migrations import ensure_columns, ensure_indexes, run_migrations, table_columns
 
 
 @pytest.fixture

@@ -51,11 +51,11 @@ def cli_run(
     timeout: float = PROVIDER_CLI_DEFAULT_TIMEOUT,
     extra_env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess:
-    """Run ``python -m src.main --config <config_path> *args`` as a subprocess."""
+    """Run ``python -m tg_agent.main --config <config_path> *args`` as a subprocess."""
     cmd = [
         sys.executable,
         "-m",
-        "src.main",
+        "tg_agent.main",
         "--config",
         str(config_path),
         *args,

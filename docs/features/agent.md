@@ -56,10 +56,10 @@ in-process Telegram pool (`--no-pool`), поэтому database-backed tools д�
 
 === "CLI"
     ```bash
-    python -m src.main agent chat "собери сообщения из @channel"
-    python -m src.main agent threads          # список тредов
-    python -m src.main agent thread-create --title "Анализ"
-    python -m src.main agent messages 1       # сообщения треда
+    python -m tg_agent.main agent chat "собери сообщения из @channel"
+    python -m tg_agent.main agent threads          # список тредов
+    python -m tg_agent.main agent thread-create --title "Анализ"
+    python -m tg_agent.main agent messages 1       # сообщения треда
     ```
 
 === "Web"

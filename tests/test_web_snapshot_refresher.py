@@ -6,12 +6,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.web.runtime_shims import (
+from tg_agent.web.runtime_shims import (
     SnapshotClientPool,
     SnapshotCollector,
     SnapshotSchedulerManager,
 )
-from src.web.snapshot_refresher import SnapshotRefresher
+from tg_agent.web.snapshot_refresher import SnapshotRefresher
 
 
 def _mock_db():

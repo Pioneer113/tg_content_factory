@@ -84,9 +84,9 @@ You will receive a Telegram login code — enter it yourself. Verify with `tg-ag
 
 These still work but are **frozen**: development is paused indefinitely, and new capabilities must not be built on them. The CLI + skill is the only actively developed interface.
 
-- **Web dashboard** (FastAPI + Bootstrap 5) — `python -m src.main serve`, then http://localhost:8080 (password from `WEB_PASS`)
+- **Web dashboard** (FastAPI + Bootstrap 5) — `python -m tg_agent.main serve`, then http://localhost:8080 (password from `WEB_PASS`)
 - **TUI** and the **embedded agent chat** (`tg-agent agent chat`; `claude-agent-sdk` / `deepagents` backends)
-- **MCP server** (`python -m src.main mcp-server`)
+- **MCP server** (`python -m tg_agent.main mcp-server`)
 
 ### Legacy: split deployment (Docker / k8s)
 
@@ -95,10 +95,10 @@ For split deployments pass `--no-worker` and run a dedicated worker service:
 
 ```bash
 # container 1 — web UI + API only
-python -m src.main serve --no-worker
+python -m tg_agent.main serve --no-worker
 
 # container 2 — Telegram worker (shared SQLite volume)
-python -m src.main worker
+python -m tg_agent.main worker
 ```
 
 ## Docker
@@ -246,10 +246,10 @@ telethon-cli users get-me --output json
  pytest tests/test_web.py::test_health_endpoint -v
 
  # Benchmark serial vs safe mixed-mode suite execution
- python -m src.main test benchmark
+ python -m tg_agent.main test benchmark
 
   # Lint
-  ruff check src/ tests/ conftest.py
+  ruff check tg_agent/ tests/ conftest.py
   ```
 
 ### CI Note

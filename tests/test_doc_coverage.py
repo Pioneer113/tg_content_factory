@@ -77,13 +77,13 @@ class FakeResults:
 def _sample_results() -> FakeResults:
     files = [
         FakeFileResult(
-            "src/good.py",
+            "tg_agent/good.py",
             total=2,
             covered=2,
             nodes=[FakeNode("a", True), FakeNode("b", True)],
         ),
         FakeFileResult(
-            "src/bad.py",
+            "tg_agent/bad.py",
             total=4,
             covered=1,
             nodes=[
@@ -94,7 +94,7 @@ def _sample_results() -> FakeResults:
             ],
         ),
         FakeFileResult(
-            "src/mid.py",
+            "tg_agent/mid.py",
             total=2,
             covered=1,
             nodes=[FakeNode("ok", True), FakeNode("nope", False, lineno=5)],
@@ -113,7 +113,7 @@ def _sample_results() -> FakeResults:
 def test_worst_files_orders_by_coverage_ascending() -> None:
     worst = doc_coverage.worst_files(_sample_results(), top=10)
     # bad.py (25%) хуже mid.py (50%); полностью покрытый good.py не попадает.
-    assert [f.filename for f in worst] == ["src/bad.py", "src/mid.py"]
+    assert [f.filename for f in worst] == ["tg_agent/bad.py", "tg_agent/mid.py"]
 
 
 def test_worst_files_excludes_fully_documented() -> None:
@@ -139,8 +139,8 @@ def test_undocumented_nodes_lists_only_missing() -> None:
 def test_undocumented_nodes_carries_location() -> None:
     items = doc_coverage.undocumented_nodes(_sample_results())
     by_name = {name: (filename, lineno) for filename, lineno, name, _ in items}
-    assert by_name["undoc_one"] == ("src/bad.py", 10)
-    assert by_name["nope"] == ("src/mid.py", 5)
+    assert by_name["undoc_one"] == ("tg_agent/bad.py", 10)
+    assert by_name["nope"] == ("tg_agent/mid.py", 5)
 
 
 # --------------------------------------------------------------------------- #

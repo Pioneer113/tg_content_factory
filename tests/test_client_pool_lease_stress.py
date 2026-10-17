@@ -11,11 +11,11 @@ import pytest
 _LEASE_OWNERSHIP_ALLOWLIST = {
     # These helpers deliberately return the borrowed result to a caller that
     # owns the finally/release boundary.
-    "src/telegram/pool_dialogs.py:_get_client",
-    "src/services/telegram_command_dispatcher.py:_get_client",
-    "src/services/telegram_actions.py:_client",
-    "src/agent/tools/_registry.py:resolve_entity",
-    "src/cli/commands/messages.py:messages_read_impl",
+    "tg_agent/telegram/pool_dialogs.py:_get_client",
+    "tg_agent/services/telegram_command_dispatcher.py:_get_client",
+    "tg_agent/services/telegram_actions.py:_client",
+    "tg_agent/agent/tools/_registry.py:resolve_entity",
+    "tg_agent/cli/commands/messages.py:messages_read_impl",
 }
 
 

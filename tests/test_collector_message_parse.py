@@ -1,7 +1,7 @@
 """Characterization tests for Telethon ``msg`` → :class:`Message` conversion.
 
 The conversion lived inline inside ``Collector._stream_channel_messages`` (the
-E-rank hot loop). Before extracting it into ``src/telegram/collector_message_parse``
+E-rank hot loop). Before extracting it into ``tg_agent/telegram/collector_message_parse``
 (#1045) these tests pin the exact mapping — forum-topic id resolution, forward
 source channel extraction, tz normalization, and every helper field — so the
 refactor is provably behavior-preserving.
@@ -21,8 +21,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.telegram.collector import Collector
-from src.telegram.collector_message_parse import (
+from tg_agent.telegram.collector import Collector
+from tg_agent.telegram.collector_message_parse import (
     build_message_from_telethon,
     extract_forward_from_channel_id,
     extract_message_entities_json,
@@ -33,7 +33,7 @@ from src.telegram.collector_message_parse import (
     get_service_action_semantic,
     plain_text_and_entities_json,
 )
-from src.telegram.rich_text import _page_lines, rich_text_to_str, webpage_page_text
+from tg_agent.telegram.rich_text import _page_lines, rich_text_to_str, webpage_page_text
 
 
 def _msg(**kwargs) -> SimpleNamespace:

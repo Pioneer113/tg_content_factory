@@ -7,9 +7,9 @@ from datetime import datetime, timezone
 
 import pytest
 
-from src.database.repositories.accounts import AccountSessionDecryptError, AccountsRepository
-from src.models import Account, AccountSessionStatus
-from src.security.session_cipher import SessionCipher
+from tg_agent.database.repositories.accounts import AccountSessionDecryptError, AccountsRepository
+from tg_agent.models import Account, AccountSessionStatus
+from tg_agent.security.session_cipher import SessionCipher
 
 
 @pytest.fixture
@@ -129,7 +129,7 @@ async def test_get_account_summaries_reports_decrypt_failed_without_session(repo
         session_cipher=SessionCipher("wrong-key"),
     )
 
-    with caplog.at_level(logging.DEBUG, logger="src.database.repositories.accounts"):
+    with caplog.at_level(logging.DEBUG, logger="tg_agent.database.repositories.accounts"):
         summaries = await wrong_key_repo.get_account_summaries()
 
     assert len(summaries) == 1

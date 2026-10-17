@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import pytest
 
-from src.services.provider_adapters import (
+from tg_agent.services.provider_adapters import (
     make_huggingface_image_adapter,
     make_openai_image_adapter,
     make_replicate_image_adapter,

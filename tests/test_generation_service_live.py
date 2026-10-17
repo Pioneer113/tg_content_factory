@@ -18,9 +18,9 @@ from datetime import datetime, timezone
 
 import pytest
 
-from src.models import Message, SearchResult
-from src.services.generation_service import GenerationService
-from src.services.provider_service import RuntimeProviderRegistry as RuntimeProviderService
+from tg_agent.models import Message, SearchResult
+from tg_agent.services.generation_service import GenerationService
+from tg_agent.services.provider_service import RuntimeProviderRegistry as RuntimeProviderService
 
 _LIVE_GATE = os.environ.get("RUN_REAL_PROVIDER_SMOKE") != "1" or not os.environ.get("ZAI_API_KEY")
 _LIVE_REASON = "Set RUN_REAL_PROVIDER_SMOKE=1 and ZAI_API_KEY to run live generation smoke."

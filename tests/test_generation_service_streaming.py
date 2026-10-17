@@ -1,8 +1,8 @@
 import asyncio
 from datetime import datetime, timezone
 
-from src.models import Message, SearchResult
-from src.services.generation_service import GenerationService
+from tg_agent.models import Message, SearchResult
+from tg_agent.services.generation_service import GenerationService
 
 
 class DummySearchEngine:

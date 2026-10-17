@@ -20,9 +20,9 @@
 ## CLI
 
 ```bash
-python -m src.main collect                              # все каналы, инкрементально
-python -m src.main channel collect --channel-id ID     # один канал
-python -m src.main collect sample --channel-id ID --limit 10  # превью
+python -m tg_agent.main collect                              # все каналы, инкрементально
+python -m tg_agent.main channel collect --channel-id ID     # один канал
+python -m tg_agent.main collect sample --channel-id ID --limit 10  # превью
 ```
 
 ## Web
@@ -32,8 +32,8 @@ python -m src.main collect sample --channel-id ID --limit 10  # превью
 ## Статистика
 
 ```bash
-python -m src.main channel stats --channel-id ID   # статистика одного канала
-python -m src.main analytics velocity              # сообщений в день
+python -m tg_agent.main channel stats --channel-id ID   # статистика одного канала
+python -m tg_agent.main analytics velocity              # сообщений в день
 ```
 
 ## Cancellation
@@ -41,7 +41,7 @@ python -m src.main analytics velocity              # сообщений в де�
 Коллекция может быть отменена через `asyncio.Event` (`Collector._cancel_event`), который проверяется каждые 10 сообщений и на границе каждого канала.
 
 ```bash
-python -m src.main scheduler task-cancel 42
+python -m tg_agent.main scheduler task-cancel 42
 ```
 
 Web: `POST /scheduler/tasks/{task_id}/cancel`

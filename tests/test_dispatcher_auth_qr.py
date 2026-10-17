@@ -11,9 +11,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.database import Database
-from src.models import Account, TelegramCommand, TelegramCommandStatus
-from src.services.telegram_command_dispatcher import TelegramCommandDispatcher
+from tg_agent.database import Database
+from tg_agent.models import Account, TelegramCommand, TelegramCommandStatus
+from tg_agent.services.telegram_command_dispatcher import TelegramCommandDispatcher
 
 BARE_PHONE = "79991234567"  # Telethon user.phone arrives without the leading +
 PHONE = "+" + BARE_PHONE  # canonical stored form

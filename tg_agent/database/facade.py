@@ -1,0 +1,1459 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import sqlite3
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
+from contextlib import asynccontextmanager
+from datetime import datetime
+from typing import Any, cast
+
+import aiosqlite
+from tenacity import AsyncRetrying, RetryCallState, RetryError, retry_if_exception, stop_after_attempt
+from tenacity.wait import wait_chain, wait_fixed
+
+from tg_agent.database.bundles import DatabaseRepositories
+from tg_agent.database.connection import ConnectionTuning, DBConnection
+from tg_agent.database.migrations import run_migrations
+from tg_agent.database.pool import BufferedCursor, ReadConnectionPool, ReadPoolProxy
+from tg_agent.database.repositories._transactions import begin_immediate
+from tg_agent.database.repositories.accounts import AccountsRepository
+from tg_agent.database.repositories.channel_ratings import ChannelRatingsRepository
+from tg_agent.database.repositories.channel_stats import ChannelStatsRepository
+from tg_agent.database.repositories.channels import ChannelBulkUpdateResult, ChannelsRepository
+from tg_agent.database.repositories.collection_tasks import CollectionTasksRepository
+from tg_agent.database.repositories.content_pipelines import ContentPipelinesRepository
+from tg_agent.database.repositories.decisions import DecisionsRepository
+from tg_agent.database.repositories.dialog_batch import DialogBatchRepository
+from tg_agent.database.repositories.dialog_cache import DialogCacheRepository
+from tg_agent.database.repositories.dm_messages import DmMessagesRepository
+from tg_agent.database.repositories.dm_reply_drafts import DmReplyDraftsRepository
+from tg_agent.database.repositories.filters import FilterRepository
+from tg_agent.database.repositories.generated_images import GeneratedImagesRepository
+from tg_agent.database.repositories.generation_runs import GenerationRunsRepository
+from tg_agent.database.repositories.incoming_dms import IncomingDmsRepository
+from tg_agent.database.repositories.messages import MessageSearchPage, MessagesRepository
+from tg_agent.database.repositories.notification_bots import NotificationBotsRepository
+from tg_agent.database.repositories.notified_messages import NotifiedMessagesRepository
+from tg_agent.database.repositories.photo_loader import PhotoLoaderRepository
+from tg_agent.database.repositories.ping_monitors import PingMonitorRepository
+from tg_agent.database.repositories.pipeline_action_log import PipelineActionLogRepository
+from tg_agent.database.repositories.pipeline_templates import PipelineTemplatesRepository
+from tg_agent.database.repositories.runtime_snapshots import RuntimeSnapshotsRepository
+from tg_agent.database.repositories.search_log import SearchLogRepository
+from tg_agent.database.repositories.search_queries import SearchQueriesRepository
+from tg_agent.database.repositories.settings import SettingsRepository
+from tg_agent.database.repositories.telegram_commands import TelegramCommandsRepository
+from tg_agent.models import (
+    Account,
+    AccountSummary,
+    Channel,
+    ChannelStats,
+    CollectionTask,
+    CollectionTaskStatus,
+    Message,
+    NotificationBot,
+    SearchParams,
+    SearchQuery,
+    StatsAllTaskPayload,
+)
+from tg_agent.security import SessionCipher
+
+logger = logging.getLogger(__name__)
+
+_SQLITE_BUSY_MESSAGES = (
+    "database is locked",
+    "database table is locked",
+    "database is busy",
+)
+_BUSY_RETRY_DELAYS_SEC = (0.05, 0.2)
+_SESSION_ENCRYPTION_SECRET_UNSET = object()
+
+
+class DatabaseBusyError(RuntimeError):
+    """Raised when SQLite stays locked after short write retries."""
+
+
+def _is_sqlite_busy_error(exc: BaseException) -> bool:
+    message = str(exc).lower()
+    return any(part in message for part in _SQLITE_BUSY_MESSAGES)
+
+
+def _is_retryable_busy_error(exc: BaseException) -> bool:
+    return isinstance(exc, sqlite3.OperationalError) and _is_sqlite_busy_error(exc)
+
+
+def _wrap_async(
+    action: Callable[[], Awaitable[aiosqlite.Cursor | None]],
+) -> Callable[[], Awaitable[aiosqlite.Cursor | None]]:
+    """Обернуть action в async-fn для tenacity.AsyncRetrying.
+
+    tenacity await'ит результат ``fn()``, но ``action`` — синхронный ``Callable``,
+    возвращающий coroutine; без обёртки coroutine остался бы не-await'нутым и ни
+    одна DDL/DML внутри не выполнилась бы (#1132).
+    """
+
+    async def _runner() -> aiosqlite.Cursor | None:
+        return await action()
+
+    return _runner
+
+
+class Database:
+    def __init__(
+        self,
+        db_path: str = "data/tg_search.db",
+        session_encryption_secret: str | None | object = _SESSION_ENCRYPTION_SECRET_UNSET,
+        *,
+        read_pool_size: int = 4,
+        cache_size_kb: int = 64000,
+        mmap_size_mb: int = 256,
+    ):
+        self._db_path = db_path
+        self._session_encryption_secret = (
+            os.getenv("SESSION_ENCRYPTION_KEY")
+            if session_encryption_secret is _SESSION_ENCRYPTION_SECRET_UNSET
+            else session_encryption_secret
+        )
+        self._tuning = ConnectionTuning(cache_size_kb=cache_size_kb, mmap_size_mb=mmap_size_mb)
+        self._connection = DBConnection(db_path, tuning=self._tuning)
+        # Lone write connection (`_db`). All DML goes here under `_write_lock` so the
+        # "one writer" contract (#569) is preserved. Reads go through `_read_proxy`,
+        # backed by a pool of read connections, so a slow SELECT can't block the whole
+        # process (#760).
+        self._db: aiosqlite.Connection | None = None
+        self._read_pool: ReadConnectionPool | None = None
+        self._read_proxy: ReadPoolProxy | None = None
+        self._read_pool_size = read_pool_size
+        self._fts_available: bool = True
+        # Connection-wide write lock (issue #569). All multi-statement
+        # transactions and autocommit writes acquire this lock so that
+        # coroutines sharing one aiosqlite connection cannot interleave
+        # an autocommit INSERT/UPDATE/DELETE between awaits of an open
+        # BEGIN IMMEDIATE block (which would otherwise commit our open
+        # transaction prematurely under isolation_level=None).
+        self._write_lock: asyncio.Lock = asyncio.Lock()
+        self._busy_retry_delays_sec = _BUSY_RETRY_DELAYS_SEC
+        self._accounts: AccountsRepository | None = None
+        self._channels: ChannelsRepository | None = None
+        self._messages: MessagesRepository | None = None
+        self._tasks: CollectionTasksRepository | None = None
+        self._search_log: SearchLogRepository | None = None
+        self._channel_stats: ChannelStatsRepository | None = None
+        self._settings: SettingsRepository | None = None
+        self._filters: FilterRepository | None = None
+        self._notification_bots: NotificationBotsRepository | None = None
+        self._notified_messages: NotifiedMessagesRepository | None = None
+        self._search_queries: SearchQueriesRepository | None = None
+        self._photo_loader: PhotoLoaderRepository | None = None
+        self._dialog_cache: DialogCacheRepository | None = None
+        self._dialog_batch: DialogBatchRepository | None = None
+        self._content_pipelines: ContentPipelinesRepository | None = None
+        self._decisions: DecisionsRepository | None = None
+        self._telegram_commands: TelegramCommandsRepository | None = None
+        self._runtime_snapshots: RuntimeSnapshotsRepository | None = None
+        self._pipeline_action_log: PipelineActionLogRepository | None = None
+        self._repos: DatabaseRepositories | None = None
+
+    async def initialize(self) -> None:
+        self._db = await self._connection.connect()
+        self._fts_available = await run_migrations(self._db)
+        if not self._fts_available:
+            logger.warning(
+                "FTS5 full-text search is unavailable; text queries will use LIKE fallback"
+            )
+
+        # Read pool (#760). Repositories read through `read_db` (a proxy over the pool)
+        # so a slow SELECT only ties up one read connection, never the whole process.
+        # For :memory: each connect is a separate empty DB, so the pool degenerates to
+        # the single write connection (shared) — tests keep one consistent in-memory DB.
+        self._read_pool = ReadConnectionPool(
+            self._db_path, size=self._read_pool_size, tuning=self._tuning
+        )
+        if self._db_path == ":memory:":
+            await self._read_pool.open(shared_conn=self._db)
+        else:
+            await self._read_pool.open()
+        self._read_proxy = ReadPoolProxy(self._read_pool)
+        read_db = self._read_proxy
+
+        session_cipher = None
+        if self._session_encryption_secret:
+            # The constructor accepts a private object sentinel for the
+            # environment-backed default; at this point the truthy value is
+            # necessarily the resolved string secret.
+            session_cipher = SessionCipher(cast(str, self._session_encryption_secret))
+
+        self._accounts = AccountsRepository(
+            read_db, session_cipher=session_cipher, database=self
+        )
+        self._channels = ChannelsRepository(read_db, database=self)
+        self._messages = MessagesRepository(
+            read_db,
+            fts_available=self._fts_available,
+            database=self,
+        )
+        self._tasks = CollectionTasksRepository(read_db, database=self)
+        self._search_log = SearchLogRepository(read_db, database=self)
+        self._channel_stats = ChannelStatsRepository(read_db, database=self)
+        self._settings = SettingsRepository(read_db, database=self)
+        self._filters = FilterRepository(read_db, database=self)
+        self._notification_bots = NotificationBotsRepository(read_db, database=self)
+        self._notified_messages = NotifiedMessagesRepository(read_db, database=self)
+        self._search_queries = SearchQueriesRepository(read_db, database=self)
+        self._photo_loader = PhotoLoaderRepository(read_db, database=self)
+        self._dialog_cache = DialogCacheRepository(read_db, database=self)
+        self._dialog_batch = DialogBatchRepository(read_db, database=self)
+        self._content_pipelines = ContentPipelinesRepository(read_db, database=self)
+        self._decisions = DecisionsRepository(read_db, database=self)
+        self._telegram_commands = TelegramCommandsRepository(read_db, database=self)
+        self._runtime_snapshots = RuntimeSnapshotsRepository(read_db, database=self)
+        self._channel_ratings = ChannelRatingsRepository(read_db, database=self)
+        self._generation_runs = GenerationRunsRepository(read_db, database=self)
+        self._generated_images = GeneratedImagesRepository(read_db, database=self)
+        self._pipeline_templates = PipelineTemplatesRepository(read_db, database=self)
+        self._pipeline_action_log = PipelineActionLogRepository(read_db, database=self)
+        self._incoming_dms = IncomingDmsRepository(read_db, database=self)
+        self._dm_messages = DmMessagesRepository(read_db, database=self)
+        self._dm_reply_drafts = DmReplyDraftsRepository(read_db, database=self)
+        self._ping_monitors = PingMonitorRepository(read_db, database=self)
+        self._repos = DatabaseRepositories(
+            accounts=self._accounts,
+            channels=self._channels,
+            messages=self._messages,
+            tasks=self._tasks,
+            search_log=self._search_log,
+            channel_stats=self._channel_stats,
+            settings=self._settings,
+            filters=self._filters,
+            notification_bots=self._notification_bots,
+            notified_messages=self._notified_messages,
+            search_queries=self._search_queries,
+            photo_loader=self._photo_loader,
+            dialog_cache=self._dialog_cache,
+            dialog_batch=self._dialog_batch,
+            content_pipelines=self._content_pipelines,
+            generation_runs=self._generation_runs,
+            generated_images=self._generated_images,
+            pipeline_templates=self._pipeline_templates,
+            telegram_commands=self._telegram_commands,
+            runtime_snapshots=self._runtime_snapshots,
+            channel_ratings=self._channel_ratings,
+            pipeline_action_log=self._pipeline_action_log,
+            incoming_dms=self._incoming_dms,
+            dm_messages=self._dm_messages,
+            dm_reply_drafts=self._dm_reply_drafts,
+            ping_monitors=self._ping_monitors,
+            decisions=self._decisions,
+        )
+
+        await self._accounts.migrate_sessions()
+
+        # Seed built-in pipeline templates (idempotent)
+        try:
+            from tg_agent.services.pipeline_templates_builtin import get_builtin_templates
+            await self._pipeline_templates.ensure_builtins(get_builtin_templates())
+        except Exception:
+            logger.warning("Failed to seed built-in pipeline templates", exc_info=True)
+
+    async def close(self) -> None:
+        if self._read_pool is not None:
+            await self._read_pool.close()
+        await self._connection.close()
+
+    async def execute(self, sql: str, params: tuple = ()) -> aiosqlite.Cursor:
+        # Generic escape hatch — stays on the write connection so callers that keep a
+        # live cursor or issue DDL behave exactly as before.
+        return await self._connection.execute(sql, params)
+
+    async def execute_fetchall(self, sql: str, params: tuple = ()) -> list:
+        # Read path → pool, so a SELECT never waits on the write connection (#760).
+        if self._read_proxy is not None:
+            return await self._read_proxy.execute_fetchall(sql, params)
+        return await self._connection.execute_fetchall(sql, params)
+
+    async def _read(self, sql: str, params: tuple = ()) -> BufferedCursor:
+        """Run a facade-internal SELECT through the read pool (read twin of execute_write)."""
+        assert self._read_proxy is not None
+        return await self._read_proxy.execute(sql, params)
+
+    async def _with_busy_retry(
+        self,
+        operation: str,
+        action: Callable[[], Awaitable[aiosqlite.Cursor | None]],
+    ) -> aiosqlite.Cursor | None:
+        # tenacity вместо ручного цикла (#1132); лестница задержек — ровно
+        # self._busy_retry_delays_sec (wait_chain), попыток len(delays)+1.
+        delays = self._busy_retry_delays_sec
+
+        def _log_retry(retry_state: RetryCallState) -> None:
+            # attempt_number — номер только что провалившейся попытки (1-based),
+            # после которой спим delays[attempt_number-1]. Берём задержку из нашей
+            # лестницы, а не из tenacity-internal retry_state.next_action (то поле
+            # недокументировано и может уйти при апгрейте tenacity).
+            idx = retry_state.attempt_number - 1
+            delay = delays[idx] if 0 <= idx < len(delays) else 0.0
+            logger.warning(
+                "Database locked during %s; retrying in %.2fs (%d/%d)",
+                operation,
+                delay,
+                retry_state.attempt_number,
+                len(delays) + 1,
+            )
+
+        retryer = AsyncRetrying(
+            retry=retry_if_exception(_is_retryable_busy_error),
+            stop=stop_after_attempt(len(delays) + 1),
+            wait=wait_chain(*(wait_fixed(delay) for delay in delays)),
+            sleep=asyncio.sleep,
+            before_sleep=_log_retry,
+        )
+        try:
+            # Оборачиваем action в async-fn: tenacity AsyncRetrying await'ит
+            # результат fn(), а action — это синхронный Callable, возвращающий
+            # coroutine (lambda: begin_immediate(...)). Без обёртки coroutine
+            # остаётся не-await'нутым и BEGIN не выполняется (#1132).
+            return await retryer(_wrap_async(action))
+        except RetryError as retry_error:
+            last_exc = retry_error.last_attempt.exception()
+            logger.warning(
+                "Database stayed locked during %s after %d attempts",
+                operation,
+                len(delays) + 1,
+            )
+            raise DatabaseBusyError(
+                "Database is busy. Retry the request in a few seconds."
+            ) from last_exc
+
+    @asynccontextmanager
+    async def transaction(self) -> AsyncIterator[aiosqlite.Connection]:
+        """Acquire the connection-wide write lock and run BEGIN IMMEDIATE.
+
+        All writes inside the block run on the locked connection — no
+        other coroutine on the same aiosqlite connection can interleave
+        a DML statement that would commit our open transaction
+        prematurely (issue #569).
+
+        Always commits on clean exit, always rolls back on exception.
+        Not reentrant — nesting would deadlock asyncio.Lock.
+        """
+        assert self._db is not None
+        # Local binding keeps the narrowed (non-optional) type visible inside the lambda.
+        db = self._db
+        async with self._write_lock:
+            await self._with_busy_retry(
+                "transaction begin",
+                lambda: begin_immediate(db),
+            )
+            committed = False
+            try:
+                yield db
+                await db.execute("COMMIT")
+                committed = True
+            finally:
+                if not committed:
+                    try:
+                        await db.execute("ROLLBACK")
+                    except aiosqlite.OperationalError:
+                        pass
+
+    async def execute_write(
+        self, sql: str, params: tuple = ()
+    ) -> aiosqlite.Cursor:
+        """Locked single-statement write (INSERT/UPDATE/DELETE/REPLACE).
+
+        Holds Database._write_lock for execute()+commit() so that this
+        autocommit write cannot interleave with another coroutine's
+        open BEGIN IMMEDIATE block on the same connection (issue #569).
+        """
+        assert self._db is not None
+        db = self._db
+        async with self._write_lock:
+            async def _write_once() -> aiosqlite.Cursor:
+                cur = await db.execute(sql, params)
+                await db.commit()
+                return cur
+
+            cur = await self._with_busy_retry("execute_write", _write_once)
+            assert cur is not None
+            return cur
+
+    async def executemany_write(
+        self, sql: str, seq: Iterable[Any]
+    ) -> aiosqlite.Cursor:
+        """Locked single-statement batch write (issue #569).
+
+        Returns the cursor (callers may read ``rowcount``).
+        """
+        assert self._db is not None
+        db = self._db
+        async with self._write_lock:
+            async def _write_once() -> aiosqlite.Cursor:
+                cur = await db.executemany(sql, seq)
+                await db.commit()
+                return cur
+
+            cur = await self._with_busy_retry("executemany_write", _write_once)
+            assert cur is not None
+            return cur
+
+    @property
+    def db(self) -> aiosqlite.Connection | None:
+        return self._db
+
+    @property
+    def fts_available(self) -> bool:
+        return self._fts_available
+
+    @property
+    def filter_repo(self) -> FilterRepository:
+        self._require()
+        assert self._filters is not None
+        return self._filters
+
+    @property
+    def repos(self) -> DatabaseRepositories:
+        self._require()
+        assert self._repos is not None
+        return self._repos
+
+    def _require(self) -> None:
+        if any(
+            repo is None
+            for repo in (
+                self._accounts,
+                self._channels,
+                self._messages,
+                self._tasks,
+                self._search_log,
+                self._channel_stats,
+                self._settings,
+                self._filters,
+                self._notification_bots,
+                self._search_queries,
+                self._photo_loader,
+                self._dialog_cache,
+                self._content_pipelines,
+                self._telegram_commands,
+                self._runtime_snapshots,
+                self._pipeline_action_log,
+                self._decisions,
+            )
+        ):
+            raise RuntimeError("Database.initialize() has not been called")
+
+    async def add_account(self, account: Account) -> int:
+        self._require()
+        assert self._accounts is not None, (
+            "Database.add_account requires initialized AccountsRepository"
+        )
+        return await self._accounts.add_account(account)
+
+    async def get_accounts(self, active_only: bool = False) -> list[Account]:
+        self._require()
+        assert self._accounts is not None, (
+            "Database.get_accounts requires initialized AccountsRepository"
+        )
+        return await self._accounts.get_accounts(active_only)
+
+    async def get_live_usable_accounts(self, active_only: bool = False) -> list[Account]:
+        self._require()
+        assert self._accounts is not None, (
+            "Database.get_live_usable_accounts requires initialized AccountsRepository"
+        )
+        return await self._accounts.get_live_usable_accounts(active_only)
+
+    async def get_account_summaries(self, active_only: bool = False) -> list[AccountSummary]:
+        self._require()
+        assert self._accounts is not None, (
+            "Database.get_account_summaries requires initialized AccountsRepository"
+        )
+        return await self._accounts.get_account_summaries(active_only)
+
+    async def update_account_flood(self, phone: str, until) -> None:
+        self._require()
+        assert self._accounts is not None, (
+            "Database.update_account_flood requires initialized AccountsRepository"
+        )
+        await self._accounts.update_account_flood(phone, until)
+
+    async def update_account_premium(self, phone: str, is_premium: bool) -> None:
+        self._require()
+        assert self._accounts is not None, (
+            "Database.update_account_premium requires initialized AccountsRepository"
+        )
+        await self._accounts.update_account_premium(phone, is_premium)
+
+    async def set_account_active(self, account_id: int, active: bool) -> None:
+        self._require()
+        assert self._accounts is not None, (
+            "Database.set_account_active requires initialized AccountsRepository"
+        )
+        await self._accounts.set_account_active(account_id, active)
+
+    async def delete_account(self, account_id: int) -> None:
+        self._require()
+        assert self._accounts is not None, (
+            "Database.delete_account requires initialized AccountsRepository"
+        )
+        await self._accounts.delete_account(account_id)
+
+    async def add_channel(self, channel: Channel) -> int:
+        self._require()
+        assert self._channels is not None, (
+            "Database.add_channel requires initialized ChannelsRepository"
+        )
+        return await self._channels.add_channel(channel)
+
+    async def get_channels(
+        self, active_only: bool = False, include_filtered: bool = True
+    ) -> list[Channel]:
+        self._require()
+        assert self._channels is not None, (
+            "Database.get_channels requires initialized ChannelsRepository"
+        )
+        return await self._channels.get_channels(active_only, include_filtered)
+
+    async def get_channel_by_pk(self, pk: int) -> Channel | None:
+        self._require()
+        assert self._channels is not None, (
+            "Database.get_channel_by_pk requires initialized ChannelsRepository"
+        )
+        return await self._channels.get_channel_by_pk(pk)
+
+    async def get_channel_by_channel_id(self, channel_id: int) -> Channel | None:
+        self._require()
+        assert self._channels is not None, (
+            "Database.get_channel_by_channel_id requires initialized ChannelsRepository"
+        )
+        return await self._channels.get_channel_by_channel_id(channel_id)
+
+    async def get_channels_with_counts(
+        self, active_only: bool = False, include_filtered: bool = True
+    ) -> list[Channel]:
+        self._require()
+        assert self._channels is not None, (
+            "Database.get_channels_with_counts requires initialized ChannelsRepository"
+        )
+        return await self._channels.get_channels_with_counts(active_only, include_filtered)
+
+    async def update_channel_last_id(self, channel_id: int, last_id: int) -> None:
+        self._require()
+        assert self._channels is not None, (
+            "Database.update_channel_last_id requires initialized ChannelsRepository"
+        )
+        await self._channels.update_channel_last_id(channel_id, last_id)
+
+    async def set_channel_active(
+        self,
+        pk: int,
+        active: bool,
+        *,
+        origin: str = "auto",
+        actor: str | None = None,
+        reason: str | None = None,
+    ) -> int:
+        self._require()
+        assert self._channels is not None, (
+            "Database.set_channel_active requires initialized ChannelsRepository"
+        )
+        return await self._channels.set_channel_active(
+            pk, active, origin=origin, actor=actor, reason=reason
+        )
+
+    async def set_channel_filtered(
+        self,
+        pk: int,
+        filtered: bool,
+        *,
+        origin: str = "auto",
+        actor: str | None = None,
+        reason: str | None = None,
+    ) -> int:
+        self._require()
+        assert self._channels is not None, (
+            "Database.set_channel_filtered requires initialized ChannelsRepository"
+        )
+        return await self._channels.set_channel_filtered(
+            pk, filtered, origin=origin, actor=actor, reason=reason
+        )
+
+    async def set_channels_filtered_bulk(
+        self,
+        updates: list[tuple[int, str]],
+        *,
+        origin: str = "auto",
+        actor: str | None = None,
+        reason: str | None = None,
+        commit: bool = True,
+    ) -> ChannelBulkUpdateResult:
+        self._require()
+        assert self._channels is not None, (
+            "Database.set_channels_filtered_bulk requires initialized ChannelsRepository"
+        )
+        return await self._channels.set_filtered_bulk(
+            updates,
+            origin=origin,
+            actor=actor,
+            reason=reason,
+            commit=commit,
+        )
+
+    async def reset_all_channel_filters(
+        self,
+        *,
+        origin: str = "auto",
+        actor: str | None = None,
+        reason: str | None = None,
+        commit: bool = True,
+    ) -> tuple[int, int]:
+        self._require()
+        assert self._channels is not None, (
+            "Database.reset_all_channel_filters requires initialized ChannelsRepository"
+        )
+        return await self._channels.reset_all_filters(
+            origin=origin, actor=actor, reason=reason, commit=commit
+        )
+
+    async def reset_channel_filters_for_pks(
+        self,
+        pks: list[int],
+        *,
+        origin: str = "auto",
+        actor: str | None = None,
+        reason: str | None = None,
+        commit: bool = True,
+    ) -> tuple[int, int]:
+        self._require()
+        assert self._channels is not None, (
+            "Database.reset_channel_filters_for_pks requires initialized ChannelsRepository"
+        )
+        return await self._channels.reset_filters_for_pks(
+            pks, origin=origin, actor=actor, reason=reason, commit=commit
+        )
+
+    async def set_channel_type(self, channel_id: int, channel_type: str) -> None:
+        self._require()
+        assert self._channels is not None, (
+            "Database.set_channel_type requires initialized ChannelsRepository"
+        )
+        await self._channels.set_channel_type(channel_id, channel_type)
+
+    async def update_channel_preferred_phone(
+        self, channel_id: int, phone: str | None
+    ) -> None:
+        self._require()
+        assert self._channels is not None, (
+            "Database.update_channel_preferred_phone requires initialized ChannelsRepository"
+        )
+        await self._channels.update_channel_preferred_phone(channel_id, phone)
+
+    async def update_channel_meta(
+        self, channel_id: int, *, username: str | None, title: str | None
+    ) -> None:
+        self._require()
+        assert self._channels is not None, (
+            "Database.update_channel_meta requires initialized ChannelsRepository"
+        )
+        await self._channels.update_channel_meta(channel_id, username=username, title=title)
+
+    async def update_channel_full_meta(
+        self,
+        channel_id: int,
+        *,
+        about: str | None,
+        linked_chat_id: int | None,
+        has_comments: bool,
+    ) -> None:
+        self._require()
+        assert self._channels is not None, (
+            "Database.update_channel_full_meta requires initialized ChannelsRepository"
+        )
+        await self._channels.update_channel_full_meta(
+            channel_id, about=about, linked_chat_id=linked_chat_id, has_comments=has_comments
+        )
+
+    async def create_rename_event(
+        self,
+        channel_id: int,
+        old_title: str | None,
+        new_title: str | None,
+        old_username: str | None,
+        new_username: str | None,
+    ) -> int:
+        """Record a channel rename event awaiting user decision.
+
+        Idempotent: if a pending (undecided) event already exists for
+        this channel, returns its id without creating a duplicate.
+        """
+        self._require()
+        cur = await self._read(
+            "SELECT id FROM channel_rename_events WHERE channel_id = ? AND decision IS NULL LIMIT 1",
+            (channel_id,),
+        )
+        existing = await cur.fetchone()
+        if existing:
+            return existing["id"]
+        try:
+            write_cur = await self.execute_write(
+                """
+                INSERT INTO channel_rename_events
+                    (channel_id, old_title, new_title, old_username, new_username)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (channel_id, old_title, new_title, old_username, new_username),
+            )
+            return write_cur.lastrowid or 0
+        except sqlite3.IntegrityError:
+            # Concurrent INSERT won the race; re-select the existing row
+            cur = await self._read(
+                "SELECT id FROM channel_rename_events WHERE channel_id = ? AND decision IS NULL LIMIT 1",
+                (channel_id,),
+            )
+            row = await cur.fetchone()
+            return row["id"] if row else 0
+
+    async def list_pending_rename_events(self) -> list[dict]:
+        """Return all undecided rename events, newest first."""
+        self._require()
+        cur = await self._read(
+            """
+            SELECT e.id, e.channel_id, e.old_title, e.new_title,
+                   e.old_username, e.new_username, e.created_at,
+                   c.title AS current_title, c.username AS current_username
+            FROM channel_rename_events e
+            LEFT JOIN channels c ON c.channel_id = e.channel_id
+            WHERE e.decision IS NULL
+            ORDER BY e.created_at DESC
+            """
+        )
+        rows = await cur.fetchall()
+        return [dict(r) for r in rows]
+
+    async def count_pending_rename_events(self) -> int:
+        """Return the number of pending (undecided) rename events."""
+        self._require()
+        cur = await self._read(
+            "SELECT COUNT(*) FROM channel_rename_events WHERE decision IS NULL"
+        )
+        row = await cur.fetchone()
+        return row[0] if row else 0
+
+    async def decide_rename_event(
+        self, event_id: int, decision: str, *, commit: bool = True
+    ) -> int:
+        """Mark a rename event as decided (decision: 'filter' or 'keep').
+
+        Only updates if the event has not already been decided, preventing
+        overwrite of a previous decision in race conditions.
+        """
+        self._require()
+        sql = """
+            UPDATE channel_rename_events
+            SET decision = ?, decided_at = datetime('now')
+            WHERE id = ? AND decision IS NULL
+            """
+        if commit:
+            cur = await self.execute_write(sql, (decision, event_id))
+        else:
+            write_conn = self.db
+            assert write_conn is not None and write_conn.in_transaction, (
+                "Database.decide_rename_event(commit=False) requires an active transaction"
+            )
+            cur = await write_conn.execute(sql, (decision, event_id))
+        return cur.rowcount if cur.rowcount is not None else 0
+
+    async def get_rename_event(self, event_id: int) -> dict | None:
+        """Return a single rename event by id (including its decision), or None."""
+        self._require()
+        cur = await self._read(
+            """
+            SELECT id, channel_id, old_title, new_title,
+                   old_username, new_username, created_at,
+                   decided_at, decision
+            FROM channel_rename_events
+            WHERE id = ?
+            """,
+            (event_id,),
+        )
+        row = await cur.fetchone()
+        return dict(row) if row else None
+
+    async def ensure_channel_filtered(
+        self,
+        channel_id: int,
+        required_flags: Iterable[str],
+        *,
+        origin: str = "auto",
+        actor: str | None = None,
+        reason: str | None = None,
+    ) -> None:
+        """Idempotently mark a channel as filtered and ensure required_flags
+        are present in its filter_flags (merged with existing flags).
+
+        Used by rename-review handlers to guarantee the final filtered state
+        regardless of prior manual changes to the channel.
+        """
+        self._require()
+        assert self._channels is not None, (
+            "Database.ensure_channel_filtered requires initialized ChannelsRepository"
+        )
+        channel = await self._channels.get_channel_by_channel_id(channel_id)
+        if channel is None:
+            return
+        existing = {
+            f.strip()
+            for f in (channel.filter_flags or "").split(",")
+            if f.strip()
+        }
+        merged = existing | set(required_flags)
+        await self._channels.set_filtered_bulk(
+            [(channel_id, ",".join(sorted(merged)))],
+            origin=origin,
+            actor=actor,
+            reason=reason,
+        )
+
+    async def get_forum_topics(self, channel_id: int) -> list[dict]:
+        self._require()
+        assert self._channels is not None, (
+            "Database.get_forum_topics requires initialized ChannelsRepository"
+        )
+        return await self._channels.get_forum_topics(channel_id)
+
+    async def upsert_forum_topics(self, channel_id: int, topics: list[dict]) -> None:
+        self._require()
+        assert self._channels is not None, (
+            "Database.upsert_forum_topics requires initialized ChannelsRepository"
+        )
+        await self._channels.upsert_forum_topics(channel_id, topics)
+
+    async def delete_channel(self, pk: int) -> None:
+        self._require()
+        assert self._channels is not None, (
+            "Database.delete_channel requires initialized ChannelsRepository"
+        )
+        await self._channels.delete_channel(pk)
+
+    async def insert_message(self, msg: Message) -> bool:
+        self._require()
+        assert self._messages is not None, (
+            "Database.insert_message requires initialized MessagesRepository"
+        )
+        return await self._messages.insert_message(msg)
+
+    async def insert_messages_batch(self, messages: list[Message]) -> int:
+        self._require()
+        assert self._messages is not None, (
+            "Database.insert_messages_batch requires initialized MessagesRepository"
+        )
+        return await self._messages.insert_messages_batch(messages)
+
+    async def search_messages_for_query(
+        self,
+        sq: "SearchQuery",
+        limit: int = 1,
+    ) -> tuple[list[Message], int]:
+        self._require()
+        assert self._messages is not None, (
+            "Database.search_messages_for_query requires initialized MessagesRepository"
+        )
+        return await self._messages.search_messages_for_query(sq, limit)
+
+    async def search_messages_for_query_since(
+        self,
+        sq: "SearchQuery",
+        since: str,
+        limit: int = 3,
+    ) -> tuple[list[Message], int]:
+        self._require()
+        assert self._messages is not None, (
+            "Database.search_messages_for_query_since requires initialized MessagesRepository"
+        )
+        return await self._messages.search_messages_for_query_since(sq, since, limit)
+
+    async def search_messages(
+        self,
+        query: str = "",
+        channel_id: int | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        topic_id: int | None = None,
+        is_fts: bool = False,
+        min_length: int | None = None,
+        max_length: int | None = None,
+        include_filtered: bool = False,
+    ) -> MessageSearchPage:
+        self._require()
+        assert self._messages is not None, (
+            "Database.search_messages requires initialized MessagesRepository"
+        )
+        return await self._messages.search_messages(
+            SearchParams(
+                query=query,
+                channel_id=channel_id,
+                date_from=date_from,
+                date_to=date_to,
+                limit=limit,
+                offset=offset,
+                topic_id=topic_id,
+                is_fts=is_fts,
+                min_length=min_length,
+                max_length=max_length,
+                include_filtered=include_filtered,
+            )
+        )
+
+    async def search_semantic_messages(
+        self,
+        query_embedding: list[float],
+        *,
+        channel_id: int | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        min_length: int | None = None,
+        max_length: int | None = None,
+        candidate_limit: int | None = None,
+        include_filtered: bool = False,
+    ) -> tuple[list[Message], int]:
+        self._require()
+        assert self._messages is not None, (
+            "Database.search_semantic_messages requires initialized MessagesRepository"
+        )
+        return await self._messages.search_semantic_messages(
+            query_embedding=query_embedding,
+            channel_id=channel_id,
+            date_from=date_from,
+            date_to=date_to,
+            limit=limit,
+            offset=offset,
+            min_length=min_length,
+            max_length=max_length,
+            candidate_limit=candidate_limit,
+            include_filtered=include_filtered,
+        )
+
+    async def search_hybrid_messages(
+        self,
+        query: str,
+        query_embedding: list[float],
+        *,
+        channel_id: int | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+        is_fts: bool = False,
+        min_length: int | None = None,
+        max_length: int | None = None,
+        candidate_limit: int | None = None,
+        include_filtered: bool = False,
+    ) -> tuple[list[Message], int]:
+        self._require()
+        assert self._messages is not None, (
+            "Database.search_hybrid_messages requires initialized MessagesRepository"
+        )
+        return await self._messages.search_hybrid_messages(
+            query=query,
+            query_embedding=query_embedding,
+            channel_id=channel_id,
+            date_from=date_from,
+            date_to=date_to,
+            limit=limit,
+            offset=offset,
+            is_fts=is_fts,
+            min_length=min_length,
+            max_length=max_length,
+            candidate_limit=candidate_limit,
+            include_filtered=include_filtered,
+        )
+
+    async def delete_messages_for_channel(self, channel_id: int) -> int:
+        self._require()
+        assert self._messages is not None, (
+            "Database.delete_messages_for_channel requires initialized MessagesRepository"
+        )
+        return await self._messages.delete_messages_for_channel(channel_id)
+
+    async def get_stats(self) -> dict:
+        self._require()
+        assert self._messages is not None, (
+            "Database.get_stats requires initialized MessagesRepository"
+        )
+        return await self._messages.get_stats()
+
+    async def get_storage_stats(self) -> dict[str, int | float | str | None]:
+        """Return cheap SQLite file/page statistics for operator diagnostics.
+
+        ``freelist_count`` is deliberately exposed: SQLite does not return those
+        pages to the filesystem until a VACUUM (or incremental vacuum) is run.
+        The PRAGMAs are constant-time metadata lookups and do not scan the DB.
+        """
+        assert self._db is not None
+        db = self._db
+
+        async def _pragma_int(name: str) -> int:
+            cursor = await db.execute(f"PRAGMA {name}")
+            row = await cursor.fetchone()
+            return int(row[0]) if row else 0
+
+        page_size = await _pragma_int("page_size")
+        page_count = await _pragma_int("page_count")
+        freelist_count = await _pragma_int("freelist_count")
+        auto_vacuum = await _pragma_int("auto_vacuum")
+        cursor = await db.execute("PRAGMA journal_mode")
+        row = await cursor.fetchone()
+        journal_mode = str(row[0]) if row else None
+        file_size = None
+        if self._db_path != ":memory:":
+            try:
+                file_size = await asyncio.to_thread(os.path.getsize, self._db_path)
+            except OSError:
+                pass
+        return {
+            "path": self._db_path,
+            "file_size_bytes": file_size,
+            "page_size": page_size,
+            "page_count": page_count,
+            "freelist_count": freelist_count,
+            "freelist_percent": round(freelist_count * 100 / page_count, 2) if page_count else 0.0,
+            "vacuum_recommended": freelist_count * 100 >= page_count * 25 if page_count else False,
+            "auto_vacuum": auto_vacuum,
+            "journal_mode": journal_mode,
+        }
+
+    async def get_trending_emojis(self, limit: int = 10, days: int | None = None) -> list[dict]:
+        self._require()
+        assert self._messages is not None, (
+            "Database.get_trending_emojis requires initialized MessagesRepository"
+        )
+        return await self._messages.get_trending_emojis(limit=limit, days=days)
+
+    async def get_top_reacted_messages(
+        self,
+        limit: int = 10,
+        channel_id: int | None = None,
+        days: int | None = None,
+    ) -> list[Message]:
+        self._require()
+        assert self._messages is not None, (
+            "Database.get_top_reacted_messages requires initialized MessagesRepository"
+        )
+        return await self._messages.get_top_reacted_messages(
+            limit=limit, channel_id=channel_id, days=days
+        )
+
+    async def get_top_messages(
+        self,
+        limit: int = 50,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ) -> list[dict]:
+        self._require()
+        assert self._messages is not None, (
+            "Database.get_top_messages requires initialized MessagesRepository"
+        )
+        return await self._messages.get_top_messages(limit, date_from, date_to)
+
+    async def get_engagement_by_media_type(
+        self,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ) -> list[dict]:
+        self._require()
+        assert self._messages is not None, (
+            "Database.get_engagement_by_media_type requires initialized MessagesRepository"
+        )
+        return await self._messages.get_engagement_by_media_type(date_from, date_to)
+
+    async def get_hourly_activity(
+        self,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ) -> list[dict]:
+        self._require()
+        assert self._messages is not None, (
+            "Database.get_hourly_activity requires initialized MessagesRepository"
+        )
+        return await self._messages.get_hourly_activity(date_from, date_to)
+
+    async def get_notification_queries(self, active_only: bool = True) -> list[SearchQuery]:
+        self._require()
+        assert self._search_queries is not None, (
+            "Database.get_notification_queries requires initialized SearchQueriesRepository"
+        )
+        return await self._search_queries.get_notification_queries(active_only)
+
+    async def create_collection_task(
+        self,
+        channel_id: int,
+        channel_title: str | None,
+        *,
+        channel_username: str | None = None,
+        run_after: datetime | None = None,
+        payload: dict[str, Any] | None = None,
+        parent_task_id: int | None = None,
+    ) -> int:
+        self._require()
+        assert self._tasks is not None, (
+            "Database.create_collection_task requires initialized CollectionTasksRepository"
+        )
+        return await self._tasks.create_collection_task(
+            channel_id,
+            channel_title,
+            channel_username=channel_username,
+            run_after=run_after,
+            payload=payload,
+            parent_task_id=parent_task_id,
+        )
+
+    async def update_collection_task_progress(self, task_id: int, messages_collected: int) -> None:
+        self._require()
+        assert self._tasks is not None, (
+            "Database.update_collection_task_progress requires initialized CollectionTasksRepository"
+        )
+        await self._tasks.update_collection_task_progress(task_id, messages_collected)
+
+    async def persist_stats_progress(
+        self,
+        task_id: int,
+        *,
+        payload: StatsAllTaskPayload,
+        messages_collected: int,
+    ) -> None:
+        self._require()
+        assert self._tasks is not None, (
+            "Database.persist_stats_progress requires initialized CollectionTasksRepository"
+        )
+        await self._tasks.persist_stats_progress(task_id, payload=payload, messages_collected=messages_collected)
+
+    async def update_collection_task(
+        self,
+        task_id: int,
+        status: CollectionTaskStatus | str,
+        messages_collected: int | None = None,
+        error: str | None = None,
+        note: str | None = None,
+        run_after: datetime | None = None,
+    ) -> None:
+        self._require()
+        assert self._tasks is not None, (
+            "Database.update_collection_task requires initialized CollectionTasksRepository"
+        )
+        await self._tasks.update_collection_task(
+            task_id,
+            status,
+            messages_collected,
+            error,
+            note,
+            run_after,
+        )
+
+    async def reschedule_collection_task(
+        self,
+        task_id: int,
+        *,
+        run_after: datetime,
+        note: str | None = None,
+        messages_collected: int = 0,
+    ) -> None:
+        self._require()
+        assert self._tasks is not None, (
+            "Database.reschedule_collection_task requires initialized CollectionTasksRepository"
+        )
+        await self._tasks.reschedule_collection_task(
+            task_id,
+            run_after=run_after,
+            note=note,
+            messages_collected=messages_collected,
+        )
+
+    async def reset_collection_task_to_pending(
+        self,
+        task_id: int,
+        *,
+        note: str | None = None,
+    ) -> None:
+        self._require()
+        assert self._tasks is not None, (
+            "Database.reset_collection_task_to_pending requires initialized CollectionTasksRepository"
+        )
+        await self._tasks.reset_collection_task_to_pending(task_id, note=note)
+
+    async def get_collection_task(self, task_id: int) -> CollectionTask | None:
+        self._require()
+        assert self._tasks is not None, (
+            "Database.get_collection_task requires initialized CollectionTasksRepository"
+        )
+        return await self._tasks.get_collection_task(task_id)
+
+    async def get_collection_tasks(self, limit: int = 20) -> list[CollectionTask]:
+        self._require()
+        assert self._tasks is not None, (
+            "Database.get_collection_tasks requires initialized CollectionTasksRepository"
+        )
+        return await self._tasks.get_collection_tasks(limit)
+
+    async def count_collection_tasks(self, status_filter: str | None = None) -> int:
+        self._require()
+        assert self._tasks is not None, (
+            "Database.count_collection_tasks requires initialized CollectionTasksRepository"
+        )
+        return await self._tasks.count_collection_tasks(status_filter)
+
+    async def get_collection_tasks_paginated(
+        self, limit: int = 20, offset: int = 0, status_filter: str | None = None
+    ) -> tuple[list[CollectionTask], int]:
+        self._require()
+        assert self._tasks is not None, (
+            "Database.get_collection_tasks_paginated requires initialized CollectionTasksRepository"
+        )
+        return await self._tasks.get_collection_tasks_paginated(limit, offset, status_filter)
+
+    async def get_active_collection_tasks_for_channel(
+        self,
+        channel_id: int,
+    ) -> list[CollectionTask]:
+        self._require()
+        assert self._tasks is not None, (
+            "Database.get_active_collection_tasks_for_channel requires initialized CollectionTasksRepository"
+        )
+        return await self._tasks.get_active_collection_tasks_for_channel(channel_id)
+
+    async def get_channel_ids_with_active_tasks(self) -> set[int]:
+        self._require()
+        assert self._tasks is not None, (
+            "Database.get_channel_ids_with_active_tasks requires initialized CollectionTasksRepository"
+        )
+        return await self._tasks.get_channel_ids_with_active_tasks()
+
+    async def get_active_stats_task(self) -> CollectionTask | None:
+        self._require()
+        assert self._tasks is not None, (
+            "Database.get_active_stats_task requires initialized CollectionTasksRepository"
+        )
+        return await self._tasks.get_active_stats_task()
+
+    async def create_stats_task(
+        self,
+        payload: StatsAllTaskPayload,
+        *,
+        run_after: datetime | None = None,
+        parent_task_id: int | None = None,
+    ) -> int:
+        self._require()
+        assert self._tasks is not None, (
+            "Database.create_stats_task requires initialized CollectionTasksRepository"
+        )
+        return await self._tasks.create_stats_task(
+            payload,
+            run_after=run_after,
+            parent_task_id=parent_task_id,
+        )
+
+    async def reschedule_stats_task(
+        self,
+        task_id: int,
+        *,
+        payload: StatsAllTaskPayload,
+        run_after: datetime,
+        messages_collected: int,
+    ) -> None:
+        self._require()
+        assert self._tasks is not None, (
+            "Database.reschedule_stats_task requires initialized CollectionTasksRepository"
+        )
+        return await self._tasks.reschedule_stats_task(
+            task_id,
+            payload=payload,
+            run_after=run_after,
+            messages_collected=messages_collected,
+        )
+
+    async def get_pending_channel_tasks(self) -> list[CollectionTask]:
+        self._require()
+        assert self._tasks is not None, (
+            "Database.get_pending_channel_tasks requires initialized CollectionTasksRepository"
+        )
+        return await self._tasks.get_pending_channel_tasks()
+
+    async def delete_pending_channel_tasks(self) -> int:
+        self._require()
+        assert self._tasks is not None, (
+            "Database.delete_pending_channel_tasks requires initialized CollectionTasksRepository"
+        )
+        return await self._tasks.delete_pending_channel_tasks()
+
+    async def fail_running_collection_tasks_on_startup(self) -> int:
+        self._require()
+        assert self._tasks is not None, (
+            "Database.fail_running_collection_tasks_on_startup requires initialized CollectionTasksRepository"
+        )
+        return await self._tasks.fail_running_collection_tasks_on_startup()
+
+    async def reset_orphaned_running_tasks(self) -> int:
+        self._require()
+        assert self._tasks is not None, (
+            "Database.reset_orphaned_running_tasks requires initialized CollectionTasksRepository"
+        )
+        return await self._tasks.reset_orphaned_running_tasks()
+
+    async def cancel_collection_task(self, task_id: int, note: str | None = None) -> bool:
+        self._require()
+        assert self._tasks is not None, (
+            "Database.cancel_collection_task requires initialized CollectionTasksRepository"
+        )
+        return await self._tasks.cancel_collection_task(task_id, note=note)
+
+    async def log_search(self, phone: str, query: str, results_count: int) -> None:
+        self._require()
+        assert self._search_log is not None, (
+            "Database.log_search requires initialized SearchLogRepository"
+        )
+        await self._search_log.log_search(phone, query, results_count)
+
+    async def get_recent_searches(self, limit: int = 20) -> list[dict]:
+        self._require()
+        assert self._search_log is not None, (
+            "Database.get_recent_searches requires initialized SearchLogRepository"
+        )
+        return await self._search_log.get_recent_searches(limit)
+
+    async def save_channel_stats(self, stats: ChannelStats) -> int:
+        self._require()
+        assert self._channel_stats is not None, (
+            "Database.save_channel_stats requires initialized ChannelStatsRepository"
+        )
+        return await self._channel_stats.save_channel_stats(stats)
+
+    async def get_channel_stats(self, channel_id: int, limit: int = 1) -> list[ChannelStats]:
+        self._require()
+        assert self._channel_stats is not None, (
+            "Database.get_channel_stats requires initialized ChannelStatsRepository"
+        )
+        return await self._channel_stats.get_channel_stats(channel_id, limit)
+
+    async def get_latest_stats_for_all(self) -> dict[int, ChannelStats]:
+        self._require()
+        assert self._channel_stats is not None, (
+            "Database.get_latest_stats_for_all requires initialized ChannelStatsRepository"
+        )
+        return await self._channel_stats.get_latest_stats_for_all()
+
+    async def get_previous_subscriber_counts(self) -> dict[int, int | None]:
+        self._require()
+        assert self._channel_stats is not None, (
+            "Database.get_previous_subscriber_counts requires initialized ChannelStatsRepository"
+        )
+        return await self._channel_stats.get_previous_subscriber_counts()
+
+    async def get_setting(self, key: str) -> str | None:
+        self._require()
+        assert self._settings is not None, (
+            "Database.get_setting requires initialized SettingsRepository"
+        )
+        return await self._settings.get_setting(key)
+
+    async def set_setting(self, key: str, value: str) -> None:
+        self._require()
+        assert self._settings is not None, (
+            "Database.set_setting requires initialized SettingsRepository"
+        )
+        await self._settings.set_setting(key, value)
+
+    async def get_notification_bot(self, tg_user_id: int) -> NotificationBot | None:
+        self._require()
+        assert self._notification_bots is not None, (
+            "Database.get_notification_bot requires initialized NotificationBotsRepository"
+        )
+        return await self._notification_bots.get_bot(tg_user_id)
+
+    async def save_notification_bot(self, bot: NotificationBot) -> int:
+        self._require()
+        assert self._notification_bots is not None, (
+            "Database.save_notification_bot requires initialized NotificationBotsRepository"
+        )
+        return await self._notification_bots.save_bot(bot)
+
+    async def delete_notification_bot(self, tg_user_id: int) -> None:
+        self._require()
+        assert self._notification_bots is not None, (
+            "Database.delete_notification_bot requires initialized NotificationBotsRepository"
+        )
+        await self._notification_bots.delete_bot(tg_user_id)
+
+    # ── Agent chat ─────────────────────────────────────────────────────────────
+
+    async def create_agent_thread(self, title: str = "Новый тред") -> int:
+        self._require()
+        cur = await self.execute_write("INSERT INTO agent_threads (title) VALUES (?)", (title,))
+        assert cur.lastrowid is not None
+        return cur.lastrowid
+
+    async def get_agent_threads(self) -> list[dict]:
+        self._require()
+        cur = await self._read(
+            "SELECT id, title, created_at FROM agent_threads ORDER BY created_at DESC"
+        )
+        rows = await cur.fetchall()
+        return [dict(r) for r in rows]
+
+    async def get_agent_thread(self, thread_id: int) -> dict | None:
+        self._require()
+        cur = await self._read(
+            "SELECT id, title, created_at FROM agent_threads WHERE id = ?", (thread_id,)
+        )
+        row = await cur.fetchone()
+        return dict(row) if row else None
+
+    async def rename_agent_thread(self, thread_id: int, title: str) -> None:
+        self._require()
+        await self.execute_write(
+            "UPDATE agent_threads SET title = ? WHERE id = ?", (title, thread_id)
+        )
+
+    async def delete_agent_thread(self, thread_id: int) -> None:
+        self._require()
+        await self.execute_write("DELETE FROM agent_threads WHERE id = ?", (thread_id,))
+
+    async def get_agent_messages(self, thread_id: int) -> list[dict]:
+        self._require()
+        cur = await self._read(
+            "SELECT id, thread_id, role, content, created_at"
+            " FROM agent_messages WHERE thread_id = ? ORDER BY created_at ASC",
+            (thread_id,),
+        )
+        rows = await cur.fetchall()
+        return [dict(r) for r in rows]
+
+    async def save_agent_message(self, thread_id: int, role: str, content: str) -> None:
+        self._require()
+        await self.execute_write(
+            "INSERT INTO agent_messages (thread_id, role, content) VALUES (?, ?, ?)",
+            (thread_id, role, content),
+        )
+
+    async def delete_last_agent_exchange(self, thread_id: int) -> None:
+        """Delete the last user message and any assistant reply from a thread."""
+        self._require()
+        # Find the last user message
+        cur = await self._read(
+            "SELECT id FROM agent_messages"
+            " WHERE thread_id = ? AND role = 'user'"
+            " ORDER BY id DESC LIMIT 1",
+            (thread_id,),
+        )
+        row = await cur.fetchone()
+        if row is None:
+            return
+        last_user_id = row["id"]
+        # Delete that user message and any messages after it (assistant reply)
+        await self.execute_write(
+            "DELETE FROM agent_messages WHERE thread_id = ? AND id >= ?",
+            (thread_id, last_user_id),
+        )

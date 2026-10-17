@@ -19,16 +19,16 @@
 
 | Файл | Эндпоинтов | Сложность |
 |------|-----------|-----------|
-| `src/web/routes/analytics.py` | 4 | Низкая |
-| `src/web/routes/search.py` | 2 | Низкая |
-| `src/web/routes/search_queries.py` | 6 | Средняя |
-| `src/web/routes/channels.py` | 6 | Средняя |
-| `src/web/routes/filter.py` | 9 | Средняя |
-| `src/web/routes/settings.py` | 19 | Высокая |
-| `src/web/routes/agent.py` | 10 | Высокая |
-| `src/web/routes/photo_loader.py` | 10 | Высокая |
-| `src/web/routes/channel_collection.py` | 4 | Средняя |
-| `src/web/routes/moderation.py` | +5 | Средняя |
+| `tg_agent/web/routes/analytics.py` | 4 | Низкая |
+| `tg_agent/web/routes/search.py` | 2 | Низкая |
+| `tg_agent/web/routes/search_queries.py` | 6 | Средняя |
+| `tg_agent/web/routes/channels.py` | 6 | Средняя |
+| `tg_agent/web/routes/filter.py` | 9 | Средняя |
+| `tg_agent/web/routes/settings.py` | 19 | Высокая |
+| `tg_agent/web/routes/agent.py` | 10 | Высокая |
+| `tg_agent/web/routes/photo_loader.py` | 10 | Высокая |
+| `tg_agent/web/routes/channel_collection.py` | 4 | Средняя |
+| `tg_agent/web/routes/moderation.py` | +5 | Средняя |
 
 ---
 
@@ -54,7 +54,7 @@ app.state.shutting_down = False
 **Для CollectionQueue (scheduler/channels/search_queries):**
 
 ```python
-from src.collection_queue import CollectionQueue
+from tg_agent.collection_queue import CollectionQueue
 app.state.collection_queue = CollectionQueue(collector, db)
 # В teardown:
 await app.state.collection_queue.shutdown()
@@ -63,7 +63,7 @@ await app.state.collection_queue.shutdown()
 **Для AgentManager (agent/settings):**
 
 ```python
-from src.agent.manager import AgentManager
+from tg_agent.agent.manager import AgentManager
 agent_manager_mock = MagicMock(spec=AgentManager)
 agent_manager_mock.available = True
 agent_manager_mock.get_runtime_status = AsyncMock(return_value=runtime_status_mock)
@@ -81,14 +81,14 @@ app.state.agent_manager = agent_manager_mock
 def test_search_with_query(client, monkeypatch):
     mock_svc = MagicMock()
     mock_svc.search = AsyncMock(return_value=SearchResult(messages=[], total=0, query="x"))
-    monkeypatch.setattr("src.web.routes.search.deps.search_service", lambda r: mock_svc)
+    monkeypatch.setattr("tg_agent.web.routes.search.deps.search_service", lambda r: mock_svc)
     resp = await client.get("/search?q=x")
 ```
 
 **Способ 2: patch через context manager**
 
 ```python
-with patch("src.web.routes.scheduler.deps.scheduler_service") as mock_svc:
+with patch("tg_agent.web.routes.scheduler.deps.scheduler_service") as mock_svc:
     mock_svc.return_value.start = AsyncMock()
     await client.post("/scheduler/start")
     mock_svc.return_value.start.assert_called_once()
@@ -102,7 +102,7 @@ class FakePublishService:
     async def publish_run(self, run, pipeline):
         return [PublishResult(success=True, message_id=777)]
 
-monkeypatch.setattr("src.web.routes.moderation.PublishService", FakePublishService)
+monkeypatch.setattr("tg_agent.web.routes.moderation.PublishService", FakePublishService)
 ```
 
 ### 2.3 Вспомогательные функции
@@ -253,7 +253,7 @@ def test_search_with_query(client, monkeypatch):
     mock_svc = MagicMock()
     mock_svc.search = AsyncMock(return_value=mock_result)
     mock_svc.check_quota = AsyncMock(return_value=None)
-    monkeypatch.setattr("src.web.routes.search.deps.search_service", lambda r: mock_svc)
+    monkeypatch.setattr("tg_agent.web.routes.search.deps.search_service", lambda r: mock_svc)
     resp = await client.get("/search?q=test")
     assert resp.status_code == 200
 ```
@@ -418,11 +418,11 @@ async def _enable_dev_mode(db):
 
 ```python
 monkeypatch.setattr(
-    "src.web.routes.settings.AgentProviderService.load_provider_configs",
+    "tg_agent.web.routes.settings.AgentProviderService.load_provider_configs",
     AsyncMock(return_value=[]),
 )
 monkeypatch.setattr(
-    "src.web.routes.settings.AgentProviderService.load_model_cache",
+    "tg_agent.web.routes.settings.AgentProviderService.load_model_cache",
     AsyncMock(return_value={}),
 )
 ```
@@ -532,7 +532,7 @@ def agent_manager_mock():
 
 ```python
 monkeypatch.setattr(
-    "src.web.routes.photo_loader._persist_uploads",
+    "tg_agent.web.routes.photo_loader._persist_uploads",
     AsyncMock(return_value=[]),
 )
 ```
@@ -572,7 +572,7 @@ monkeypatch.setattr(
 **Фикстура:**
 
 ```python
-from src.services.task_enqueuer import TaskEnqueuer
+from tg_agent.services.task_enqueuer import TaskEnqueuer
 enqueuer_mock = MagicMock(spec=TaskEnqueuer)
 enqueuer_mock.enqueue_pipeline_run = AsyncMock()
 app.state.task_enqueuer = enqueuer_mock
@@ -611,8 +611,8 @@ assert "text/event-stream" in resp.headers["content-type"]
 **Решение:** Мокать через monkeypatch:
 
 ```python
-monkeypatch.setattr("src.web.routes.settings.AgentProviderService.load_provider_configs", AsyncMock(return_value=[]))
-monkeypatch.setattr("src.web.routes.settings.AgentProviderService.load_model_cache", AsyncMock(return_value={}))
+monkeypatch.setattr("tg_agent.web.routes.settings.AgentProviderService.load_provider_configs", AsyncMock(return_value=[]))
+monkeypatch.setattr("tg_agent.web.routes.settings.AgentProviderService.load_model_cache", AsyncMock(return_value={}))
 ```
 
 ### 4.4 MagicMock().available truthy по умолчанию
@@ -718,15 +718,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.config import AppConfig
-from src.database import Database
-from src.models import Account, Channel
-from src.scheduler.service import SchedulerManager
-from src.search.ai_search import AISearchEngine
-from src.search.engine import SearchEngine
-from src.telegram.auth import TelegramAuth
-from src.telegram.collector import Collector
-from src.web.app import create_app
+from tg_agent.config import AppConfig
+from tg_agent.database import Database
+from tg_agent.models import Account, Channel
+from tg_agent.scheduler.service import SchedulerManager
+from tg_agent.search.ai_search import AISearchEngine
+from tg_agent.search.engine import SearchEngine
+from tg_agent.telegram.auth import TelegramAuth
+from tg_agent.telegram.collector import Collector
+from tg_agent.web.app import create_app
 
 
 @pytest.fixture

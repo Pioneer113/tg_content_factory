@@ -9,20 +9,20 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.agent.manager import AgentManager
-from src.collection_queue import CollectionQueue
-from src.config import AppConfig, DatabaseConfig
-from src.database import Database
-from src.models import Account, Channel, RuntimeSnapshot
-from src.scheduler.service import SchedulerManager
-from src.search.ai_search import AISearchEngine
-from src.search.engine import SearchEngine
-from src.services.provider_service import RuntimeProviderRegistry
-from src.telegram.auth import TelegramAuth
-from src.telegram.collector import Collector
-from src.web.app import create_app
-from src.web.bootstrap import build_container_with_templates
-from src.web.log_handler import LogBuffer
+from tg_agent.agent.manager import AgentManager
+from tg_agent.collection_queue import CollectionQueue
+from tg_agent.config import AppConfig, DatabaseConfig
+from tg_agent.database import Database
+from tg_agent.models import Account, Channel, RuntimeSnapshot
+from tg_agent.scheduler.service import SchedulerManager
+from tg_agent.search.ai_search import AISearchEngine
+from tg_agent.search.engine import SearchEngine
+from tg_agent.services.provider_service import RuntimeProviderRegistry
+from tg_agent.telegram.auth import TelegramAuth
+from tg_agent.telegram.collector import Collector
+from tg_agent.web.app import create_app
+from tg_agent.web.bootstrap import build_container_with_templates
+from tg_agent.web.log_handler import LogBuffer
 
 
 @pytest.fixture
@@ -167,7 +167,7 @@ def agent_manager_mock():
 #
 # This fixture goes through the real `build_container_with_templates`
 # bootstrap with `runtime_mode="web"` — the exact same wiring that
-# `python -m src.main serve` uses in production. Tests that want to exercise
+# `python -m tg_agent.main serve` uses in production. Tests that want to exercise
 # the web-mode code path should take this fixture instead of `base_app`.
 
 _WEB_MODE_PASSWORD = "testpass"
@@ -207,7 +207,7 @@ async def web_mode_app(tmp_path):
 
     app = create_app(config)
     # Copy every relevant attribute from the real container — this is the exact
-    # surface `src/web/app.py:lifespan` sets up when `serve` boots.
+    # surface `tg_agent/web/app.py:lifespan` sets up when `serve` boots.
     for attr in (
         "db", "config", "pool", "collector", "scheduler", "auth", "notifier",
         "collection_queue", "unified_dispatcher", "telegram_command_dispatcher",

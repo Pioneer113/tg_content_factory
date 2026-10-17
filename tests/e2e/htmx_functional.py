@@ -35,7 +35,7 @@ produces.
 
 Run it by hand or via pytest (``tests/e2e/test_htmx_functional.py``)::
 
-    python -m src.main serve --web-pass secret      # in another terminal
+    python -m tg_agent.main serve --web-pass secret      # in another terminal
     RUN_E2E_CONSOLE_SMOKE=1 E2E_BASE_URL=http://localhost:8080 WEB_PASS=secret \\
         pytest tests/e2e/test_htmx_functional.py -m e2e
 """

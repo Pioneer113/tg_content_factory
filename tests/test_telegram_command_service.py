@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.models import TelegramCommand
-from src.services.telegram_command_service import TelegramCommandService
+from tg_agent.models import TelegramCommand
+from tg_agent.services.telegram_command_service import TelegramCommandService
 
 
 @pytest.fixture

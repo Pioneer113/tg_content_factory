@@ -11,14 +11,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.config import LLMConfig
-from src.database.repositories.messages import MessageSearchPage
-from src.models import Message
-from src.search.ai_search import AISearchEngine
-from src.services.generation_service import GenerationService
-from src.services.pipeline_nodes.handlers import _build_source_messages as graph_source_messages
-from src.services.translation_service import TranslationService
-from src.utils.sanitize import sanitize_dict, sanitize_name, sanitize_user_content
+from tg_agent.config import LLMConfig
+from tg_agent.database.repositories.messages import MessageSearchPage
+from tg_agent.models import Message
+from tg_agent.search.ai_search import AISearchEngine
+from tg_agent.services.generation_service import GenerationService
+from tg_agent.services.pipeline_nodes.handlers import _build_source_messages as graph_source_messages
+from tg_agent.services.translation_service import TranslationService
+from tg_agent.utils.sanitize import sanitize_dict, sanitize_name, sanitize_user_content
 
 # (adversarial input, expected output) — every invisible/stealth carrier must die
 ADVERSARIAL_CASES = [
@@ -42,7 +42,7 @@ class DummySearchEngine:
         self._messages = messages
 
     async def search_hybrid(self, query: str, **kwargs):
-        from src.models import SearchResult
+        from tg_agent.models import SearchResult
 
         return SearchResult(messages=self._messages, total=len(self._messages), query=query)
 
@@ -162,8 +162,8 @@ async def test_graph_node_prompt_is_sanitized():
 
 async def test_llm_refine_fallback_prompt_is_sanitized():
     """source → llm_refine without llm_generate: the fallback must not pass raw text (#1546 review)."""
-    from src.services.pipeline_nodes.base import NodeContext
-    from src.services.pipeline_nodes.handlers import LlmRefineHandler
+    from tg_agent.services.pipeline_nodes.base import NodeContext
+    from tg_agent.services.pipeline_nodes.handlers import LlmRefineHandler
 
     context = NodeContext()
     context.set_global("context_messages", [_message(INJECTION_MESSAGE)])

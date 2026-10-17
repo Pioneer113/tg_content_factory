@@ -26,7 +26,7 @@ _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 
 def _require_codex() -> None:
-    from src.services.provider_adapters import codex_available
+    from tg_agent.services.provider_adapters import codex_available
 
     codex_available.cache_clear()
     if not codex_available():

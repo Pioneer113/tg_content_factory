@@ -28,7 +28,7 @@ _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 @pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 @pytest.mark.timeout(300)
 async def test_codex_adapter_generates_valid_png(tmp_path):
-    from src.services.provider_adapters import codex_available, make_codex_image_adapter
+    from tg_agent.services.provider_adapters import codex_available, make_codex_image_adapter
 
     if not codex_available():
         pytest.skip("Codex SDK not installed or Codex CLI not authenticated")

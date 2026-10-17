@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.models import (
+from tg_agent.models import (
     CollectionTask,
     CollectionTaskStatus,
     CollectionTaskType,
@@ -18,8 +18,8 @@ from src.models import (
     ContentPublishTaskPayload,
     PipelinePublishMode,
 )
-from src.services.publish_service import PublishResult
-from src.services.task_handlers import ContentTaskHandler, TaskHandlerContext
+from tg_agent.services.publish_service import PublishResult
+from tg_agent.services.task_handlers import ContentTaskHandler, TaskHandlerContext
 
 
 def _context() -> TaskHandlerContext:
@@ -78,10 +78,10 @@ async def test_auto_publish_delivery_failure_marks_task_failed():
     gen.generate = AsyncMock(return_value=run)
 
     with (
-        patch("src.services.pipeline_service.PipelineService") as pipe_cls,
-        patch("src.services.publish_service.PublishService") as pub_cls,
+        patch("tg_agent.services.pipeline_service.PipelineService") as pipe_cls,
+        patch("tg_agent.services.publish_service.PublishService") as pub_cls,
         patch(
-            "src.services.task_handlers.content.build_content_generation_service",
+            "tg_agent.services.task_handlers.content.build_content_generation_service",
             AsyncMock(return_value=gen),
         ),
     ):
@@ -111,10 +111,10 @@ async def test_auto_publish_success_marks_task_completed():
     gen.generate = AsyncMock(return_value=run)
 
     with (
-        patch("src.services.pipeline_service.PipelineService") as pipe_cls,
-        patch("src.services.publish_service.PublishService") as pub_cls,
+        patch("tg_agent.services.pipeline_service.PipelineService") as pipe_cls,
+        patch("tg_agent.services.publish_service.PublishService") as pub_cls,
         patch(
-            "src.services.task_handlers.content.build_content_generation_service",
+            "tg_agent.services.task_handlers.content.build_content_generation_service",
             AsyncMock(return_value=gen),
         ),
     ):
@@ -153,10 +153,10 @@ async def test_content_publish_partial_delivery_marks_task_failed():
     )
 
     with (
-        patch("src.services.pipeline_service.PipelineService") as pipe_cls,
-        patch("src.services.publish_service.PublishService") as pub_cls,
+        patch("tg_agent.services.pipeline_service.PipelineService") as pipe_cls,
+        patch("tg_agent.services.publish_service.PublishService") as pub_cls,
         patch(
-            "src.database.repositories.generation_runs.GenerationRunsRepository._to_generation_run",
+            "tg_agent.database.repositories.generation_runs.GenerationRunsRepository._to_generation_run",
             staticmethod(lambda row: row),
         ),
     ):
@@ -185,10 +185,10 @@ async def test_content_publish_full_success_marks_completed():
     )
 
     with (
-        patch("src.services.pipeline_service.PipelineService") as pipe_cls,
-        patch("src.services.publish_service.PublishService") as pub_cls,
+        patch("tg_agent.services.pipeline_service.PipelineService") as pipe_cls,
+        patch("tg_agent.services.publish_service.PublishService") as pub_cls,
         patch(
-            "src.database.repositories.generation_runs.GenerationRunsRepository._to_generation_run",
+            "tg_agent.database.repositories.generation_runs.GenerationRunsRepository._to_generation_run",
             staticmethod(lambda row: row),
         ),
     ):

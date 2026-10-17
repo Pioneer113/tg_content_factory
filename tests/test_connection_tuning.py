@@ -6,9 +6,9 @@ import aiosqlite
 import pytest
 from pydantic import ValidationError
 
-from src.config import DatabaseConfig
-from src.database.connection import ConnectionTuning, DBConnection, apply_pragmas
-from src.database.facade import Database
+from tg_agent.config import DatabaseConfig
+from tg_agent.database.connection import ConnectionTuning, DBConnection, apply_pragmas
+from tg_agent.database.facade import Database
 
 
 async def _pragma(conn, name: str):

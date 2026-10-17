@@ -15,12 +15,12 @@ from pathlib import Path
 
 import pytest
 
-from src.cli.dotenv import load_cli_dotenv
-from src.config import load_config
 from tests.cli_real_tg_integration._live_readiness import (
     _gate_enabled,
     _resolve_api_credentials,
 )
+from tg_agent.cli.dotenv import load_cli_dotenv
+from tg_agent.config import load_config
 
 CLI_REAL_TG_LIVE_GATE_ENV = "RUN_CLI_REAL_TG_LIVE"
 CLI_REAL_TG_ROOT_ENV = "CLI_REAL_TG_ROOT"
@@ -586,7 +586,7 @@ def _cli_command(cli_env: CliEnv, args: tuple[str, ...]) -> list[str]:
     return [
         sys.executable,
         "-m",
-        "src.main",
+        "tg_agent.main",
         "--config",
         str(cli_env.config_path),
         *args,

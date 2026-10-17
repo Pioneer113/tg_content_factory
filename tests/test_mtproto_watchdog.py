@@ -17,13 +17,13 @@ import pytest
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 
-from src.telegram.mtproto_watchdog import (
+from tests.helpers import drain_loop, wait_until
+from tg_agent.telegram.mtproto_watchdog import (
     SECURITY_WARNING_SUBSTR,
     TGCF_TELETHON_LOGGER_ROOT,
     MTProtoSecurityWatchdog,
     bind_telethon_base_logger,
 )
-from tests.helpers import drain_loop, wait_until
 
 PHONE_A = "+70001112233"
 PHONE_B = "+70002223344"
@@ -230,7 +230,7 @@ class TestForceReconnectPhone:
     def _pool_with_client(raw) -> object:
         from types import SimpleNamespace
 
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool.clients = {PHONE_A: SimpleNamespace(raw_client=raw)}
@@ -251,7 +251,7 @@ class TestForceReconnectPhone:
         raw.connect.assert_awaited_once()
 
     async def test_unknown_phone_returns_false(self):
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool.clients = {}
@@ -272,8 +272,8 @@ class TestBackendLoggerProvider:
     async def test_native_backend_passes_per_phone_logger(self):
         from unittest.mock import MagicMock
 
-        from src.models import Account
-        from src.telegram.backends import NativeTelethonBackend
+        from tg_agent.models import Account
+        from tg_agent.telegram.backends import NativeTelethonBackend
 
         auth = MagicMock()
         client = MagicMock()
@@ -298,8 +298,8 @@ class TestBackendLoggerProvider:
         reconnect of the healthy *pooled* client."""
         from unittest.mock import MagicMock
 
-        from src.models import Account
-        from src.telegram.backends import NativeTelethonBackend
+        from tg_agent.models import Account
+        from tg_agent.telegram.backends import NativeTelethonBackend
 
         auth = MagicMock()
         auth.create_client_from_session = AsyncMock(return_value=MagicMock())
@@ -317,8 +317,8 @@ class TestBackendLoggerProvider:
     async def test_router_marks_force_native_as_ephemeral(self):
         from unittest.mock import MagicMock
 
-        from src.models import Account
-        from src.telegram.backends import BackendRouter
+        from tg_agent.models import Account
+        from tg_agent.telegram.backends import BackendRouter
 
         native = MagicMock()
         native.acquire_client = AsyncMock(return_value=MagicMock())
@@ -332,8 +332,8 @@ class TestBackendLoggerProvider:
     async def test_router_native_mode_pooled_client_is_supervised(self):
         from unittest.mock import MagicMock
 
-        from src.models import Account
-        from src.telegram.backends import BackendRouter
+        from tg_agent.models import Account
+        from tg_agent.telegram.backends import BackendRouter
 
         native = MagicMock()
         native.acquire_client = AsyncMock(return_value=MagicMock())
@@ -352,7 +352,7 @@ class TestDisconnectAllUninstall:
         the dead pool referenced and pile up across pool re-creations."""
         from unittest.mock import MagicMock
 
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool.__new__(ClientPool)
         pool.clients = {}

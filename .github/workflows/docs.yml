@@ -6,9 +6,9 @@ on:
     paths:
       - "docs/**"
       - "mkdocs.yml"
-      # autodoc (mkdocstrings) рендерит API-страницы из docstring в src/,
+      # autodoc (mkdocstrings) рендерит API-страницы из docstring в tg_agent/,
       # поэтому изменения кода тоже должны пере-деплоить доки (#1071).
-      - "src/**"
+      - "tg_agent/**"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 

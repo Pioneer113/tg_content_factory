@@ -7,9 +7,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.models import Channel, Message, PipelineEdge, PipelineGraph, PipelineNode, PipelineNodeType
-from src.services.pipeline_service import PipelineService
 from tests.agent_tools_helpers import _get_tool_handlers, _text
+from tg_agent.models import Channel, Message, PipelineEdge, PipelineGraph, PipelineNode, PipelineNodeType
+from tg_agent.services.pipeline_service import PipelineService
 
 
 def _make_pipeline(
@@ -49,7 +49,7 @@ def _make_run(run_id=1, pipeline_id=1, status="pending", moderation_status="pend
 class TestPipelinesToolListPipelines:
     @pytest.mark.anyio
     async def test_empty(self, mock_db):
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.list_pipelines = AsyncMock(return_value=[])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["list_pipelines"]({"active_only": False})
@@ -66,7 +66,7 @@ class TestPipelinesToolListPipelines:
             schedule_cron="0 * * * *",
             generation_backend="chain",
         )
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.list_pipelines = AsyncMock(return_value=[p])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["list_pipelines"]({"active_only": True})
@@ -77,7 +77,7 @@ class TestPipelinesToolListPipelines:
 
     @pytest.mark.anyio
     async def test_error(self, mock_db):
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.list_pipelines = AsyncMock(side_effect=Exception("db err"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["list_pipelines"]({})
@@ -85,7 +85,7 @@ class TestPipelinesToolListPipelines:
 
     @pytest.mark.anyio
     async def test_empty_returns_not_found(self, mock_db):
-        with patch("src.services.pipeline_service.PipelineService.list_pipelines", AsyncMock(return_value=[])):
+        with patch("tg_agent.services.pipeline_service.PipelineService.list_pipelines", AsyncMock(return_value=[])):
             handlers = _get_tool_handlers(mock_db, config=MagicMock())
             result = await handlers["list_pipelines"]({})
             assert "Пайплайны не найдены" in _text(result)
@@ -93,7 +93,7 @@ class TestPipelinesToolListPipelines:
     @pytest.mark.anyio
     async def test_with_pipelines(self, mock_db):
         p = _make_pipeline(pk=1, name="NewsPipeline")
-        with patch("src.services.pipeline_service.PipelineService.list_pipelines", AsyncMock(return_value=[p])):
+        with patch("tg_agent.services.pipeline_service.PipelineService.list_pipelines", AsyncMock(return_value=[p])):
             handlers = _get_tool_handlers(mock_db, config=MagicMock())
             result = await handlers["list_pipelines"]({})
             text = _text(result)
@@ -110,7 +110,7 @@ class TestPipelinesToolGetPipelineDetail:
 
     @pytest.mark.anyio
     async def test_not_found(self, mock_db):
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.get_detail = AsyncMock(return_value=None)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_pipeline_detail"]({"pipeline_id": 999})
@@ -134,7 +134,7 @@ class TestPipelinesToolGetPipelineDetail:
             "source_titles": ["Channel A", "Channel B"],
             "target_refs": ["@target"],
         }
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.get_detail = AsyncMock(return_value=detail)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_pipeline_detail"]({"pipeline_id": 2})
@@ -151,7 +151,7 @@ class TestPipelinesToolGetPipelineDetail:
     @pytest.mark.anyio
     async def test_pipeline_not_found(self, mock_db):
         with patch(
-            "src.services.pipeline_service.PipelineService.get_detail", AsyncMock(return_value=None)
+            "tg_agent.services.pipeline_service.PipelineService.get_detail", AsyncMock(return_value=None)
         ):
             handlers = _get_tool_handlers(mock_db, config=MagicMock())
             result = await handlers["get_pipeline_detail"]({"pipeline_id": 999})
@@ -168,7 +168,7 @@ class TestPipelinesToolGetPipelineDetail:
             "targets": [MagicMock(phone="phone1", dialog_id=123)],
         }
         with patch(
-            "src.services.pipeline_service.PipelineService.get_detail", AsyncMock(return_value=detail)
+            "tg_agent.services.pipeline_service.PipelineService.get_detail", AsyncMock(return_value=detail)
         ):
             handlers = _get_tool_handlers(mock_db, config=MagicMock())
             result = await handlers["get_pipeline_detail"]({"pipeline_id": 1})
@@ -247,8 +247,8 @@ class TestPipelinesToolAddPipeline:
 
     @pytest.mark.anyio
     async def test_creates_pipeline(self, mock_db):
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
-            with patch("src.services.pipeline_service.PipelineTargetRef"):
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
+            with patch("tg_agent.services.pipeline_service.PipelineTargetRef"):
                 mock_svc.return_value.add = AsyncMock(return_value=10)
                 handlers = _get_tool_handlers(mock_db)
                 result = await handlers["add_pipeline"]({
@@ -286,7 +286,7 @@ class TestPipelinesToolTogglePipeline:
 
     @pytest.mark.anyio
     async def test_not_found(self, mock_db):
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.toggle = AsyncMock(return_value=False)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["toggle_pipeline"]({"pipeline_id": 99})
@@ -295,7 +295,7 @@ class TestPipelinesToolTogglePipeline:
     @pytest.mark.anyio
     async def test_toggled(self, mock_db):
         p = SimpleNamespace(id=1, name="P1", is_active=True)
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.toggle = AsyncMock(return_value=True)
             mock_svc.return_value.get = AsyncMock(return_value=p)
             handlers = _get_tool_handlers(mock_db)
@@ -312,7 +312,7 @@ class TestPipelinesToolTogglePipeline:
 
     @pytest.mark.anyio
     async def test_pipeline_not_found(self, mock_db):
-        with patch("src.services.pipeline_service.PipelineService.toggle", AsyncMock(return_value=False)):
+        with patch("tg_agent.services.pipeline_service.PipelineService.toggle", AsyncMock(return_value=False)):
             handlers = _get_tool_handlers(mock_db, config=MagicMock())
             result = await handlers["toggle_pipeline"]({"pipeline_id": 999})
             assert "не найден" in _text(result)
@@ -321,8 +321,8 @@ class TestPipelinesToolTogglePipeline:
     async def test_toggle_activates(self, mock_db):
         p = _make_pipeline(pk=1, name="Test", is_active=True)
         with patch(
-            "src.services.pipeline_service.PipelineService.toggle", AsyncMock(return_value=True)
-        ), patch("src.services.pipeline_service.PipelineService.get", AsyncMock(return_value=p)):
+            "tg_agent.services.pipeline_service.PipelineService.toggle", AsyncMock(return_value=True)
+        ), patch("tg_agent.services.pipeline_service.PipelineService.get", AsyncMock(return_value=p)):
             handlers = _get_tool_handlers(mock_db, config=MagicMock())
             result = await handlers["toggle_pipeline"]({"pipeline_id": 1})
             assert "активирован" in _text(result) or "деактивирован" in _text(result)
@@ -338,7 +338,7 @@ class TestPipelinesToolDeletePipeline:
     @pytest.mark.anyio
     async def test_requires_confirmation(self, mock_db):
         p = SimpleNamespace(id=1, name="PipeX")
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.get = AsyncMock(return_value=p)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["delete_pipeline"]({"pipeline_id": 1, "confirm": False})
@@ -347,7 +347,7 @@ class TestPipelinesToolDeletePipeline:
     @pytest.mark.anyio
     async def test_deletes_with_confirmation(self, mock_db):
         p = SimpleNamespace(id=1, name="PipeToDelete")
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.get = AsyncMock(return_value=p)
             mock_svc.return_value.delete = AsyncMock()
             handlers = _get_tool_handlers(mock_db)
@@ -359,7 +359,7 @@ class TestPipelinesToolDeletePipeline:
     @pytest.mark.anyio
     async def test_requires_confirm_new(self, mock_db):
         p = _make_pipeline(pk=1, name="Test")
-        with patch("src.services.pipeline_service.PipelineService.get", AsyncMock(return_value=p)):
+        with patch("tg_agent.services.pipeline_service.PipelineService.get", AsyncMock(return_value=p)):
             handlers = _get_tool_handlers(mock_db, config=MagicMock())
             result = await handlers["delete_pipeline"]({"pipeline_id": 1})
             assert "confirm=true" in _text(result).lower()
@@ -672,7 +672,7 @@ class TestGetPipelineDryRunCountTool:
 
     @pytest.mark.anyio
     async def test_not_found(self, mock_db):
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.get_detail = AsyncMock(return_value=None)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_pipeline_dry_run_count"]({"pipeline_id": 9})
@@ -682,7 +682,7 @@ class TestGetPipelineDryRunCountTool:
     async def test_counts_messages(self, mock_db):
         mock_db.repos = MagicMock()
         mock_db.repos.messages.get_recent_for_channels = AsyncMock(return_value=[1, 2, 3])
-        with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
             mock_svc.return_value.get_detail = AsyncMock(return_value={"source_ids": [100, 200]})
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_pipeline_dry_run_count"](

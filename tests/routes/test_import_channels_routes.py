@@ -8,7 +8,7 @@ import io
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.models import Channel
+from tg_agent.models import Channel
 
 
 @pytest.fixture
@@ -158,7 +158,7 @@ async def test_import_file_empty(client):
 @pytest.mark.anyio
 async def test_import_file_too_large_rejected(client):
     """#633 bug #20: an oversized upload is rejected with 413, not read into memory."""
-    from src.web.routes.import_channels import MAX_IMPORT_FILE_BYTES
+    from tg_agent.web.routes.import_channels import MAX_IMPORT_FILE_BYTES
 
     oversized = b"@channel\n" * ((MAX_IMPORT_FILE_BYTES // 9) + 2)
     assert len(oversized) > MAX_IMPORT_FILE_BYTES
@@ -173,7 +173,7 @@ async def test_import_file_too_large_rejected(client):
 @pytest.mark.anyio
 async def test_import_request_content_length_over_cap_rejected_before_app():
     """Oversized import requests with Content-Length are rejected before route parsing."""
-    from src.web.app import ImportUploadLimitMiddleware
+    from tg_agent.web.app import ImportUploadLimitMiddleware
 
     called = False
 
@@ -209,7 +209,7 @@ async def test_import_request_content_length_over_cap_rejected_before_app():
 @pytest.mark.anyio
 async def test_import_request_stream_over_cap_rejected_before_app():
     """Import requests without Content-Length are capped while reading ASGI chunks."""
-    from src.web.app import ImportUploadLimitMiddleware
+    from tg_agent.web.app import ImportUploadLimitMiddleware
 
     called = False
 
@@ -249,7 +249,7 @@ async def test_import_request_stream_over_cap_rejected_before_app():
 @pytest.mark.anyio
 async def test_import_file_at_limit_accepted(client):
     """A file exactly at the size limit is still accepted."""
-    from src.web.routes.import_channels import MAX_IMPORT_FILE_BYTES
+    from tg_agent.web.routes.import_channels import MAX_IMPORT_FILE_BYTES
 
     line = b"@channel1\n"
     content = line * (MAX_IMPORT_FILE_BYTES // len(line))

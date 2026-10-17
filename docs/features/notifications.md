@@ -6,11 +6,11 @@
 
 === "CLI"
     ```bash
-    python -m src.main notification setup      # создать бота через BotFather
-    python -m src.main notification status     # статус бота
-    python -m src.main notification test       # тестовое сообщение
-    python -m src.main notification dry-run    # превью совпадений без отправки
-    python -m src.main notification delete     # удалить бота
+    python -m tg_agent.main notification setup      # создать бота через BotFather
+    python -m tg_agent.main notification status     # статус бота
+    python -m tg_agent.main notification test       # тестовое сообщение
+    python -m tg_agent.main notification dry-run    # превью совпадений без отправки
+    python -m tg_agent.main notification delete     # удалить бота
     ```
 
 === "Web"
@@ -28,7 +28,7 @@
 Проверить текущие совпадения без отправки уведомлений:
 
 ```bash
-python -m src.main notification dry-run
+python -m tg_agent.main notification dry-run
 ```
 
 Web: `POST /scheduler/dry-run-notifications`

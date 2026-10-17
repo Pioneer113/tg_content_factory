@@ -2,8 +2,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.models import Account, AccountSessionStatus, AccountSummary
-from src.services.account_service import (
+from tg_agent.models import Account, AccountSessionStatus, AccountSummary
+from tg_agent.services.account_service import (
     AccountService,
     pick_default_account_phone,
     resolve_default_phone,
@@ -146,7 +146,7 @@ async def test_account_service_delete_proceeds_when_pool_remove_fails(mock_bundl
 
 @pytest.mark.anyio
 async def test_account_service_init_with_db():
-    from src.database import Database
+    from tg_agent.database import Database
 
     db = MagicMock(spec=Database)
     # This just tests that it doesn't crash during init

@@ -7,8 +7,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from src.models import Channel, Message
-from src.services.telegram_export_builder import (
+from tg_agent.models import Channel, Message
+from tg_agent.services.telegram_export_builder import (
     MANIFEST_JSON_NAME,
     MEDIA_NOT_INCLUDED,
     MEDIA_TOO_BIG,

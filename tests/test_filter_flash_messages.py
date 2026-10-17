@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from src.web.template_globals import FLASH_ERRORS, FLASH_MESSAGES
+from tg_agent.web.template_globals import FLASH_ERRORS, FLASH_MESSAGES
 
 
 def test_filter_success_codes_registered():

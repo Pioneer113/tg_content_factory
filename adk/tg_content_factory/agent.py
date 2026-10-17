@@ -22,16 +22,16 @@ from contextlib import closing
 from pathlib import Path
 from urllib.parse import quote
 
-from src.agent.adk_backend import build_adk_agent
-from src.agent.prompt_template import (
+from tg_agent.agent.adk_backend import build_adk_agent
+from tg_agent.agent.prompt_template import (
     AGENT_PROMPT_TEMPLATE_SETTING,
     DEFAULT_AGENT_PROMPT_TEMPLATE,
     build_prompt_template_context,
     render_prompt_template,
     validate_prompt_template,
 )
-from src.cli.dotenv import load_cli_dotenv
-from src.config import AppConfig, load_config
+from tg_agent.cli.dotenv import load_cli_dotenv
+from tg_agent.config import AppConfig, load_config
 
 
 def _configured_prompt(config: AppConfig) -> str:

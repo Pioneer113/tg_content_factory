@@ -6,8 +6,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from src.models import SearchQuery, SearchQueryDailyStat
-from src.services.search_query_service import SearchQueryService
+from tg_agent.models import SearchQuery, SearchQueryDailyStat
+from tg_agent.services.search_query_service import SearchQueryService
 
 
 class FakeBundle:

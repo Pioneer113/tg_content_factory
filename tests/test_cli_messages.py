@@ -8,10 +8,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.config import AppConfig
-from src.models import Account, Message
 from tests.helpers import cli_add_channel as _add_channel
 from tests.helpers import cli_ns as _ns
+from tg_agent.config import AppConfig
+from tg_agent.models import Account, Message
 
 NOW = __import__("datetime").datetime(
     2025, 1, 1, 12, 0, 0, tzinfo=__import__("datetime").timezone.utc
@@ -37,7 +37,7 @@ def test_messages_read_text_format(cli_env, capsys):
     _add_channel(cli_env, channel_id=100, title="MsgCh")
     _add_message(cli_env, channel_id=100, message_id=1, text="test message")
 
-    from src.cli.commands.messages import run
+    from tg_agent.cli.commands.messages import run
 
     run(_ns(
         messages_action="read",
@@ -68,7 +68,7 @@ def test_messages_read_text_format_with_reactions(cli_env, capsys):
         reactions_json='[{"emoji": "👍", "count": 5}, {"emoji": "❤️", "count": 2}]',
     )
 
-    from src.cli.commands.messages import run
+    from tg_agent.cli.commands.messages import run
 
     run(_ns(
         messages_action="read",
@@ -98,7 +98,7 @@ def test_messages_read_json_format(cli_env, capsys):
         reactions_json='[{"emoji": "🔥", "count": 7}]',
     )
 
-    from src.cli.commands.messages import run
+    from tg_agent.cli.commands.messages import run
 
     run(_ns(
         messages_action="read",
@@ -130,7 +130,7 @@ def test_messages_read_csv_format(cli_env, capsys):
         reactions_json='[{"emoji": "custom:42", "count": 3}]',
     )
 
-    from src.cli.commands.messages import run
+    from tg_agent.cli.commands.messages import run
 
     run(_ns(
         messages_action="read",
@@ -157,7 +157,7 @@ def test_messages_read_with_query_filter(cli_env, capsys):
     _add_message(cli_env, channel_id=100, message_id=1, text="important alert")
     _add_message(cli_env, channel_id=100, message_id=2, text="boring stuff")
 
-    from src.cli.commands.messages import run
+    from tg_agent.cli.commands.messages import run
 
     run(_ns(
         messages_action="read",
@@ -179,7 +179,7 @@ def test_messages_read_with_query_filter(cli_env, capsys):
 
 
 def test_messages_read_channel_not_found(cli_env, capsys):
-    from src.cli.commands.messages import run
+    from tg_agent.cli.commands.messages import run
 
     run(_ns(
         messages_action="read",
@@ -201,7 +201,7 @@ def test_messages_read_channel_not_found(cli_env, capsys):
 def test_messages_read_no_messages(cli_env, capsys):
     _add_channel(cli_env, channel_id=100, title="EmptyCh")
 
-    from src.cli.commands.messages import run
+    from tg_agent.cli.commands.messages import run
 
     run(_ns(
         messages_action="read",
@@ -224,7 +224,7 @@ def test_messages_read_by_pk(cli_env, capsys):
     pk = _add_channel(cli_env, channel_id=500, title="PkCh")
     _add_message(cli_env, channel_id=500, message_id=1, text="found by pk")
 
-    from src.cli.commands.messages import run
+    from tg_agent.cli.commands.messages import run
 
     run(_ns(
         messages_action="read",
@@ -257,7 +257,7 @@ async def _fake_iter(items):
 
 
 def _run_live(cli_db, identifier, *, capsys, resolve_side_effect=None):
-    from src.cli.commands.messages import messages_read_impl
+    from tg_agent.cli.commands.messages import messages_read_impl
 
     pool = MagicMock()
     pool.clients = {"+10000000001": object(), "+90000000009": object()}
@@ -279,8 +279,8 @@ def _run_live(cli_db, identifier, *, capsys, resolve_side_effect=None):
     async def fake_init_pool(_, __):
         return MagicMock(), pool
 
-    with patch("src.cli.runtime.init_db", side_effect=fake_init_db), \
-         patch("src.cli.runtime.init_pool", side_effect=fake_init_pool):
+    with patch("tg_agent.cli.runtime.init_db", side_effect=fake_init_db), \
+         patch("tg_agent.cli.runtime.init_pool", side_effect=fake_init_pool):
         asyncio.run(messages_read_impl(
             "config.yaml", identifier=identifier, limit=10, live=True, phone=None,
         ))
@@ -316,7 +316,7 @@ def test_messages_read_live_empty_phone_falls_back_to_default(cli_db, capsys):
     default account, not hard-error 'Account  not connected.' (#1480 review M1)."""
     asyncio.run(cli_db.add_account(Account(phone="+90000000009", session_string="b", is_primary=True)))
 
-    from src.cli.commands.messages import messages_read_impl
+    from tg_agent.cli.commands.messages import messages_read_impl
 
     pool = MagicMock()
     pool.clients = {"+90000000009": object()}
@@ -335,8 +335,8 @@ def test_messages_read_live_empty_phone_falls_back_to_default(cli_db, capsys):
     async def fake_init_pool(_, __):
         return MagicMock(), pool
 
-    with patch("src.cli.runtime.init_db", side_effect=fake_init_db), \
-         patch("src.cli.runtime.init_pool", side_effect=fake_init_pool):
+    with patch("tg_agent.cli.runtime.init_db", side_effect=fake_init_db), \
+         patch("tg_agent.cli.runtime.init_pool", side_effect=fake_init_pool):
         asyncio.run(messages_read_impl(
             "config.yaml", identifier="@somedialog", limit=10, live=True, phone="",
         ))

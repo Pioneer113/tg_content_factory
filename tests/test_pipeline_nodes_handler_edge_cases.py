@@ -6,9 +6,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.services.pipeline_nodes import NodeContext
-from src.services.pipeline_nodes.base import BaseNodeHandler
-from src.services.pipeline_nodes.handlers import (
+from tests.helpers import make_pipeline_node_message
+from tg_agent.services.pipeline_nodes import NodeContext
+from tg_agent.services.pipeline_nodes.base import BaseNodeHandler
+from tg_agent.services.pipeline_nodes.handlers import (
     AgentLoopHandler,
     ConditionHandler,
     DelayHandler,
@@ -23,7 +24,6 @@ from src.services.pipeline_nodes.handlers import (
     ReactHandler,
     SourceHandler,
 )
-from tests.helpers import make_pipeline_node_message
 
 # Shared message factory (deduped into tests/helpers.py).
 _msg = make_pipeline_node_message
@@ -615,7 +615,7 @@ async def test_agent_loop_invalid_json_tool_call(caplog):
         return "recovered"
 
     services = {"provider_callable": provider, "agent_tools": {}}
-    with caplog.at_level(logging.WARNING, logger="src.services.pipeline_nodes.handlers"):
+    with caplog.at_level(logging.WARNING, logger="tg_agent.services.pipeline_nodes.handlers"):
         await AgentLoopHandler().execute({"max_steps": 3}, ctx, services)
     # JSON parse fails → loop breaks on step 1
     assert call_count == 1

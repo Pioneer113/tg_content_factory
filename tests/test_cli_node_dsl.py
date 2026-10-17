@@ -3,11 +3,11 @@ from __future__ import annotations
 
 import pytest
 
-from src.models import PipelineNodeType
+from tg_agent.models import PipelineNodeType
 
 
 def _make_spec(raw: str):
-    from src.cli.node_dsl import parse_node_spec
+    from tg_agent.cli.node_dsl import parse_node_spec
 
     return parse_node_spec(raw)
 
@@ -77,7 +77,7 @@ class TestParseQuotedValues:
         assert spec.config["prompt"] == "Use model=claude"
 
     def test_unclosed_quote_raises(self):
-        from src.cli.node_dsl import NodeSpecError
+        from tg_agent.cli.node_dsl import NodeSpecError
 
         with pytest.raises(NodeSpecError, match="quote|unclosed|unterminated"):
             _make_spec('react:emoji="unclosed')
@@ -116,13 +116,13 @@ class TestExplicitId:
 
 class TestValidation:
     def test_unknown_type_raises(self):
-        from src.cli.node_dsl import NodeSpecError
+        from tg_agent.cli.node_dsl import NodeSpecError
 
         with pytest.raises(NodeSpecError, match="[Uu]nknown.*type|invalid.*type"):
             _make_spec("nonexistent_type:x=1")
 
     def test_empty_string_raises(self):
-        from src.cli.node_dsl import NodeSpecError
+        from tg_agent.cli.node_dsl import NodeSpecError
 
         with pytest.raises(NodeSpecError):
             _make_spec("")
@@ -140,7 +140,7 @@ class TestValidation:
 
 class TestGenerateNodeId:
     def test_default_naming(self):
-        from src.cli.node_dsl import generate_node_id
+        from tg_agent.cli.node_dsl import generate_node_id
 
         assert generate_node_id(PipelineNodeType.REACT, 0) == "react_0"
         assert generate_node_id(PipelineNodeType.LLM_GENERATE, 3) == "llm_generate_3"

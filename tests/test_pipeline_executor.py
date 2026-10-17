@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from src.models import (
+from tg_agent.models import (
     ContentPipeline,
     PipelineEdge,
     PipelineGraph,
@@ -13,12 +13,12 @@ from src.models import (
     PipelineNodeType,
     PipelinePublishMode,
 )
-from src.services.pipeline_executor import (
+from tg_agent.services.pipeline_executor import (
     PipelineCycleError,
     PipelineExecutor,
     _topological_sort,
 )
-from src.services.pipeline_nodes.base import NodeContext
+from tg_agent.services.pipeline_nodes.base import NodeContext
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -187,7 +187,7 @@ class TestExecuteHappyPath:
             h.execute.side_effect = _execute
             return h
 
-        with patch("src.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
+        with patch("tg_agent.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
             executor = PipelineExecutor()
             result = await executor.execute(pipeline, graph, {})
 
@@ -235,7 +235,7 @@ class TestExecuteConditionSkip:
 
             return handler
 
-        with patch("src.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
+        with patch("tg_agent.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
             executor = PipelineExecutor()
             result = await executor.execute(pipeline, graph, {})
 
@@ -279,7 +279,7 @@ class TestExecuteConditionSkip:
             handler.execute.side_effect = _run
             return handler
 
-        with patch("src.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
+        with patch("tg_agent.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
             result = await PipelineExecutor().execute(pipeline, graph, {})
 
         assert "cond" in call_log
@@ -310,7 +310,7 @@ class TestExecuteNodeFailure:
             handler.execute.side_effect = _fail
             return handler
 
-        with patch("src.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
+        with patch("tg_agent.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
             executor = PipelineExecutor()
             with pytest.raises(RuntimeError, match="node exploded"):
                 await executor.execute(pipeline, graph, {})
@@ -344,7 +344,7 @@ class TestExecuteSeedsContext:
             handler.execute.side_effect = _inspect
             return handler
 
-        with patch("src.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
+        with patch("tg_agent.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
             executor = PipelineExecutor()
             result = await executor.execute(pipeline, graph, {})
 
@@ -389,7 +389,7 @@ class TestExecutorResultSemantics:
             h.execute.side_effect = _execute
             return h
 
-        with patch("src.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
+        with patch("tg_agent.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
             executor = PipelineExecutor()
             result = await executor.execute(pipeline, graph, {})
 
@@ -399,7 +399,7 @@ class TestExecutorResultSemantics:
 
     @pytest.mark.anyio
     async def test_mixed_graph_generation_wins_but_action_counts_preserved(self):
-        from src.services.pipeline_result import increment_action_count
+        from tg_agent.services.pipeline_result import increment_action_count
 
         graph = PipelineGraph(
             nodes=[
@@ -424,7 +424,7 @@ class TestExecutorResultSemantics:
             h.execute.side_effect = _execute
             return h
 
-        with patch("src.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
+        with patch("tg_agent.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
             executor = PipelineExecutor()
             result = await executor.execute(pipeline, graph, {})
 
@@ -437,7 +437,7 @@ class TestExecutorResultSemantics:
     @pytest.mark.anyio
     async def test_action_only_graph_with_empty_text_is_not_zero_result(self):
         """Regression: empty generated_text MUST NOT collapse result_count to 0."""
-        from src.services.pipeline_result import increment_action_count
+        from tg_agent.services.pipeline_result import increment_action_count
 
         graph = PipelineGraph(
             nodes=[
@@ -458,7 +458,7 @@ class TestExecutorResultSemantics:
             h.execute.side_effect = _execute
             return h
 
-        with patch("src.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
+        with patch("tg_agent.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
             executor = PipelineExecutor()
             result = await executor.execute(pipeline, graph, {})
 
@@ -479,7 +479,7 @@ class TestExecutorResultSemantics:
             h.execute.return_value = None
             return h
 
-        with patch("src.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
+        with patch("tg_agent.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
             executor = PipelineExecutor()
             result = await executor.execute(pipeline, graph, {})
 
@@ -508,7 +508,7 @@ class TestExecutorResultSemantics:
             h.execute.side_effect = _execute
             return h
 
-        with patch("src.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
+        with patch("tg_agent.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
             executor = PipelineExecutor()
             result = await executor.execute(pipeline, graph, {})
 
@@ -530,7 +530,7 @@ class TestExecutorResultSemantics:
             h.execute.return_value = None
             return h
 
-        with patch("src.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
+        with patch("tg_agent.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
             result = await PipelineExecutor().execute(pipeline, graph, {})
 
         assert result["node_errors"] == []
@@ -538,7 +538,7 @@ class TestExecutorResultSemantics:
     @pytest.mark.anyio
     async def test_mixed_action_types_all_preserved(self):
         """Multiple action types (react + forward + delete) all surface in action_counts."""
-        from src.services.pipeline_result import increment_action_count
+        from tg_agent.services.pipeline_result import increment_action_count
 
         graph = PipelineGraph(
             nodes=[
@@ -569,7 +569,7 @@ class TestExecutorResultSemantics:
             h.execute.side_effect = _execute
             return h
 
-        with patch("src.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
+        with patch("tg_agent.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
             executor = PipelineExecutor()
             result = await executor.execute(pipeline, graph, {})
 
@@ -621,7 +621,7 @@ class TestExecuteDiamondRunsMergeOnce:
         call_log: list[str] = []
 
         with patch(
-            "src.services.pipeline_executor.get_handler",
+            "tg_agent.services.pipeline_executor.get_handler",
             side_effect=_counting_handler_factory(call_log),
         ):
             await PipelineExecutor().execute(pipeline, graph, {})
@@ -651,7 +651,7 @@ class TestExecuteCycleRejectedFailClosed:
         call_log: list[str] = []
 
         with patch(
-            "src.services.pipeline_executor.get_handler",
+            "tg_agent.services.pipeline_executor.get_handler",
             side_effect=_counting_handler_factory(call_log),
         ):
             with pytest.raises(PipelineCycleError):
@@ -676,7 +676,7 @@ class TestExecuteCycleRejectedFailClosed:
         call_log: list[str] = []
 
         with patch(
-            "src.services.pipeline_executor.get_handler",
+            "tg_agent.services.pipeline_executor.get_handler",
             side_effect=_counting_handler_factory(call_log),
         ):
             with pytest.raises(PipelineCycleError):
@@ -697,7 +697,7 @@ class TestExecuteCycleRejectedFailClosed:
         call_log: list[str] = []
 
         with patch(
-            "src.services.pipeline_executor.get_handler",
+            "tg_agent.services.pipeline_executor.get_handler",
             side_effect=_counting_handler_factory(call_log),
         ):
             result = await PipelineExecutor().execute(pipeline, graph, {})
@@ -725,7 +725,7 @@ class TestExecutePartialInboundSuppression:
         call_log: list[str] = []
 
         with patch(
-            "src.services.pipeline_executor.get_handler",
+            "tg_agent.services.pipeline_executor.get_handler",
             side_effect=_counting_handler_factory(call_log, condition_false={"cond"}),
         ):
             await PipelineExecutor().execute(pipeline, graph, {})
@@ -757,7 +757,7 @@ class TestExecutePartialInboundSuppression:
         call_log: list[str] = []
 
         with patch(
-            "src.services.pipeline_executor.get_handler",
+            "tg_agent.services.pipeline_executor.get_handler",
             side_effect=_counting_handler_factory(
                 call_log, condition_false={"cond1", "cond2"}
             ),
@@ -806,7 +806,7 @@ class TestExecuteFullSourceToPublishChain:
             handler.execute.side_effect = _run
             return handler
 
-        with patch("src.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
+        with patch("tg_agent.services.pipeline_executor.get_handler", side_effect=fake_get_handler):
             result = await PipelineExecutor().execute(pipeline, graph, {})
 
         assert call_log == ["src", "flt", "llm", "img", "pub"]

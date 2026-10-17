@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.cli.graph_viz import render_ascii
-from src.models import (
+from tg_agent.cli.graph_viz import render_ascii
+from tg_agent.models import (
     PipelineEdge,
     PipelineGraph,
     PipelineNode,
@@ -16,12 +16,12 @@ from src.models import (
 # ---------------------------------------------------------------------------
 
 def _builder():
-    from src.cli.graph_builder import GraphBuilder
+    from tg_agent.cli.graph_builder import GraphBuilder
     return GraphBuilder()
 
 
 def _spec(raw: str):
-    from src.cli.node_dsl import parse_node_spec
+    from tg_agent.cli.node_dsl import parse_node_spec
     return parse_node_spec(raw)
 
 
@@ -137,7 +137,7 @@ class TestIdAssignment:
         assert g.nodes[0].id == "delay_0"
 
     def test_duplicate_id_raises(self):
-        from src.cli.graph_builder import GraphBuilderError
+        from tg_agent.cli.graph_builder import GraphBuilderError
         b = _builder()
         b.add_node_spec(_spec("delay:id=dup"))
         b.add_node_spec(_spec("react:id=dup"))
@@ -168,7 +168,7 @@ class TestMinimalGraph:
 
 class TestEmptyBuilder:
     def test_empty_raises(self):
-        from src.cli.graph_builder import GraphBuilderError
+        from tg_agent.cli.graph_builder import GraphBuilderError
         b = _builder()
         with pytest.raises(GraphBuilderError):
             b.build()

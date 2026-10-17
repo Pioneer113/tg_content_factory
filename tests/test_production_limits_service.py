@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.services.production_limits_service import (
+from tg_agent.services.production_limits_service import (
     CostConfig,
     CostTracker,
     ProductionLimitsService,
@@ -96,7 +96,7 @@ async def test_rate_limiter_get_usage():
 async def test_rate_limiter_window_reset():
     """Minute and day windows reset after their respective durations."""
     fake_time = 1000.0
-    with patch("src.services.production_limits_service.time.time", return_value=fake_time):
+    with patch("tg_agent.services.production_limits_service.time.time", return_value=fake_time):
         limiter = RateLimiter(RateLimitConfig(requests_per_minute=2, tokens_per_minute=10000))
         # Override window_start that was set by the real time.time in default_factory
         limiter._minute_stats.window_start = fake_time
@@ -109,7 +109,7 @@ async def test_rate_limiter_window_reset():
         assert allowed is False
 
     # Advance time past the 60-second minute window
-    with patch("src.services.production_limits_service.time.time", return_value=fake_time + 61):
+    with patch("tg_agent.services.production_limits_service.time.time", return_value=fake_time + 61):
         allowed, wait_time = await limiter.check_and_acquire(tokens=10)
         assert allowed is True
         assert wait_time == 0.0
@@ -199,13 +199,13 @@ async def test_cost_tracker_remaining_budget():
 async def test_cost_tracker_day_reset():
     """Daily cost resets after 86400 seconds."""
     fake_time = 5000.0
-    with patch("src.services.production_limits_service.time.time", return_value=fake_time):
+    with patch("tg_agent.services.production_limits_service.time.time", return_value=fake_time):
         tracker = CostTracker(CostConfig(cost_per_1k_tokens=1.0, daily_cost_cap=100.0))
         await tracker.record_cost(tokens=3000)
         assert tracker.get_daily_cost() == 3.0
 
     # Advance past 24 hours
-    with patch("src.services.production_limits_service.time.time", return_value=fake_time + 86401):
+    with patch("tg_agent.services.production_limits_service.time.time", return_value=fake_time + 86401):
         # check_cost_cap triggers the day reset
         allowed, _ = await tracker.check_cost_cap(tokens=0)
         assert allowed is True
@@ -238,12 +238,12 @@ async def test_cost_tracker_stale_day_not_restored(db):
     cfg = CostConfig(cost_per_1k_tokens=1.0, daily_cost_cap=100.0)
 
     fake_time = 5000.0
-    with patch("src.services.production_limits_service.time.time", return_value=fake_time):
+    with patch("tg_agent.services.production_limits_service.time.time", return_value=fake_time):
         tracker = CostTracker(cfg, db=db)
         await tracker.record_cost(tokens=3000)  # persisted with day_start=5000
 
     # Next day: more than 24h later -> stale state must not be restored.
-    with patch("src.services.production_limits_service.time.time", return_value=fake_time + 86401):
+    with patch("tg_agent.services.production_limits_service.time.time", return_value=fake_time + 86401):
         restarted = CostTracker(cfg, db=db)
         await restarted.check_cost_cap(tokens=0)
         assert restarted.get_daily_cost() == 0.0
@@ -396,13 +396,13 @@ async def test_rate_limiter_wait_and_acquire_succeeds_after_window():
 async def test_cost_tracker_record_cost_day_reset():
     """record_cost resets daily_cost when 86400s have elapsed."""
     fake_time = 5000.0
-    with patch("src.services.production_limits_service.time.time", return_value=fake_time):
+    with patch("tg_agent.services.production_limits_service.time.time", return_value=fake_time):
         tracker = CostTracker(CostConfig(cost_per_1k_tokens=1.0, daily_cost_cap=100.0))
         await tracker.record_cost(tokens=3000)
         assert tracker.get_daily_cost() == 3.0
 
     # Advance past 24h — record_cost should reset
-    with patch("src.services.production_limits_service.time.time", return_value=fake_time + 86401):
+    with patch("tg_agent.services.production_limits_service.time.time", return_value=fake_time + 86401):
         cost = await tracker.record_cost(tokens=1000)
         assert cost == 1.0
         assert tracker.get_daily_cost() == 1.0  # reset happened
@@ -440,7 +440,7 @@ async def test_execute_with_retry_retries_on_failure():
             raise RuntimeError("transient")
         return "recovered"
 
-    with patch("src.services.production_limits_service.asyncio.sleep", new_callable=AsyncMock):
+    with patch("tg_agent.services.production_limits_service.asyncio.sleep", new_callable=AsyncMock):
         result = await service.execute_with_retry(func=flaky, tokens=10, max_retries=3, base_delay=0.01)
     assert result == "recovered"
     assert call_count == 3
@@ -455,7 +455,7 @@ async def test_execute_with_retry_raises_after_max_retries():
         cost_config=CostConfig(daily_cost_cap=100.0),
     )
 
-    with patch("src.services.production_limits_service.asyncio.sleep", new_callable=AsyncMock):
+    with patch("tg_agent.services.production_limits_service.asyncio.sleep", new_callable=AsyncMock):
         with pytest.raises(RuntimeError, match="always fails"):
             await service.execute_with_retry(
                 func=AsyncMock(side_effect=RuntimeError("always fails")),
@@ -669,7 +669,7 @@ async def test_execute_with_retry_releases_reservation_on_failed_attempt():
             raise RuntimeError("transient")
         return "recovered"
 
-    with patch("src.services.production_limits_service.asyncio.sleep", new_callable=AsyncMock):
+    with patch("tg_agent.services.production_limits_service.asyncio.sleep", new_callable=AsyncMock):
         result = await service.execute_with_retry(func=flaky, tokens=1000, max_retries=2, base_delay=0.01)
 
     assert result == "recovered"
@@ -687,7 +687,7 @@ async def test_execute_with_retry_exhausted_leaves_no_reservation():
         cost_config=CostConfig(cost_per_1k_tokens=1.0, daily_cost_cap=1.0),
     )
 
-    with patch("src.services.production_limits_service.asyncio.sleep", new_callable=AsyncMock):
+    with patch("tg_agent.services.production_limits_service.asyncio.sleep", new_callable=AsyncMock):
         with pytest.raises(RuntimeError, match="always fails"):
             await service.execute_with_retry(
                 func=AsyncMock(side_effect=RuntimeError("always fails")),
@@ -746,13 +746,13 @@ async def test_reserved_cost_is_cleared_on_day_reset():
     alongside the recorded spend, so a stranded estimate does not pin the budget
     of the next day."""
     fake_time = 5000.0
-    with patch("src.services.production_limits_service.time.time", return_value=fake_time):
+    with patch("tg_agent.services.production_limits_service.time.time", return_value=fake_time):
         tracker = CostTracker(CostConfig(cost_per_image=1.0, daily_cost_cap=1.0))
         await tracker.reserve_cost(is_image=True)
         assert tracker.get_reserved_cost() == pytest.approx(1.0)
 
     # Past 24h — the day reset (triggered via check_cost_cap) must clear _reserved.
-    with patch("src.services.production_limits_service.time.time", return_value=fake_time + 86401):
+    with patch("tg_agent.services.production_limits_service.time.time", return_value=fake_time + 86401):
         allowed, _ = await tracker.check_cost_cap(is_image=True)
         assert allowed is True
         # The new-day check itself owns a fresh reservation; the stale one was
@@ -872,14 +872,14 @@ async def test_record_cost_holds_lock_and_reservation_until_booking_commits():
 
 
 def test_from_config_disabled_returns_none():
-    from src.config import AppConfig
+    from tg_agent.config import AppConfig
 
     cfg = AppConfig()  # production_limits.enabled defaults to False
     assert ProductionLimitsService.from_config(MagicMock(), cfg) is None
 
 
 def test_from_config_enabled_builds_service():
-    from src.config import AppConfig, ProductionLimitsConfig
+    from tg_agent.config import AppConfig, ProductionLimitsConfig
 
     cfg = AppConfig(production_limits=ProductionLimitsConfig(enabled=True, daily_cost_cap=5.0))
     svc = ProductionLimitsService.from_config(MagicMock(), cfg)

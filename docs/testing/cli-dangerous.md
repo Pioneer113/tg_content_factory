@@ -41,7 +41,7 @@ sandbox environment and follow the rollback steps before finishing.
 1. Use a dedicated test Telegram account (separate SIM or virtual number).
 2. Set `CLI_REAL_TG_ROOT` to the project root containing the live `config.yaml`
    and database.
-3. Confirm the account is connected: `python -m src.main account list`.
+3. Confirm the account is connected: `python -m tg_agent.main account list`.
 
 ---
 
@@ -53,16 +53,16 @@ sandbox environment and follow the rollback steps before finishing.
 
 ```bash
 # 1. Request the code
-python -m src.main account send-code --phone +1XXXXXXXXXX
+python -m tg_agent.main account send-code --phone +1XXXXXXXXXX
 
 # 2. Enter the code received via SMS
-python -m src.main account verify-code --phone +1XXXXXXXXXX --code 12345
+python -m tg_agent.main account verify-code --phone +1XXXXXXXXXX --code 12345
 ```
 
 **Rollback:** If the session is not wanted, delete it:
 
 ```bash
-python -m src.main account delete --phone +1XXXXXXXXXX --yes
+python -m tg_agent.main account delete --phone +1XXXXXXXXXX --yes
 ```
 
 ---
@@ -81,7 +81,7 @@ second participant in the sandbox group.
 
 ```bash
 # Grant admin rights (custom title, can-post)
-python -m src.main dialogs edit-admin \
+python -m tg_agent.main dialogs edit-admin \
   --phone +1XXXXXXXXXX \
   --chat-id <GROUP_ID> \
   --user-id <TARGET_USER_ID> \
@@ -89,13 +89,13 @@ python -m src.main dialogs edit-admin \
   --yes
 
 # Verify with participants list
-python -m src.main dialogs participants --phone +1XXXXXXXXXX <GROUP_ID>
+python -m tg_agent.main dialogs participants --phone +1XXXXXXXXXX <GROUP_ID>
 ```
 
 **Rollback:** Remove admin rights:
 
 ```bash
-python -m src.main dialogs edit-admin \
+python -m tg_agent.main dialogs edit-admin \
   --phone +1XXXXXXXXXX \
   --chat-id <GROUP_ID> \
   --user-id <TARGET_USER_ID> \
@@ -115,20 +115,20 @@ python -m src.main dialogs edit-admin \
 
 ```bash
 # Restrict all members from sending messages
-python -m src.main dialogs edit-permissions \
+python -m tg_agent.main dialogs edit-permissions \
   --phone +1XXXXXXXXXX \
   --chat-id <GROUP_ID> \
   --no-send-messages \
   --yes
 
 # Verify effect
-python -m src.main dialogs participants --phone +1XXXXXXXXXX <GROUP_ID>
+python -m tg_agent.main dialogs participants --phone +1XXXXXXXXXX <GROUP_ID>
 ```
 
 **Rollback:** Restore default permissions:
 
 ```bash
-python -m src.main dialogs edit-permissions \
+python -m tg_agent.main dialogs edit-permissions \
   --phone +1XXXXXXXXXX \
   --chat-id <GROUP_ID> \
   --send-messages \
@@ -146,7 +146,7 @@ python -m src.main dialogs edit-permissions \
 **Steps:**
 
 ```bash
-python -m src.main dialogs kick \
+python -m tg_agent.main dialogs kick \
   --phone +1XXXXXXXXXX \
   --chat-id <GROUP_ID> \
   --user-id <TARGET_USER_ID> \
@@ -169,16 +169,16 @@ connected account to initiate a BotFather session.
 
 ```bash
 # Interactive setup — follow BotFather prompts
-python -m src.main notification setup --phone +1XXXXXXXXXX
+python -m tg_agent.main notification setup --phone +1XXXXXXXXXX
 
 # Verify the bot is registered
-python -m src.main notification status
+python -m tg_agent.main notification status
 ```
 
 **Rollback:** Delete the notification bot configuration:
 
 ```bash
-python -m src.main notification delete --phone +1XXXXXXXXXX --yes
+python -m tg_agent.main notification delete --phone +1XXXXXXXXXX --yes
 ```
 
 > To also delete the bot from Telegram, open a chat with @BotFather and use

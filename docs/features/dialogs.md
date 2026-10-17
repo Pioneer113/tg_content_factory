@@ -6,9 +6,9 @@
 
 === "CLI"
     ```bash
-    python -m src.main dialogs list --phone +79001234567
-    python -m src.main dialogs refresh --phone +79001234567
-    python -m src.main dialogs leave 123456 789012 --phone +79001234567 --yes
+    python -m tg_agent.main dialogs list --phone +79001234567
+    python -m tg_agent.main dialogs refresh --phone +79001234567
+    python -m tg_agent.main dialogs leave 123456 789012 --phone +79001234567 --yes
     ```
 
 === "Web"
@@ -18,13 +18,13 @@
 
 === "CLI"
     ```bash
-    python -m src.main dialogs send @username "текст" --yes
-    python -m src.main dialogs react @chat 42 👍 --phone +79001234567
-    python -m src.main dialogs edit-message @chat 42 "новый текст" --yes
-    python -m src.main dialogs delete-message @chat 42 43 44 --yes
-    python -m src.main dialogs pin-message @chat 42 --notify
-    python -m src.main dialogs unpin-message @chat --message-id 42
-    python -m src.main dialogs mark-read @chat --max-id 100
+    python -m tg_agent.main dialogs send @username "текст" --yes
+    python -m tg_agent.main dialogs react @chat 42 👍 --phone +79001234567
+    python -m tg_agent.main dialogs edit-message @chat 42 "новый текст" --yes
+    python -m tg_agent.main dialogs delete-message @chat 42 43 44 --yes
+    python -m tg_agent.main dialogs pin-message @chat 42 --notify
+    python -m tg_agent.main dialogs unpin-message @chat --message-id 42
+    python -m tg_agent.main dialogs mark-read @chat --max-id 100
     ```
 
 === "Web"
@@ -35,10 +35,10 @@
 
 === "CLI"
     ```bash
-    python -m src.main dialogs participants @chat --limit 100 --search "Иван"
-    python -m src.main dialogs edit-admin @chat @user --title "Модератор" --yes
-    python -m src.main dialogs edit-permissions @chat @user --until-date 2025-12-31 --yes
-    python -m src.main dialogs kick @chat @user --yes
+    python -m tg_agent.main dialogs participants @chat --limit 100 --search "Иван"
+    python -m tg_agent.main dialogs edit-admin @chat @user --title "Модератор" --yes
+    python -m tg_agent.main dialogs edit-permissions @chat @user --until-date 2025-12-31 --yes
+    python -m tg_agent.main dialogs kick @chat @user --yes
     ```
 
 === "Web"
@@ -49,8 +49,8 @@
 
 === "CLI"
     ```bash
-    python -m src.main dialogs download-media @chat 42 --output-dir ./downloads
-    python -m src.main dialogs broadcast-stats @channel
+    python -m tg_agent.main dialogs download-media @chat 42 --output-dir ./downloads
+    python -m tg_agent.main dialogs broadcast-stats @channel
     ```
 
 === "Web"
@@ -60,8 +60,8 @@
 
 === "CLI"
     ```bash
-    python -m src.main dialogs archive @chat
-    python -m src.main dialogs unarchive @chat
+    python -m tg_agent.main dialogs archive @chat
+    python -m tg_agent.main dialogs unarchive @chat
     ```
 
 === "Web"
@@ -71,7 +71,7 @@
 
 === "CLI"
     ```bash
-    python -m src.main dialogs create-channel --title "Мой канал" --username mychannel
+    python -m tg_agent.main dialogs create-channel --title "Мой канал" --username mychannel
     ```
 
 === "Web"
@@ -81,8 +81,8 @@
 
 === "CLI"
     ```bash
-    python -m src.main dialogs cache-status
-    python -m src.main dialogs cache-clear --phone +79001234567
+    python -m tg_agent.main dialogs cache-status
+    python -m tg_agent.main dialogs cache-clear --phone +79001234567
     ```
 
 === "Web"

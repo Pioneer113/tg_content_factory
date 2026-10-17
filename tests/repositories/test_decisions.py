@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.models import Account
+from tg_agent.models import Account
 
 
 @pytest.mark.anyio

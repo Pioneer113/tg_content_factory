@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from src.models import Channel, Message
+from tg_agent.models import Channel, Message
 
 pytestmark = [pytest.mark.anyio, pytest.mark.aiosqlite_serial]
 

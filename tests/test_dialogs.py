@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from telethon.tl.types import InputPeerChannel
 
-from src.config import AppConfig
-from src.services.channel_service import ChannelService
 from tests.helpers import AsyncIterMessages, FakeCliTelethonClient, build_web_app, make_auth_client
+from tg_agent.config import AppConfig
+from tg_agent.services.channel_service import ChannelService
 
 _FAKE_DIALOGS = [
     {
@@ -80,7 +80,7 @@ def _make_dialog_client(dialogs: list[dict]) -> FakeCliTelethonClient:
 
 
 def _bind_dialog_cache_methods(pool):
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool._dialogs_cache = {}
     pool._dialogs_cache_ttl_sec = 60.0
@@ -266,7 +266,7 @@ async def test_leave_channels_success():
     """All dialogs → True; resolve_entity_with_warm called with the right peer types."""
     from telethon.tl.types import PeerChannel, PeerUser
 
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = MagicMock(spec=ClientPool)
     mock_client = MagicMock()
@@ -285,7 +285,7 @@ async def test_leave_channels_success():
     pool.invalidate_dialogs_cache = MagicMock()
 
     dialogs = [(-100111, "channel"), (999, "dm")]
-    with patch("src.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
+    with patch("tg_agent.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
         result = await ClientPool.leave_channels(pool, "+1234567890", dialogs)
 
     assert result == {-100111: True, 999: True}
@@ -301,7 +301,7 @@ async def test_leave_channels_success():
 @pytest.mark.anyio
 async def test_leave_channels_partial_failure():
     """One remove_dialog raises RuntimeError → that id is False, others True."""
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = MagicMock(spec=ClientPool)
     mock_client = MagicMock()
@@ -324,7 +324,7 @@ async def test_leave_channels_partial_failure():
     pool.invalidate_dialogs_cache = MagicMock()
 
     dialogs = [(-100111, "channel"), (-100222, "supergroup")]
-    with patch("src.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
+    with patch("tg_agent.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
         result = await ClientPool.leave_channels(pool, "+1234567890", dialogs)
 
     assert result[-100111] is False
@@ -339,7 +339,7 @@ async def test_leave_channels_transient_flood_retries():
     processed (no break). #1176."""
     from telethon.errors import FloodWaitError
 
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = MagicMock(spec=ClientPool)
     mock_client = MagicMock()
@@ -367,7 +367,7 @@ async def test_leave_channels_transient_flood_retries():
     dialogs = [(-100111, "channel"), (-100222, "supergroup")]
     with (
         patch("telethon_floodgate.flood_wait.asyncio.sleep", AsyncMock()),
-        patch("src.telegram.pool_dialogs.asyncio.sleep", AsyncMock()),
+        patch("tg_agent.telegram.pool_dialogs.asyncio.sleep", AsyncMock()),
     ):
         result = await ClientPool.leave_channels(pool, "+1234567890", dialogs)
 
@@ -386,8 +386,8 @@ async def test_leave_channels_cold_resolve_warms_then_succeeds():
     Exercises the REAL resolve_entity_with_warm (wired onto the pool) so the
     warm-then-retry path is integration-tested, not just the delegation.
     """
-    from src.telegram.client_pool import ClientPool
-    from src.telegram.pool_dialogs import DialogsMixin
+    from tg_agent.telegram.client_pool import ClientPool
+    from tg_agent.telegram.pool_dialogs import DialogsMixin
 
     pool = MagicMock(spec=ClientPool)
     # Wire the real warm-then-retry resolver; its only `self` deps are mocked below.
@@ -416,7 +416,7 @@ async def test_leave_channels_cold_resolve_warms_then_succeeds():
     pool.invalidate_dialogs_cache = MagicMock()
 
     dialogs = [(-100111, "channel")]
-    with patch("src.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
+    with patch("tg_agent.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
         result = await ClientPool.leave_channels(pool, "+1234567890", dialogs)
 
     assert result == {-100111: True}
@@ -432,7 +432,7 @@ async def test_leave_channels_blocking_flood_defers_and_continues():
     does NOT break: remaining dialogs are still processed. #1176 (no-break)."""
     from telethon.errors import FloodWaitError
 
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = MagicMock(spec=ClientPool)
     mock_client = MagicMock()
@@ -454,7 +454,7 @@ async def test_leave_channels_blocking_flood_defers_and_continues():
     pool.invalidate_dialogs_cache = MagicMock()
 
     dialogs = [(-100111, "channel"), (-100222, "supergroup")]
-    with patch("src.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
+    with patch("tg_agent.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
         result = await ClientPool.leave_channels(pool, "+1234567890", dialogs)
 
     assert result == {-100111: False, -100222: True}
@@ -471,7 +471,7 @@ async def test_delete_dialogs_dispatches_request_per_type():
     from telethon.tl.functions.channels import DeleteChannelRequest
     from telethon.tl.functions.messages import DeleteChatRequest
 
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = MagicMock(spec=ClientPool)
     invoked_requests = []
@@ -492,7 +492,7 @@ async def test_delete_dialogs_dispatches_request_per_type():
     pool.invalidate_dialogs_cache = MagicMock()
 
     dialogs = [(-100111, "channel"), (-100222, "supergroup"), (333, "group"), (999, "dm")]
-    with patch("src.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
+    with patch("tg_agent.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
         result = await ClientPool.delete_dialogs(pool, "+1234567890", dialogs)
 
     assert result == {-100111: True, -100222: True, 333: True, 999: True}
@@ -514,7 +514,7 @@ async def test_delete_dialogs_group_skips_resolve_entity():
     stale entity cache) must still be deleted, not fail on a needless resolve_entity."""
     from telethon.tl.functions.messages import DeleteChatRequest
 
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = MagicMock(spec=ClientPool)
     invoked_requests = []
@@ -536,7 +536,7 @@ async def test_delete_dialogs_group_skips_resolve_entity():
     pool.invalidate_dialogs_cache = MagicMock()
 
     dialogs = [(333, "group")]
-    with patch("src.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
+    with patch("tg_agent.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
         result = await ClientPool.delete_dialogs(pool, "+1234567890", dialogs)
 
     assert result == {333: True}
@@ -552,7 +552,7 @@ async def test_delete_dialogs_transient_flood_retries():
     remaining dialogs still processed (no break). #1176."""
     from telethon.errors import FloodWaitError
 
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = MagicMock(spec=ClientPool)
     invoked_requests = []
@@ -583,7 +583,7 @@ async def test_delete_dialogs_transient_flood_retries():
     dialogs = [(999, "dm"), (888, "bot")]
     with (
         patch("telethon_floodgate.flood_wait.asyncio.sleep", AsyncMock()),
-        patch("src.telegram.pool_dialogs.asyncio.sleep", AsyncMock()),
+        patch("tg_agent.telegram.pool_dialogs.asyncio.sleep", AsyncMock()),
     ):
         result = await ClientPool.delete_dialogs(pool, "+1234567890", dialogs)
 
@@ -602,7 +602,7 @@ async def test_delete_dialogs_no_client_marks_every_dialog_failed():
     """Without an available client delete_dialogs must report EVERY dialog as
     failed — a mutant flipping the comprehension to True would make the caller
     believe irreversible deletions succeeded (#mutation slice 5)."""
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = MagicMock(spec=ClientPool)
     pool.get_client_by_phone = AsyncMock(return_value=None)
@@ -622,7 +622,7 @@ async def test_delete_dialogs_blocking_flood_defers_only_that_dialog():
     flood-path outcome flip to True survived)."""
     from telethon.errors import FloodWaitError
 
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = MagicMock(spec=ClientPool)
     mock_client = MagicMock()
@@ -644,7 +644,7 @@ async def test_delete_dialogs_blocking_flood_defers_only_that_dialog():
     pool.invalidate_dialogs_cache = MagicMock()
 
     dialogs = [(-100111, "channel"), (999, "dm")]
-    with patch("src.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
+    with patch("tg_agent.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
         result = await ClientPool.delete_dialogs(pool, "+1234567890", dialogs)
 
     assert result == {-100111: False, 999: True}
@@ -658,7 +658,7 @@ async def test_delete_dialogs_generic_failure_marks_failed_and_releases_client()
     is released in finally with the SAME phone (#mutation slice 5)."""
     from telethon.tl.functions.channels import DeleteChannelRequest
 
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = MagicMock(spec=ClientPool)
     invoked_requests = []
@@ -681,7 +681,7 @@ async def test_delete_dialogs_generic_failure_marks_failed_and_releases_client()
     pool.invalidate_dialogs_cache = MagicMock()
 
     dialogs = [(999, "dm"), (-100111, "channel")]
-    with patch("src.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
+    with patch("tg_agent.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
         result = await ClientPool.delete_dialogs(pool, "+1234567890", dialogs)
 
     assert result == {999: False, -100111: True}
@@ -696,7 +696,7 @@ async def test_delete_dialogs_dm_resolves_peer_user_and_passes_resolved_entity()
     delete the wrong target (#mutation slice 5)."""
     from telethon.tl.types import PeerUser
 
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = MagicMock(spec=ClientPool)
     mock_client = MagicMock()
@@ -723,7 +723,7 @@ async def test_delete_dialogs_dm_resolves_peer_user_and_passes_resolved_entity()
     pool.invalidate_dialogs_cache = MagicMock()
 
     dialogs = [(999, "dm"), (777, "bot")]
-    with patch("src.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
+    with patch("tg_agent.telegram.pool_dialogs.asyncio.sleep", AsyncMock()):
         result = await ClientPool.delete_dialogs(pool, "+1234567890", dialogs)
 
     assert result == {999: True, 777: True}
@@ -738,7 +738,7 @@ async def test_delete_dialogs_dm_resolves_peer_user_and_passes_resolved_entity()
 async def test_get_dialogs_for_phone_cache_mode_follows_include_dm_and_mode():
     """cache_mode is "full" when include_dm is set OR mode=="full", else
     "channels_only" — the DB cache key depends on it (#mutation slice 5)."""
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     async def _run(include_dm, mode, expected_mode):
         pool = MagicMock(spec=ClientPool)
@@ -765,8 +765,8 @@ async def test_get_dialogs_for_phone_cache_miss_fetches_with_default_mode():
     """On a full cache miss the background sweep is launched with the ORIGINAL
     defaults (include_dm=False, mode="channels_only") — a default flip would
     silently widen every caller's sweep to DMs (#mutation slice 5)."""
-    from src.telegram.client_pool import ClientPool
-    from src.telegram.pool_dialogs import DialogFetchResult
+    from tg_agent.telegram.client_pool import ClientPool
+    from tg_agent.telegram.pool_dialogs import DialogFetchResult
 
     pool = MagicMock(spec=ClientPool)
     pool._get_cached_dialogs = MagicMock(return_value=None)
@@ -833,7 +833,7 @@ async def test_get_my_dialogs_enriches_already_added(db):
     Under the queued-command model, get_my_dialogs reads from dialog_cache
     when refresh=False; the pool is not consulted. Seed the cache directly.
     """
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     await db.add_channel(
         Channel(
@@ -882,7 +882,7 @@ async def test_get_my_dialogs_passes_refresh_flag(db):
 @pytest.mark.anyio
 async def test_get_my_dialogs_bot_type():
     """entity with bot=True → channel_type='bot'."""
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = MagicMock(spec=ClientPool)
 
@@ -926,7 +926,7 @@ async def test_get_my_dialogs_bot_type():
 @pytest.mark.anyio
 async def test_get_dialogs_for_phone_partial_on_timeout():
     """When iter_dialogs times out, partial accumulated results are returned."""
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = MagicMock(spec=ClientPool)
 
@@ -970,7 +970,7 @@ async def test_get_dialogs_for_phone_partial_on_timeout():
     async def fast_wait_for(coro, timeout):
         return await original_wait_for(coro, timeout=min(timeout, 0.05))
 
-    with patch("src.telegram.pool_dialogs.asyncio.wait_for", fast_wait_for):
+    with patch("tg_agent.telegram.pool_dialogs.asyncio.wait_for", fast_wait_for):
         result = await ClientPool.get_dialogs_for_phone(pool, "+1234567890")
 
     assert len(result) == 1
@@ -995,7 +995,7 @@ async def test_get_dialogs_for_phone_transient_flood_is_retried_not_propagated(d
 
     from telethon_floodgate import FloodWaitInfo, HandledFloodWaitError
 
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = _sweep_pool(db)
     partial_dialog = _make_channel_dialog(-100999, title="Partial Channel", message_id=7)
@@ -1083,7 +1083,7 @@ async def test_dialogs_page_without_accounts_shows_disabled_photo_loader(
 
 @pytest.mark.anyio
 async def test_get_dialogs_for_phone_uses_manual_cache():
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = MagicMock(spec=ClientPool)
     mock_client = MagicMock()
@@ -1110,7 +1110,7 @@ async def test_get_dialogs_for_phone_uses_manual_cache():
 
 @pytest.mark.anyio
 async def test_get_dialogs_for_phone_refresh_bypasses_cache():
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = MagicMock(spec=ClientPool)
     mock_client = MagicMock()
@@ -1136,7 +1136,7 @@ async def test_get_dialogs_for_phone_refresh_bypasses_cache():
 
 @pytest.mark.anyio
 async def test_get_dialogs_for_phone_refetches_after_ttl_expiry():
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = MagicMock(spec=ClientPool)
     mock_client = MagicMock()
@@ -1163,7 +1163,7 @@ async def test_get_dialogs_for_phone_refetches_after_ttl_expiry():
 
 @pytest.mark.anyio
 async def test_get_dialogs_for_phone_uses_db_cache_across_pool_instances(db):
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     await db.repos.dialog_cache.replace_dialogs("+1234567890", list(_FAKE_DIALOGS))
 
@@ -1186,7 +1186,7 @@ async def test_get_dialogs_for_phone_uses_db_cache_across_pool_instances(db):
 
 @pytest.mark.anyio
 async def test_get_dialogs_for_phone_refresh_replaces_db_cache(db):
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     await db.repos.dialog_cache.replace_dialogs(
         "+1234567890",
@@ -1222,7 +1222,7 @@ async def test_get_dialogs_for_phone_refresh_replaces_db_cache(db):
 
 @pytest.mark.anyio
 async def test_get_dialogs_for_phone_failed_refresh_keeps_existing_db_cache(db):
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     await db.repos.dialog_cache.replace_dialogs("+1234567890", list(_FAKE_DIALOGS))
 
@@ -1254,7 +1254,7 @@ async def test_get_dialogs_for_phone_flood_stale_cache_is_flagged_partial(db):
     printed "Dialogs refreshed: N total" over a cache that was never updated —
     the exact silent-success the partial flag exists to prevent.
     """
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     await db.repos.dialog_cache.replace_dialogs("+1234567890", list(_FAKE_DIALOGS))
 
@@ -1284,7 +1284,7 @@ async def test_get_dialogs_for_phone_empty_partial_uses_stale_cache(db):
     """A flood before the first dialog must not turn a populated cache empty (#1379)."""
     from telethon_floodgate import FloodWaitInfo, HandledFloodWaitError
 
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     phone = "+1234567890"
     await db.repos.dialog_cache.replace_dialogs(phone, list(_FAKE_DIALOGS))
@@ -1332,7 +1332,7 @@ async def test_partial_sweep_over_a_still_fresh_snapshot_is_not_fresh(db):
     the rest of the TTL. The stale-predecessor case alone does not cover this:
     the dangerous one is a manual refresh started while the cache is still fresh.
     """
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     phone = "+79995550000"
     # A snapshot written just now — comfortably inside the TTL.
@@ -1372,7 +1372,7 @@ async def test_partial_sweep_is_not_served_as_a_fresh_cache(db):
     current. upsert_dialogs therefore keeps the PREVIOUS cached_at
     (#1360/#1347), so the fragment stays stale and is re-fetched.
     """
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     phone = "+1234567890"
     # An OLD complete snapshot, well past the TTL.
@@ -1419,7 +1419,7 @@ def _sweep_pool(db, phone: str = "+1234567890"):
     """
     from telethon_floodgate import TelegramRateLimitGate
 
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = MagicMock(spec=ClientPool)
     pool._db = db
@@ -1441,7 +1441,7 @@ def _dialog_stream(dialogs):
 
 async def test_stream_dialogs_forwards_offset_kwargs():
     """Offsets reach Telethon; a plain sweep still calls it with none (#1359)."""
-    from src.telegram.backends import TelegramTransportSession
+    from tg_agent.telegram.backends import TelegramTransportSession
 
     client = MagicMock()
     client.iter_dialogs.return_value = _dialog_stream([])
@@ -1466,7 +1466,7 @@ def test_advance_cursor_mirrors_telethon_split_offsets():
     whenever a chunk ended with message-less dialogs, so the resumed request
     replayed a seen tail, made no progress, and stopped the sweep early (#1359).
     """
-    from src.telegram.pool_dialogs import _advance_cursor, _DialogCursor
+    from tg_agent.telegram.pool_dialogs import _advance_cursor, _DialogCursor
 
     cursor = _DialogCursor()
 
@@ -1489,7 +1489,7 @@ def test_advance_cursor_mirrors_telethon_split_offsets():
 @pytest.mark.anyio
 async def test_sweep_caps_each_pass_and_retry_to_total_budget(db):
     """The total sweep deadline also bounds a pass's retry settings (#1379)."""
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = _sweep_pool(db)
     mock_client = MagicMock()
@@ -1504,9 +1504,9 @@ async def test_sweep_caps_each_pass_and_retry_to_total_budget(db):
         )
 
     with (
-        patch("src.telegram.pool_dialogs.DIALOG_FETCH_TOTAL_BUDGET_SEC", 1.0),
-        patch("src.telegram.pool_dialogs.time.perf_counter", side_effect=[100.0, 100.5, 100.5]),
-        patch("src.telegram.pool_dialogs.run_with_flood_wait_retry", new=_fake_retry),
+        patch("tg_agent.telegram.pool_dialogs.DIALOG_FETCH_TOTAL_BUDGET_SEC", 1.0),
+        patch("tg_agent.telegram.pool_dialogs.time.perf_counter", side_effect=[100.0, 100.5, 100.5]),
+        patch("tg_agent.telegram.pool_dialogs.run_with_flood_wait_retry", new=_fake_retry),
     ):
         result = await ClientPool._fetch_dialogs_for_phone(
             pool, "+1234567890", True, "full", "full"
@@ -1526,7 +1526,7 @@ async def test_sweep_progress_survives_an_unhandled_error(db):
     everything the chunk flushes had accumulated since the last chunk boundary
     is discarded — exactly the loss this PR exists to prevent.
     """
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = _sweep_pool(db)
     seen = _make_channel_dialog(-1001, title="Seen", message_id=11)
@@ -1563,7 +1563,7 @@ async def test_multi_pass_sweep_survives_the_rate_limit_gate(db):
     """
     from telethon_floodgate import TelegramRateLimitGate
 
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = _sweep_pool(db)
     assert isinstance(pool._rate_limit_gate, TelegramRateLimitGate), (
@@ -1586,7 +1586,7 @@ async def test_multi_pass_sweep_survives_the_rate_limit_gate(db):
     async def fast_wait_for(coro, timeout):
         return await original_wait_for(coro, timeout=min(timeout, 0.05))
 
-    with patch("src.telegram.pool_dialogs.asyncio.wait_for", fast_wait_for):
+    with patch("tg_agent.telegram.pool_dialogs.asyncio.wait_for", fast_wait_for):
         result = await ClientPool._fetch_dialogs_for_phone(
             pool, "+1234567890", True, "full", "full"
         )
@@ -1607,7 +1607,7 @@ async def test_partial_sweep_reports_rows_actually_written(db):
     """
     from telethon_floodgate import FloodWaitInfo, HandledFloodWaitError
 
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = _sweep_pool(db)
     reached = _make_channel_dialog(-1001, title="Reached", message_id=11)
@@ -1643,7 +1643,7 @@ async def test_sweep_keeps_progress_on_blocking_flood(db):
     """A long flood ends the sweep partial, but what arrived is persisted."""
     from telethon_floodgate import FloodWaitInfo, HandledFloodWaitError
 
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = _sweep_pool(db)
     kept = _make_channel_dialog(-1001, title="Kept", message_id=11)
@@ -1677,7 +1677,7 @@ async def test_sweep_keeps_progress_on_blocking_flood(db):
 
 async def test_sweep_stops_when_a_resumed_pass_adds_nothing(db):
     """No new dialogs on resume means stop -- and stay honest about it."""
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = _sweep_pool(db)
     only = _make_channel_dialog(-1001, title="Only", message_id=11)
@@ -1695,7 +1695,7 @@ async def test_sweep_stops_when_a_resumed_pass_adds_nothing(db):
     async def fast_wait_for(coro, timeout):
         return await original_wait_for(coro, timeout=min(timeout, 0.05))
 
-    with patch("src.telegram.pool_dialogs.asyncio.wait_for", fast_wait_for):
+    with patch("tg_agent.telegram.pool_dialogs.asyncio.wait_for", fast_wait_for):
         result = await ClientPool._fetch_dialogs_for_phone(
             pool, "+1234567890", True, "full", "full"
         )
@@ -1708,7 +1708,7 @@ async def test_sweep_stops_when_a_resumed_pass_adds_nothing(db):
 
 async def test_sweep_dedupes_overlapping_boundary_page(db):
     """Resuming re-reads the boundary dialog; it must appear once."""
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = _sweep_pool(db)
     first = _make_channel_dialog(-1001, title="First", message_id=11)
@@ -1728,7 +1728,7 @@ async def test_sweep_dedupes_overlapping_boundary_page(db):
     async def fast_wait_for(coro, timeout):
         return await original_wait_for(coro, timeout=min(timeout, 0.05))
 
-    with patch("src.telegram.pool_dialogs.asyncio.wait_for", fast_wait_for):
+    with patch("tg_agent.telegram.pool_dialogs.asyncio.wait_for", fast_wait_for):
         result = await ClientPool._fetch_dialogs_for_phone(
             pool, "+1234567890", True, "full", "full"
         )
@@ -1738,7 +1738,7 @@ async def test_sweep_dedupes_overlapping_boundary_page(db):
 
 async def test_partial_sweep_does_not_poison_the_memory_cache(db):
     """A partial snapshot must not be served as complete for the whole TTL."""
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = _sweep_pool(db)
     only = _make_channel_dialog(-1001, title="Only", message_id=11)
@@ -1756,7 +1756,7 @@ async def test_partial_sweep_does_not_poison_the_memory_cache(db):
     async def fast_wait_for(coro, timeout):
         return await original_wait_for(coro, timeout=min(timeout, 0.05))
 
-    with patch("src.telegram.pool_dialogs.asyncio.wait_for", fast_wait_for):
+    with patch("tg_agent.telegram.pool_dialogs.asyncio.wait_for", fast_wait_for):
         result = await ClientPool._fetch_dialogs_for_phone(
             pool, "+1234567890", True, "full", "full"
         )
@@ -1800,7 +1800,7 @@ async def test_sweep_ends_partial_when_the_gate_refuses_the_next_pass(db):
     """
     from telethon_floodgate import TelegramRateLimitedError
 
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = _sweep_pool(db)
     kept = _make_channel_dialog(-1001, title="Kept", message_id=11)
@@ -1839,8 +1839,8 @@ async def test_completed_sweep_leaves_a_fresh_snapshot(db):
     itself stale, and the very next read re-fetched every dialog from Telegram:
     observed live as 2367 dialogs all sitting at 1970-01-01.
     """
-    from src.telegram.client_pool import ClientPool
-    from src.telegram.pool_dialogs import DIALOG_FETCH_UPSERT_CHUNK
+    from tg_agent.telegram.client_pool import ClientPool
+    from tg_agent.telegram.pool_dialogs import DIALOG_FETCH_UPSERT_CHUNK
 
     phone = "+1234567890"
     pool = _sweep_pool(db, phone)
@@ -1874,7 +1874,7 @@ async def test_completed_sweep_leaves_a_fresh_snapshot(db):
 
 
 def _resolve_pool():
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = MagicMock(spec=ClientPool)
     pool.release_client = AsyncMock()
@@ -1888,7 +1888,7 @@ def _resolve_pool():
 async def test_resolve_channel_once_numeric_on_owner_confirms_gone():
     """A numeric miss on the OWNING account is a trusted gone — not a review
     sentinel and not a silent None (#mutation slice 5)."""
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = _resolve_pool()
     pool.get_client_by_phone = AsyncMock(return_value=(MagicMock(), "+1"))
@@ -1905,7 +1905,7 @@ async def test_resolve_channel_once_numeric_elsewhere_flags_review_not_gone():
     """The same numeric miss on an ARBITRARY account is only a cache-miss: with
     review_on_uncertain it surfaces the quarantine sentinel, and a username
     miss stays None (#mutation slice 5)."""
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = _resolve_pool()
     pool.get_available_client = AsyncMock(return_value=(MagicMock(), "+2"))
@@ -1927,7 +1927,7 @@ async def test_resolve_channel_once_review_requires_signal_gone():
     """Without signal_gone an uncertain numeric miss stays None even when
     review_on_uncertain is requested — review is a gone-check affordance
     (#mutation slice 5)."""
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = _resolve_pool()
     pool.get_available_client = AsyncMock(return_value=(MagicMock(), "+2"))
@@ -1941,7 +1941,7 @@ async def test_resolve_channel_once_review_requires_signal_gone():
 async def test_resolve_channel_once_owner_unavailable_defers_to_review():
     """When the owning account is unavailable we must NOT confirm gone — the
     uncertain sentinel is returned instead (#mutation slice 5)."""
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = _resolve_pool()
     pool.get_client_by_phone = AsyncMock(return_value=None)
@@ -1963,7 +1963,7 @@ async def test_resolve_channel_once_flood_rotates_three_clients_then_raises():
 
     from telethon_floodgate import FloodWaitInfo, HandledFloodWaitError
 
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     def _flood_error():
         info = FloodWaitInfo(
@@ -1990,7 +1990,7 @@ async def test_resolve_channel_once_remember_phone_force_only_for_fallback():
     """The gone-check self-heal remembers the resolving account: force=True only
     when the resolver was a FALLBACK account, never for the routed owner
     (#mutation slice 5)."""
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     entity = MagicMock()
     entity.title = "Ch"

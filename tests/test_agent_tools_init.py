@@ -23,7 +23,7 @@ class TestAdaptSdkTool:
             handler=handler,
         )
 
-        from src.agent.tools import _adapt_sdk_tool
+        from tg_agent.agent.tools import _adapt_sdk_tool
 
         adapted = _adapt_sdk_tool(tool)
         result = await adapted()
@@ -42,7 +42,7 @@ class TestAdaptSdkTool:
             }
 
         tool = SdkMcpTool(name="t", description="d", input_schema={}, handler=handler)
-        from src.agent.tools import _adapt_sdk_tool
+        from tg_agent.agent.tools import _adapt_sdk_tool
 
         adapted = _adapt_sdk_tool(tool)
         result = await adapted()
@@ -61,7 +61,7 @@ class TestAdaptSdkTool:
             }
 
         tool = SdkMcpTool(name="t", description="d", input_schema={}, handler=handler)
-        from src.agent.tools import _adapt_sdk_tool
+        from tg_agent.agent.tools import _adapt_sdk_tool
 
         adapted = _adapt_sdk_tool(tool)
         result = await adapted()
@@ -75,7 +75,7 @@ class TestAdaptSdkTool:
             return "plain string"
 
         tool = SdkMcpTool(name="t", description="d", input_schema={}, handler=handler)
-        from src.agent.tools import _adapt_sdk_tool
+        from tg_agent.agent.tools import _adapt_sdk_tool
 
         adapted = _adapt_sdk_tool(tool)
         result = await adapted()
@@ -89,7 +89,7 @@ class TestAdaptSdkTool:
             return {"error": "something"}
 
         tool = SdkMcpTool(name="t", description="d", input_schema={}, handler=handler)
-        from src.agent.tools import _adapt_sdk_tool
+        from tg_agent.agent.tools import _adapt_sdk_tool
 
         adapted = _adapt_sdk_tool(tool)
         result = await adapted()
@@ -106,7 +106,7 @@ class TestAdaptSdkTool:
             return {"content": [{"type": "text", "text": "ok"}]}
 
         tool = SdkMcpTool(name="t", description="d", input_schema={}, handler=handler)
-        from src.agent.tools import _adapt_sdk_tool
+        from tg_agent.agent.tools import _adapt_sdk_tool
 
         adapted = _adapt_sdk_tool(tool)
         await adapted(query="test", limit=5)
@@ -120,7 +120,7 @@ class TestAdaptSdkTool:
             return {"content": [{"type": "text", "text": "ok"}]}
 
         tool = SdkMcpTool(name="t", description="My description", input_schema={}, handler=handler)
-        from src.agent.tools import _adapt_sdk_tool
+        from tg_agent.agent.tools import _adapt_sdk_tool
 
         adapted = _adapt_sdk_tool(tool)
         assert adapted.__doc__ == "My description"
@@ -133,7 +133,7 @@ class TestAdaptSdkTool:
             return {"content": [{"type": "image", "data": "x"}]}
 
         tool = SdkMcpTool(name="t", description="d", input_schema={}, handler=handler)
-        from src.agent.tools import _adapt_sdk_tool
+        from tg_agent.agent.tools import _adapt_sdk_tool
 
         adapted = _adapt_sdk_tool(tool)
         result = await adapted()
@@ -154,12 +154,12 @@ class TestWrapWithSessionGate:
 
         tool = SdkMcpTool(name="test_tool", description="d", input_schema={}, handler=handler)
 
-        from src.agent.tools import _wrap_with_session_gate
+        from tg_agent.agent.tools import _wrap_with_session_gate
 
         wrapped = _wrap_with_session_gate(tool)
         assert wrapped.name == "test_tool"
 
-        with patch("src.agent.permission_gate.get_gate", return_value=None):
+        with patch("tg_agent.agent.permission_gate.get_gate", return_value=None):
             result = await wrapped.handler()
         assert result["content"][0]["text"] == "ok"
 
@@ -172,14 +172,14 @@ class TestWrapWithSessionGate:
 
         tool = SdkMcpTool(name="t", description="d", input_schema={}, handler=handler)
 
-        from src.agent.tools import _wrap_with_session_gate
+        from tg_agent.agent.tools import _wrap_with_session_gate
 
         wrapped = _wrap_with_session_gate(tool)
 
         gate = MagicMock()
         with (
-            patch("src.agent.permission_gate.get_gate", return_value=gate),
-            patch("src.agent.permission_gate.get_request_context", return_value=None),
+            patch("tg_agent.agent.permission_gate.get_gate", return_value=gate),
+            patch("tg_agent.agent.permission_gate.get_request_context", return_value=None),
         ):
             result = await wrapped.handler()
         assert result["content"][0]["text"] == "passed"
@@ -188,14 +188,14 @@ class TestWrapWithSessionGate:
     async def test_gate_tool_requestable_returns_gate_result(self):
         from claude_agent_sdk import SdkMcpTool
 
-        from src.agent.tools.permissions import ToolAccessState
+        from tg_agent.agent.tools.permissions import ToolAccessState
 
         async def handler(*args, **kwargs):
             return {"content": [{"type": "text", "text": "should not reach"}]}
 
         tool = SdkMcpTool(name="test_tool", description="d", input_schema={}, handler=handler)
 
-        from src.agent.tools import _wrap_with_session_gate
+        from tg_agent.agent.tools import _wrap_with_session_gate
 
         wrapped = _wrap_with_session_gate(tool)
 
@@ -206,8 +206,8 @@ class TestWrapWithSessionGate:
         ctx.tool_access_policy = {"test_tool": ToolAccessState.REQUESTABLE}
 
         with (
-            patch("src.agent.permission_gate.get_gate", return_value=gate),
-            patch("src.agent.permission_gate.get_request_context", return_value=ctx),
+            patch("tg_agent.agent.permission_gate.get_gate", return_value=gate),
+            patch("tg_agent.agent.permission_gate.get_request_context", return_value=ctx),
         ):
             result = await wrapped.handler()
         assert result["content"][0]["text"] == "blocked"
@@ -221,7 +221,7 @@ class TestWrapWithSessionGate:
 
         tool = SdkMcpTool(name="test_tool", description="d", input_schema={}, handler=handler)
 
-        from src.agent.tools import _wrap_with_session_gate
+        from tg_agent.agent.tools import _wrap_with_session_gate
 
         wrapped = _wrap_with_session_gate(tool)
 
@@ -229,8 +229,8 @@ class TestWrapWithSessionGate:
         ctx.db_permissions = {"test_tool": True}
 
         with (
-            patch("src.agent.permission_gate.get_gate", return_value=MagicMock()),
-            patch("src.agent.permission_gate.get_request_context", return_value=ctx),
+            patch("tg_agent.agent.permission_gate.get_gate", return_value=MagicMock()),
+            patch("tg_agent.agent.permission_gate.get_request_context", return_value=ctx),
         ):
             result = await wrapped.handler()
         assert result["content"][0]["text"] == "allowed"
@@ -249,7 +249,7 @@ class TestWrapWithSessionGate:
             annotations={"title": "My Tool"},
         )
 
-        from src.agent.tools import _wrap_with_session_gate
+        from tg_agent.agent.tools import _wrap_with_session_gate
 
         wrapped = _wrap_with_session_gate(tool)
         assert wrapped.name == "my_tool"
@@ -263,25 +263,25 @@ class TestWrapWithSessionGate:
 
 class TestPipelineSafeTools:
     def test_is_frozenset(self):
-        from src.agent.tools import _PIPELINE_SAFE_TOOLS
+        from tg_agent.agent.tools import _PIPELINE_SAFE_TOOLS
 
         assert isinstance(_PIPELINE_SAFE_TOOLS, frozenset)
 
     def test_contains_search_tools(self):
-        from src.agent.tools import _PIPELINE_SAFE_TOOLS
+        from tg_agent.agent.tools import _PIPELINE_SAFE_TOOLS
 
         assert "search_messages" in _PIPELINE_SAFE_TOOLS
         assert "semantic_search" in _PIPELINE_SAFE_TOOLS
 
     def test_does_not_contain_write_tools(self):
-        from src.agent.tools import _PIPELINE_SAFE_TOOLS
+        from tg_agent.agent.tools import _PIPELINE_SAFE_TOOLS
 
         assert "send_message" not in _PIPELINE_SAFE_TOOLS
         assert "delete_channel" not in _PIPELINE_SAFE_TOOLS
         assert "run_pipeline" not in _PIPELINE_SAFE_TOOLS
 
     def test_contains_list_and_get_tools(self):
-        from src.agent.tools import _PIPELINE_SAFE_TOOLS
+        from tg_agent.agent.tools import _PIPELINE_SAFE_TOOLS
 
         assert "list_channels" in _PIPELINE_SAFE_TOOLS
         assert "list_pipelines" in _PIPELINE_SAFE_TOOLS
@@ -294,30 +294,30 @@ class TestPipelineSafeTools:
 
 class TestBuildAgentToolsDict:
     def test_returns_only_safe_tools(self):
-        from src.agent.tools import _PIPELINE_SAFE_TOOLS, build_agent_tools_dict
+        from tg_agent.agent.tools import _PIPELINE_SAFE_TOOLS, build_agent_tools_dict
 
         mock_db = MagicMock()
         captured_tools = []
 
         with patch(
-            "src.agent.tools.create_sdk_mcp_server",
+            "tg_agent.agent.tools.create_sdk_mcp_server",
             side_effect=lambda **kwargs: captured_tools.extend(kwargs.get("tools", [])),
         ):
-            from src.agent.tools import make_mcp_server
+            from tg_agent.agent.tools import make_mcp_server
             make_mcp_server(mock_db)
 
-        with patch("src.services.embedding_service.EmbeddingService"):
+        with patch("tg_agent.services.embedding_service.EmbeddingService"):
             tools_dict = build_agent_tools_dict(mock_db)
 
         for tool_name in tools_dict:
             assert tool_name in _PIPELINE_SAFE_TOOLS, f"build_agent_tools_dict included unsafe tool: {tool_name}"
 
     def test_dialog_import_listing_is_interactive_only(self):
-        from src.agent.tools import _PIPELINE_SAFE_TOOLS, build_agent_tools_dict
+        from tg_agent.agent.tools import _PIPELINE_SAFE_TOOLS, build_agent_tools_dict
 
         mock_db = MagicMock()
 
-        with patch("src.services.embedding_service.EmbeddingService"):
+        with patch("tg_agent.services.embedding_service.EmbeddingService"):
             tools_dict = build_agent_tools_dict(mock_db)
 
         assert "list_dialogs_for_import" not in _PIPELINE_SAFE_TOOLS
@@ -347,9 +347,9 @@ class TestBuildAgentToolsDict:
         mock_module.register = MagicMock(return_value=[fake_tool])
 
         with (
-            patch("src.services.embedding_service.EmbeddingService"),
+            patch("tg_agent.services.embedding_service.EmbeddingService"),
             patch.multiple(
-                "src.agent.tools",
+                "tg_agent.agent.tools",
                 search=mock_module,
                 channels=mock_module,
                 collection=mock_module,
@@ -369,7 +369,7 @@ class TestBuildAgentToolsDict:
                 agent_threads=mock_module,
             ),
         ):
-            from src.agent.tools import build_agent_tools_dict
+            from tg_agent.agent.tools import build_agent_tools_dict
             tools_dict = build_agent_tools_dict(mock_db)
 
         # search_messages is in _PIPELINE_SAFE_TOOLS, so it should be included
@@ -381,8 +381,8 @@ class TestBuildAgentToolsDict:
     def test_runtime_context_passed_to_pipeline_tool_registers(self):
         from claude_agent_sdk import SdkMcpTool
 
-        from src.agent.runtime_context import AgentRuntimeContext
-        from src.agent.tools import build_agent_tools_dict
+        from tg_agent.agent.runtime_context import AgentRuntimeContext
+        from tg_agent.agent.tools import build_agent_tools_dict
 
         mock_db = MagicMock()
         pool = MagicMock()
@@ -407,9 +407,9 @@ class TestBuildAgentToolsDict:
         mock_module.register = register
 
         with (
-            patch("src.services.embedding_service.EmbeddingService"),
+            patch("tg_agent.services.embedding_service.EmbeddingService"),
             patch.multiple(
-                "src.agent.tools",
+                "tg_agent.agent.tools",
                 search=mock_module,
                 channels=mock_module,
                 collection=mock_module,
@@ -438,6 +438,6 @@ class TestBuildAgentToolsDict:
         assert all(ctx.runtime_kind == "live" for ctx in seen_contexts)
 
     def test_account_info_is_not_pipeline_safe(self):
-        from src.agent.tools import _PIPELINE_SAFE_TOOLS
+        from tg_agent.agent.tools import _PIPELINE_SAFE_TOOLS
 
         assert "get_account_info" not in _PIPELINE_SAFE_TOOLS

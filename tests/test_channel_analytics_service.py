@@ -8,9 +8,9 @@ from unittest.mock import patch
 
 import pytest
 
-from src.config import AppConfig
-from src.models import Channel, ChannelStats, Message
-from src.services.channel_analytics_service import (
+from tg_agent.config import AppConfig
+from tg_agent.models import Channel, ChannelStats, Message
+from tg_agent.services.channel_analytics_service import (
     ChannelAnalyticsService,
     ChannelComparison,
     ChannelListItem,
@@ -1015,7 +1015,7 @@ async def test_repo_cross_citations_latest_date(db):
 @pytest.mark.aiosqlite_serial
 def test_cli_analytics_channel(cli_db, capsys):
     """End-to-end test for `analytics channel <channel_id>` CLI command."""
-    from src.cli.commands.analytics import run as analytics_run
+    from tg_agent.cli.commands.analytics import run as analytics_run
 
     # Seed data synchronously via the db
     async def _seed():
@@ -1054,7 +1054,7 @@ def test_cli_analytics_channel(cli_db, capsys):
     async def fake_init_db(_config_path):
         return config, cli_db
 
-    with patch("src.cli.commands.analytics.runtime.init_db", side_effect=fake_init_db):
+    with patch("tg_agent.cli.commands.analytics.runtime.init_db", side_effect=fake_init_db):
         analytics_run(argparse.Namespace(
             config="config.yaml",
             analytics_action="channel",
@@ -1074,8 +1074,8 @@ def test_cli_analytics_channel(cli_db, capsys):
 @pytest.mark.aiosqlite_serial
 def test_cli_analytics_channel_rating(cli_db, capsys):
     """End-to-end test for `analytics channel-rating` CLI command (#967)."""
-    from src.cli.commands.analytics import run as analytics_run
-    from src.models import ChannelRating
+    from tg_agent.cli.commands.analytics import run as analytics_run
+    from tg_agent.models import ChannelRating
 
     async def _seed():
         await cli_db.repos.channel_ratings.upsert(
@@ -1097,7 +1097,7 @@ def test_cli_analytics_channel_rating(cli_db, capsys):
     async def fake_init_db(_config_path):
         return config, cli_db
 
-    with patch("src.cli.commands.analytics.runtime.init_db", side_effect=fake_init_db):
+    with patch("tg_agent.cli.commands.analytics.runtime.init_db", side_effect=fake_init_db):
         analytics_run(argparse.Namespace(
             config="config.yaml", analytics_action="channel-rating",
             useful="useful", genre=None, limit=50,
@@ -1113,14 +1113,14 @@ def test_cli_analytics_channel_rating(cli_db, capsys):
 @pytest.mark.aiosqlite_serial
 def test_cli_analytics_channel_not_found(cli_db, capsys):
     """CLI analytics channel for nonexistent channel prints not found."""
-    from src.cli.commands.analytics import run as analytics_run
+    from tg_agent.cli.commands.analytics import run as analytics_run
 
     config = AppConfig()
 
     async def fake_init_db(_config_path):
         return config, cli_db
 
-    with patch("src.cli.commands.analytics.runtime.init_db", side_effect=fake_init_db):
+    with patch("tg_agent.cli.commands.analytics.runtime.init_db", side_effect=fake_init_db):
         analytics_run(argparse.Namespace(
             config="config.yaml",
             analytics_action="channel",

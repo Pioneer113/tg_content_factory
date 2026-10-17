@@ -2,7 +2,7 @@
   "_comment": "Baseline-снимок scripts/detect_reinvented.py (#1108). Фиксирует текущие находки-велосипеды, чтобы прогоны диффили и подсвечивали НОВЫЕ. Пересоздать: python scripts/detect_reinvented.py --update-baseline.",
   "findings": [
     {
-      "file": "src/agent/backends/_stream.py",
+      "file": "tg_agent/agent/backends/_stream.py",
       "line": 463,
       "kind": "handrolled-retry-loop",
       "what": "самописный retry/backoff-цикл в _await_with_countdown()",
@@ -10,7 +10,7 @@
       "confidence": "med"
     },
     {
-      "file": "src/services/task_handlers/stats.py",
+      "file": "tg_agent/services/task_handlers/stats.py",
       "line": 174,
       "kind": "handrolled-retry-loop",
       "what": "самописный retry/backoff-цикл в handle_stats_all()",
@@ -18,7 +18,7 @@
       "confidence": "med"
     },
     {
-      "file": "src/services/telegram_command_dispatcher.py",
+      "file": "tg_agent/services/telegram_command_dispatcher.py",
       "line": 152,
       "kind": "handrolled-retry-loop",
       "what": "самописный retry/backoff-цикл в _run_loop()",
@@ -26,7 +26,7 @@
       "confidence": "med"
     },
     {
-      "file": "src/services/unified_dispatcher.py",
+      "file": "tg_agent/services/unified_dispatcher.py",
       "line": 182,
       "kind": "handrolled-retry-loop",
       "what": "самописный retry/backoff-цикл в _run_loop()",
@@ -34,7 +34,7 @@
       "confidence": "med"
     },
     {
-      "file": "src/telegram/collector_mixins/collection.py",
+      "file": "tg_agent/telegram/collector_mixins/collection.py",
       "line": 322,
       "kind": "handrolled-retry-loop",
       "what": "самописный retry/backoff-цикл в collect_all_channels()",
@@ -42,7 +42,7 @@
       "confidence": "med"
     },
     {
-      "file": "src/telegram/collector_mixins/stats.py",
+      "file": "tg_agent/telegram/collector_mixins/stats.py",
       "line": 475,
       "kind": "handrolled-retry-loop",
       "what": "самописный retry/backoff-цикл в collect_all_stats()",
@@ -50,7 +50,7 @@
       "confidence": "med"
     },
     {
-      "file": "src/telegram/pool_dialogs.py",
+      "file": "tg_agent/telegram/pool_dialogs.py",
       "line": 312,
       "kind": "handrolled-retry-loop",
       "what": "самописный retry/backoff-цикл в warm_all_dialogs()",
@@ -58,7 +58,7 @@
       "confidence": "med"
     },
     {
-      "file": "src/telegram/pool_dialogs.py",
+      "file": "tg_agent/telegram/pool_dialogs.py",
       "line": 1285,
       "kind": "handrolled-retry-loop",
       "what": "самописный retry/backoff-цикл в leave_channels()",
@@ -66,7 +66,7 @@
       "confidence": "med"
     },
     {
-      "file": "src/telegram/pool_dialogs.py",
+      "file": "tg_agent/telegram/pool_dialogs.py",
       "line": 1353,
       "kind": "handrolled-retry-loop",
       "what": "самописный retry/backoff-цикл в delete_dialogs()",
@@ -74,7 +74,7 @@
       "confidence": "med"
     },
     {
-      "file": "src/web/bootstrap.py",
+      "file": "tg_agent/web/bootstrap.py",
       "line": 76,
       "kind": "handrolled-retry-loop",
       "what": "самописный retry/backoff-цикл в _retry_telegram_pool_until_connected()",
@@ -82,7 +82,7 @@
       "confidence": "med"
     },
     {
-      "file": "src/web/scheduler/context.py",
+      "file": "tg_agent/web/scheduler/context.py",
       "line": 236,
       "kind": "manual-counter",
       "what": "самописный частотный счётчик в _dedupe_recent_unavailability_events()",
@@ -90,7 +90,7 @@
       "confidence": "med"
     },
     {
-      "file": "src/web/search/handlers.py",
+      "file": "tg_agent/web/search/handlers.py",
       "line": 86,
       "kind": "handrolled-retry-loop",
       "what": "самописный retry/backoff-цикл в _telegram_search_via_worker()",

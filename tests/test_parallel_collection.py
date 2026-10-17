@@ -12,11 +12,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.collection_queue import CollectionQueue
-from src.config import SchedulerConfig
-from src.database import Database
-from src.models import Channel, CollectionTask, CollectionTaskStatus
-from src.telegram.collector import Collector
+from tg_agent.collection_queue import CollectionQueue
+from tg_agent.config import SchedulerConfig
+from tg_agent.database import Database
+from tg_agent.models import Channel, CollectionTask, CollectionTaskStatus
+from tg_agent.telegram.collector import Collector
 
 
 def _make_pool(

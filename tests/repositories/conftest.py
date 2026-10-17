@@ -2,19 +2,19 @@ from __future__ import annotations
 
 import pytest
 
-from src.database.repositories.accounts import AccountsRepository
-from src.database.repositories.channel_stats import ChannelStatsRepository
-from src.database.repositories.channels import ChannelsRepository
-from src.database.repositories.collection_tasks import CollectionTasksRepository
-from src.database.repositories.content_pipelines import ContentPipelinesRepository
-from src.database.repositories.filters import FilterRepository
-from src.database.repositories.messages import MessagesRepository
-from src.database.repositories.notification_bots import NotificationBotsRepository
-from src.database.repositories.search_log import SearchLogRepository
-from src.database.repositories.search_queries import SearchQueriesRepository
-from src.database.repositories.settings import SettingsRepository
-from src.models import Channel
-from src.security.session_cipher import SessionCipher
+from tg_agent.database.repositories.accounts import AccountsRepository
+from tg_agent.database.repositories.channel_stats import ChannelStatsRepository
+from tg_agent.database.repositories.channels import ChannelsRepository
+from tg_agent.database.repositories.collection_tasks import CollectionTasksRepository
+from tg_agent.database.repositories.content_pipelines import ContentPipelinesRepository
+from tg_agent.database.repositories.filters import FilterRepository
+from tg_agent.database.repositories.messages import MessagesRepository
+from tg_agent.database.repositories.notification_bots import NotificationBotsRepository
+from tg_agent.database.repositories.search_log import SearchLogRepository
+from tg_agent.database.repositories.search_queries import SearchQueriesRepository
+from tg_agent.database.repositories.settings import SettingsRepository
+from tg_agent.models import Channel
+from tg_agent.security.session_cipher import SessionCipher
 
 
 @pytest.fixture

@@ -1,7 +1,7 @@
 """Opt-in e2e: assert no panel page logs a JS console error (issues #792, #1014).
 
 This test is **opt-in** and skipped by default — it needs a live web server
-(``python -m src.main serve``) plus the Playwright browser binaries
+(``python -m tg_agent.main serve``) plus the Playwright browser binaries
 (``playwright install --with-deps chromium``), neither of which exists in the
 standard CI run. Enable it with::
 

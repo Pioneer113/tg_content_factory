@@ -9,20 +9,20 @@ import pytest
 from telethon.errors import FloodWaitError, TypeNotFoundError, UsernameNotOccupiedError
 from telethon.tl.types import InputPeerChannel, PeerChannel
 
-from src.config import SchedulerConfig
-from src.database import DatabaseBusyError
-from src.models import Channel, ChannelStats, CollectionTaskStatus, Message, StatsAllTaskPayload
-from src.telegram.backends import TelegramTransportSession
-from src.telegram.collector import (
+from tests.helpers import AsyncIterEmpty as _AsyncIterEmpty
+from tests.helpers import AsyncIterMessages as _AsyncIterMessages
+from tests.helpers import FakeTelethonClient, make_mock_message, make_mock_pool, make_mock_reactions
+from tg_agent.config import SchedulerConfig
+from tg_agent.database import DatabaseBusyError
+from tg_agent.models import Channel, ChannelStats, CollectionTaskStatus, Message, StatsAllTaskPayload
+from tg_agent.telegram.backends import TelegramTransportSession
+from tg_agent.telegram.collector import (
     AllCollectionClientsFloodedError,
     Collector,
     NoActiveCollectionClientsError,
     UsernameResolveFloodWaitDeferredError,
     UsernameResolveRateLimitedError,
 )
-from tests.helpers import AsyncIterEmpty as _AsyncIterEmpty
-from tests.helpers import AsyncIterMessages as _AsyncIterMessages
-from tests.helpers import FakeTelethonClient, make_mock_message, make_mock_pool, make_mock_reactions
 
 # Outer hang guard for tests whose own stream/cleanup timeouts are tens of ms: it must only fire on
 # a real hang, not on a loaded CI runner (0.2s flaked under xdist+coverage).
@@ -1375,7 +1375,7 @@ async def test_collect_channel_checks_notifications_on_persistence_error(db):
 
     db.insert_messages_batch = _flaky_insert
 
-    with patch("src.telegram.collector_mixins.stream.MESSAGE_FLUSH_BATCH_SIZE", 2), patch.object(
+    with patch("tg_agent.telegram.collector_mixins.stream.MESSAGE_FLUSH_BATCH_SIZE", 2), patch.object(
         collector, "_check_notification_queries", new=AsyncMock()
     ) as check_mock, patch.object(
         collector, "_maybe_enqueue_auto_translate", new=AsyncMock()
@@ -1484,7 +1484,7 @@ async def test_persist_progress_log_includes_channel_username(db, caplog):
     pool = make_mock_pool(get_available_client=AsyncMock(return_value=(mock_client, "+7000")))
     collector = Collector(pool, db, SchedulerConfig(delay_between_requests_sec=0))
 
-    caplog.set_level("INFO", logger="src.telegram.collector")
+    caplog.set_level("INFO", logger="tg_agent.telegram.collector")
     count = await collector._collect_channel(stored, force=True)
 
     assert count == 1
@@ -1540,8 +1540,8 @@ async def test_collect_channel_hanging_stream_close_times_out_and_releases_clien
         async def aclose(self):
             await asyncio.Event().wait()
 
-    monkeypatch.setattr("src.telegram.collector_mixins.stream.STREAM_CLEANUP_TIMEOUT_SEC", 0.05)
-    monkeypatch.setattr("src.telegram.backends.STREAM_ITERATOR_CLOSE_TIMEOUT_SEC", 0.01)
+    monkeypatch.setattr("tg_agent.telegram.collector_mixins.stream.STREAM_CLEANUP_TIMEOUT_SEC", 0.05)
+    monkeypatch.setattr("tg_agent.telegram.backends.STREAM_ITERATOR_CLOSE_TIMEOUT_SEC", 0.01)
 
     mock_client = AsyncMock()
     mock_client.get_entity = AsyncMock(return_value=SimpleNamespace())
@@ -1578,8 +1578,8 @@ async def test_collect_channel_abandoned_stream_read_retires_client(db, monkeypa
         async def aclose(self):
             await asyncio.Event().wait()
 
-    monkeypatch.setattr("src.telegram.collector_mixins.stream.STREAM_CLEANUP_TIMEOUT_SEC", 0.01)
-    monkeypatch.setattr("src.telegram.backends.STREAM_ITERATOR_CLOSE_TIMEOUT_SEC", 0.05)
+    monkeypatch.setattr("tg_agent.telegram.collector_mixins.stream.STREAM_CLEANUP_TIMEOUT_SEC", 0.01)
+    monkeypatch.setattr("tg_agent.telegram.backends.STREAM_ITERATOR_CLOSE_TIMEOUT_SEC", 0.05)
 
     mock_client = AsyncMock()
     mock_client.get_entity = AsyncMock(return_value=SimpleNamespace())
@@ -1622,8 +1622,8 @@ async def test_collect_channel_dirty_client_remove_timeout_releases_lease(db, mo
     async def _hung_remove(_phone):
         await asyncio.Event().wait()
 
-    monkeypatch.setattr("src.telegram.collector_mixins.stream.STREAM_CLEANUP_TIMEOUT_SEC", 0.01)
-    monkeypatch.setattr("src.telegram.backends.STREAM_ITERATOR_CLOSE_TIMEOUT_SEC", 0.05)
+    monkeypatch.setattr("tg_agent.telegram.collector_mixins.stream.STREAM_CLEANUP_TIMEOUT_SEC", 0.01)
+    monkeypatch.setattr("tg_agent.telegram.backends.STREAM_ITERATOR_CLOSE_TIMEOUT_SEC", 0.05)
 
     mock_client = AsyncMock()
     mock_client.get_entity = AsyncMock(return_value=SimpleNamespace())
@@ -1798,8 +1798,8 @@ async def test_incremental_batch_flushes_to_avoid_huge_final_flush(db):
 @pytest.mark.anyio
 async def test_flush_verifies_persisted_ids_in_chunks(db, monkeypatch):
     """Persist verification should chunk SQL IN parameters under SQLite's limit."""
-    monkeypatch.setattr("src.telegram.collector_mixins.stream.MESSAGE_FLUSH_BATCH_SIZE", 1001)
-    monkeypatch.setattr("src.telegram.collector_mixins.collection.PERSISTED_ID_VERIFY_CHUNK_SIZE", 400)
+    monkeypatch.setattr("tg_agent.telegram.collector_mixins.stream.MESSAGE_FLUSH_BATCH_SIZE", 1001)
+    monkeypatch.setattr("tg_agent.telegram.collector_mixins.collection.PERSISTED_ID_VERIFY_CHUNK_SIZE", 400)
 
     ch = Channel(channel_id=-100131, title="Test", username="test131", last_collected_id=50)
     ch_id = await db.add_channel(ch)
@@ -1852,7 +1852,7 @@ async def test_collect_correct_across_flush_boundaries_for_batch_size(db, monkey
     real in-memory DB (no insert mock), parameterised on both the current default
     and the rejected 1000 hypothesis.
     """
-    monkeypatch.setattr("src.telegram.collector_mixins.stream.MESSAGE_FLUSH_BATCH_SIZE", batch_size)
+    monkeypatch.setattr("tg_agent.telegram.collector_mixins.stream.MESSAGE_FLUSH_BATCH_SIZE", batch_size)
 
     # N straddles 2.4 flush partitions at batch=500 and 1.2 at batch=1000, so a
     # boundary-off-by-one in either dedup or last_id advancement would show up.
@@ -1934,7 +1934,7 @@ async def test_collect_channel_db_busy_during_flush_keeps_cursor(db):
     raised by insert_messages_batch during flush is swallowed by _flush_batch
     (returns False) — the cycle stops cleanly, no messages are counted and
     last_collected_id is left untouched so the batch is re-collected next run."""
-    from src.database import DatabaseBusyError
+    from tg_agent.database import DatabaseBusyError
 
     ch = Channel(channel_id=-100127, title="Busy", username="busy", last_collected_id=5)
     await db.add_channel(ch)
@@ -1990,7 +1990,7 @@ async def test_full_backfill_does_not_rewind_existing_cursor(db):
 
 @pytest.mark.anyio
 async def test_backfill_does_not_send_notification_queries(db):
-    from src.models import SearchQuery
+    from tg_agent.models import SearchQuery
 
     ch = Channel(channel_id=-100128, title="Test", username="test128", last_collected_id=0)
     await db.add_channel(ch)
@@ -2017,7 +2017,7 @@ async def test_backfill_does_not_send_notification_queries(db):
 
 @pytest.mark.anyio
 async def test_incremental_collection_sends_notification_queries(db):
-    from src.models import SearchQuery
+    from tg_agent.models import SearchQuery
 
     ch = Channel(channel_id=-100129, title="Test", username="test129", last_collected_id=10)
     await db.add_channel(ch)
@@ -2042,7 +2042,7 @@ async def test_incremental_collection_sends_notification_queries(db):
 
 @pytest.mark.anyio
 async def test_incremental_collection_sends_notifications_before_idle_timeout_return(db):
-    from src.models import SearchQuery
+    from tg_agent.models import SearchQuery
 
     ch = Channel(channel_id=-100141, title="Test", username="test141", last_collected_id=10)
     await db.add_channel(ch)
@@ -2347,7 +2347,7 @@ async def test_collect_channel_long_flood_all_accounts_flooded_returns(db):
 @pytest.mark.anyio
 async def test_collection_queue_skips_filtered_channel(db):
     """CollectionQueue worker skips channels that become filtered after enqueue."""
-    from src.collection_queue import CollectionQueue
+    from tg_agent.collection_queue import CollectionQueue
 
     ch = Channel(channel_id=-100140, title="Will Be Filtered")
     await db.add_channel(ch)
@@ -2378,7 +2378,7 @@ async def test_collection_queue_skips_filtered_channel(db):
 @pytest.mark.anyio
 async def test_connection_error_triggers_reconnect_and_requeue(db):
     """ConnectionError during collection triggers reconnect and re-enqueues the task."""
-    from src.collection_queue import CollectionQueue
+    from tg_agent.collection_queue import CollectionQueue
 
     ch = Channel(channel_id=-100170, title="Reconnect Test")
     await db.add_channel(ch)
@@ -2416,7 +2416,7 @@ async def test_connection_error_triggers_reconnect_and_requeue(db):
 @pytest.mark.anyio
 async def test_connection_error_no_retry_after_max(db):
     """Second ConnectionError after retry marks task as FAILED."""
-    from src.collection_queue import CollectionQueue
+    from tg_agent.collection_queue import CollectionQueue
 
     ch = Channel(channel_id=-100171, title="No Retry Test")
     await db.add_channel(ch)
@@ -2445,7 +2445,7 @@ async def test_connection_error_no_retry_after_max(db):
 @pytest.mark.anyio
 async def test_connection_error_reconnect_fails(db):
     """When reconnect fails, task is marked as FAILED immediately."""
-    from src.collection_queue import CollectionQueue
+    from tg_agent.collection_queue import CollectionQueue
 
     ch = Channel(channel_id=-100172, title="Reconnect Fail Test")
     await db.add_channel(ch)
@@ -2473,8 +2473,8 @@ async def test_connection_error_reconnect_fails(db):
 
 @pytest.mark.anyio
 async def test_enqueue_all_channels_uses_incremental_queue_tasks(db):
-    from src.collection_queue import CollectionQueue
-    from src.services.collection_service import CollectionService
+    from tg_agent.collection_queue import CollectionQueue
+    from tg_agent.services.collection_service import CollectionService
 
     await db.add_channel(
         Channel(
@@ -2513,7 +2513,7 @@ async def test_enqueue_all_channels_uses_incremental_queue_tasks(db):
 
 @pytest.mark.anyio
 async def test_collection_queue_force_tasks_default_to_incremental(db):
-    from src.collection_queue import CollectionQueue
+    from tg_agent.collection_queue import CollectionQueue
 
     await db.add_channel(Channel(channel_id=-100162, title="Manual Channel", username="manual_ch"))
 
@@ -2543,7 +2543,7 @@ async def test_collection_queue_force_tasks_default_to_incremental(db):
 
 @pytest.mark.anyio
 async def test_collection_queue_explicit_full_tasks_keep_full_collection(db):
-    from src.collection_queue import CollectionQueue
+    from tg_agent.collection_queue import CollectionQueue
 
     await db.add_channel(Channel(channel_id=-100262, title="Full Channel", username="full_ch"))
 
@@ -2573,7 +2573,7 @@ async def test_collection_queue_explicit_full_tasks_keep_full_collection(db):
 
 @pytest.mark.anyio
 async def test_collection_queue_reschedules_when_all_clients_flooded(db):
-    from src.collection_queue import CollectionQueue
+    from tg_agent.collection_queue import CollectionQueue
 
     await db.add_channel(Channel(channel_id=-100163, title="Flood Wait", username="flood_wait_ch"))
 
@@ -2605,7 +2605,7 @@ async def test_collection_queue_reschedules_when_all_clients_flooded(db):
 
 @pytest.mark.anyio
 async def test_collection_queue_fails_when_no_active_clients(db):
-    from src.collection_queue import CollectionQueue
+    from tg_agent.collection_queue import CollectionQueue
 
     await db.add_channel(Channel(channel_id=-100164, title="No Clients", username="no_clients_ch"))
 
@@ -2634,7 +2634,7 @@ async def test_collection_queue_fails_when_no_active_clients(db):
 @pytest.mark.anyio
 async def test_requeue_startup_tasks(db):
     """requeue_startup_tasks re-enqueues pending tasks that survived a restart."""
-    from src.collection_queue import CollectionQueue
+    from tg_agent.collection_queue import CollectionQueue
 
     ch = Channel(channel_id=-100160, title="Pending Channel", username="pending_ch")
     await db.add_channel(ch)
@@ -2666,7 +2666,7 @@ async def test_requeue_startup_tasks(db):
 
 @pytest.mark.anyio
 async def test_requeue_startup_tasks_preserves_incremental_flag(db):
-    from src.collection_queue import CollectionQueue
+    from tg_agent.collection_queue import CollectionQueue
 
     await db.add_channel(
         Channel(
@@ -2711,7 +2711,7 @@ async def test_requeue_startup_tasks_preserves_incremental_flag(db):
 @pytest.mark.anyio
 async def test_requeue_startup_tasks_cancels_orphaned(db):
     """requeue_startup_tasks cancels tasks whose channel was deleted."""
-    from src.collection_queue import CollectionQueue
+    from tg_agent.collection_queue import CollectionQueue
 
     # Create a task for a channel that doesn't exist in the channels table
     task_id = await db.create_collection_task(-100999, "Ghost Channel")
@@ -2732,7 +2732,7 @@ async def test_requeue_startup_tasks_defers_future_run_after(db):
     """Startup tasks with run_after in the future go to _delayed_requeues, not the main queue."""
     from datetime import datetime, timedelta, timezone
 
-    from src.collection_queue import CollectionQueue
+    from tg_agent.collection_queue import CollectionQueue
 
     ch = Channel(channel_id=-100170, title="Future Task", username="future_ch")
     await db.add_channel(ch)
@@ -2757,7 +2757,7 @@ async def test_requeue_startup_tasks_defers_future_run_after(db):
 
 @pytest.mark.anyio
 async def test_collection_queue_cancels_deleted_channel(db):
-    from src.collection_queue import CollectionQueue
+    from tg_agent.collection_queue import CollectionQueue
 
     ch = Channel(channel_id=-100141, title="Will Be Deleted")
     await db.add_channel(ch)
@@ -2785,7 +2785,7 @@ async def test_collection_queue_cancels_deleted_channel(db):
 
 @pytest.mark.anyio
 async def test_collection_queue_clear_pending_tasks_removes_db_rows_and_queue_items(db):
-    from src.collection_queue import CollectionQueue
+    from tg_agent.collection_queue import CollectionQueue
 
     await db.add_channel(Channel(channel_id=-100171, title="Queued One", username="queued_one"))
     await db.add_channel(Channel(channel_id=-100172, title="Queued Two", username="queued_two"))
@@ -2818,7 +2818,7 @@ async def test_collection_queue_clear_pending_tasks_removes_db_rows_and_queue_it
 
 @pytest.mark.anyio
 async def test_collection_queue_skips_task_deleted_after_dequeue(db):
-    from src.collection_queue import CollectionQueue
+    from tg_agent.collection_queue import CollectionQueue
 
     await db.add_channel(
         Channel(channel_id=-100174, title="Deleted After Dequeue", username="deleted")

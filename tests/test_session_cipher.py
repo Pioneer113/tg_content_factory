@@ -1,6 +1,6 @@
 import pytest
 
-from src.security import SessionCipher
+from tg_agent.security import SessionCipher
 
 
 def test_encrypt_decrypt_roundtrip():

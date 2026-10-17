@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from src.config import AppConfig, load_config, parse_proxy_url, resolve_session_encryption_secret
+from tg_agent.config import AppConfig, load_config, parse_proxy_url, resolve_session_encryption_secret
 
 
 def test_default_config():

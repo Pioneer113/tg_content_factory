@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from src.services.unified_dispatcher import HANDLED_TYPES
+from tg_agent.services.unified_dispatcher import HANDLED_TYPES
 
 pytestmark = pytest.mark.anyio
 

@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.models import PhotoAutoUploadJob, PhotoSendMode
-from src.services.photo_auto_upload_service import PhotoAutoPreview, PhotoAutoUploadService
+from tg_agent.models import PhotoAutoUploadJob, PhotoSendMode
+from tg_agent.services.photo_auto_upload_service import PhotoAutoPreview, PhotoAutoUploadService
 
 
 def _make_job(**overrides) -> PhotoAutoUploadJob:

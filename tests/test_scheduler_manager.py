@@ -2,9 +2,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.config import SchedulerConfig
-from src.models import SearchQuery
-from src.scheduler.service import SchedulerManager
+from tg_agent.config import SchedulerConfig
+from tg_agent.models import SearchQuery
+from tg_agent.scheduler.service import SchedulerManager
 
 
 @pytest.fixture

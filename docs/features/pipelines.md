@@ -16,9 +16,9 @@ Pipeline config
 
 === "CLI"
     ```bash
-    python -m src.main pipeline add
-    python -m src.main pipeline list
-    python -m src.main pipeline show 1
+    python -m tg_agent.main pipeline add
+    python -m tg_agent.main pipeline list
+    python -m tg_agent.main pipeline show 1
     ```
 
 === "Web"
@@ -28,10 +28,10 @@ Pipeline config
 
 === "CLI"
     ```bash
-    python -m src.main pipeline generate 1      # генерация
-    python -m src.main pipeline run 1           # генерация + публикация
-    python -m src.main pipeline runs 1          # история запусков
-    python -m src.main pipeline run-show 42     # детали запуска
+    python -m tg_agent.main pipeline generate 1      # генерация
+    python -m tg_agent.main pipeline run 1           # генерация + публикация
+    python -m tg_agent.main pipeline runs 1          # история запусков
+    python -m tg_agent.main pipeline run-show 42     # детали запуска
     ```
 
 === "Web"
@@ -41,11 +41,11 @@ Pipeline config
 
 === "CLI"
     ```bash
-    python -m src.main pipeline queue          # очередь на модерацию
-    python -m src.main pipeline approve 42     # одобрить
-    python -m src.main pipeline reject 42      # отклонить
-    python -m src.main pipeline publish 42     # опубликовать
-    python -m src.main pipeline bulk-approve 1 2 3
+    python -m tg_agent.main pipeline queue          # очередь на модерацию
+    python -m tg_agent.main pipeline approve 42     # одобрить
+    python -m tg_agent.main pipeline reject 42      # отклонить
+    python -m tg_agent.main pipeline publish 42     # опубликовать
+    python -m tg_agent.main pipeline bulk-approve 1 2 3
     ```
 
 === "Web"

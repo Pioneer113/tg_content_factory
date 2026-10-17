@@ -22,9 +22,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.config import AppConfig, SchedulerConfig
-from src.database import Database
-from src.models import (
+from tg_agent.config import AppConfig, SchedulerConfig
+from tg_agent.database import Database
+from tg_agent.models import (
     CollectionTask,
     CollectionTaskStatus,
     CollectionTaskType,
@@ -33,7 +33,7 @@ from src.models import (
     SqStatsTaskPayload,
     StatsAllTaskPayload,
 )
-from src.telegram.collector import Collector
+from tg_agent.telegram.collector import Collector
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -58,19 +58,19 @@ def make_app_config(**overrides):
 
 class TestFormatException:
     def test_with_message(self):
-        from src.cli.commands.test import _format_exception
+        from tg_agent.cli.commands.test import _format_exception
 
         exc = RuntimeError("something broke")
         assert _format_exception(exc) == "something broke"
 
     def test_empty_message(self):
-        from src.cli.commands.test import _format_exception
+        from tg_agent.cli.commands.test import _format_exception
 
         exc = RuntimeError("")
         assert _format_exception(exc) == "RuntimeError"
 
     def test_whitespace_only(self):
-        from src.cli.commands.test import _format_exception
+        from tg_agent.cli.commands.test import _format_exception
 
         exc = RuntimeError("   ")
         assert _format_exception(exc) == "RuntimeError"
@@ -78,7 +78,7 @@ class TestFormatException:
 
 class TestFormatAllFloodedDetail:
     def test_no_retry_no_datetime(self):
-        from src.cli.commands.test import _format_all_flooded_detail
+        from tg_agent.cli.commands.test import _format_all_flooded_detail
 
         result = _format_all_flooded_detail(
             "base", retry_after_sec=None, next_available_at_utc=None
@@ -86,7 +86,7 @@ class TestFormatAllFloodedDetail:
         assert "all clients are flood-waited" in result
 
     def test_retry_sec_only(self):
-        from src.cli.commands.test import _format_all_flooded_detail
+        from tg_agent.cli.commands.test import _format_all_flooded_detail
 
         result = _format_all_flooded_detail(
             "base", retry_after_sec=10, next_available_at_utc=None
@@ -95,7 +95,7 @@ class TestFormatAllFloodedDetail:
         assert "until" not in result
 
     def test_retry_sec_with_utc(self):
-        from src.cli.commands.test import _format_all_flooded_detail
+        from tg_agent.cli.commands.test import _format_all_flooded_detail
 
         dt = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
         result = _format_all_flooded_detail(
@@ -109,7 +109,7 @@ class TestIsPremiumFlood:
     def test_premium_operations(self):
         from telethon_floodgate import FloodWaitInfo
 
-        from src.cli.commands.test import _is_premium_flood
+        from tg_agent.cli.commands.test import _is_premium_flood
 
         for op in ("check_search_quota", "search_telegram_check_quota", "search_telegram"):
             info = FloodWaitInfo(
@@ -123,7 +123,7 @@ class TestIsPremiumFlood:
     def test_non_premium_operation(self):
         from telethon_floodgate import FloodWaitInfo
 
-        from src.cli.commands.test import _is_premium_flood
+        from tg_agent.cli.commands.test import _is_premium_flood
 
         info = FloodWaitInfo(
             operation="get_entity",
@@ -138,7 +138,7 @@ class TestGetSearchResultFloodWait:
     def test_returns_flood_info(self):
         from telethon_floodgate import FloodWaitInfo
 
-        from src.cli.commands.test import _get_search_result_flood_wait
+        from tg_agent.cli.commands.test import _get_search_result_flood_wait
 
         info = FloodWaitInfo(
             operation="search",
@@ -150,13 +150,13 @@ class TestGetSearchResultFloodWait:
         assert _get_search_result_flood_wait(result) is info
 
     def test_returns_none_not_flood_info(self):
-        from src.cli.commands.test import _get_search_result_flood_wait
+        from tg_agent.cli.commands.test import _get_search_result_flood_wait
 
         result = SimpleNamespace(flood_wait="not a flood info")
         assert _get_search_result_flood_wait(result) is None
 
     def test_returns_none_no_attr(self):
-        from src.cli.commands.test import _get_search_result_flood_wait
+        from tg_agent.cli.commands.test import _get_search_result_flood_wait
 
         assert _get_search_result_flood_wait(SimpleNamespace()) is None
 
@@ -165,7 +165,7 @@ class TestRunBenchmarkStep:
     def test_success(self):
         import sys
 
-        from src.cli.commands.test import BenchmarkStep, _run_benchmark_step
+        from tg_agent.cli.commands.test import BenchmarkStep, _run_benchmark_step
 
         step = BenchmarkStep("test", (sys.executable, "-c", "pass"))
         elapsed = _run_benchmark_step(step)
@@ -174,7 +174,7 @@ class TestRunBenchmarkStep:
     def test_failure_exits(self):
         import sys
 
-        from src.cli.commands.test import BenchmarkStep, _run_benchmark_step
+        from tg_agent.cli.commands.test import BenchmarkStep, _run_benchmark_step
 
         step = BenchmarkStep("fail", (sys.executable, "-c", "import sys; sys.exit(1)"))
         with pytest.raises(SystemExit):
@@ -183,7 +183,7 @@ class TestRunBenchmarkStep:
 
 class TestPrintResult:
     def test_pass(self, capsys):
-        from src.cli.commands.test import CheckResult, Status, _print_result
+        from tg_agent.cli.commands.test import CheckResult, Status, _print_result
 
         _print_result(CheckResult("test", Status.PASS, "ok"))
         out = capsys.readouterr().out
@@ -191,14 +191,14 @@ class TestPrintResult:
         assert "test" in out
 
     def test_fail(self, capsys):
-        from src.cli.commands.test import CheckResult, Status, _print_result
+        from tg_agent.cli.commands.test import CheckResult, Status, _print_result
 
         _print_result(CheckResult("test", Status.FAIL, "bad"))
         out = capsys.readouterr().out
         assert "FAIL" in out
 
     def test_skip(self, capsys):
-        from src.cli.commands.test import CheckResult, Status, _print_result
+        from tg_agent.cli.commands.test import CheckResult, Status, _print_result
 
         _print_result(CheckResult("test", Status.SKIP, "skipped"))
         out = capsys.readouterr().out
@@ -210,7 +210,7 @@ class TestDecideLiveFloodAction:
     async def test_no_availability_returns_skip(self):
         from telethon_floodgate import FloodWaitInfo
 
-        from src.cli.commands.test import _decide_live_test_flood_action
+        from tg_agent.cli.commands.test import _decide_live_test_flood_action
 
         pool = MagicMock()
         pool.get_stats_availability = None
@@ -228,8 +228,8 @@ class TestDecideLiveFloodAction:
     async def test_not_flooded_returns_rotate(self):
         from telethon_floodgate import FloodWaitInfo
 
-        from src.cli.commands.test import _decide_live_test_flood_action
-        from src.telegram.client_pool import StatsClientAvailability
+        from tg_agent.cli.commands.test import _decide_live_test_flood_action
+        from tg_agent.telegram.client_pool import StatsClientAvailability
 
         pool = MagicMock()
         pool.get_stats_availability = AsyncMock(
@@ -248,7 +248,7 @@ class TestDecideLiveFloodAction:
 class TestTgCallWrapper:
     @pytest.mark.anyio
     async def test_timeout_raises(self):
-        from src.cli.commands.test import _tg_call
+        from tg_agent.cli.commands.test import _tg_call
 
         async def _hang():
             await asyncio.sleep(100)
@@ -259,35 +259,35 @@ class TestTgCallWrapper:
 
 class TestIsRegularSearchUnavailable:
     def test_match(self):
-        from src.cli.commands.test import _is_regular_search_client_unavailable_error
+        from tg_agent.cli.commands.test import _is_regular_search_client_unavailable_error
 
         assert _is_regular_search_client_unavailable_error(
             "Нет доступных Telegram-аккаунтов. Проверьте подключение."
         )
 
     def test_no_match(self):
-        from src.cli.commands.test import _is_regular_search_client_unavailable_error
+        from tg_agent.cli.commands.test import _is_regular_search_client_unavailable_error
 
         assert not _is_regular_search_client_unavailable_error("something else")
 
 
 class TestIsPremiumFloodUnavailable:
     def test_match(self):
-        from src.cli.commands.test import _is_premium_flood_unavailable_error
+        from tg_agent.cli.commands.test import _is_premium_flood_unavailable_error
 
         assert _is_premium_flood_unavailable_error(
             "Premium-аккаунты временно недоступны из-за Flood Wait."
         )
 
     def test_no_match(self):
-        from src.cli.commands.test import _is_premium_flood_unavailable_error
+        from tg_agent.cli.commands.test import _is_premium_flood_unavailable_error
 
         assert not _is_premium_flood_unavailable_error("other")
 
 
 class TestTelegramLiveStepSkipError:
     def test_is_runtime_error(self):
-        from src.cli.commands.test import TelegramLiveStepSkipError
+        from tg_agent.cli.commands.test import TelegramLiveStepSkipError
 
         err = TelegramLiveStepSkipError("detail")
         assert isinstance(err, RuntimeError)
@@ -296,7 +296,7 @@ class TestTelegramLiveStepSkipError:
 
 class TestTelegramLiveFloodDecision:
     def test_defaults(self):
-        from src.cli.commands.test import TelegramLiveFloodDecision
+        from tg_agent.cli.commands.test import TelegramLiveFloodDecision
 
         d = TelegramLiveFloodDecision(action="skip", detail="d")
         assert d.retry_after_sec is None
@@ -311,8 +311,8 @@ class TestTelegramLiveFloodDecision:
 class TestClientPoolDialogsCache:
     @pytest.mark.anyio
     async def test_invalidate_all(self, db):
-        from src.telegram.auth import TelegramAuth
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.auth import TelegramAuth
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool(TelegramAuth(0, ""), db)
         pool._store_cached_dialogs("+7", "full", [{"channel_id": 1}])
@@ -323,8 +323,8 @@ class TestClientPoolDialogsCache:
 
     @pytest.mark.anyio
     async def test_invalidate_by_phone(self, db):
-        from src.telegram.auth import TelegramAuth
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.auth import TelegramAuth
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool(TelegramAuth(0, ""), db)
         pool._store_cached_dialogs("+7", "full", [{"channel_id": 1}])
@@ -335,8 +335,8 @@ class TestClientPoolDialogsCache:
 
     @pytest.mark.anyio
     async def test_get_cached_expired(self, db):
-        from src.telegram.auth import TelegramAuth
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.auth import TelegramAuth
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool(TelegramAuth(0, ""), db)
         pool._store_cached_dialogs("+7", "full", [{"channel_id": 1}])
@@ -347,8 +347,8 @@ class TestClientPoolDialogsCache:
 
     @pytest.mark.anyio
     async def test_get_cached_channels_only_from_full(self, db):
-        from src.telegram.auth import TelegramAuth
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.auth import TelegramAuth
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool(TelegramAuth(0, ""), db)
         pool._store_cached_dialogs("+7", "full", [
@@ -361,8 +361,8 @@ class TestClientPoolDialogsCache:
 
     @pytest.mark.anyio
     async def test_get_cached_channels_only_full_expired(self, db):
-        from src.telegram.auth import TelegramAuth
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.auth import TelegramAuth
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool(TelegramAuth(0, ""), db)
         pool._store_cached_dialogs("+7", "full", [{"channel_id": 1}])
@@ -374,8 +374,8 @@ class TestClientPoolDialogsCache:
 class TestClientPoolPremiumFlood:
     @pytest.mark.anyio
     async def test_report_premium_flood(self, db):
-        from src.telegram.auth import TelegramAuth
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.auth import TelegramAuth
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool(TelegramAuth(0, ""), db)
         await pool.report_premium_flood("+7", 60)
@@ -383,8 +383,8 @@ class TestClientPoolPremiumFlood:
 
     @pytest.mark.anyio
     async def test_clear_premium_flood(self, db):
-        from src.telegram.auth import TelegramAuth
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.auth import TelegramAuth
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool(TelegramAuth(0, ""), db)
         await pool.report_premium_flood("+7", 60)
@@ -393,8 +393,8 @@ class TestClientPoolPremiumFlood:
 
     @pytest.mark.anyio
     async def test_premium_flood_expires_stale_entries(self, db):
-        from src.telegram.auth import TelegramAuth
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.auth import TelegramAuth
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool(TelegramAuth(0, ""), db)
         # Add an expired entry
@@ -408,8 +408,8 @@ class TestClientPoolPremiumFlood:
 class TestClientPoolStatsAvailability:
     @pytest.mark.anyio
     async def test_get_stats_availability(self, db):
-        from src.telegram.auth import TelegramAuth
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.auth import TelegramAuth
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool(TelegramAuth(0, ""), db)
         result = await pool.get_stats_availability()
@@ -417,8 +417,8 @@ class TestClientPoolStatsAvailability:
 
     @pytest.mark.anyio
     async def test_get_premium_stats_no_premium(self, db):
-        from src.telegram.auth import TelegramAuth
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.auth import TelegramAuth
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool(TelegramAuth(0, ""), db)
         result = await pool.get_premium_stats_availability()
@@ -428,8 +428,8 @@ class TestClientPoolStatsAvailability:
 class TestClientPoolDialogsFetched:
     @pytest.mark.anyio
     async def test_mark_and_check(self, db):
-        from src.telegram.auth import TelegramAuth
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.auth import TelegramAuth
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool(TelegramAuth(0, ""), db)
         assert not pool.is_dialogs_fetched("+7")
@@ -440,8 +440,8 @@ class TestClientPoolDialogsFetched:
 class TestClientPoolPremiumUnavailabilityReason:
     @pytest.mark.anyio
     async def test_no_premium_accounts(self, db):
-        from src.telegram.auth import TelegramAuth
-        from src.telegram.client_pool import ClientPool
+        from tg_agent.telegram.auth import TelegramAuth
+        from tg_agent.telegram.client_pool import ClientPool
 
         pool = ClientPool(TelegramAuth(0, ""), db)
         reason = await pool.get_premium_unavailability_reason()
@@ -455,7 +455,7 @@ class TestClientPoolPremiumUnavailabilityReason:
 
 class TestEmbedHistoryInPrompt:
     def test_basic(self):
-        from src.agent.manager import _embed_history_in_prompt
+        from tg_agent.agent.manager import _embed_history_in_prompt
 
         result = _embed_history_in_prompt(
             [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}],
@@ -466,7 +466,7 @@ class TestEmbedHistoryInPrompt:
         assert "<user>\nnew msg\n</user>" in result
 
     def test_empty_history(self):
-        from src.agent.manager import _embed_history_in_prompt
+        from tg_agent.agent.manager import _embed_history_in_prompt
 
         result = _embed_history_in_prompt([], "msg")
         assert result == "<user>\nmsg\n</user>"
@@ -474,7 +474,7 @@ class TestEmbedHistoryInPrompt:
 
 class TestDeepagentsBackendProperties:
     def test_legacy_fallback_model(self):
-        from src.agent.manager import DeepagentsBackend
+        from tg_agent.agent.manager import DeepagentsBackend
 
         config = AppConfig()
         config.agent.fallback_model = "openai:gpt-4"
@@ -483,7 +483,7 @@ class TestDeepagentsBackendProperties:
         assert backend.legacy_fallback_model == "openai:gpt-4"
 
     def test_fallback_model_returns_last_used(self):
-        from src.agent.manager import DeepagentsBackend
+        from tg_agent.agent.manager import DeepagentsBackend
 
         db = MagicMock(spec=Database)
         backend = DeepagentsBackend(db, AppConfig())
@@ -491,7 +491,7 @@ class TestDeepagentsBackendProperties:
         assert backend.fallback_model == "openai:gpt-4"
 
     def test_fallback_provider_returns_last_used(self):
-        from src.agent.manager import DeepagentsBackend
+        from tg_agent.agent.manager import DeepagentsBackend
 
         db = MagicMock(spec=Database)
         backend = DeepagentsBackend(db, AppConfig())
@@ -499,7 +499,7 @@ class TestDeepagentsBackendProperties:
         assert backend.fallback_provider == "openai"
 
     def test_configured_with_legacy_model(self):
-        from src.agent.manager import DeepagentsBackend
+        from tg_agent.agent.manager import DeepagentsBackend
 
         config = AppConfig()
         config.agent.fallback_model = "openai:gpt-4"
@@ -508,7 +508,7 @@ class TestDeepagentsBackendProperties:
         assert backend.configured is True
 
     def test_not_configured(self):
-        from src.agent.manager import DeepagentsBackend
+        from tg_agent.agent.manager import DeepagentsBackend
 
         config = AppConfig()
         config.agent.fallback_model = ""
@@ -518,21 +518,21 @@ class TestDeepagentsBackendProperties:
         assert backend.configured is False
 
     def test_provider_from_model_no_colon(self):
-        from src.agent.manager import DeepagentsBackend
+        from tg_agent.agent.manager import DeepagentsBackend
 
         db = MagicMock(spec=Database)
         backend = DeepagentsBackend(db, AppConfig())
         assert backend._provider_from_model("gpt-4") is None
 
     def test_provider_from_model_with_colon(self):
-        from src.agent.manager import DeepagentsBackend
+        from tg_agent.agent.manager import DeepagentsBackend
 
         db = MagicMock(spec=Database)
         backend = DeepagentsBackend(db, AppConfig())
         assert backend._provider_from_model("openai:gpt-4") == "openai"
 
     def test_init_error_property(self):
-        from src.agent.manager import DeepagentsBackend
+        from tg_agent.agent.manager import DeepagentsBackend
 
         db = MagicMock(spec=Database)
         backend = DeepagentsBackend(db, AppConfig())
@@ -543,7 +543,7 @@ class TestDeepagentsBackendProperties:
 
 class TestDeepagentsBackendExtractResult:
     def test_dict_with_messages(self):
-        from src.agent.manager import DeepagentsBackend
+        from tg_agent.agent.manager import DeepagentsBackend
 
         db = MagicMock(spec=Database)
         backend = DeepagentsBackend(db, AppConfig())
@@ -552,7 +552,7 @@ class TestDeepagentsBackendExtractResult:
         assert result == "hello world"
 
     def test_dict_with_list_content(self):
-        from src.agent.manager import DeepagentsBackend
+        from tg_agent.agent.manager import DeepagentsBackend
 
         db = MagicMock(spec=Database)
         backend = DeepagentsBackend(db, AppConfig())
@@ -561,7 +561,7 @@ class TestDeepagentsBackendExtractResult:
         assert "a" in result and "b" in result
 
     def test_dict_empty_messages(self):
-        from src.agent.manager import DeepagentsBackend
+        from tg_agent.agent.manager import DeepagentsBackend
 
         db = MagicMock(spec=Database)
         backend = DeepagentsBackend(db, AppConfig())
@@ -569,7 +569,7 @@ class TestDeepagentsBackendExtractResult:
         assert "messages" in result
 
     def test_non_dict(self):
-        from src.agent.manager import DeepagentsBackend
+        from tg_agent.agent.manager import DeepagentsBackend
 
         db = MagicMock(spec=Database)
         backend = DeepagentsBackend(db, AppConfig())
@@ -578,7 +578,7 @@ class TestDeepagentsBackendExtractResult:
 
 class TestDeepagentsClassifyProbeFailure:
     def test_timeout_returns_unknown(self):
-        from src.agent.manager import DeepagentsBackend
+        from tg_agent.agent.manager import DeepagentsBackend
 
         db = MagicMock(spec=Database)
         backend = DeepagentsBackend(db, AppConfig())
@@ -586,7 +586,7 @@ class TestDeepagentsClassifyProbeFailure:
         assert status == "unknown"
 
     def test_auth_error_returns_unknown(self):
-        from src.agent.manager import DeepagentsBackend
+        from tg_agent.agent.manager import DeepagentsBackend
 
         db = MagicMock(spec=Database)
         backend = DeepagentsBackend(db, AppConfig())
@@ -594,7 +594,7 @@ class TestDeepagentsClassifyProbeFailure:
         assert status == "unknown"
 
     def test_generic_error_returns_unsupported(self):
-        from src.agent.manager import DeepagentsBackend
+        from tg_agent.agent.manager import DeepagentsBackend
 
         db = MagicMock(spec=Database)
         backend = DeepagentsBackend(db, AppConfig())
@@ -604,8 +604,8 @@ class TestDeepagentsClassifyProbeFailure:
 
 class TestDeepagentsBackendValidation:
     def test_legacy_validation_no_model(self):
-        from src.agent.manager import DeepagentsBackend
-        from src.agent.provider_registry import ProviderRuntimeConfig
+        from tg_agent.agent.manager import DeepagentsBackend
+        from tg_agent.agent.provider_registry import ProviderRuntimeConfig
 
         db = MagicMock(spec=Database)
         backend = DeepagentsBackend(db, AppConfig())
@@ -616,8 +616,8 @@ class TestDeepagentsBackendValidation:
         assert backend._legacy_validation_error(cfg) != ""
 
     def test_legacy_validation_anthropic_no_key(self):
-        from src.agent.manager import DeepagentsBackend
-        from src.agent.provider_registry import ProviderRuntimeConfig
+        from tg_agent.agent.manager import DeepagentsBackend
+        from tg_agent.agent.provider_registry import ProviderRuntimeConfig
 
         db = MagicMock(spec=Database)
         backend = DeepagentsBackend(db, AppConfig())
@@ -630,7 +630,7 @@ class TestDeepagentsBackendValidation:
 
 class TestClaudeSdkBackendAvailable:
     def test_available_with_api_key(self):
-        from src.agent.manager import ClaudeSdkBackend
+        from tg_agent.agent.manager import ClaudeSdkBackend
 
         db = MagicMock(spec=Database)
         backend = ClaudeSdkBackend(db, AppConfig())
@@ -638,7 +638,7 @@ class TestClaudeSdkBackendAvailable:
             assert backend.available is True
 
     def test_not_available_without_key(self):
-        from src.agent.manager import ClaudeSdkBackend
+        from tg_agent.agent.manager import ClaudeSdkBackend
 
         db = MagicMock(spec=Database)
         backend = ClaudeSdkBackend(db, AppConfig())
@@ -658,7 +658,7 @@ class TestClaudeSdkBackendAvailable:
 
 class TestAgentManager:
     def test_initialize_calls_backends(self):
-        from src.agent.manager import AgentManager
+        from tg_agent.agent.manager import AgentManager
 
         db = MagicMock(spec=Database)
         manager = AgentManager(db, AppConfig())
@@ -671,7 +671,7 @@ class TestAgentManager:
 
     @pytest.mark.anyio
     async def test_refresh_settings_cache(self):
-        from src.agent.manager import AgentManager
+        from tg_agent.agent.manager import AgentManager
 
         db = MagicMock(spec=Database)
         manager = AgentManager(db, AppConfig())
@@ -684,7 +684,7 @@ class TestAgentManager:
 
 class TestAgentRuntimeStatus:
     def test_fields(self):
-        from src.agent.manager import AgentRuntimeStatus
+        from tg_agent.agent.manager import AgentRuntimeStatus
 
         status = AgentRuntimeStatus(
             claude_available=True,
@@ -707,7 +707,7 @@ class TestAgentRuntimeStatus:
 
 class TestCollectorGetMediaType:
     def _get_media_type(self, media):
-        from src.telegram.collector import Collector as _Collector
+        from tg_agent.telegram.collector import Collector as _Collector
 
         return _Collector._get_media_type(SimpleNamespace(media=media))
 
@@ -938,7 +938,7 @@ class TestCollectorAutoDelete:
 class TestProviderConfigServiceRefresh:
     @pytest.mark.anyio
     async def test_refresh_models_for_provider_live_fail(self, db):
-        from src.services.agent_provider_service import ProviderConfigService
+        from tg_agent.services.agent_provider_service import ProviderConfigService
 
         config = AppConfig()
         svc = ProviderConfigService(db, config)
@@ -950,8 +950,8 @@ class TestProviderConfigServiceRefresh:
 
     @pytest.mark.anyio
     async def test_refresh_all_models(self, db):
-        from src.agent.provider_registry import ProviderRuntimeConfig
-        from src.services.agent_provider_service import ProviderConfigService
+        from tg_agent.agent.provider_registry import ProviderRuntimeConfig
+        from tg_agent.services.agent_provider_service import ProviderConfigService
 
         config = AppConfig()
         svc = ProviderConfigService(db, config)
@@ -968,9 +968,9 @@ class TestProviderConfigServiceRefresh:
 class TestProviderConfigServiceSaveLoad:
     @pytest.mark.anyio
     async def test_save_and_load_round_trip(self, db):
-        from src.agent.provider_registry import ProviderRuntimeConfig
-        from src.security import SessionCipher
-        from src.services.agent_provider_service import ProviderConfigService
+        from tg_agent.agent.provider_registry import ProviderRuntimeConfig
+        from tg_agent.security import SessionCipher
+        from tg_agent.services.agent_provider_service import ProviderConfigService
 
         config = AppConfig()
         svc = ProviderConfigService(db, config)
@@ -990,8 +990,8 @@ class TestProviderConfigServiceSaveLoad:
 
 class TestProviderConfigServiceValidation:
     def test_validate_missing_model(self):
-        from src.agent.provider_registry import ProviderRuntimeConfig
-        from src.services.agent_provider_service import ProviderConfigService
+        from tg_agent.agent.provider_registry import ProviderRuntimeConfig
+        from tg_agent.services.agent_provider_service import ProviderConfigService
 
         svc = ProviderConfigService(MagicMock(), AppConfig())
         cfg = ProviderRuntimeConfig(
@@ -1001,8 +1001,8 @@ class TestProviderConfigServiceValidation:
         assert "Model is required" in svc.validate_provider_config(cfg)
 
     def test_validate_unknown_provider(self):
-        from src.agent.provider_registry import ProviderRuntimeConfig
-        from src.services.agent_provider_service import ProviderConfigService
+        from tg_agent.agent.provider_registry import ProviderRuntimeConfig
+        from tg_agent.services.agent_provider_service import ProviderConfigService
 
         svc = ProviderConfigService(MagicMock(), AppConfig())
         cfg = ProviderRuntimeConfig(
@@ -1012,7 +1012,7 @@ class TestProviderConfigServiceValidation:
         assert "Unknown provider" in svc.validate_provider_config(cfg)
 
     def test_create_empty_config_unknown_provider(self):
-        from src.services.agent_provider_service import ProviderConfigService
+        from tg_agent.services.agent_provider_service import ProviderConfigService
 
         svc = ProviderConfigService(MagicMock(), AppConfig())
         with pytest.raises(RuntimeError, match="Unknown provider"):
@@ -1021,8 +1021,8 @@ class TestProviderConfigServiceValidation:
 
 class TestProviderConfigServiceCompat:
     def test_compatibility_error_unsupported(self, db):
-        from src.agent.provider_registry import ProviderRuntimeConfig
-        from src.services.agent_provider_service import (
+        from tg_agent.agent.provider_registry import ProviderRuntimeConfig
+        from tg_agent.services.agent_provider_service import (
             ProviderConfigService,
             ProviderModelCacheEntry,
             ProviderModelCompatibilityRecord,
@@ -1049,8 +1049,8 @@ class TestProviderConfigServiceCompat:
         assert error == "not compatible"
 
     def test_compatibility_warning_unknown(self, db):
-        from src.agent.provider_registry import ProviderRuntimeConfig
-        from src.services.agent_provider_service import (
+        from tg_agent.agent.provider_registry import ProviderRuntimeConfig
+        from tg_agent.services.agent_provider_service import (
             ProviderConfigService,
             ProviderModelCacheEntry,
             ProviderModelCompatibilityRecord,
@@ -1084,7 +1084,7 @@ class TestProviderConfigServiceCompat:
 
 class TestAgentRuntimeContextRunSync:
     def test_outside_event_loop(self):
-        from src.agent.runtime_context import AgentRuntimeContext
+        from tg_agent.agent.runtime_context import AgentRuntimeContext
 
         async def _op():
             return 42
@@ -1093,7 +1093,7 @@ class TestAgentRuntimeContextRunSync:
         assert result == 42
 
     def test_sync_bridge_keeps_runtime_timeout_independent_from_permission_timeout(self):
-        from src.agent.runtime_context import (
+        from tg_agent.agent.runtime_context import (
             DEFAULT_SYNC_TIMEOUT_SEC,
             DEFAULT_TOOL_SYNC_TIMEOUT_SEC,
             AgentRuntimeContext,
@@ -1117,7 +1117,7 @@ class TestAgentRuntimeContextRunSync:
 
     @pytest.mark.anyio
     async def test_inside_event_loop_raises(self):
-        from src.agent.runtime_context import AgentRuntimeContext
+        from tg_agent.agent.runtime_context import AgentRuntimeContext
 
         async def _op():
             return 42
@@ -1127,8 +1127,8 @@ class TestAgentRuntimeContextRunSync:
 
     @pytest.mark.anyio
     async def test_sync_bridge_unbounded_wait_stops_on_request_cancel(self):
-        from src.agent.permission_gate import AgentRequestContext, reset_request_context, set_request_context
-        from src.agent.runtime_context import AgentRuntimeContext, AgentToolRuntimeError
+        from tg_agent.agent.permission_gate import AgentRequestContext, reset_request_context, set_request_context
+        from tg_agent.agent.runtime_context import AgentRuntimeContext, AgentToolRuntimeError
 
         cancel_event = threading.Event()
         started = asyncio.Event()
@@ -1169,7 +1169,7 @@ class TestAgentRuntimeContextRunSync:
 
     @pytest.mark.anyio
     async def test_sync_bridge_times_out_non_permission_waits(self):
-        from src.agent.runtime_context import AgentRuntimeContext, AgentToolRuntimeError
+        from tg_agent.agent.runtime_context import AgentRuntimeContext, AgentToolRuntimeError
 
         started = asyncio.Event()
         cancelled = asyncio.Event()
@@ -1198,7 +1198,7 @@ class TestAgentRuntimeContextRunSync:
 
     @pytest.mark.anyio
     async def test_generate_image_sync_bridge_allows_adapter_timeout_before_runtime_timeout(self):
-        from src.agent.runtime_context import AgentRuntimeContext
+        from tg_agent.agent.runtime_context import AgentRuntimeContext
 
         ctx = AgentRuntimeContext.build(
             db=MagicMock(),
@@ -1220,13 +1220,13 @@ class TestAgentRuntimeContextRunSync:
 
     @pytest.mark.anyio
     async def test_sync_bridge_excludes_permission_waits_from_runtime_timeout(self):
-        from src.agent.permission_gate import (
+        from tg_agent.agent.permission_gate import (
             AgentRequestContext,
             PermissionWaitTracker,
             reset_request_context,
             set_request_context,
         )
-        from src.agent.runtime_context import AgentRuntimeContext
+        from tg_agent.agent.runtime_context import AgentRuntimeContext
 
         tracker = PermissionWaitTracker()
         cancel_event = threading.Event()
@@ -1273,38 +1273,38 @@ class TestAgentRuntimeContextRunSync:
 class TestDeepagentsSyncTools:
     @pytest.fixture
     def sync_tools(self, mock_db):
-        from src.agent.tools.deepagents_sync import build_deepagents_tools
+        from tg_agent.agent.tools.deepagents_sync import build_deepagents_tools
 
         return {t.__name__: t for t in build_deepagents_tools(mock_db)}
 
     def test_toggle_pipeline(self, sync_tools, mock_db):
-        with patch("src.services.pipeline_service.PipelineService") as svc_cls:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as svc_cls:
             svc_cls.return_value.toggle = AsyncMock(return_value=True)
             svc_cls.return_value.get = AsyncMock(return_value=SimpleNamespace(name="Pipe", is_active=False))
             result = sync_tools["toggle_pipeline"](1)
         assert "деактивирован" in result
 
     def test_toggle_pipeline_error(self, sync_tools):
-        with patch("src.services.pipeline_service.PipelineService", side_effect=RuntimeError("err")):
+        with patch("tg_agent.services.pipeline_service.PipelineService", side_effect=RuntimeError("err")):
             result = sync_tools["toggle_pipeline"](1)
         assert "Ошибка" in result
 
     def test_delete_pipeline(self, sync_tools, mock_db):
-        with patch("src.services.pipeline_service.PipelineService") as svc_cls:
+        with patch("tg_agent.services.pipeline_service.PipelineService") as svc_cls:
             svc_cls.return_value.get = AsyncMock(return_value=SimpleNamespace(name="Pipe"))
             svc_cls.return_value.delete = AsyncMock()
             result = sync_tools["delete_pipeline"](1, confirm=True)
         assert "удалён" in result
 
     def test_toggle_search_query(self, sync_tools, mock_db):
-        with patch("src.services.search_query_service.SearchQueryService") as svc_cls:
+        with patch("tg_agent.services.search_query_service.SearchQueryService") as svc_cls:
             svc_cls.return_value.get = AsyncMock(return_value=SimpleNamespace(is_active=True))
             svc_cls.return_value.toggle = AsyncMock()
             result = sync_tools["toggle_search_query"](1)
         assert "деактивирован" in result
 
     def test_delete_search_query(self, sync_tools, mock_db):
-        with patch("src.services.search_query_service.SearchQueryService") as svc_cls:
+        with patch("tg_agent.services.search_query_service.SearchQueryService") as svc_cls:
             svc_cls.return_value.delete = AsyncMock()
             result = sync_tools["delete_search_query"](1, confirm=True)
         assert "удалён" in result
@@ -1343,14 +1343,14 @@ class TestDeepagentsSyncTools:
         assert "не найдены" in result
 
     def test_analyze_filters(self, sync_tools, mock_db):
-        with patch("src.filters.analyzer.ChannelAnalyzer") as cls:
+        with patch("tg_agent.filters.analyzer.ChannelAnalyzer") as cls:
             report = SimpleNamespace(results=[])
             cls.return_value.analyze_all = AsyncMock(return_value=report)
             result = sync_tools["analyze_filters"]()
         assert "0" in result or "проверено" in result
 
     def test_apply_filters(self, sync_tools, mock_db):
-        with patch("src.filters.analyzer.ChannelAnalyzer") as cls:
+        with patch("tg_agent.filters.analyzer.ChannelAnalyzer") as cls:
             report = SimpleNamespace(results=[])
             cls.return_value.analyze_all = AsyncMock(return_value=report)
             cls.return_value.apply_filters = AsyncMock(return_value=0)
@@ -1358,7 +1358,7 @@ class TestDeepagentsSyncTools:
         assert "помечены" in result
 
     def test_reset_filters(self, sync_tools, mock_db):
-        with patch("src.filters.analyzer.ChannelAnalyzer") as cls:
+        with patch("tg_agent.filters.analyzer.ChannelAnalyzer") as cls:
             cls.return_value.reset_filters = AsyncMock(return_value=3)
             result = sync_tools["reset_filters"](confirm=True)
         assert "3" in result
@@ -1377,28 +1377,28 @@ class TestDeepagentsSyncTools:
 class TestSchedulerManager:
     @pytest.mark.anyio
     async def test_is_running_false(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
 
         sm = SchedulerManager(SchedulerConfig())
         assert sm.is_running is False
 
     @pytest.mark.anyio
     async def test_interval_minutes(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
 
         sm = SchedulerManager(SchedulerConfig(collect_interval_minutes=30))
         assert sm.interval_minutes == 30
 
     @pytest.mark.anyio
     async def test_is_job_enabled_no_bundle(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
 
         sm = SchedulerManager(SchedulerConfig())
         assert await sm.is_job_enabled("collect_all") is True
 
     @pytest.mark.anyio
     async def test_update_interval_no_scheduler(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
 
         sm = SchedulerManager(SchedulerConfig())
         sm.update_interval(15)
@@ -1406,28 +1406,28 @@ class TestSchedulerManager:
 
     @pytest.mark.anyio
     async def test_get_job_next_run_no_scheduler(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
 
         sm = SchedulerManager(SchedulerConfig())
         assert sm.get_job_next_run("collect_all") is None
 
     @pytest.mark.anyio
     async def test_get_all_jobs_no_scheduler(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
 
         sm = SchedulerManager(SchedulerConfig())
         assert sm.get_all_jobs_next_run() == {}
 
     @pytest.mark.anyio
     async def test_stop_not_running(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
 
         sm = SchedulerManager(SchedulerConfig())
         await sm.stop()  # Should not raise
 
     @pytest.mark.anyio
     async def test_trigger_now_no_enqueuer(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
 
         sm = SchedulerManager(SchedulerConfig())
         result = await sm.trigger_now()
@@ -1435,7 +1435,7 @@ class TestSchedulerManager:
 
     @pytest.mark.anyio
     async def test_trigger_background_no_enqueuer(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
 
         sm = SchedulerManager(SchedulerConfig())
         await sm.trigger_background()
@@ -1445,7 +1445,7 @@ class TestSchedulerManager:
 
     @pytest.mark.anyio
     async def test_run_photo_due_no_enqueuer(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
 
         sm = SchedulerManager(SchedulerConfig())
         result = await sm._run_photo_due()
@@ -1453,7 +1453,7 @@ class TestSchedulerManager:
 
     @pytest.mark.anyio
     async def test_run_photo_auto_no_enqueuer(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
 
         sm = SchedulerManager(SchedulerConfig())
         result = await sm._run_photo_auto()
@@ -1461,42 +1461,42 @@ class TestSchedulerManager:
 
     @pytest.mark.anyio
     async def test_run_pipeline_job_no_enqueuer(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
 
         sm = SchedulerManager(SchedulerConfig())
         await sm._run_pipeline_job(1)  # Should not raise
 
     @pytest.mark.anyio
     async def test_run_content_generate_no_enqueuer(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
 
         sm = SchedulerManager(SchedulerConfig())
         await sm._run_content_generate_job(1)  # Should not raise
 
     @pytest.mark.anyio
     async def test_run_search_query_no_enqueuer(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
 
         sm = SchedulerManager(SchedulerConfig())
         await sm._run_search_query(1)  # Should not raise
 
     @pytest.mark.anyio
     async def test_load_settings_no_bundle(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
 
         sm = SchedulerManager(SchedulerConfig())
         await sm.load_settings()  # Should not raise
 
     @pytest.mark.anyio
     async def test_sync_job_state_not_running(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
 
         sm = SchedulerManager(SchedulerConfig())
         await sm.sync_job_state("collect_all", True)  # Should not raise
 
     @pytest.mark.anyio
     async def test_get_potential_jobs(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
 
         sm = SchedulerManager(SchedulerConfig())
         jobs = await sm.get_potential_jobs()
@@ -1509,7 +1509,7 @@ class TestSchedulerManager:
 
 
 def _make_dispatcher(**overrides):
-    from src.services.unified_dispatcher import UnifiedDispatcher
+    from tg_agent.services.unified_dispatcher import UnifiedDispatcher
 
     collector = MagicMock()
     collector.is_running = False

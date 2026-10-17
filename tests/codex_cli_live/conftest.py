@@ -47,12 +47,12 @@ class CodexCliEnv:
     config_path: str
 
     def run(self, *args: str, timeout: float = 180.0) -> subprocess.CompletedProcess:
-        """Run ``python -m src.main --config <cfg> <args>`` as a real subprocess.
+        """Run ``python -m tg_agent.main --config <cfg> <args>`` as a real subprocess.
 
         Returns the completed process (stdout/stderr captured as text). Fails the
         test on timeout rather than hanging.
         """
-        cmd = [sys.executable, "-m", "src.main", "--config", self.config_path, *args]
+        cmd = [sys.executable, "-m", "tg_agent.main", "--config", self.config_path, *args]
         env = dict(os.environ)
         env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(_REPO_ROOT), env.get("PYTHONPATH", "")]))
         try:

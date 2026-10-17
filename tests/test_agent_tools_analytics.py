@@ -19,7 +19,7 @@ class TestAnalyticsToolGetAnalyticsSummary:
             "total_rejected": 10,
             "pipelines_count": 5,
         }
-        with patch("src.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
+        with patch("tg_agent.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
             mock_svc.return_value.get_summary = AsyncMock(return_value=summary)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_analytics_summary"]({})
@@ -31,7 +31,7 @@ class TestAnalyticsToolGetAnalyticsSummary:
 
     @pytest.mark.anyio
     async def test_error(self, mock_db):
-        with patch("src.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
+        with patch("tg_agent.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
             mock_svc.return_value.get_summary = AsyncMock(side_effect=Exception("analytics down"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_analytics_summary"]({})
@@ -41,7 +41,7 @@ class TestAnalyticsToolGetAnalyticsSummary:
 class TestAnalyticsToolGetPipelineStats:
     @pytest.mark.anyio
     async def test_empty(self, mock_db):
-        with patch("src.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
+        with patch("tg_agent.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
             mock_svc.return_value.get_pipeline_stats = AsyncMock(return_value=[])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_pipeline_stats"]({})
@@ -58,7 +58,7 @@ class TestAnalyticsToolGetPipelineStats:
             pending_moderation=5,
             success_rate=0.80,
         )
-        with patch("src.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
+        with patch("tg_agent.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
             mock_svc.return_value.get_pipeline_stats = AsyncMock(return_value=[stat])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_pipeline_stats"]({"pipeline_id": 1})
@@ -69,7 +69,7 @@ class TestAnalyticsToolGetPipelineStats:
 
     @pytest.mark.anyio
     async def test_error(self, mock_db):
-        with patch("src.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
+        with patch("tg_agent.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
             mock_svc.return_value.get_pipeline_stats = AsyncMock(side_effect=Exception("err"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_pipeline_stats"]({})
@@ -79,7 +79,7 @@ class TestAnalyticsToolGetPipelineStats:
 class TestAnalyticsToolGetTrendingTopics:
     @pytest.mark.anyio
     async def test_empty(self, mock_db):
-        with patch("src.services.trend_service.TrendService") as mock_svc:
+        with patch("tg_agent.services.trend_service.TrendService") as mock_svc:
             mock_svc.return_value.get_trending_topics = AsyncMock(return_value=[])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_trending_topics"]({"days": 7, "limit": 10})
@@ -91,7 +91,7 @@ class TestAnalyticsToolGetTrendingTopics:
             SimpleNamespace(keyword="Python", count=500),
             SimpleNamespace(keyword="AI", count=300),
         ]
-        with patch("src.services.trend_service.TrendService") as mock_svc:
+        with patch("tg_agent.services.trend_service.TrendService") as mock_svc:
             mock_svc.return_value.get_trending_topics = AsyncMock(return_value=topics)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_trending_topics"]({"days": 14, "limit": 5})
@@ -102,7 +102,7 @@ class TestAnalyticsToolGetTrendingTopics:
 
     @pytest.mark.anyio
     async def test_error(self, mock_db):
-        with patch("src.services.trend_service.TrendService") as mock_svc:
+        with patch("tg_agent.services.trend_service.TrendService") as mock_svc:
             mock_svc.return_value.get_trending_topics = AsyncMock(side_effect=Exception("trend err"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_trending_topics"]({})
@@ -112,7 +112,7 @@ class TestAnalyticsToolGetTrendingTopics:
 class TestAnalyticsToolGetTrendingChannels:
     @pytest.mark.anyio
     async def test_empty(self, mock_db):
-        with patch("src.services.trend_service.TrendService") as mock_svc:
+        with patch("tg_agent.services.trend_service.TrendService") as mock_svc:
             mock_svc.return_value.get_trending_channels = AsyncMock(return_value=[])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_trending_channels"]({})
@@ -124,7 +124,7 @@ class TestAnalyticsToolGetTrendingChannels:
             SimpleNamespace(title="TechChannel", channel_id=100, message_count=200),
             SimpleNamespace(title="NewsChannel", channel_id=200, message_count=150),
         ]
-        with patch("src.services.trend_service.TrendService") as mock_svc:
+        with patch("tg_agent.services.trend_service.TrendService") as mock_svc:
             mock_svc.return_value.get_trending_channels = AsyncMock(return_value=channels)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_trending_channels"]({"days": 7, "limit": 10})
@@ -137,7 +137,7 @@ class TestAnalyticsToolGetTrendingChannels:
 class TestAnalyticsToolGetMessageVelocity:
     @pytest.mark.anyio
     async def test_empty(self, mock_db):
-        with patch("src.services.trend_service.TrendService") as mock_svc:
+        with patch("tg_agent.services.trend_service.TrendService") as mock_svc:
             mock_svc.return_value.get_message_velocity = AsyncMock(return_value=[])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_message_velocity"]({"days": 30})
@@ -149,7 +149,7 @@ class TestAnalyticsToolGetMessageVelocity:
             SimpleNamespace(date="2026-01-01", count=1000),
             SimpleNamespace(date="2026-01-02", count=1200),
         ]
-        with patch("src.services.trend_service.TrendService") as mock_svc:
+        with patch("tg_agent.services.trend_service.TrendService") as mock_svc:
             mock_svc.return_value.get_message_velocity = AsyncMock(return_value=velocity)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_message_velocity"]({"days": 7})
@@ -159,7 +159,7 @@ class TestAnalyticsToolGetMessageVelocity:
 
     @pytest.mark.anyio
     async def test_error(self, mock_db):
-        with patch("src.services.trend_service.TrendService") as mock_svc:
+        with patch("tg_agent.services.trend_service.TrendService") as mock_svc:
             mock_svc.return_value.get_message_velocity = AsyncMock(side_effect=Exception("err"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_message_velocity"]({})
@@ -169,7 +169,7 @@ class TestAnalyticsToolGetMessageVelocity:
 class TestAnalyticsToolGetPeakHours:
     @pytest.mark.anyio
     async def test_empty(self, mock_db):
-        with patch("src.services.trend_service.TrendService") as mock_svc:
+        with patch("tg_agent.services.trend_service.TrendService") as mock_svc:
             mock_svc.return_value.get_peak_hours = AsyncMock(return_value=[])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_peak_hours"]({})
@@ -181,7 +181,7 @@ class TestAnalyticsToolGetPeakHours:
             SimpleNamespace(hour=9, count=500),
             SimpleNamespace(hour=18, count=800),
         ]
-        with patch("src.services.trend_service.TrendService") as mock_svc:
+        with patch("tg_agent.services.trend_service.TrendService") as mock_svc:
             mock_svc.return_value.get_peak_hours = AsyncMock(return_value=hours)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_peak_hours"]({"days": 14})
@@ -194,7 +194,7 @@ class TestAnalyticsToolGetPeakHours:
 
     @pytest.mark.anyio
     async def test_days_are_clamped(self, mock_db):
-        with patch("src.services.trend_service.TrendService") as mock_svc:
+        with patch("tg_agent.services.trend_service.TrendService") as mock_svc:
             mock_svc.return_value.get_peak_hours = AsyncMock(return_value=[])
             handlers = _get_tool_handlers(mock_db)
             await handlers["get_peak_hours"]({"days": 999999})
@@ -202,7 +202,7 @@ class TestAnalyticsToolGetPeakHours:
 
     @pytest.mark.anyio
     async def test_error(self, mock_db):
-        with patch("src.services.trend_service.TrendService") as mock_svc:
+        with patch("tg_agent.services.trend_service.TrendService") as mock_svc:
             mock_svc.return_value.get_peak_hours = AsyncMock(side_effect=Exception("err"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_peak_hours"]({})
@@ -212,7 +212,7 @@ class TestAnalyticsToolGetPeakHours:
 class TestAnalyticsToolGetCalendar:
     @pytest.mark.anyio
     async def test_empty(self, mock_db):
-        with patch("src.services.content_calendar_service.ContentCalendarService") as mock_svc:
+        with patch("tg_agent.services.content_calendar_service.ContentCalendarService") as mock_svc:
             mock_svc.return_value.get_upcoming = AsyncMock(return_value=[])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_calendar"]({"limit": 10})
@@ -229,7 +229,7 @@ class TestAnalyticsToolGetCalendar:
             created_at="2026-04-30",
             preview="Preview of upcoming post",
         )
-        with patch("src.services.content_calendar_service.ContentCalendarService") as mock_svc:
+        with patch("tg_agent.services.content_calendar_service.ContentCalendarService") as mock_svc:
             mock_svc.return_value.get_upcoming = AsyncMock(return_value=[event])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_calendar"]({})
@@ -240,7 +240,7 @@ class TestAnalyticsToolGetCalendar:
 
     @pytest.mark.anyio
     async def test_error(self, mock_db):
-        with patch("src.services.content_calendar_service.ContentCalendarService") as mock_svc:
+        with patch("tg_agent.services.content_calendar_service.ContentCalendarService") as mock_svc:
             mock_svc.return_value.get_upcoming = AsyncMock(side_effect=Exception("cal err"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_calendar"]({})
@@ -250,7 +250,7 @@ class TestAnalyticsToolGetCalendar:
 class TestAnalyticsToolGetDailyStats:
     @pytest.mark.anyio
     async def test_empty(self, mock_db):
-        with patch("src.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
+        with patch("tg_agent.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
             mock_svc.return_value.get_daily_stats = AsyncMock(return_value=[])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_daily_stats"]({"days": 7})
@@ -258,13 +258,13 @@ class TestAnalyticsToolGetDailyStats:
 
     @pytest.mark.anyio
     async def test_with_data(self, mock_db):
-        from src.services.content_analytics_service import DailyStats
+        from tg_agent.services.content_analytics_service import DailyStats
 
         rows = [
             DailyStats(date="2026-01-01", generations=10, publications=8, rejections=1),
             DailyStats(date="2026-01-02", generations=15, publications=12, rejections=0),
         ]
-        with patch("src.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
+        with patch("tg_agent.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
             mock_svc.return_value.get_daily_stats = AsyncMock(return_value=rows)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_daily_stats"]({"days": 7, "pipeline_id": 1})
@@ -275,7 +275,7 @@ class TestAnalyticsToolGetDailyStats:
 
     @pytest.mark.anyio
     async def test_default_days(self, mock_db):
-        with patch("src.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
+        with patch("tg_agent.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
             mock_svc.return_value.get_daily_stats = AsyncMock(return_value=[])
             handlers = _get_tool_handlers(mock_db)
             await handlers["get_daily_stats"]({})
@@ -284,7 +284,7 @@ class TestAnalyticsToolGetDailyStats:
 
     @pytest.mark.anyio
     async def test_error(self, mock_db):
-        with patch("src.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
+        with patch("tg_agent.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
             mock_svc.return_value.get_daily_stats = AsyncMock(side_effect=Exception("stats err"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_daily_stats"]({})
@@ -398,7 +398,7 @@ class TestAnalyticsToolGetHourlyActivity:
 class TestGetTrendingEmojisTool:
     @pytest.mark.anyio
     async def test_empty(self, mock_db):
-        with patch("src.services.trend_service.TrendService") as mock_svc:
+        with patch("tg_agent.services.trend_service.TrendService") as mock_svc:
             mock_svc.return_value.get_trending_emojis = AsyncMock(return_value=[])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_trending_emojis"]({})
@@ -407,7 +407,7 @@ class TestGetTrendingEmojisTool:
     @pytest.mark.anyio
     async def test_with_data(self, mock_db):
         emojis = [SimpleNamespace(emoji="👍", count=42), SimpleNamespace(emoji="🔥", count=10)]
-        with patch("src.services.trend_service.TrendService") as mock_svc:
+        with patch("tg_agent.services.trend_service.TrendService") as mock_svc:
             mock_svc.return_value.get_trending_emojis = AsyncMock(return_value=emojis)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_trending_emojis"]({"days": 30, "limit": 5})
@@ -417,7 +417,7 @@ class TestGetTrendingEmojisTool:
 
     @pytest.mark.anyio
     async def test_error(self, mock_db):
-        with patch("src.services.trend_service.TrendService") as mock_svc:
+        with patch("tg_agent.services.trend_service.TrendService") as mock_svc:
             mock_svc.return_value.get_trending_emojis = AsyncMock(side_effect=Exception("boom"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_trending_emojis"]({})
@@ -439,7 +439,7 @@ class TestGetChannelAnalyticsTool:
             total_posts=50, posts_today=2, posts_week=10, posts_month=30,
             avg_views=500.0, avg_forwards=3.0, avg_reactions=20.0,
         )
-        with patch("src.services.channel_analytics_service.ChannelAnalyticsService") as mock_svc:
+        with patch("tg_agent.services.channel_analytics_service.ChannelAnalyticsService") as mock_svc:
             mock_svc.return_value.get_channel_overview = AsyncMock(return_value=overview)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_channel_analytics"]({"channel_id": 100, "days": 30})
@@ -449,7 +449,7 @@ class TestGetChannelAnalyticsTool:
 
     @pytest.mark.anyio
     async def test_error(self, mock_db):
-        with patch("src.services.channel_analytics_service.ChannelAnalyticsService") as mock_svc:
+        with patch("tg_agent.services.channel_analytics_service.ChannelAnalyticsService") as mock_svc:
             mock_svc.return_value.get_channel_overview = AsyncMock(side_effect=Exception("boom"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["get_channel_analytics"]({"channel_id": 100})
@@ -473,7 +473,7 @@ class TestRateChannelTool:
     @pytest.mark.anyio
     async def test_requires_confirmation(self, mock_db):
         """Without confirm=true the judge must NOT run (no spend, no write)."""
-        with patch("src.services.provider_service.build_provider_service") as mock_build:
+        with patch("tg_agent.services.provider_service.build_provider_service") as mock_build:
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["rate_channel"]({"channel_id": 100})
         assert "Подтвердите" in _text(result)
@@ -484,7 +484,7 @@ class TestRateChannelTool:
         provider_svc = MagicMock()
         provider_svc.has_providers = MagicMock(return_value=False)
         with patch(
-            "src.services.provider_service.build_provider_service",
+            "tg_agent.services.provider_service.build_provider_service",
             AsyncMock(return_value=provider_svc),
         ):
             handlers = _get_tool_handlers(mock_db)
@@ -502,10 +502,10 @@ class TestRateChannelTool:
         analysis_svc = MagicMock()
         analysis_svc.classify_channel = AsyncMock()
         with patch(
-            "src.services.provider_service.build_provider_service",
+            "tg_agent.services.provider_service.build_provider_service",
             AsyncMock(return_value=provider_svc),
         ), patch(
-            "src.services.channel_analysis_service.ChannelAnalysisService",
+            "tg_agent.services.channel_analysis_service.ChannelAnalysisService",
             return_value=analysis_svc,
         ):
             handlers = _get_tool_handlers(mock_db)
@@ -524,10 +524,10 @@ class TestRateChannelTool:
         analysis_svc.sample_posts = AsyncMock(return_value=[])
         analysis_svc.classify_channel = AsyncMock()
         with patch(
-            "src.services.provider_service.build_provider_service",
+            "tg_agent.services.provider_service.build_provider_service",
             AsyncMock(return_value=provider_svc),
         ), patch(
-            "src.services.channel_analysis_service.ChannelAnalysisService",
+            "tg_agent.services.channel_analysis_service.ChannelAnalysisService",
             return_value=analysis_svc,
         ):
             handlers = _get_tool_handlers(mock_db)
@@ -537,7 +537,7 @@ class TestRateChannelTool:
 
     @pytest.mark.anyio
     async def test_runs_judge(self, mock_db):
-        from src.models import ChannelRating
+        from tg_agent.models import ChannelRating
 
         rating = ChannelRating(
             channel_id=100, title="JudgedCh", username="judged",
@@ -552,10 +552,10 @@ class TestRateChannelTool:
         analysis_svc.sample_posts = AsyncMock(return_value=["a", "b"])
         analysis_svc.classify_channel = AsyncMock(return_value=rating)
         with patch(
-            "src.services.provider_service.build_provider_service",
+            "tg_agent.services.provider_service.build_provider_service",
             AsyncMock(return_value=provider_svc),
         ), patch(
-            "src.services.channel_analysis_service.ChannelAnalysisService",
+            "tg_agent.services.channel_analysis_service.ChannelAnalysisService",
             return_value=analysis_svc,
         ):
             handlers = _get_tool_handlers(mock_db)

@@ -7,8 +7,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from src.models import Channel, Message
-from src.services.export_service import (
+from tg_agent.models import Channel, Message
+from tg_agent.services.export_service import (
     default_export_dir,
     gather_channel_messages,
     resolve_html_page_size,

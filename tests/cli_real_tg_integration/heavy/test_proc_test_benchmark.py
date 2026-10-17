@@ -1,4 +1,4 @@
-"""`python -m src.main test benchmark` — runs pytest 3 times back-to-back.
+"""`python -m tg_agent.main test benchmark` — runs pytest 3 times back-to-back.
 
 Compares serial vs parallel-safe vs aiosqlite-serial elapsed times. Each
 sub-run is a real `pytest` subprocess (see src/cli/commands/test.py:122,

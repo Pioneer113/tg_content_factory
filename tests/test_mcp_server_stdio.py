@@ -26,7 +26,7 @@ async def _list_tool_names(config_path: Path) -> list[str]:
 
     params = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "src.main", "--config", str(config_path), "mcp-server", "--no-pool"],
+        args=["-m", "tg_agent.main", "--config", str(config_path), "mcp-server", "--no-pool"],
         cwd=str(await asyncio.to_thread(_repo_root)),
     )
     async with stdio_client(params) as (read, write):
@@ -65,7 +65,7 @@ async def _seed_tool_acl(db_path: Path, acl: dict[str, bool]) -> None:
     """
     import json
 
-    from src.database import Database
+    from tg_agent.database import Database
 
     db = Database(str(db_path))
     await db.initialize()

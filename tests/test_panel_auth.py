@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from src.web.panel_auth import (
+from tg_agent.web.panel_auth import (
     get_cookie_user,
     get_session_secret,
     is_public_path,

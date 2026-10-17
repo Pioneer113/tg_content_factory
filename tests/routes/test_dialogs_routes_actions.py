@@ -41,7 +41,7 @@ async def test_participants_cache_hit(route_client, monkeypatch):
     snapshot = SimpleNamespace(payload={"participants": [{"id": 1}]})
     mock_db = MagicMock()
     mock_db.repos.runtime_snapshots.get_snapshot = AsyncMock(return_value=snapshot)
-    monkeypatch.setattr("src.web.deps.get_db", lambda r: mock_db)
+    monkeypatch.setattr("tg_agent.web.deps.get_db", lambda r: mock_db)
     resp = await route_client.get("/dialogs/participants?phone=%2B1234567890&chat_id=-100123")
     assert resp.status_code == 200
     assert resp.json()["participants"]
@@ -79,7 +79,7 @@ async def test_history_cache_hit_within_ttl(route_client, monkeypatch):
     mock_db = MagicMock()
     mock_db.repos.runtime_snapshots.get_snapshot = AsyncMock(return_value=snapshot)
     mock_db.repos.runtime_snapshots.delete_snapshot = AsyncMock()
-    monkeypatch.setattr("src.web.deps.get_db", lambda r: mock_db)
+    monkeypatch.setattr("tg_agent.web.deps.get_db", lambda r: mock_db)
     resp = await route_client.get("/dialogs/history?phone=%2B1234567890&chat_id=-100123")
     assert resp.status_code == 200
     assert resp.json()["messages"]
@@ -99,7 +99,7 @@ async def test_history_expired_snapshot_is_deleted_and_requeued(route_client, mo
     mock_db.repos.runtime_snapshots.delete_snapshot = AsyncMock()
     mock_db.repos.telegram_commands.find_active_by_type = AsyncMock(return_value=None)
     mock_db.repos.telegram_commands.create_command = AsyncMock(return_value=42)
-    monkeypatch.setattr("src.web.deps.get_db", lambda r: mock_db)
+    monkeypatch.setattr("tg_agent.web.deps.get_db", lambda r: mock_db)
     resp = await route_client.get(
         "/dialogs/history?phone=%2B1234567890&chat_id=-100123",
         follow_redirects=False,
@@ -387,7 +387,7 @@ async def test_resolve_entity_enqueues(route_client):
 
 async def _seed_pending_command(db, *, phone="+1234567890", emoji="👍"):
     """Insert one PENDING dialogs.react command and return its id."""
-    from src.models import TelegramCommand, TelegramCommandStatus
+    from tg_agent.models import TelegramCommand, TelegramCommandStatus
 
     return await db.repos.telegram_commands.create_command(
         TelegramCommand(
@@ -400,7 +400,7 @@ async def _seed_pending_command(db, *, phone="+1234567890", emoji="👍"):
 
 @pytest.mark.anyio
 async def test_cancel_queue_command_cancels_pending(route_client, base_app):
-    from src.models import TelegramCommandStatus
+    from tg_agent.models import TelegramCommandStatus
 
     _, db, _ = base_app
     command_id = await _seed_pending_command(db)
@@ -432,7 +432,7 @@ async def test_cancel_queue_command_missing_id_redirects_with_error(route_client
 
 @pytest.mark.anyio
 async def test_clear_pending_queue_commands_bulk_cancels(route_client, base_app):
-    from src.models import TelegramCommandStatus
+    from tg_agent.models import TelegramCommandStatus
 
     _, db, _ = base_app
     ids = [await _seed_pending_command(db, emoji=e) for e in ("👍", "❤️", "🔥")]

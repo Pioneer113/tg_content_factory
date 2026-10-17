@@ -1,0 +1,193 @@
+"""Agent tools for notification bot management."""
+
+from __future__ import annotations
+
+import inspect
+from typing import Annotated
+
+from claude_agent_sdk import tool
+from mcp.types import ToolAnnotations
+
+from tg_agent.agent.tools._categories import ToolCategory, ToolMeta
+from tg_agent.agent.tools._formatters import format_notification_status
+from tg_agent.agent.tools._registry import _text_response, arg_str, require_confirmation, require_pool
+
+
+async def _describe_target(target_service):
+    describe = getattr(target_service, "describe_target", None)
+    if not callable(describe):
+        return None
+    status = describe()
+    if inspect.isawaitable(status):
+        return await status
+    return None
+
+
+
+
+# Permission metadata for this module's tools (#245). Single source of
+# truth: permissions.py derives TOOL_CATEGORIES / MODULE_GROUPS /
+# PHONE_BINDED_TOOLS from these declarations; invariants in
+# tests/test_tool_permissions_autoderive.py keep them in sync with the
+# @tool() definitions.
+TOOL_GROUPS: list[tuple[str, dict[str, ToolMeta]]] = [
+    ("Уведомления", {
+        "get_notification_status": ToolMeta(ToolCategory.READ),
+        "setup_notification_bot": ToolMeta(ToolCategory.WRITE),
+        "delete_notification_bot": ToolMeta(ToolCategory.DELETE),
+        "test_notification": ToolMeta(ToolCategory.WRITE),
+        "notification_dry_run": ToolMeta(ToolCategory.READ),
+    }),
+]
+
+def register(db, client_pool, embedding_service, **kwargs):
+    tools = []
+
+    @tool("get_notification_status", "Get notification bot status and configuration", {})
+    async def get_notification_status(args):
+        try:
+            from tg_agent.services.notification_service import NotificationService
+            from tg_agent.services.notification_target_service import NotificationTargetService
+
+            target_service = NotificationTargetService(db, client_pool)
+            target_status = await _describe_target(target_service)
+            if target_status is not None and getattr(target_status, "state", None) != "available":
+                return _text_response(format_notification_status(None, target_status))
+            svc = NotificationService(db, target_service)
+            bot = await svc.get_status()
+            return _text_response(format_notification_status(bot, target_status))
+        except Exception as e:
+            return _text_response(f"Ошибка получения статуса бота: {e}")
+
+    tools.append(get_notification_status)
+
+    @tool(
+        "setup_notification_bot",
+        "⚠️ Set up a notification bot via BotFather. Requires Telegram client. "
+        "Ask user for confirmation first.",
+        {"confirm": Annotated[bool, "Установите true для подтверждения действия"]},
+    )
+    async def setup_notification_bot(args):
+        pool_gate = require_pool(client_pool, "Настройка бота уведомлений")
+        if pool_gate:
+            return pool_gate
+        gate = require_confirmation("создаст нового бота уведомлений через BotFather", args)
+        if gate:
+            return gate
+        try:
+            from tg_agent.services.notification_service import NotificationService
+            from tg_agent.services.notification_target_service import NotificationTargetService
+
+            svc = NotificationService(db, NotificationTargetService(db, client_pool))
+            bot = await svc.setup_bot()
+            return _text_response(
+                f"Бот уведомлений создан!\n"
+                f"- Username: @{bot.bot_username}\n"
+                f"- Bot ID: {bot.bot_id or 'неизвестен'}\n"
+                f"- Target user ID: {bot.tg_user_id}"
+            )
+        except Exception as e:
+            return _text_response(f"Ошибка настройки бота: {e}")
+
+    tools.append(setup_notification_bot)
+
+    @tool(
+        "delete_notification_bot",
+        "⚠️ DANGEROUS: Delete the notification bot. Always ask user for confirmation first.",
+        {"confirm": Annotated[bool, "Установите true для подтверждения действия"]},
+        annotations=ToolAnnotations(destructiveHint=True),
+    )
+    async def delete_notification_bot(args):
+        pool_gate = require_pool(client_pool, "Удаление бота уведомлений")
+        if pool_gate:
+            return pool_gate
+        gate = require_confirmation("удалит бота уведомлений", args)
+        if gate:
+            return gate
+        try:
+            from tg_agent.services.notification_service import NotificationService
+            from tg_agent.services.notification_target_service import NotificationTargetService
+
+            svc = NotificationService(db, NotificationTargetService(db, client_pool))
+            await svc.teardown_bot()
+            return _text_response("Бот уведомлений удалён.")
+        except Exception as e:
+            return _text_response(f"Ошибка удаления бота: {e}")
+
+    tools.append(delete_notification_bot)
+
+    @tool(
+        "test_notification",
+        "Send a test notification message via the bot. "
+        "Optionally pass custom text; if omitted, a default test message is used.",
+        {"text": Annotated[str, "Опционально: текст уведомления (пусто — дефолтное тестовое сообщение)"]},
+    )
+    async def test_notification(args):
+        pool_gate = require_pool(client_pool, "Тестовое уведомление")
+        if pool_gate:
+            return pool_gate
+        try:
+            from tg_agent.services.notification_service import NotificationService
+            from tg_agent.services.notification_target_service import NotificationTargetService
+
+            svc = NotificationService(db, NotificationTargetService(db, client_pool))
+            bot = await svc.get_status()
+            if bot is None:
+                return _text_response("Бот уведомлений не настроен. Сначала вызовите setup_notification_bot.")
+            text = arg_str(args, "text", "🔔 Тестовое уведомление от агента")
+            await svc.send_notification(text)
+            return _text_response("Тестовое уведомление отправлено.")
+        except Exception as e:
+            return _text_response(f"Ошибка отправки уведомления: {e}")
+
+    tools.append(test_notification)
+
+    # ------------------------------------------------------------------
+    # notification_dry_run (READ)
+    # ------------------------------------------------------------------
+
+    @tool(
+        "notification_dry_run",
+        "Preview how many matches each active search query with notify_on_collect=true would produce. "
+        "Does NOT send notifications. Queries managed via add_search_query / list_search_queries.",
+        {},
+    )
+    async def notification_dry_run(args):
+        try:
+            from datetime import timezone
+
+            last_task = await db.repos.tasks.get_last_completed_collect_task()
+            since = None
+            if last_task and last_task.completed_at:
+                since = last_task.completed_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            queries = await db.get_notification_queries(active_only=True)
+            # Filter out disabled jobs
+            filtered = []
+            for sq in queries:
+                val = await db.repos.settings.get_setting(f"scheduler_job_disabled:sq_{sq.id}")
+                if val != "1":
+                    filtered.append(sq)
+            queries = filtered
+            if not queries:
+                return _text_response("Нет активных запросов уведомлений.")
+            # Use the SAME production predicate (regex/substring) as CLI/web dry-run, not FTS,
+            # so the agent preview agrees with what would actually fire (#838/3 parity); counts
+            # are uncapped (paged over the whole window), not truncated at 5000.
+            from tg_agent.services.notification_matcher import dry_run_counts
+
+            counts = await dry_run_counts(db, queries, since)
+            total_matches = 0
+            lines = [f"Dry-run уведомлений (с {since or 'N/A'}):"]
+            for sq in queries:
+                count = counts.get(sq.id, 0)
+                name = getattr(sq, "name", None) or sq.query
+                lines.append(f"  {name}: {count} совпадений")
+                total_matches += count
+            lines.append(f"\nИтого: {total_matches} совпадений")
+            return _text_response("\n".join(lines))
+        except Exception as e:
+            return _text_response(f"Ошибка dry-run уведомлений: {e}")
+
+    tools.append(notification_dry_run)
+
+    return tools

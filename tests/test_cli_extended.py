@@ -11,8 +11,8 @@ import pydantic.root_model  # noqa: F401
 import pytest
 from telethon_floodgate import FloodWaitInfo
 
-from src.config import AppConfig
-from src.models import Channel, ChannelStats, CollectionTaskStatus, StatsAllTaskPayload
+from tg_agent.config import AppConfig
+from tg_agent.models import Channel, ChannelStats, CollectionTaskStatus, StatsAllTaskPayload
 
 pytestmark = pytest.mark.aiosqlite_serial
 
@@ -43,8 +43,8 @@ def _ensure_db_open(db):
 def cli_env(cli_db, cli_init_patch):
     with cli_init_patch(
         cli_db,
-        "src.cli.commands.channel.runtime.init_db",
-        "src.cli.commands.test.runtime.init_db",
+        "tg_agent.cli.commands.channel.runtime.init_db",
+        "tg_agent.cli.commands.test.runtime.init_db",
         config=AppConfig(),
     ):
         yield cli_db
@@ -65,12 +65,12 @@ def cli_env_with_mock_pool(cli_env):
     )
 
     async def fake_init_pool(config, db):
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         return TelegramAuth(0, ""), mock_pool
 
     with patch(
-        "src.cli.commands.channel.runtime.init_pool",
+        "tg_agent.cli.commands.channel.runtime.init_pool",
         side_effect=fake_init_pool,
     ):
         yield cli_env, mock_pool
@@ -84,7 +84,7 @@ class TestCLIChannelExtended:
             "New Channel",
             "new_chan",
         )
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="add", identifier="@new_chan"))
         out = capsys.readouterr().out
@@ -105,7 +105,7 @@ class TestCLIChannelExtended:
             "scam",
             True,
         )
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="add", identifier="@scam_chan"))
         out = capsys.readouterr().out
@@ -122,7 +122,7 @@ class TestCLIChannelExtended:
             _chan(1, "Ch1", "u1"),
             _chan(2, "Ch2", "u2"),
         ]
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="import", source="u1, u2"))
         out = capsys.readouterr().out
@@ -140,7 +140,7 @@ class TestCLIChannelExtended:
             None,  # Failed to resolve
             _chan(3, "Ch3", "u3"),
         ]
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="import", source="u1, u2, u3"))
         out = capsys.readouterr().out
@@ -154,8 +154,8 @@ class TestCLIChannelExtended:
         pk = asyncio.run(db.add_channel(Channel(channel_id=100, title="StatsChan")))
 
         init_pool = AsyncMock()
-        with patch("src.cli.commands.channel.runtime.init_pool", init_pool):
-            from src.cli.commands.channel import run
+        with patch("tg_agent.cli.commands.channel.runtime.init_pool", init_pool):
+            from tg_agent.cli.commands.channel import run
 
             run(_ns(channel_action="stats", identifier=str(pk), all=False))
 
@@ -193,8 +193,8 @@ class TestCLIChannelExtended:
         )
 
         init_pool = AsyncMock()
-        with patch("src.cli.commands.channel.runtime.init_pool", init_pool):
-            from src.cli.commands.channel import run
+        with patch("tg_agent.cli.commands.channel.runtime.init_pool", init_pool):
+            from tg_agent.cli.commands.channel import run
 
             run(_ns(channel_action="stats", identifier=None, all=True))
 
@@ -215,8 +215,8 @@ class TestCLIChannelExtended:
         asyncio.run(db.add_channel(Channel(channel_id=333, title="Ch")))
         asyncio.run(db.create_stats_task(StatsAllTaskPayload(channel_ids=[333])))
 
-        with patch("src.cli.commands.channel.runtime.init_pool", AsyncMock()):
-            from src.cli.commands.channel import run
+        with patch("tg_agent.cli.commands.channel.runtime.init_pool", AsyncMock()):
+            from tg_agent.cli.commands.channel import run
 
             run(_ns(channel_action="stats", identifier=None, all=True))
 
@@ -256,7 +256,7 @@ class TestCLIChannelExtended:
             _chan(102, "T2", "u2", "scam", True),
         ]
 
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="refresh-types"))
 
@@ -273,7 +273,7 @@ class TestCLIChannelExtended:
     def test_add_no_client_error(self, cli_env_with_mock_pool, capsys):
         db, pool = cli_env_with_mock_pool
         pool.resolve_channel.side_effect = RuntimeError("no_client")
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="add", identifier="@any"))
         out = capsys.readouterr().out
@@ -282,7 +282,7 @@ class TestCLIChannelExtended:
     def test_add_general_error(self, cli_env_with_mock_pool, capsys):
         db, pool = cli_env_with_mock_pool
         pool.resolve_channel.side_effect = Exception("boom")
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="add", identifier="@any"))
         out = capsys.readouterr().out
@@ -297,7 +297,7 @@ class TestCLIChannelExtended:
             _chan(10, "C1", "chan1"),
             _chan(20, "C2", "chan2"),
         ]
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="import", source=str(import_file)))
         out = capsys.readouterr().out
@@ -306,15 +306,15 @@ class TestCLIChannelExtended:
     def test_import_no_client_error(self, cli_env_with_mock_pool, capsys):
         db, pool = cli_env_with_mock_pool
         pool.resolve_channel.side_effect = RuntimeError("no_client")
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="import", source="@any"))
         out = capsys.readouterr().out
         assert "Нет доступных аккаунтов Telegram. Импорт прерван" in out
 
     def test_stats_unknown_identifier(self, cli_env, capsys):
-        with patch("src.cli.commands.channel.runtime.init_pool", AsyncMock()):
-            from src.cli.commands.channel import run
+        with patch("tg_agent.cli.commands.channel.runtime.init_pool", AsyncMock()):
+            from tg_agent.cli.commands.channel import run
 
             run(_ns(channel_action="stats", identifier="99999", all=False))
         out = capsys.readouterr().out
@@ -328,7 +328,7 @@ class TestCLIChannelExtended:
             )
         )
         pool.resolve_channel.side_effect = Exception("resolve error")
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="refresh-types"))
         out = capsys.readouterr().out
@@ -343,7 +343,7 @@ class TestCLIChannelExtended:
         )
         # Definitive not-found returns the {"gone": True} sentinel (audit #835/8).
         pool.resolve_channel.return_value = {"gone": True}
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="refresh-types"))
         out = capsys.readouterr().out
@@ -362,7 +362,7 @@ class TestCLIChannelExtended:
         asyncio.run(db.set_channel_active(pk, True, origin="human"))
         pool.resolve_channel.return_value = {"gone": True}
 
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="refresh-types"))
         out = capsys.readouterr().out
@@ -384,12 +384,12 @@ class TestCLIChannelExtended:
         )
 
         with patch(
-            "src.cli.commands.channel.Collector",
+            "tg_agent.cli.commands.channel.Collector",
         ) as mock_collector:
             inst = mock_collector.return_value
             inst.collect_single_channel = AsyncMock(return_value=42)
 
-            from src.cli.commands.channel import run
+            from tg_agent.cli.commands.channel import run
 
             run(_ns(channel_action="collect", identifier=str(ch_id)))
 
@@ -414,14 +414,14 @@ class TestCLIChannelExtended:
             "scam",
             True,
         )
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="import", source="u99"))
         out = capsys.readouterr().out
         assert "WARN (scam): u99" in out
 
     def test_stats_no_identifier_error(self, cli_env_with_mock_pool, capsys):
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="stats", identifier=None, all=False))
         out = capsys.readouterr().out
@@ -429,7 +429,7 @@ class TestCLIChannelExtended:
 
     def test_stats_not_found(self, cli_env_with_mock_pool, capsys):
         db, pool = cli_env_with_mock_pool
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(
             _ns(
@@ -443,7 +443,7 @@ class TestCLIChannelExtended:
 
     def test_collect_not_found(self, cli_env_with_mock_pool, capsys):
         db, pool = cli_env_with_mock_pool
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="collect", identifier="999"))
         out = capsys.readouterr().out
@@ -460,7 +460,7 @@ class TestCLIChannelExtended:
 
         asyncio.run(_test())
 
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="refresh-types"))
         # Should continue even if prefetch fails
@@ -482,7 +482,7 @@ class TestCLIChannelExtended:
             "NullType",
             "u105",
         )
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="refresh-types"))
         out = capsys.readouterr().out
@@ -496,13 +496,13 @@ class TestCLIChannelExtended:
             )
         )
         with patch(
-            "src.cli.commands.channel.Collector",
+            "tg_agent.cli.commands.channel.Collector",
         ) as mock_collector:
             inst = mock_collector.return_value
             inst.collect_single_channel = AsyncMock(
                 side_effect=Exception("collect fail"),
             )
-            from src.cli.commands.channel import run
+            from tg_agent.cli.commands.channel import run
 
             with pytest.raises(Exception, match="collect fail"):
                 run(
@@ -524,15 +524,15 @@ class TestCLIChannelExtended:
             )
         )
 
-        from src.telegram.collector import UsernameResolveRateLimitedError
+        from tg_agent.telegram.collector import UsernameResolveRateLimitedError
 
         inst = None
-        with patch("src.cli.commands.channel.Collector") as mock_collector:
+        with patch("tg_agent.cli.commands.channel.Collector") as mock_collector:
             inst = mock_collector.return_value
             inst.collect_single_channel = AsyncMock(
                 side_effect=UsernameResolveRateLimitedError("+7001", 28)
             )
-            from src.cli.commands.channel import run
+            from tg_agent.cli.commands.channel import run
 
             run(
                 _ns(
@@ -564,11 +564,11 @@ class TestCLIChannelExtended:
             )
         )
 
-        from src.telegram.collector import UsernameResolveFloodWaitDeferredError
+        from tg_agent.telegram.collector import UsernameResolveFloodWaitDeferredError
 
         next_available_at = datetime.now(timezone.utc) + timedelta(minutes=30)
         inst = None
-        with patch("src.cli.commands.channel.Collector") as mock_collector:
+        with patch("tg_agent.cli.commands.channel.Collector") as mock_collector:
             inst = mock_collector.return_value
             inst.collect_single_channel = AsyncMock(
                 side_effect=UsernameResolveFloodWaitDeferredError(
@@ -576,7 +576,7 @@ class TestCLIChannelExtended:
                     next_available_at=next_available_at,
                 )
             )
-            from src.cli.commands.channel import run
+            from tg_agent.cli.commands.channel import run
 
             run(
                 _ns(
@@ -611,12 +611,12 @@ class TestCLITestExtended:
             side_effect=Exception("chan fail"),
         )
 
-        from src.cli.commands.test import run
+        from tg_agent.cli.commands.test import run
 
         init_db_mock = AsyncMock(return_value=(AppConfig(), cli_env))
         with (
             patch(
-                "src.cli.commands.test.runtime.init_db",
+                "tg_agent.cli.commands.test.runtime.init_db",
                 side_effect=init_db_mock,
             ),
             pytest.raises(SystemExit),
@@ -629,13 +629,13 @@ class TestCLITestExtended:
 
     def test_write_checks_with_empty_db(self, cli_env, capsys):
         # Empty DB (no accounts, no channels)
-        from src.cli.commands.test import run
+        from tg_agent.cli.commands.test import run
 
         init_db_mock = AsyncMock(
             return_value=(AppConfig(), cli_env),
         )
         with patch(
-            "src.cli.commands.test.runtime.init_db",
+            "tg_agent.cli.commands.test.runtime.init_db",
             side_effect=init_db_mock,
         ):
             run(_ns(command="test", test_action="write"))
@@ -653,16 +653,16 @@ class TestCLITestExtended:
         db, pool = cli_env_with_mock_pool
         pool.clients = {}  # No accounts
 
-        from src.cli.commands.test import run
+        from tg_agent.cli.commands.test import run
 
         init_db = AsyncMock(return_value=(AppConfig(), db))
         init_pool = AsyncMock(return_value=(None, pool))
         with patch(
-            "src.cli.commands.test.runtime.init_db",
+            "tg_agent.cli.commands.test.runtime.init_db",
             side_effect=init_db,
         ):
             with patch(
-                "src.cli.commands.test.runtime.init_pool",
+                "tg_agent.cli.commands.test.runtime.init_pool",
                 side_effect=init_pool,
             ):
                 run(_ns(command="test", test_action="telegram"))
@@ -709,11 +709,11 @@ class TestCLITestExtended:
             m.date = datetime.now(timezone.utc)
             m.media = None
             sender_patch = patch(
-                "src.telegram.collector.Collector._get_sender_name",
+                "tg_agent.telegram.collector.Collector._get_sender_name",
                 return_value="Test Sender",
             )
             media_patch = patch(
-                "src.telegram.collector.Collector._get_media_type",
+                "tg_agent.telegram.collector.Collector._get_media_type",
                 return_value="text",
             )
             with sender_patch, media_patch:
@@ -722,7 +722,7 @@ class TestCLITestExtended:
         mock_client.iter_messages = mock_iter
 
         with patch(
-            "src.telegram.collector.Collector",
+            "tg_agent.telegram.collector.Collector",
         ) as mock_collector:
             inst = mock_collector.return_value
             inst.collect_channel_stats = AsyncMock(
@@ -730,7 +730,7 @@ class TestCLITestExtended:
             )
 
             with patch(
-                "src.search.engine.SearchEngine",
+                "tg_agent.search.engine.SearchEngine",
             ) as mock_engine:
                 engine_inst = mock_engine.return_value
                 engine_inst.search_my_chats = AsyncMock(
@@ -750,7 +750,7 @@ class TestCLITestExtended:
                     return_value={"left": 10},
                 )
 
-                from src.cli.commands.test import run
+                from tg_agent.cli.commands.test import run
 
                 init_db = AsyncMock(
                     return_value=(AppConfig(), db),
@@ -759,11 +759,11 @@ class TestCLITestExtended:
                     return_value=(None, pool),
                 )
                 with patch(
-                    "src.cli.commands.test.runtime.init_db",
+                    "tg_agent.cli.commands.test.runtime.init_db",
                     side_effect=init_db,
                 ):
                     with patch(
-                        "src.cli.commands.test.runtime.init_pool",
+                        "tg_agent.cli.commands.test.runtime.init_pool",
                         side_effect=init_pool,
                     ):
                         run(
@@ -821,11 +821,11 @@ class TestCLITestExtended:
             m.date = datetime.now(timezone.utc)
             m.media = None
             sender_patch = patch(
-                "src.telegram.collector.Collector._get_sender_name",
+                "tg_agent.telegram.collector.Collector._get_sender_name",
                 return_value="Test Sender",
             )
             media_patch = patch(
-                "src.telegram.collector.Collector._get_media_type",
+                "tg_agent.telegram.collector.Collector._get_media_type",
                 return_value="text",
             )
             with sender_patch, media_patch:
@@ -833,13 +833,13 @@ class TestCLITestExtended:
 
         mock_client.iter_messages = mock_iter
 
-        with patch("src.telegram.collector.Collector") as mock_collector:
+        with patch("tg_agent.telegram.collector.Collector") as mock_collector:
             inst = mock_collector.return_value
             inst.collect_channel_stats = AsyncMock(
                 return_value=MagicMock(subscriber_count=100),
             )
 
-            with patch("src.search.engine.SearchEngine") as mock_engine:
+            with patch("tg_agent.search.engine.SearchEngine") as mock_engine:
                 engine_inst = mock_engine.return_value
                 from datetime import datetime, timezone
 
@@ -872,16 +872,16 @@ class TestCLITestExtended:
                     )
                 )
 
-                from src.cli.commands.test import run
+                from tg_agent.cli.commands.test import run
 
                 init_db = AsyncMock(return_value=(AppConfig(), db))
                 init_pool = AsyncMock(return_value=(None, pool))
                 with patch(
-                    "src.cli.commands.test.runtime.init_db",
+                    "tg_agent.cli.commands.test.runtime.init_db",
                     side_effect=init_db,
                 ):
                     with patch(
-                        "src.cli.commands.test.runtime.init_pool",
+                        "tg_agent.cli.commands.test.runtime.init_pool",
                         side_effect=init_pool,
                     ):
                         run(
@@ -958,11 +958,11 @@ class TestCLITestExtended:
             m.date = datetime.now(timezone.utc)
             m.media = None
             sender_patch = patch(
-                "src.telegram.collector.Collector._get_sender_name",
+                "tg_agent.telegram.collector.Collector._get_sender_name",
                 return_value="Test Sender",
             )
             media_patch = patch(
-                "src.telegram.collector.Collector._get_media_type",
+                "tg_agent.telegram.collector.Collector._get_media_type",
                 return_value="text",
             )
             with sender_patch, media_patch:
@@ -970,13 +970,13 @@ class TestCLITestExtended:
 
         mock_client.iter_messages = mock_iter
 
-        with patch("src.telegram.collector.Collector") as mock_collector:
+        with patch("tg_agent.telegram.collector.Collector") as mock_collector:
             inst = mock_collector.return_value
             inst.collect_channel_stats = AsyncMock(
                 return_value=MagicMock(subscriber_count=100),
             )
 
-            with patch("src.search.engine.SearchEngine") as mock_engine:
+            with patch("tg_agent.search.engine.SearchEngine") as mock_engine:
                 engine_inst = mock_engine.return_value
                 engine_inst.search_my_chats = AsyncMock(
                     return_value=MagicMock(total=5, error=None, flood_wait=None),
@@ -989,21 +989,21 @@ class TestCLITestExtended:
                 )
                 engine_inst.check_search_quota = AsyncMock(return_value={"left": 10})
 
-                from src.cli.commands.test import run
+                from tg_agent.cli.commands.test import run
 
                 init_db = AsyncMock(return_value=(AppConfig(), db))
                 init_pool = AsyncMock(return_value=(None, pool))
                 sleep_mock = AsyncMock()
                 with patch(
-                    "src.cli.commands.test.runtime.init_db",
+                    "tg_agent.cli.commands.test.runtime.init_db",
                     side_effect=init_db,
                 ):
                     with patch(
-                        "src.cli.commands.test.runtime.init_pool",
+                        "tg_agent.cli.commands.test.runtime.init_pool",
                         side_effect=init_pool,
                     ):
                         with patch(
-                            "src.cli.commands.test.asyncio.sleep",
+                            "tg_agent.cli.commands.test.asyncio.sleep",
                             sleep_mock,
                         ):
                             run(
@@ -1063,11 +1063,11 @@ class TestCLITestExtended:
             m.date = datetime.now(timezone.utc)
             m.media = None
             sender_patch = patch(
-                "src.telegram.collector.Collector._get_sender_name",
+                "tg_agent.telegram.collector.Collector._get_sender_name",
                 return_value="Test Sender",
             )
             media_patch = patch(
-                "src.telegram.collector.Collector._get_media_type",
+                "tg_agent.telegram.collector.Collector._get_media_type",
                 return_value="text",
             )
             with sender_patch, media_patch:
@@ -1075,13 +1075,13 @@ class TestCLITestExtended:
 
         mock_client.iter_messages = mock_iter
 
-        with patch("src.telegram.collector.Collector") as mock_collector:
+        with patch("tg_agent.telegram.collector.Collector") as mock_collector:
             inst = mock_collector.return_value
             inst.collect_channel_stats = AsyncMock(
                 return_value=MagicMock(subscriber_count=100),
             )
 
-            with patch("src.search.engine.SearchEngine") as mock_engine:
+            with patch("tg_agent.search.engine.SearchEngine") as mock_engine:
                 engine_inst = mock_engine.return_value
                 from datetime import datetime, timezone
 
@@ -1106,16 +1106,16 @@ class TestCLITestExtended:
                 )
                 engine_inst.check_search_quota = AsyncMock(return_value={"left": 10})
 
-                from src.cli.commands.test import run
+                from tg_agent.cli.commands.test import run
 
                 init_db = AsyncMock(return_value=(AppConfig(), db))
                 init_pool = AsyncMock(return_value=(None, pool))
                 with patch(
-                    "src.cli.commands.test.runtime.init_db",
+                    "tg_agent.cli.commands.test.runtime.init_db",
                     side_effect=init_db,
                 ):
                     with patch(
-                        "src.cli.commands.test.runtime.init_pool",
+                        "tg_agent.cli.commands.test.runtime.init_pool",
                         side_effect=init_pool,
                     ):
                         run(
@@ -1184,11 +1184,11 @@ class TestCLITestExtended:
             m.date = datetime.now(timezone.utc)
             m.media = None
             sender_patch = patch(
-                "src.telegram.collector.Collector._get_sender_name",
+                "tg_agent.telegram.collector.Collector._get_sender_name",
                 return_value="Test Sender",
             )
             media_patch = patch(
-                "src.telegram.collector.Collector._get_media_type",
+                "tg_agent.telegram.collector.Collector._get_media_type",
                 return_value="text",
             )
             with sender_patch, media_patch:
@@ -1196,13 +1196,13 @@ class TestCLITestExtended:
 
         mock_client.iter_messages = mock_iter
 
-        with patch("src.telegram.collector.Collector") as mock_collector:
+        with patch("tg_agent.telegram.collector.Collector") as mock_collector:
             inst = mock_collector.return_value
             inst.collect_channel_stats = AsyncMock(
                 return_value=MagicMock(subscriber_count=100),
             )
 
-            with patch("src.search.engine.SearchEngine") as mock_engine:
+            with patch("tg_agent.search.engine.SearchEngine") as mock_engine:
                 engine_inst = mock_engine.return_value
                 engine_inst.search_my_chats = AsyncMock(
                     side_effect=[
@@ -1222,21 +1222,21 @@ class TestCLITestExtended:
                 )
                 engine_inst.check_search_quota = AsyncMock(return_value={"left": 10})
 
-                from src.cli.commands.test import run
+                from tg_agent.cli.commands.test import run
 
                 init_db = AsyncMock(return_value=(AppConfig(), db))
                 init_pool = AsyncMock(return_value=(None, pool))
                 sleep_mock = AsyncMock()
                 with patch(
-                    "src.cli.commands.test.runtime.init_db",
+                    "tg_agent.cli.commands.test.runtime.init_db",
                     side_effect=init_db,
                 ):
                     with patch(
-                        "src.cli.commands.test.runtime.init_pool",
+                        "tg_agent.cli.commands.test.runtime.init_pool",
                         side_effect=init_pool,
                     ):
                         with patch(
-                            "src.cli.commands.test.asyncio.sleep",
+                            "tg_agent.cli.commands.test.asyncio.sleep",
                             sleep_mock,
                         ):
                             run(
@@ -1307,11 +1307,11 @@ class TestCLITestExtended:
             m.date = datetime.now(timezone.utc)
             m.media = None
             sender_patch = patch(
-                "src.telegram.collector.Collector._get_sender_name",
+                "tg_agent.telegram.collector.Collector._get_sender_name",
                 return_value="Test Sender",
             )
             media_patch = patch(
-                "src.telegram.collector.Collector._get_media_type",
+                "tg_agent.telegram.collector.Collector._get_media_type",
                 return_value="text",
             )
             with sender_patch, media_patch:
@@ -1319,13 +1319,13 @@ class TestCLITestExtended:
 
         mock_client.iter_messages = mock_iter
 
-        with patch("src.telegram.collector.Collector") as mock_collector:
+        with patch("tg_agent.telegram.collector.Collector") as mock_collector:
             inst = mock_collector.return_value
             inst.collect_channel_stats = AsyncMock(
                 return_value=MagicMock(subscriber_count=100),
             )
 
-            with patch("src.search.engine.SearchEngine") as mock_engine:
+            with patch("tg_agent.search.engine.SearchEngine") as mock_engine:
                 engine_inst = mock_engine.return_value
                 flood_wait = FloodWaitInfo(
                     operation="search_telegram",
@@ -1348,21 +1348,21 @@ class TestCLITestExtended:
                 )
                 engine_inst.check_search_quota = AsyncMock(return_value={"left": 10})
 
-                from src.cli.commands.test import run
+                from tg_agent.cli.commands.test import run
 
                 init_db = AsyncMock(return_value=(AppConfig(), db))
                 init_pool = AsyncMock(return_value=(None, pool))
                 sleep_mock = AsyncMock()
                 with patch(
-                    "src.cli.commands.test.runtime.init_db",
+                    "tg_agent.cli.commands.test.runtime.init_db",
                     side_effect=init_db,
                 ):
                     with patch(
-                        "src.cli.commands.test.runtime.init_pool",
+                        "tg_agent.cli.commands.test.runtime.init_pool",
                         side_effect=init_pool,
                     ):
                         with patch(
-                            "src.cli.commands.test.asyncio.sleep",
+                            "tg_agent.cli.commands.test.asyncio.sleep",
                             sleep_mock,
                         ):
                             run(

@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from src.models import PhotoAutoUploadJob, PhotoBatch, PhotoBatchItem, PhotoBatchStatus
+from tg_agent.models import PhotoAutoUploadJob, PhotoBatch, PhotoBatchItem, PhotoBatchStatus
 
 
 @pytest.mark.anyio

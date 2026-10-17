@@ -24,11 +24,11 @@
 ## Запуск
 
 ```bash
-# Информационный отчёт по src/ (общий %, худшие файлы, список недокументированного)
+# Информационный отчёт по tg_agent/ (общий %, худшие файлы, список недокументированного)
 python scripts/doc_coverage.py
 
 # Другой путь / больше строк в топах
-python scripts/doc_coverage.py --path src/web --top 40
+python scripts/doc_coverage.py --path tg_agent/web --top 40
 
 # CI-гейт: ненулевой exit, если покрытие ниже порога
 python scripts/doc_coverage.py --fail-under 23

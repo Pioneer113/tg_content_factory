@@ -20,24 +20,24 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from src.database import Database
 from tests.helpers import build_web_app, make_test_config
+from tg_agent.database import Database
 
 pytestmark = pytest.mark.smoke
 
 
 def test_package_imports() -> None:
     """The top-level entrypoint module imports cleanly."""
-    import src.main
+    import tg_agent.main
 
-    assert hasattr(src.main, "main")
+    assert hasattr(tg_agent.main, "main")
 
 
 def test_cli_app_builds() -> None:
     """The full Typer CLI app assembles with its commands registered."""
     import typer
 
-    from src.cli.typer_commands import app
+    from tg_agent.cli.typer_commands import app
 
     cmd = typer.main.get_command(app)
     assert cmd.commands
@@ -45,7 +45,7 @@ def test_cli_app_builds() -> None:
 
 def test_identifier_parsing_real_function() -> None:
     """Channel-identifier parsing handles the documented separators."""
-    from src.parsers import extract_identifiers, parse_identifiers
+    from tg_agent.parsers import extract_identifiers, parse_identifiers
 
     assert parse_identifiers("@one, @two; @three") == ["@one", "@two", "@three"]
     # extract_identifiers pulls real t.me links and @username tokens.
@@ -56,7 +56,7 @@ def test_identifier_parsing_real_function() -> None:
 
 def test_default_config_constructs() -> None:
     """AppConfig builds with defaults (no config.yaml on disk required)."""
-    from src.config import AppConfig
+    from tg_agent.config import AppConfig
 
     config = AppConfig()
     assert config.database.path
@@ -64,7 +64,7 @@ def test_default_config_constructs() -> None:
 
 def test_agent_tool_registry_resolves() -> None:
     """The agent tool allow-list derives from the permission categories."""
-    from src.agent.tools.permissions import get_all_allowed_tools
+    from tg_agent.agent.tools.permissions import get_all_allowed_tools
 
     tools = get_all_allowed_tools()
     assert isinstance(tools, list)

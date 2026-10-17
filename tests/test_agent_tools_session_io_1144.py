@@ -92,7 +92,7 @@ class TestImportSessionTool:
     @pytest.mark.anyio
     async def test_valid_session_adds_account(self, mock_db, monkeypatch):
         # Patch the validator so the test does not depend on telethon internals.
-        monkeypatch.setattr("src.agent.tools.accounts.validate_session_string", lambda s: True)
+        monkeypatch.setattr("tg_agent.agent.tools.accounts.validate_session_string", lambda s: True)
         mock_db.get_account_summaries = AsyncMock(return_value=[])
         mock_db.add_account = AsyncMock(return_value=7)
         handlers = _get_tool_handlers(mock_db)
@@ -104,7 +104,7 @@ class TestImportSessionTool:
 
     @pytest.mark.anyio
     async def test_existing_phone_refused_without_force(self, mock_db, monkeypatch):
-        monkeypatch.setattr("src.agent.tools.accounts.validate_session_string", lambda s: True)
+        monkeypatch.setattr("tg_agent.agent.tools.accounts.validate_session_string", lambda s: True)
         existing = _make_account(acc_id=1, phone="+71112223344")
         mock_db.get_account_summaries = AsyncMock(return_value=[existing])
         mock_db.add_account = AsyncMock()
@@ -118,7 +118,7 @@ class TestImportSessionTool:
     @pytest.mark.anyio
     async def test_existing_phone_force_overwrites(self, mock_db, monkeypatch):
         # force=true must actually reach add_account (guards against a no-op regression).
-        monkeypatch.setattr("src.agent.tools.accounts.validate_session_string", lambda s: True)
+        monkeypatch.setattr("tg_agent.agent.tools.accounts.validate_session_string", lambda s: True)
         existing = _make_account(acc_id=1, phone="+71112223344")
         mock_db.get_account_summaries = AsyncMock(return_value=[existing])
         mock_db.add_account = AsyncMock(return_value=1)
@@ -138,7 +138,7 @@ class TestImportSessionTool:
         clobbering a working session. ``arg_bool`` must coerce it to False so the
         refusal path fires and ``add_account`` is never called.
         """
-        monkeypatch.setattr("src.agent.tools.accounts.validate_session_string", lambda s: True)
+        monkeypatch.setattr("tg_agent.agent.tools.accounts.validate_session_string", lambda s: True)
         existing = _make_account(acc_id=1, phone="+71112223344")
         mock_db.get_account_summaries = AsyncMock(return_value=[existing])
         mock_db.add_account = AsyncMock()
@@ -156,8 +156,8 @@ class TestImportSessionTool:
 
 
 def test_session_tools_classified_write():
-    from src.agent.tools._categories import ToolCategory
-    from src.agent.tools.accounts import TOOL_GROUPS
+    from tg_agent.agent.tools._categories import ToolCategory
+    from tg_agent.agent.tools.accounts import TOOL_GROUPS
 
     flat = {name: meta for _, group in TOOL_GROUPS for name, meta in group.items()}
     assert flat["export_session"].category == ToolCategory.WRITE
@@ -166,7 +166,7 @@ def test_session_tools_classified_write():
 
 def test_export_session_marked_secret_result():
     """The session is the secret being returned — loggers must know to redact it."""
-    from src.agent.tools._categories import SECRET_RESULT_TOOLS
+    from tg_agent.agent.tools._categories import SECRET_RESULT_TOOLS
 
     assert "export_session" in SECRET_RESULT_TOOLS
 
@@ -175,13 +175,13 @@ def test_react_agent_redacts_secret_tool_result_in_logs(caplog):
     """ReAct fallback logger must not preview export_session's result (#828)."""
     import logging
 
-    from src.agent.tools._categories import SECRET_RESULT_TOOLS
+    from tg_agent.agent.tools._categories import SECRET_RESULT_TOOLS
 
     secret = "1ApValidLooKingSessionStringThatMustNotLeakIntoLogs0000"
     tool_name = "export_session"
     preview = "<redacted>" if tool_name in SECRET_RESULT_TOOLS else secret[:100]
     with caplog.at_level(logging.DEBUG):
-        logging.getLogger("src.agent.react_agent").debug(
+        logging.getLogger("tg_agent.agent.react_agent").debug(
             "ReAct tool %r → %r", tool_name, preview
         )
     assert secret not in caplog.text

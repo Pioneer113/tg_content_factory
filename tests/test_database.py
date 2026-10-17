@@ -6,9 +6,9 @@ from datetime import datetime, timedelta, timezone
 import aiosqlite
 import pytest
 
-from src.database import Database, DatabaseBusyError
-from src.database.repositories.messages import MessagesRepository
-from src.models import (
+from tg_agent.database import Database, DatabaseBusyError
+from tg_agent.database.repositories.messages import MessagesRepository
+from tg_agent.models import (
     Account,
     AccountSessionStatus,
     Channel,
@@ -648,7 +648,7 @@ async def test_trending_emojis_end_to_end_via_reaction_date(db):
     """End-to-end check that the new mr.date-filtered get_trending_emojis SQL runs
     against a real DB (#760) — not just the mocked TrendService unit test. Recent
     reactions are aggregated; rows outside the window are excluded."""
-    from src.services.trend_service import TrendService
+    from tg_agent.services.trend_service import TrendService
 
     recent = datetime.now(timezone.utc)
     old = recent - timedelta(days=400)
@@ -795,7 +795,7 @@ async def test_storage_stats_handles_missing_file(tmp_path, monkeypatch):
         def _missing_file(_path):
             raise OSError("gone")
 
-        monkeypatch.setattr("src.database.facade.os.path.getsize", _missing_file)
+        monkeypatch.setattr("tg_agent.database.facade.os.path.getsize", _missing_file)
         assert (await file_db.get_storage_stats())["file_size_bytes"] is None
     finally:
         await file_db.close()
@@ -1648,7 +1648,7 @@ async def test_masked_link_url_reaches_db_and_reads(db):
 
     from telethon.tl.types import MessageEntityTextUrl
 
-    from src.telegram.collector_message_parse import build_message_from_telethon
+    from tg_agent.telegram.collector_message_parse import build_message_from_telethon
 
     await db.add_channel(Channel(channel_id=-100994, title="MaskedLinks"))
     raw = SimpleNamespace(

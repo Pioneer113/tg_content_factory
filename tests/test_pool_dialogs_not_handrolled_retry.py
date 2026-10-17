@@ -50,7 +50,7 @@ import textwrap
 
 import pytest
 
-from src.telegram.pool_dialogs import DialogsMixin
+from tg_agent.telegram.pool_dialogs import DialogsMixin
 
 # Helper-имена в src/telegram/flood_wait.py.
 _ALLOWED_FLOOD_HELPER = "run_with_flood_wait"  # single-shot, fail-fast

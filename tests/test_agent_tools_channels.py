@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.models import ChannelStats
 from tests.agent_tools_helpers import _get_tool_handlers, _text
+from tg_agent.models import ChannelStats
 
 
 def _make_channel(
@@ -80,7 +80,7 @@ class TestAddChannelTool:
 
     @pytest.mark.anyio
     async def test_with_confirm_adds_channel(self, mock_db):
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.add_by_identifier = AsyncMock(return_value=True)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["add_channel"]({"identifier": "@mychan", "confirm": True})
@@ -88,7 +88,7 @@ class TestAddChannelTool:
 
     @pytest.mark.anyio
     async def test_already_exists_returns_message(self, mock_db):
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.add_by_identifier = AsyncMock(return_value=False)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["add_channel"]({"identifier": "@existing", "confirm": True})
@@ -96,7 +96,7 @@ class TestAddChannelTool:
 
     @pytest.mark.anyio
     async def test_error_returns_text(self, mock_db):
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.add_by_identifier = AsyncMock(side_effect=Exception("API error"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["add_channel"]({"identifier": "@broken", "confirm": True})
@@ -121,7 +121,7 @@ class TestDeleteChannelTool:
     async def test_with_confirm_deletes_channel(self, mock_db):
         ch = _make_channel(title="DeleteMe")
         mock_db.get_channel_by_pk = AsyncMock(return_value=ch)
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.delete = AsyncMock()
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["delete_channel"]({"pk": 1, "confirm": True})
@@ -131,7 +131,7 @@ class TestDeleteChannelTool:
     @pytest.mark.anyio
     async def test_error_returns_text(self, mock_db):
         mock_db.get_channel_by_pk = AsyncMock(return_value=_make_channel())
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.delete = AsyncMock(side_effect=Exception("fk constraint"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["delete_channel"]({"pk": 1, "confirm": True})
@@ -148,7 +148,7 @@ class TestToggleChannelTool:
     @pytest.mark.anyio
     async def test_active_channel_gets_deactivated(self, mock_db):
         ch_after = _make_channel(is_active=False, title="MyChan")
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.toggle = AsyncMock()
             mock_db.get_channel_by_pk = AsyncMock(return_value=ch_after)
             handlers = _get_tool_handlers(mock_db)
@@ -165,7 +165,7 @@ class TestToggleChannelTool:
     async def test_suppressed_active_change_is_reported(self, mock_db):
         ch = _make_channel(is_active=True, title="ProtectedChan")
         mock_db.get_channel_by_pk = AsyncMock(return_value=ch)
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.toggle = AsyncMock(return_value=0)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["toggle_channel"]({"pk": 1})
@@ -180,7 +180,7 @@ class TestToggleChannelTool:
         ch = _make_channel(is_active=True, title="NeedsReview")
         mock_db.get_channel_by_pk = AsyncMock(return_value=ch)
         mock_db.repos.decisions.record = AsyncMock()
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.toggle = AsyncMock()
             handlers = _get_tool_handlers(mock_db)
             await handlers["toggle_channel"]({"pk": 1, "on_behalf_of_user": True})
@@ -192,7 +192,7 @@ class TestToggleChannelTool:
 
     @pytest.mark.anyio
     async def test_error_returns_text(self, mock_db):
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.toggle = AsyncMock(side_effect=Exception("not found"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["toggle_channel"]({"pk": 1})
@@ -220,7 +220,7 @@ class TestImportChannelsTool:
 
     @pytest.mark.anyio
     async def test_with_confirm_imports_channels(self, mock_db):
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.add_by_identifier = AsyncMock(return_value=True)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["import_channels"]({"text": "@chan1 @chan2", "confirm": True})
@@ -239,7 +239,7 @@ class TestImportChannelsTool:
                 return True
             raise Exception("API error")
 
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.add_by_identifier = flaky_add
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["import_channels"]({"text": "@chan1 @chan2", "confirm": True})
@@ -378,7 +378,7 @@ class TestGetChannelTagsTool:
 class TestListDialogsForImportTool:
     @pytest.mark.anyio
     async def test_empty(self, mock_db):
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.get_dialogs_with_added_flags = AsyncMock(return_value=[])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["list_dialogs_for_import"]({})
@@ -390,7 +390,7 @@ class TestListDialogsForImportTool:
             {"channel_id": 100, "title": "Already", "username": "a", "already_added": True},
             {"channel_id": 200, "title": "New", "username": None, "already_added": False},
         ]
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.get_dialogs_with_added_flags = AsyncMock(return_value=dialogs)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["list_dialogs_for_import"]({})
@@ -415,7 +415,7 @@ class TestAddChannelsBulkTool:
 
     @pytest.mark.anyio
     async def test_with_confirm_adds(self, mock_db):
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.add_bulk_by_dialog_ids = AsyncMock()
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["add_channels_bulk"]({"channel_ids": "100, 200", "confirm": True})
@@ -424,7 +424,7 @@ class TestAddChannelsBulkTool:
 
     @pytest.mark.anyio
     async def test_with_confirm_reports_skipped_ids(self, mock_db):
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.add_bulk_by_dialog_ids = AsyncMock(
                 return_value={"processed": 1, "skipped": 1, "skipped_ids": ["200"]}
             )
@@ -436,7 +436,7 @@ class TestAddChannelsBulkTool:
 
     @pytest.mark.anyio
     async def test_error_returns_text(self, mock_db):
-        with patch("src.services.channel_service.ChannelService") as mock_svc:
+        with patch("tg_agent.services.channel_service.ChannelService") as mock_svc:
             mock_svc.return_value.add_bulk_by_dialog_ids = AsyncMock(side_effect=Exception("boom"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["add_channels_bulk"]({"channel_ids": "100", "confirm": True})

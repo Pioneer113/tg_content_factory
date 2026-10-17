@@ -4,7 +4,7 @@ from datetime import date, datetime, timezone
 import pytest
 from pydantic import BaseModel
 
-from src.utils.json import safe_json_dumps, safe_json_loads, safe_json_loads_dict, safe_json_loads_list
+from tg_agent.utils.json import safe_json_dumps, safe_json_loads, safe_json_loads_dict, safe_json_loads_list
 
 
 class _SampleModel(BaseModel):

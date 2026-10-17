@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.models import (
+from tg_agent.models import (
     CollectionTask,
     CollectionTaskStatus,
     CollectionTaskType,
@@ -23,7 +23,7 @@ from src.models import (
     StatsAllTaskPayload,
     TranslateBatchTaskPayload,
 )
-from src.services.unified_dispatcher import HANDLED_TYPES, UnifiedDispatcher
+from tg_agent.services.unified_dispatcher import HANDLED_TYPES, UnifiedDispatcher
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -96,8 +96,8 @@ async def test_translate_batch_full_flow_with_chaining():
     payload = TranslateBatchTaskPayload(target_lang="en", batch_size=10)
 
     with (
-        patch("src.services.provider_service.RuntimeProviderRegistry") as mock_aps,
-        patch("src.services.translation_service.TranslationService") as mock_ts,
+        patch("tg_agent.services.provider_service.RuntimeProviderRegistry") as mock_aps,
+        patch("tg_agent.services.translation_service.TranslationService") as mock_ts,
     ):
         aps_instance = mock_aps.return_value
         aps_instance.get_provider_callable.return_value = mock_provider_fn
@@ -141,8 +141,8 @@ async def test_translate_batch_no_remaining_no_chain():
     mock_provider_fn = AsyncMock(return_value="translated")
 
     with (
-        patch("src.services.provider_service.RuntimeProviderRegistry") as mock_aps,
-        patch("src.services.translation_service.TranslationService") as mock_ts,
+        patch("tg_agent.services.provider_service.RuntimeProviderRegistry") as mock_aps,
+        patch("tg_agent.services.translation_service.TranslationService") as mock_ts,
     ):
         aps_instance = mock_aps.return_value
         aps_instance._registry = {"default": object(), "real": mock_provider_fn}
@@ -170,7 +170,7 @@ async def test_translate_batch_no_messages():
     mock_provider_fn = AsyncMock(return_value="translated")
 
     with (
-        patch("src.services.provider_service.RuntimeProviderRegistry") as mock_aps,
+        patch("tg_agent.services.provider_service.RuntimeProviderRegistry") as mock_aps,
     ):
         aps_instance = mock_aps.return_value
         aps_instance._registry = {"default": object(), "real": mock_provider_fn}
@@ -195,7 +195,7 @@ async def test_translate_batch_only_stub_provider():
 
     default_stub = AsyncMock(return_value="stub")
 
-    with patch("src.services.provider_service.RuntimeProviderRegistry") as mock_aps:
+    with patch("tg_agent.services.provider_service.RuntimeProviderRegistry") as mock_aps:
         aps_instance = mock_aps.return_value
         aps_instance._registry = {"default": default_stub}
         aps_instance.get_provider_callable.return_value = default_stub
@@ -216,7 +216,7 @@ async def test_translate_batch_exception():
     d = _make_dispatcher(db=mock_db)
     payload = TranslateBatchTaskPayload(target_lang="en")
 
-    with patch("src.services.provider_service.RuntimeProviderRegistry") as mock_aps:
+    with patch("tg_agent.services.provider_service.RuntimeProviderRegistry") as mock_aps:
         mock_aps.return_value.get_provider_callable.return_value = AsyncMock()
 
         await d._handle_translate_batch(_task(CollectionTaskType.TRANSLATE_BATCH, payload=payload))
@@ -258,8 +258,8 @@ async def test_content_generate_auto_publish_failure():
     payload = ContentGenerateTaskPayload(pipeline_id=1)
 
     with (
-        patch("src.services.content_generation_service.ContentGenerationService") as mock_gen,
-        patch("src.services.publish_service.PublishService") as mock_pub,
+        patch("tg_agent.services.content_generation_service.ContentGenerationService") as mock_gen,
+        patch("tg_agent.services.publish_service.PublishService") as mock_pub,
     ):
         gen_instance = mock_gen.return_value
         gen_instance.generate = AsyncMock(return_value=mock_run)
@@ -328,8 +328,8 @@ async def test_content_publish_with_approved_runs():
     payload = ContentPublishTaskPayload(pipeline_id=None)
 
     with (
-        patch("src.services.publish_service.PublishService") as mock_pub,
-        patch("src.database.repositories.generation_runs.GenerationRunsRepository") as mock_repo,
+        patch("tg_agent.services.publish_service.PublishService") as mock_pub,
+        patch("tg_agent.database.repositories.generation_runs.GenerationRunsRepository") as mock_repo,
     ):
         gen_run = MagicMock()
         gen_run.id = 10
@@ -391,7 +391,7 @@ async def test_content_publish_run_without_pipeline_id():
 
     payload = ContentPublishTaskPayload(pipeline_id=None)
 
-    with patch("src.database.repositories.generation_runs.GenerationRunsRepository") as mock_repo:
+    with patch("tg_agent.database.repositories.generation_runs.GenerationRunsRepository") as mock_repo:
         gen_run = MagicMock()
         gen_run.id = 10
         gen_run.pipeline_id = None
@@ -449,7 +449,7 @@ async def test_content_publish_pipeline_not_found():
 
     payload = ContentPublishTaskPayload(pipeline_id=None)
 
-    with patch("src.database.repositories.generation_runs.GenerationRunsRepository") as mock_repo:
+    with patch("tg_agent.database.repositories.generation_runs.GenerationRunsRepository") as mock_repo:
         gen_run = MagicMock()
         gen_run.id = 10
         gen_run.pipeline_id = 999
@@ -514,7 +514,7 @@ async def test_pipeline_run_outer_exception_during_setup():
     payload = PipelineRunTaskPayload(pipeline_id=1)
 
     with patch(
-        "src.services.content_generation_service.ContentGenerationService",
+        "tg_agent.services.content_generation_service.ContentGenerationService",
         side_effect=ImportError("missing module"),
     ):
         await d._handle_pipeline_run(_task(CollectionTaskType.PIPELINE_RUN, payload=payload))
@@ -545,7 +545,7 @@ async def test_pipeline_run_generation_fails_with_run_id():
     payload = PipelineRunTaskPayload(pipeline_id=1)
 
     with patch(
-        "src.services.content_generation_service.ContentGenerationService"
+        "tg_agent.services.content_generation_service.ContentGenerationService"
     ) as mock_gen:
         gen_instance = mock_gen.return_value
         gen_instance.generate = AsyncMock(side_effect=RuntimeError("LLM timeout"))
@@ -715,7 +715,7 @@ async def test_content_generate_moderated_mode_no_publish():
 
     payload = ContentGenerateTaskPayload(pipeline_id=1)
 
-    with patch("src.services.content_generation_service.ContentGenerationService") as mock_gen:
+    with patch("tg_agent.services.content_generation_service.ContentGenerationService") as mock_gen:
         gen_instance = mock_gen.return_value
         gen_instance.generate = AsyncMock(return_value=mock_run)
 
@@ -787,7 +787,7 @@ async def test_content_generate_pipeline_not_found():
 
     payload = ContentGenerateTaskPayload(pipeline_id=999)
 
-    with patch("src.services.content_generation_service.ContentGenerationService"):
+    with patch("tg_agent.services.content_generation_service.ContentGenerationService"):
         # The import inside the handler should not raise
         await d._handle_content_generate(_task(CollectionTaskType.CONTENT_GENERATE, payload=payload))
 

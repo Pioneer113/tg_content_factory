@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _actual_agent_tools() -> set[str]:
     names: set[str] = set()
-    for path in (ROOT / "src/agent/tools").glob("*.py"):
+    for path in (ROOT / "tg_agent/agent/tools").glob("*.py"):
         if path.name.startswith("_") or path.name == "__init__.py":
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -50,7 +50,7 @@ def _actual_web_routes() -> set[tuple[str, str]]:
     # feature routes inside an unnamed _IncludedRouter per include_router(), so a
     # flat walk of app.routes misses them. app.openapi()["paths"] expands every
     # included router, exposing the documented (in-schema) endpoints with methods.
-    from src.web.app import create_app
+    from tg_agent.web.app import create_app
 
     routes: set[tuple[str, str]] = set()
     for path, operations in create_app().openapi().get("paths", {}).items():
@@ -160,7 +160,7 @@ def test_configure_app_tolerates_unnamed_included_routers():
     deciding whether the static / data-image mounts already exist (FastAPI/Starlette compat)."""
     from fastapi import APIRouter, FastAPI
 
-    from src.web.assembly import configure_app
+    from tg_agent.web.assembly import configure_app
 
     app = FastAPI()
     extra = APIRouter()

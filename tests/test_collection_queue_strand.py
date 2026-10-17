@@ -14,9 +14,9 @@ import sqlite3
 
 import pytest
 
-from src.collection_queue import CollectionQueue
-from src.database import Database
-from src.models import Channel
+from tg_agent.collection_queue import CollectionQueue
+from tg_agent.database import Database
+from tg_agent.models import Channel
 
 
 class _FakeCollector:

@@ -14,8 +14,8 @@ from httpx import ASGITransport, AsyncClient
 from telethon.crypto import AuthKey
 from telethon.sessions import StringSession
 
-from src.database import Database
-from src.models import Account
+from tg_agent.database import Database
+from tg_agent.models import Account
 
 
 def _valid_session() -> str:
@@ -87,7 +87,7 @@ async def test_import_session_not_logged(route_client, base_app, caplog):
             data={"phone": "+15551112266", "session_string": session},
             follow_redirects=False,
         )
-    app_records = [r for r in caplog.records if r.name.startswith("src.")]
+    app_records = [r for r in caplog.records if r.name.startswith("tg_agent.")]
     assert all(session not in r.getMessage() for r in app_records)
 
 

@@ -11,12 +11,13 @@ from unittest.mock import AsyncMock
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.agent.prompt_template import AGENT_PROMPT_TEMPLATE_SETTING, DEFAULT_AGENT_PROMPT_TEMPLATE
-from src.agent.provider_registry import ProviderRuntimeConfig
-from src.collection_queue import CollectionQueue
-from src.config import AppConfig
-from src.database import Database
-from src.models import (
+from tests.helpers import build_web_app, drain_loop, make_auth_client, make_test_config
+from tg_agent.agent.prompt_template import AGENT_PROMPT_TEMPLATE_SETTING, DEFAULT_AGENT_PROMPT_TEMPLATE
+from tg_agent.agent.provider_registry import ProviderRuntimeConfig
+from tg_agent.collection_queue import CollectionQueue
+from tg_agent.config import AppConfig
+from tg_agent.database import Database
+from tg_agent.models import (
     Account,
     CollectionTaskStatus,
     CollectionTaskType,
@@ -24,21 +25,20 @@ from src.models import (
     RuntimeSnapshot,
     StatsAllTaskPayload,
 )
-from src.scheduler.service import SchedulerManager
-from src.search.ai_search import AISearchEngine
-from src.search.engine import SearchEngine
-from src.services.agent_provider_service import (
+from tg_agent.scheduler.service import SchedulerManager
+from tg_agent.search.ai_search import AISearchEngine
+from tg_agent.search.engine import SearchEngine
+from tg_agent.services.agent_provider_service import (
     ProviderConfigService,
     ProviderModelCacheEntry,
     ProviderModelCompatibilityRecord,
 )
-from src.services.embedding_service import EmbeddingService
-from src.telegram.collector import Collector
-from src.web.app import create_app
-from src.web.routes.channel_collection import _COLLECT_ALL_BTN, _COLLECT_ALL_FORM
-from src.web.session import COOKIE_NAME, create_session_token
-from src.web.template_globals import PYPROJECT_PATH, _agent_available_for_request, get_app_version
-from tests.helpers import build_web_app, drain_loop, make_auth_client, make_test_config
+from tg_agent.services.embedding_service import EmbeddingService
+from tg_agent.telegram.collector import Collector
+from tg_agent.web.app import create_app
+from tg_agent.web.routes.channel_collection import _COLLECT_ALL_BTN, _COLLECT_ALL_FORM
+from tg_agent.web.session import COOKIE_NAME, create_session_token
+from tg_agent.web.template_globals import PYPROJECT_PATH, _agent_available_for_request, get_app_version
 
 
 def _read_text(path: str | Path) -> str:
@@ -123,7 +123,7 @@ async def test_health_endpoint_logs_db_probe_failure(client, monkeypatch, caplog
 
     monkeypatch.setattr(client._transport.app.state.db, "execute", _broken_execute)
 
-    with caplog.at_level(logging.WARNING, logger="src.web.assembly"):
+    with caplog.at_level(logging.WARNING, logger="tg_agent.web.assembly"):
         resp = await client.get("/health")
 
     assert resp.status_code == 200
@@ -347,10 +347,10 @@ async def test_startup_continues_after_pool_initialize_timeout(tmp_path, db, cap
     import asyncio
     from types import SimpleNamespace
 
-    from src.web.bootstrap import start_container
+    from tg_agent.web.bootstrap import start_container
 
     # Shrink timeout so test runs fast
-    monkeypatch.setattr("src.web.bootstrap._POOL_INIT_TIMEOUT", 0.1)
+    monkeypatch.setattr("tg_agent.web.bootstrap._POOL_INIT_TIMEOUT", 0.1)
 
     async def _hang():
         await asyncio.sleep(9999)
@@ -406,7 +406,7 @@ async def test_settings_page_hides_credentials_form_when_env_credentials_configu
     assert "Telegram-аккаунты" in resp.text
     assert 'href="/auth/login"' in resp.text
     assert "Добавить аккаунт" in resp.text
-    template_text = await asyncio.to_thread(_read_text, "src/web/templates/settings.html")
+    template_text = await asyncio.to_thread(_read_text, "tg_agent/web/templates/settings.html")
     assert "_accounts.html" in template_text
     assert "_scheduler.html" in template_text
     assert template_text.index("_accounts.html") < template_text.index("_scheduler.html")
@@ -752,7 +752,7 @@ async def test_settings_add_agent_provider_persists_provider_in_db(client):
 async def test_settings_save_agent_providers_preserves_priority_order(client, monkeypatch):
     db = client._transport.app.state.db
     await db.set_setting("agent_dev_mode_enabled", "1")
-    from src.web.settings import handlers as settings_handlers
+    from tg_agent.web.settings import handlers as settings_handlers
 
     probe_mock = AsyncMock()
     fake_manager = SimpleNamespace(refresh_settings_cache=AsyncMock())
@@ -798,7 +798,7 @@ async def test_settings_save_agent_providers_skips_probe_for_disabled_provider(c
     await client.post(
         "/settings/agent-providers/add", data={"provider": "openai"}, follow_redirects=False
     )
-    from src.web.settings import handlers as settings_handlers
+    from tg_agent.web.settings import handlers as settings_handlers
 
     probe_mock = AsyncMock()
     fake_manager = SimpleNamespace(refresh_settings_cache=AsyncMock())
@@ -839,7 +839,7 @@ async def test_settings_refresh_agent_provider_models_returns_json(client, monke
         return ["gpt-4.1", "gpt-4.1-mini"]
 
     monkeypatch.setattr(
-        "src.services.agent_provider_service.ProviderConfigService._fetch_live_models",
+        "tg_agent.services.agent_provider_service.ProviderConfigService._fetch_live_models",
         _live_fetch,
     )
 
@@ -869,7 +869,7 @@ async def test_settings_refresh_agent_provider_models_uses_unsaved_form_values(c
         return ["gpt-4.1-mini"]
 
     monkeypatch.setattr(
-        "src.services.agent_provider_service.ProviderConfigService._fetch_live_models",
+        "tg_agent.services.agent_provider_service.ProviderConfigService._fetch_live_models",
         _live_fetch,
     )
 
@@ -935,7 +935,7 @@ async def test_settings_refresh_agent_provider_models_preserves_saved_values_whe
         return ["gpt-4.1-mini"]
 
     monkeypatch.setattr(
-        "src.services.agent_provider_service.ProviderConfigService._fetch_live_models",
+        "tg_agent.services.agent_provider_service.ProviderConfigService._fetch_live_models",
         _live_fetch,
     )
 
@@ -1059,7 +1059,7 @@ async def test_settings_probe_agent_provider_model_returns_cached_json(client, m
     await client.post(
         "/settings/agent-providers/add", data={"provider": "openai"}, follow_redirects=False
     )
-    from src.web.settings import handlers as settings_handlers
+    from tg_agent.web.settings import handlers as settings_handlers
 
     fake_manager = SimpleNamespace(
         probe_provider_config=AsyncMock(
@@ -1105,7 +1105,7 @@ async def test_settings_save_agent_providers_keeps_unsupported_probe_in_cache_on
     await client.post(
         "/settings/agent-providers/add", data={"provider": "openai"}, follow_redirects=False
     )
-    from src.web.settings import handlers as settings_handlers
+    from tg_agent.web.settings import handlers as settings_handlers
 
     fake_manager = SimpleNamespace(
         probe_provider_config=AsyncMock(
@@ -1169,7 +1169,7 @@ async def test_settings_bulk_test_uses_unsaved_form_values(client, monkeypatch):
             )
         ]
     )
-    from src.web.settings import handlers as settings_handlers
+    from tg_agent.web.settings import handlers as settings_handlers
 
     captured_configs: list[ProviderRuntimeConfig] = []
     started = asyncio.Event()
@@ -1205,7 +1205,7 @@ async def test_settings_bulk_test_uses_unsaved_form_values(client, monkeypatch):
 async def test_settings_bulk_test_clears_running_status_when_startup_raises(client, monkeypatch):
     db = client._transport.app.state.db
     await db.set_setting("agent_dev_mode_enabled", "1")
-    from src.web.settings import handlers as settings_handlers
+    from tg_agent.web.settings import handlers as settings_handlers
 
     request = SimpleNamespace(app=client._transport.app, state=SimpleNamespace())
 
@@ -1237,7 +1237,7 @@ async def test_settings_bulk_test_refreshes_each_provider_once(client, monkeypat
             )
         ]
     )
-    from src.web.settings import handlers as settings_handlers
+    from tg_agent.web.settings import handlers as settings_handlers
 
     refresh_calls: list[str] = []
     request = SimpleNamespace(app=client._transport.app, state=SimpleNamespace())
@@ -1313,7 +1313,7 @@ async def test_settings_bulk_test_summary_counter_refactor_matches_legacy(client
             )
         ]
     )
-    from src.web.settings import handlers as settings_handlers
+    from tg_agent.web.settings import handlers as settings_handlers
 
     models = ["gpt-4.1", "gpt-4.1-mini", "gpt-4o"]
     statuses = ["supported", "unsupported", "unknown"]
@@ -1390,7 +1390,7 @@ async def test_settings_bulk_test_exports_catalog(client, monkeypatch, tmp_path)
             )
         ]
     )
-    from src.web.settings import handlers as settings_handlers
+    from tg_agent.web.settings import handlers as settings_handlers
 
     export_path = tmp_path / "compat_catalog.json"
 
@@ -1482,7 +1482,7 @@ async def test_settings_page_blocks_agent_provider_writes_without_encryption_sec
             "resolve_channel": AsyncMock(),
         },
     )()
-    from src.telegram.auth import TelegramAuth
+    from tg_agent.telegram.auth import TelegramAuth
 
     app.state.auth = TelegramAuth(12345, "test_hash")
     app.state.notifier = None
@@ -1646,8 +1646,8 @@ async def test_search_semantic_unavailable_falls_back_to_local(client):
 
 @pytest.mark.anyio
 async def test_search_with_semantic_mode(client, monkeypatch):
-    from src.models import Message
-    from src.services.embedding_service import EmbeddingService
+    from tg_agent.models import Message
+    from tg_agent.services.embedding_service import EmbeddingService
 
     db = client._transport.app.state.db
 
@@ -1686,7 +1686,7 @@ async def test_search_with_semantic_mode(client, monkeypatch):
 
 @pytest.mark.anyio
 async def test_search_runtime_error_is_rendered(client, monkeypatch):
-    from src.web import deps
+    from tg_agent.web import deps
 
     class BrokenSearchService:
         async def search(self, **kwargs):
@@ -1708,7 +1708,7 @@ async def test_search_runtime_error_is_rendered(client, monkeypatch):
 @pytest.mark.anyio
 async def test_search_telegram_proxy_when_worker_down(client, monkeypatch):
     """Telegram-mode search in web runtime fails fast when no worker is alive (#643)."""
-    monkeypatch.setattr("src.web.routes.scheduler._is_worker_alive", AsyncMock(return_value=False))
+    monkeypatch.setattr("tg_agent.web.routes.scheduler._is_worker_alive", AsyncMock(return_value=False))
     _connect_pool(client)
 
     resp = await client.get("/search/fragments/results?q=test&mode=telegram")
@@ -1724,7 +1724,7 @@ async def test_search_telegram_proxied_in_web_even_with_empty_snapshot_pool(clie
     app = client._transport.app
     app.state.runtime_mode = "web"
     app.state.pool = SimpleNamespace(clients={})  # empty snapshot — no clients visible
-    monkeypatch.setattr("src.web.routes.scheduler._is_worker_alive", AsyncMock(return_value=False))
+    monkeypatch.setattr("tg_agent.web.routes.scheduler._is_worker_alive", AsyncMock(return_value=False))
 
     resp = await client.get("/search/fragments/results?q=test&mode=telegram")
 
@@ -1736,10 +1736,10 @@ async def test_search_telegram_proxied_in_web_even_with_empty_snapshot_pool(clie
 @pytest.mark.anyio
 async def test_search_telegram_proxy_renders_worker_result(client, monkeypatch):
     """Web proxies premium search to the worker and renders its result (#643)."""
-    from src.models import Message, SearchResult, TelegramCommand, TelegramCommandStatus
-    from src.web import deps
+    from tg_agent.models import Message, SearchResult, TelegramCommand, TelegramCommandStatus
+    from tg_agent.web import deps
 
-    monkeypatch.setattr("src.web.routes.scheduler._is_worker_alive", AsyncMock(return_value=True))
+    monkeypatch.setattr("tg_agent.web.routes.scheduler._is_worker_alive", AsyncMock(return_value=True))
     _connect_pool(client)
 
     msg = Message(
@@ -1768,8 +1768,8 @@ async def test_search_telegram_proxy_renders_worker_result(client, monkeypatch):
 
 
 def test_search_telegram_proxy_timeout_covers_premium_worker_bounds():
-    from src.search.telegram_search import PREMIUM_SEARCH_RPC_TIMEOUT_SEC
-    from src.web.search import handlers as search_handlers
+    from tg_agent.search.telegram_search import PREMIUM_SEARCH_RPC_TIMEOUT_SEC
+    from tg_agent.web.search import handlers as search_handlers
 
     assert search_handlers._WORKER_SEARCH_TIMEOUT_SEC >= (PREMIUM_SEARCH_RPC_TIMEOUT_SEC * 2) + 5
 
@@ -1777,14 +1777,14 @@ def test_search_telegram_proxy_timeout_covers_premium_worker_bounds():
 @pytest.mark.anyio
 async def test_search_telegram_proxy_timeout_logs_command_context(client, monkeypatch, caplog):
     """A slow worker response exposes command context instead of a generic timeout."""
-    from src.models import TelegramCommand, TelegramCommandStatus
-    from src.web import deps
-    from src.web.search import handlers as search_handlers
+    from tg_agent.models import TelegramCommand, TelegramCommandStatus
+    from tg_agent.web import deps
+    from tg_agent.web.search import handlers as search_handlers
 
-    monkeypatch.setattr("src.web.routes.scheduler._is_worker_alive", AsyncMock(return_value=True))
+    monkeypatch.setattr("tg_agent.web.routes.scheduler._is_worker_alive", AsyncMock(return_value=True))
     monkeypatch.setattr(search_handlers, "_WORKER_SEARCH_TIMEOUT_SEC", 0.01)
     monkeypatch.setattr(search_handlers, "_WORKER_SEARCH_POLL_SEC", 0.001)
-    caplog.set_level(logging.WARNING, logger="src.web.search.handlers")
+    caplog.set_level(logging.WARNING, logger="tg_agent.web.search.handlers")
     _connect_pool(client)
 
     command = TelegramCommand(
@@ -2102,7 +2102,7 @@ async def test_settings_shows_accounts(tmp_path):
     await db.add_account(account)
 
     app.state.pool = type("Pool", (), {"clients": {"+79991234567": object()}})()
-    from src.telegram.auth import TelegramAuth
+    from tg_agent.telegram.auth import TelegramAuth
 
     app.state.auth = TelegramAuth(12345, "test_hash")
     app.state.notifier = None
@@ -2168,7 +2168,7 @@ async def test_resolve_channel_success(client):
 @pytest.mark.anyio
 async def test_channels_add_logs_unexpected_error(client, monkeypatch, caplog):
     db = client._transport.app.state.db
-    with caplog.at_level(logging.ERROR, logger="src.web.routes.channels"):
+    with caplog.at_level(logging.ERROR, logger="tg_agent.web.routes.channels"):
         resp = await client.post(
             "/channels/add",
             data={"identifier": "@broken"},
@@ -2191,7 +2191,7 @@ async def test_auth_send_code_logs_exception(client, monkeypatch, caplog):
         AsyncMock(side_effect=RuntimeError("boom")),
     )
 
-    with caplog.at_level(logging.ERROR, logger="src.web.routes.auth"):
+    with caplog.at_level(logging.ERROR, logger="tg_agent.web.routes.auth"):
         resp = await client.post("/auth/send-code", data={"phone": "+7000"}, follow_redirects=False)
 
     assert resp.status_code == 303
@@ -2204,7 +2204,7 @@ async def test_auth_send_code_logs_exception(client, monkeypatch, caplog):
 
 @pytest.mark.anyio
 async def test_notification_setup_logs_exception(client, monkeypatch, caplog):
-    with caplog.at_level(logging.ERROR, logger="src.web.routes.settings"):
+    with caplog.at_level(logging.ERROR, logger="tg_agent.web.routes.settings"):
         resp = await client.post("/settings/notifications/setup", follow_redirects=False)
 
     assert resp.status_code == 303
@@ -2214,7 +2214,7 @@ async def test_notification_setup_logs_exception(client, monkeypatch, caplog):
 
 @pytest.mark.anyio
 async def test_error_redirects_are_logged_globally(client, caplog):
-    with caplog.at_level(logging.WARNING, logger="src.web.app"):
+    with caplog.at_level(logging.WARNING, logger="tg_agent.web.app"):
         resp = await client.post(
             "/settings/save-scheduler",
             data={"collect_interval_minutes": "abc"},
@@ -2346,7 +2346,7 @@ async def test_resolve_channel_fail(tmp_path):
             "get_dialogs": _get_dialogs,
         },
     )()
-    from src.telegram.auth import TelegramAuth
+    from tg_agent.telegram.auth import TelegramAuth
 
     app.state.auth = TelegramAuth(12345, "test_hash")
     app.state.notifier = None
@@ -2426,7 +2426,7 @@ async def test_add_channel_redirect_has_msg(client):
 
 @pytest.mark.anyio
 async def test_save_notification_account_round_trip(client):
-    from src.models import Account
+    from tg_agent.models import Account
 
     db = client._transport.app.state.db
     await db.add_account(Account(phone="+79990000001", session_string="session", is_primary=True))
@@ -2456,7 +2456,7 @@ async def test_settings_page_shows_stale_notification_account_warning(client):
 
 @pytest.mark.anyio
 async def test_notification_status_returns_error_for_unavailable_selected_account(client):
-    from src.models import Account
+    from tg_agent.models import Account
 
     db = client._transport.app.state.db
     await db.add_account(Account(phone="+79990000002", session_string="session", is_primary=True))
@@ -2490,7 +2490,7 @@ async def test_notification_status_returns_error_for_unavailable_selected_accoun
 @pytest.mark.anyio
 async def test_channel_type_displayed(client):
     """Channel type column is shown on channels page after adding a channel."""
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     await client._transport.app.state.db.add_channel(
         Channel(channel_id=-100123, title="Test", username="testchan", channel_type="channel")
@@ -2545,7 +2545,7 @@ async def test_add_scam_channel_is_inactive(tmp_path):
             "fetch_channel_meta": _fetch_meta,
         },
     )()
-    from src.telegram.auth import TelegramAuth
+    from tg_agent.telegram.auth import TelegramAuth
 
     app.state.auth = TelegramAuth(12345, "test_hash")
     app.state.notifier = None
@@ -2626,7 +2626,7 @@ async def test_bulk_add_scam_dialog_is_inactive(tmp_path):
             "get_dialogs": _get_dialogs_scam,
         },
     )()
-    from src.telegram.auth import TelegramAuth
+    from tg_agent.telegram.auth import TelegramAuth
 
     app.state.auth = TelegramAuth(12345, "test_hash")
     app.state.notifier = None
@@ -2659,7 +2659,7 @@ async def test_bulk_add_scam_dialog_is_inactive(tmp_path):
 async def test_filter_analyze_applies_filters(client):
     from datetime import datetime, timezone
 
-    from src.models import Channel, Message
+    from tg_agent.models import Channel, Message
 
     db = client._transport.app.state.db
     ch = Channel(channel_id=-100551, title="Spam", username="spamchan", channel_type="channel")
@@ -2687,8 +2687,8 @@ async def test_filter_analyze_applies_filters(client):
     import asyncio as aio
     from unittest.mock import MagicMock
 
-    from src.models import CollectionTaskStatus
-    from src.services.task_handlers import FilterAnalyzeTaskHandler, TaskHandlerContext
+    from tg_agent.models import CollectionTaskStatus
+    from tg_agent.services.task_handlers import FilterAnalyzeTaskHandler, TaskHandlerContext
 
     task = await db.repos.tasks.get_active_filter_analyze_task()
     assert task is not None
@@ -2712,7 +2712,7 @@ async def test_filter_analyze_applies_filters(client):
 
 @pytest.mark.anyio
 async def test_filter_apply_with_snapshot_skips_reanalyze(client, monkeypatch):
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = client._transport.app.state.db
     await db.add_channel(
@@ -2722,7 +2722,7 @@ async def test_filter_apply_with_snapshot_skips_reanalyze(client, monkeypatch):
     async def _boom(self):
         raise AssertionError("analyze_all should not be called for snapshot apply")
 
-    monkeypatch.setattr("src.web.filter.handlers.ChannelAnalyzer.analyze_all", _boom)
+    monkeypatch.setattr("tg_agent.web.filter.handlers.ChannelAnalyzer.analyze_all", _boom)
 
     resp = await client.post(
         "/channels/filter/apply",
@@ -2743,7 +2743,7 @@ async def test_filter_apply_with_snapshot_skips_reanalyze(client, monkeypatch):
 
 @pytest.mark.anyio
 async def test_filter_apply_without_snapshot_returns_error(client, monkeypatch):
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = client._transport.app.state.db
     await db.add_channel(
@@ -2753,7 +2753,7 @@ async def test_filter_apply_without_snapshot_returns_error(client, monkeypatch):
     async def _boom(self):
         raise AssertionError("analyze_all should not be called without snapshot")
 
-    monkeypatch.setattr("src.web.filter.handlers.ChannelAnalyzer.analyze_all", _boom)
+    monkeypatch.setattr("tg_agent.web.filter.handlers.ChannelAnalyzer.analyze_all", _boom)
 
     resp = await client.post("/channels/filter/apply", data={}, follow_redirects=False)
     assert resp.status_code == 303
@@ -2777,7 +2777,7 @@ async def test_filter_toggle_missing_channel_returns_not_found_msg(client):
 
 @pytest.mark.anyio
 async def test_filter_toggle_sets_manual_flag(client):
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = client._transport.app.state.db
     await db.add_channel(
@@ -2800,7 +2800,7 @@ async def test_filter_toggle_sets_manual_flag(client):
 
 @pytest.mark.anyio
 async def test_has_stats_returns_true_when_all_channels_have_stats(client):
-    from src.models import Channel, ChannelStats
+    from tg_agent.models import Channel, ChannelStats
 
     db = client._transport.app.state.db
     await db.add_channel(Channel(channel_id=-100710, title="Ch1"))
@@ -2815,7 +2815,7 @@ async def test_has_stats_returns_true_when_all_channels_have_stats(client):
 
 @pytest.mark.anyio
 async def test_has_stats_returns_false_when_channel_missing_stats(client):
-    from src.models import Channel, ChannelStats
+    from tg_agent.models import Channel, ChannelStats
 
     db = client._transport.app.state.db
     await db.add_channel(Channel(channel_id=-100720, title="With stats"))
@@ -2829,7 +2829,7 @@ async def test_has_stats_returns_false_when_channel_missing_stats(client):
 
 @pytest.mark.anyio
 async def test_stats_all_redirects_when_all_channels_have_stats(client):
-    from src.models import Channel, ChannelStats
+    from tg_agent.models import Channel, ChannelStats
 
     db = client._transport.app.state.db
     await db.add_channel(Channel(channel_id=-100730, title="Ch"))
@@ -2846,7 +2846,7 @@ async def test_stats_all_redirects_when_all_channels_have_stats(client):
 @pytest.mark.anyio
 async def test_collect_filtered_channel_is_allowed(client):
     """Manual collect (web UI) must proceed even when channel is filtered."""
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = client._transport.app.state.db
     client._transport.app.state.collection_queue = CollectionQueue(
@@ -2873,7 +2873,7 @@ async def test_collect_filtered_channel_is_allowed(client):
 
 @pytest.mark.anyio
 async def test_delete_channel_cancels_pending_collection_tasks(client):
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = client._transport.app.state.db
     await db.add_channel(
@@ -2894,7 +2894,7 @@ async def test_delete_channel_cancels_pending_collection_tasks(client):
 
 @pytest.mark.anyio
 async def test_stats_all_creates_pending_task(client):
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = client._transport.app.state.db
     await db.add_channel(Channel(channel_id=-100800, title="Test"))
@@ -2914,7 +2914,7 @@ async def test_stats_all_creates_pending_task(client):
 
 @pytest.mark.anyio
 async def test_stats_all_queued_when_collector_running(client):
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     app = client._transport.app.state
     db = app.db
@@ -2945,7 +2945,7 @@ async def test_stats_all_blocks_duplicate_active_task(client):
 
 @pytest.mark.anyio
 async def test_stats_all_only_channels_without_stats(client):
-    from src.models import Channel, ChannelStats
+    from tg_agent.models import Channel, ChannelStats
 
     db = client._transport.app.state.db
     await db.add_channel(Channel(channel_id=-100901, title="With stats"))
@@ -2972,7 +2972,7 @@ async def test_search_results_have_tg_links(client):
     """Search results contain links to original Telegram messages."""
     from datetime import datetime, timezone
 
-    from src.models import Channel, Message
+    from tg_agent.models import Channel, Message
 
     db = client._transport.app.state.db
     ch = Channel(channel_id=-100123, title="Test", username="testchan", channel_type="channel")
@@ -2996,7 +2996,7 @@ async def test_search_results_private_channel_link(client):
     """Private channel messages get t.me/c/ links."""
     from datetime import datetime, timezone
 
-    from src.models import Channel, Message
+    from tg_agent.models import Channel, Message
 
     db = client._transport.app.state.db
     ch = Channel(channel_id=-100999, title="Private", username=None, channel_type="group")
@@ -3017,7 +3017,7 @@ async def test_search_results_private_channel_link(client):
 @pytest.mark.anyio
 async def test_collect_all_htmx_returns_scheduler_link_and_creates_tasks(client, monkeypatch):
     """POST /channels/collect-all with HTMX header returns explicit status and queues tasks."""
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = client._transport.app.state.db
     monkeypatch.setattr(
@@ -3046,7 +3046,7 @@ async def test_collect_all_htmx_returns_scheduler_link_and_creates_tasks(client,
 
 @pytest.mark.anyio
 async def test_collect_all_htmx_noop_when_tasks_already_exist(client):
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = client._transport.app.state.db
     client._transport.app.state.collection_queue._ensure_worker = lambda: None
@@ -3083,7 +3083,7 @@ async def test_collect_all_non_htmx_redirects_with_new_message_and_creates_tasks
     client, monkeypatch
 ):
     """POST /channels/collect-all without HTMX redirects with queue message."""
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = client._transport.app.state.db
     monkeypatch.setattr(
@@ -3128,8 +3128,8 @@ async def test_collect_all_non_htmx_redirects_with_empty_message_when_no_channel
 async def test_enqueue_all_channels_skips_inactive_filtered_and_duplicate_tasks(
     client, monkeypatch
 ):
-    from src.models import Channel
-    from src.services.collection_service import CollectionService
+    from tg_agent.models import Channel
+    from tg_agent.services.collection_service import CollectionService
 
     db = client._transport.app.state.db
     collector = client._transport.app.state.collector
@@ -3183,7 +3183,7 @@ async def test_get_channel_ids_with_active_tasks_returns_distinct_non_stats_ids(
 
 @pytest.mark.anyio
 async def test_channels_page_collect_all_button_matches_htmx_fragment(client):
-    template_path = Path("src/web/templates/channels.html")
+    template_path = Path("tg_agent/web/templates/channels.html")
     template_text = await asyncio.to_thread(_read_text, template_path)
     match = re.search(r'(<span id="collect-all-btn">.*?</span>)', template_text, re.S)
     assert match is not None
@@ -3206,7 +3206,7 @@ async def test_channels_page_collect_all_button_matches_htmx_fragment(client):
 
 @pytest.mark.anyio
 async def test_channel_actions_include_explicit_full_backfill_button(client):
-    template_text = await asyncio.to_thread(_read_text, "src/web/templates/_macros.html")
+    template_text = await asyncio.to_thread(_read_text, "tg_agent/web/templates/_macros.html")
 
     for expected in (
         'id="collect-btn-{{ prefix }}{{ ch.id }}"',
@@ -3313,7 +3313,7 @@ async def test_save_scheduler_clamps_reaction_min_interval(client):
 @pytest.mark.anyio
 async def test_save_scheduler_reaction_min_interval_missing_uses_default(client):
     """A POST omitting the field falls back to the dispatcher default (30), not a stale 5."""
-    from src.services.telegram_command_dispatcher import DEFAULT_REACTION_MIN_INTERVAL_SEC
+    from tg_agent.services.telegram_command_dispatcher import DEFAULT_REACTION_MIN_INTERVAL_SEC
 
     db = client._transport.app.state.db
     resp = await client.post(
@@ -3350,7 +3350,7 @@ async def test_settings_page_renders_decimal_reaction_min_interval(client):
 
 @pytest.mark.anyio
 async def test_save_filters_valid(client):
-    from src.models import Channel, ChannelStats
+    from tg_agent.models import Channel, ChannelStats
 
     db = client._transport.app.state.db
     await db.add_channel(Channel(channel_id=-100501, title="Small"))
@@ -3414,7 +3414,7 @@ async def test_save_credentials_valid_and_masked_path(client):
 @pytest.mark.anyio
 async def test_notification_setup_and_delete_json(client, monkeypatch):
 
-    from src.models import Account
+    from tg_agent.models import Account
 
     db = client._transport.app.state.db
     pool = client._transport.app.state.pool
@@ -3438,8 +3438,8 @@ async def test_notification_setup_and_delete_json(client, monkeypatch):
     async def _delete_bot(_client, _username):
         return None
 
-    monkeypatch.setattr("src.services.notification_service.botfather.create_bot", _create_bot)
-    monkeypatch.setattr("src.services.notification_service.botfather.delete_bot", _delete_bot)
+    monkeypatch.setattr("tg_agent.services.notification_service.botfather.create_bot", _create_bot)
+    monkeypatch.setattr("tg_agent.services.notification_service.botfather.delete_bot", _delete_bot)
 
     resp = await client.post(
         "/settings/notifications/setup",
@@ -3458,7 +3458,7 @@ async def test_notification_setup_and_delete_json(client, monkeypatch):
 
 @pytest.mark.anyio
 async def test_notification_setup_returns_conflict_when_account_unavailable(client):
-    from src.models import Account
+    from tg_agent.models import Account
 
     db = client._transport.app.state.db
     await db.add_account(Account(phone="+79990000004", session_string="session", is_primary=True))
@@ -3475,7 +3475,7 @@ async def test_notification_setup_returns_conflict_when_account_unavailable(clie
 @pytest.mark.anyio
 async def test_collect_stats_route_enqueues_command(client):
     """Web route only enqueues a telegram command; worker executes the collection."""
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     db = client._transport.app.state.db
     await db.add_channel(Channel(channel_id=-1002001, title="Stats", username="teststats", channel_type="channel"))
@@ -3654,7 +3654,7 @@ class TestWebAgent:
 
     @pytest.mark.anyio
     async def test_get_channels_and_topics(self, client):
-        from src.models import Channel
+        from tg_agent.models import Channel
 
         db = client._transport.app.state.db
         pool = client._transport.app.state.pool
@@ -3674,7 +3674,7 @@ class TestWebAgent:
     async def test_inject_context_success(self, client):
         from datetime import datetime
 
-        from src.models import Channel, Message
+        from tg_agent.models import Channel, Message
 
         db = client._transport.app.state.db
         thread_id = await db.create_agent_thread("Context")
@@ -3848,7 +3848,7 @@ async def test_test_notification_no_queries(client, monkeypatch):
 @pytest.mark.anyio
 async def test_test_notification_no_messages(client, monkeypatch):
     """Active query exists but web still only queues notification command."""
-    from src.models import SearchQuery
+    from tg_agent.models import SearchQuery
 
     db = client._transport.app.state.db
 
@@ -3867,7 +3867,7 @@ async def test_test_notification_with_public_channel_message(client, monkeypatch
     """Message preview generation moved to worker; web only queues command."""
     from datetime import datetime, timezone
 
-    from src.models import Channel, Message, SearchQuery
+    from tg_agent.models import Channel, Message, SearchQuery
 
     db = client._transport.app.state.db
 
@@ -3895,7 +3895,7 @@ async def test_test_notification_with_private_channel_message(client, monkeypatc
     """Private channel preview generation moved to worker; web only queues command."""
     from datetime import datetime, timezone
 
-    from src.models import Channel, Message, SearchQuery
+    from tg_agent.models import Channel, Message, SearchQuery
 
     db = client._transport.app.state.db
 
@@ -4213,7 +4213,7 @@ async def test_settings_clears_stale_flood_on_load(tmp_path, real_pool_harness_f
     """GET /settings clears flood_wait_until from DB when the timestamp is expired."""
     from datetime import timedelta
 
-    from src.web.settings import handlers as settings_handlers
+    from tg_agent.web.settings import handlers as settings_handlers
 
     config = make_test_config(tmp_path)
     harness = real_pool_harness_factory()

@@ -7,12 +7,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.database import Database
-from src.models import Account, Channel
+from tg_agent.database import Database
+from tg_agent.models import Account, Channel
 
 pytestmark = pytest.mark.aiosqlite_serial
 
-_FILTER_INIT_DB_TARGET = "src.cli.commands.filter.runtime.init_db"
+_FILTER_INIT_DB_TARGET = "tg_agent.cli.commands.filter.runtime.init_db"
 
 
 def _ns(**kwargs) -> argparse.Namespace:
@@ -23,7 +23,7 @@ def _ns(**kwargs) -> argparse.Namespace:
 
 def test_parse_pks():
     """Test _parse_pks parses comma-separated PKs."""
-    from src.cli.commands.filter import _parse_pks
+    from tg_agent.cli.commands.filter import _parse_pks
 
     assert _parse_pks("1,2,3") == [1, 2, 3]
     assert _parse_pks(" 1 , 2 , 3 ") == [1, 2, 3]
@@ -36,7 +36,7 @@ def test_print_result_empty():
     import sys
     from io import StringIO
 
-    from src.cli.commands.filter import _print_result
+    from tg_agent.cli.commands.filter import _print_result
 
     result = MagicMock()
     result.purged_count = 0
@@ -56,7 +56,7 @@ def test_print_result_empty():
 
 def test_print_result_with_purged(capsys):
     """Test _print_result with purged channels."""
-    from src.cli.commands.filter import _print_result
+    from tg_agent.cli.commands.filter import _print_result
 
     result = MagicMock()
     result.purged_count = 2
@@ -78,9 +78,9 @@ def test_filter_analyze(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.add_account(Account(phone="+100", session_string="sess")))
     asyncio.run(db.add_channel(Channel(channel_id=1001, title="Test Channel")))
     with cli_init_patch(db, _FILTER_INIT_DB_TARGET):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
-        with patch("src.cli.commands.filter.ChannelAnalyzer") as mock_analyzer:
+        with patch("tg_agent.cli.commands.filter.ChannelAnalyzer") as mock_analyzer:
             mock_instance = MagicMock()
             mock_report = MagicMock()
             mock_report.results = []
@@ -106,9 +106,9 @@ def test_analyze_quick_skips_cross_dupe(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.add_account(Account(phone="+100", session_string="sess")))
     asyncio.run(db.add_channel(Channel(channel_id=1001, title="Test Channel")))
     with cli_init_patch(db, _FILTER_INIT_DB_TARGET):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
-        with patch("src.cli.commands.filter.ChannelAnalyzer") as mock_analyzer:
+        with patch("tg_agent.cli.commands.filter.ChannelAnalyzer") as mock_analyzer:
             mock_instance = MagicMock()
             mock_report = MagicMock()
             mock_report.results = []
@@ -131,9 +131,9 @@ def test_analyze_quick_sample_size_flows_through(tmp_path, cli_init_patch):
     asyncio.run(db.initialize())
     asyncio.run(db.add_account(Account(phone="+100", session_string="sess")))
     with cli_init_patch(db, _FILTER_INIT_DB_TARGET):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
-        with patch("src.cli.commands.filter.ChannelAnalyzer") as mock_analyzer:
+        with patch("tg_agent.cli.commands.filter.ChannelAnalyzer") as mock_analyzer:
             mock_instance = MagicMock()
             mock_report = MagicMock()
             mock_report.results = []
@@ -154,10 +154,10 @@ def test_analyze_prints_views_and_forward_columns(tmp_path, cli_init_patch, caps
     asyncio.run(db.initialize())
     asyncio.run(db.add_account(Account(phone="+100", session_string="sess")))
     with cli_init_patch(db, _FILTER_INIT_DB_TARGET):
-        from src.cli.commands.filter import run
-        from src.filters.models import ChannelFilterResult
+        from tg_agent.cli.commands.filter import run
+        from tg_agent.filters.models import ChannelFilterResult
 
-        with patch("src.cli.commands.filter.ChannelAnalyzer") as mock_analyzer:
+        with patch("tg_agent.cli.commands.filter.ChannelAnalyzer") as mock_analyzer:
             mock_instance = MagicMock()
             mock_report = MagicMock()
             mock_report.results = [
@@ -189,14 +189,14 @@ def test_filter_analyze_parser_accepts_quick_flag():
     """CLI exposes --quick on `filter analyze` (#774)."""
     from typer.testing import CliRunner
 
-    from src.cli.typer_app import app
+    from tg_agent.cli.typer_app import app
 
     runner = CliRunner()
 
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.filter_cmd.analyze_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.filter_cmd.analyze_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["filter", "analyze", "--quick"])
     assert result.exit_code == 0
@@ -204,8 +204,8 @@ def test_filter_analyze_parser_accepts_quick_flag():
 
     mock_impl_default = MagicMock()
     with (
-        patch("src.cli.typer_commands.filter_cmd.analyze_impl", mock_impl_default),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.filter_cmd.analyze_impl", mock_impl_default),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result_default = runner.invoke(app, ["filter", "analyze"])
     assert result_default.exit_code == 0
@@ -216,14 +216,14 @@ def test_filter_analyze_parser_accepts_sample_size():
     """CLI exposes --sample-size on `filter analyze` (#1138, default 300)."""
     from typer.testing import CliRunner
 
-    from src.cli.typer_app import app
+    from tg_agent.cli.typer_app import app
 
     runner = CliRunner()
 
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.filter_cmd.analyze_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.filter_cmd.analyze_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["filter", "analyze", "--quick", "--sample-size", "100"])
     assert result.exit_code == 0
@@ -231,8 +231,8 @@ def test_filter_analyze_parser_accepts_sample_size():
 
     mock_impl_default = MagicMock()
     with (
-        patch("src.cli.typer_commands.filter_cmd.analyze_impl", mock_impl_default),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.filter_cmd.analyze_impl", mock_impl_default),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result_default = runner.invoke(app, ["filter", "analyze"])
     assert result_default.exit_code == 0
@@ -245,9 +245,9 @@ def test_filter_apply(tmp_path, cli_init_patch, capsys):
     db = Database(db_path, session_encryption_secret="test-session-encryption-key")
     asyncio.run(db.initialize())
     with cli_init_patch(db, _FILTER_INIT_DB_TARGET):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
-        with patch("src.cli.commands.filter.ChannelAnalyzer") as mock_analyzer:
+        with patch("tg_agent.cli.commands.filter.ChannelAnalyzer") as mock_analyzer:
             mock_instance = MagicMock()
             mock_report = MagicMock()
             mock_instance.analyze_all = AsyncMock(return_value=mock_report)
@@ -266,9 +266,9 @@ def test_filter_precheck(tmp_path, cli_init_patch, capsys):
     db = Database(db_path, session_encryption_secret="test-session-encryption-key")
     asyncio.run(db.initialize())
     with cli_init_patch(db, _FILTER_INIT_DB_TARGET):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
-        with patch("src.cli.commands.filter.ChannelAnalyzer") as mock_analyzer:
+        with patch("tg_agent.cli.commands.filter.ChannelAnalyzer") as mock_analyzer:
             mock_instance = MagicMock()
             mock_instance.precheck_subscriber_ratio = AsyncMock(return_value=3)
             mock_analyzer.return_value = mock_instance
@@ -285,9 +285,9 @@ def test_filter_reset(tmp_path, cli_init_patch, capsys):
     db = Database(db_path, session_encryption_secret="test-session-encryption-key")
     asyncio.run(db.initialize())
     with cli_init_patch(db, _FILTER_INIT_DB_TARGET):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
-        with patch("src.cli.commands.filter.ChannelAnalyzer") as mock_analyzer:
+        with patch("tg_agent.cli.commands.filter.ChannelAnalyzer") as mock_analyzer:
             mock_instance = MagicMock()
             mock_instance.reset_filters = AsyncMock()
             mock_analyzer.return_value = mock_instance
@@ -304,9 +304,9 @@ def test_filter_purge_all(tmp_path, cli_init_patch, capsys):
     db = Database(db_path, session_encryption_secret="test-session-encryption-key")
     asyncio.run(db.initialize())
     with cli_init_patch(db, _FILTER_INIT_DB_TARGET):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
-        with patch("src.cli.commands.filter._build_deletion_service") as mock_build:
+        with patch("tg_agent.cli.commands.filter._build_deletion_service") as mock_build:
             mock_svc = MagicMock()
             mock_result = MagicMock()
             mock_result.purged_count = 2
@@ -327,9 +327,9 @@ def test_filter_purge_by_pks(tmp_path, cli_init_patch, capsys):
     db = Database(db_path, session_encryption_secret="test-session-encryption-key")
     asyncio.run(db.initialize())
     with cli_init_patch(db, _FILTER_INIT_DB_TARGET):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
-        with patch("src.cli.commands.filter._build_deletion_service") as mock_build:
+        with patch("tg_agent.cli.commands.filter._build_deletion_service") as mock_build:
             mock_svc = MagicMock()
             mock_result = MagicMock()
             mock_result.purged_count = 1
@@ -350,7 +350,7 @@ def test_filter_purge_invalid_pks(tmp_path, cli_init_patch, capsys):
     db = Database(db_path, session_encryption_secret="test-session-encryption-key")
     asyncio.run(db.initialize())
     with cli_init_patch(db, _FILTER_INIT_DB_TARGET):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         run(_ns(filter_action="purge", pks="abc,def"))
 
@@ -364,7 +364,7 @@ def test_filter_hard_delete_requires_dev_mode(tmp_path, cli_init_patch, capsys):
     db = Database(db_path, session_encryption_secret="test-session-encryption-key")
     asyncio.run(db.initialize())
     with cli_init_patch(db, _FILTER_INIT_DB_TARGET):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
         run(_ns(filter_action="hard-delete", pks=None, yes=False))
 
@@ -374,7 +374,7 @@ def test_filter_hard_delete_requires_dev_mode(tmp_path, cli_init_patch, capsys):
 
 def test_filter_no_action(cli_init_patch, capsys):
     """Test filter without action."""
-    from src.cli.commands.filter import run
+    from tg_agent.cli.commands.filter import run
 
     db = MagicMock()
     db.close = AsyncMock()
@@ -419,7 +419,7 @@ def test_filter_toggle_flips_flag(tmp_path, cli_init_patch, capsys):
         )
 
         with cli_init_patch(seed, _FILTER_INIT_DB_TARGET, fresh_database=True):
-            from src.cli.commands.filter import run
+            from tg_agent.cli.commands.filter import run
 
             run(_ns(filter_action="toggle", pk=pk))
 
@@ -428,7 +428,7 @@ def test_filter_toggle_flips_flag(tmp_path, cli_init_patch, capsys):
         assert "marked as filtered" in out
 
         with cli_init_patch(seed, _FILTER_INIT_DB_TARGET, fresh_database=True):
-            from src.cli.commands.filter import run
+            from tg_agent.cli.commands.filter import run
 
             run(_ns(filter_action="toggle", pk=pk))
 
@@ -446,7 +446,7 @@ def test_filter_toggle_not_found(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.initialize())
     try:
         with cli_init_patch(db, _FILTER_INIT_DB_TARGET, fresh_database=True):
-            from src.cli.commands.filter import run
+            from tg_agent.cli.commands.filter import run
 
             run(_ns(filter_action="toggle", pk=999))
 
@@ -480,9 +480,9 @@ def _run_hard_delete_with_prompt(tmp_path, cli_init_patch, db_name, typed):
 
     captured = {}
     with cli_init_patch(seed, _FILTER_INIT_DB_TARGET):
-        from src.cli.commands.filter import run
+        from tg_agent.cli.commands.filter import run
 
-        with patch("src.cli.commands.filter._build_deletion_service") as mock_build, patch(
+        with patch("tg_agent.cli.commands.filter._build_deletion_service") as mock_build, patch(
             "builtins.input", return_value=typed
         ):
             mock_svc = MagicMock()

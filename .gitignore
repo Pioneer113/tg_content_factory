@@ -82,5 +82,5 @@ docs/superpowers/
 .ao-scratchpad/
 .venv-migration/
 
-# mutmut sandbox (generated copy of src/tests/scripts; see [tool.mutmut] in pyproject.toml)
+# mutmut sandbox (generated copy of tg_agent/tests/scripts; see [tool.mutmut] in pyproject.toml)
 mutants/

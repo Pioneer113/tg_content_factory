@@ -4,8 +4,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.cli.commands.analytics import run
 from tests.helpers import cli_ns, fake_asyncio_run, make_cli_config, make_cli_db
+from tg_agent.cli.commands.analytics import run
 
 
 def _args(**overrides):
@@ -17,7 +17,7 @@ def _args(**overrides):
 def _init_patches(db, config=None):
     config = config or make_cli_config()
     return (
-        patch("src.cli.commands.analytics.runtime.init_db", AsyncMock(return_value=(config, db))),
+        patch("tg_agent.cli.commands.analytics.runtime.init_db", AsyncMock(return_value=(config, db))),
         patch("asyncio.run", fake_asyncio_run),
     )
 
@@ -98,7 +98,7 @@ def test_summary(capsys):
         "total_pending": 10, "total_rejected": 10, "pipelines_count": 5,
     })
     with _init_patches(db)[0], _init_patches(db)[1], \
-         patch("src.services.content_analytics_service.ContentAnalyticsService", return_value=mock_svc):
+         patch("tg_agent.services.content_analytics_service.ContentAnalyticsService", return_value=mock_svc):
         run(_args(analytics_action="summary"))
     out = capsys.readouterr().out
     assert "100" in out
@@ -115,7 +115,7 @@ def test_pipeline_stats_empty(capsys):
     mock_svc = MagicMock()
     mock_svc.get_pipeline_stats = AsyncMock(return_value=[])
     with _init_patches(db)[0], _init_patches(db)[1], \
-         patch("src.services.content_analytics_service.ContentAnalyticsService", return_value=mock_svc):
+         patch("tg_agent.services.content_analytics_service.ContentAnalyticsService", return_value=mock_svc):
         run(_args(analytics_action="pipeline-stats", pipeline_id=None))
     assert "No pipeline stats" in capsys.readouterr().out
 
@@ -127,7 +127,7 @@ def test_pipeline_stats_with_data(capsys):
     mock_svc = MagicMock()
     mock_svc.get_pipeline_stats = AsyncMock(return_value=[s])
     with _init_patches(db)[0], _init_patches(db)[1], \
-         patch("src.services.content_analytics_service.ContentAnalyticsService", return_value=mock_svc):
+         patch("tg_agent.services.content_analytics_service.ContentAnalyticsService", return_value=mock_svc):
         run(_args(analytics_action="pipeline-stats", pipeline_id=None))
     assert "TestPipe" in capsys.readouterr().out
 
@@ -142,20 +142,20 @@ def test_daily_empty(capsys):
     mock_svc = MagicMock()
     mock_svc.get_daily_stats = AsyncMock(return_value=[])
     with _init_patches(db)[0], _init_patches(db)[1], \
-         patch("src.services.content_analytics_service.ContentAnalyticsService", return_value=mock_svc):
+         patch("tg_agent.services.content_analytics_service.ContentAnalyticsService", return_value=mock_svc):
         run(_args(analytics_action="daily", days=30, pipeline_id=None))
     assert "No data" in capsys.readouterr().out
 
 
 def test_daily_with_data(capsys):
-    from src.services.content_analytics_service import DailyStats
+    from tg_agent.services.content_analytics_service import DailyStats
 
     db = make_cli_db()
     rows = [DailyStats(date="2024-01-01", generations=5, publications=3, rejections=0)]
     mock_svc = MagicMock()
     mock_svc.get_daily_stats = AsyncMock(return_value=rows)
     with _init_patches(db)[0], _init_patches(db)[1], \
-         patch("src.services.content_analytics_service.ContentAnalyticsService", return_value=mock_svc):
+         patch("tg_agent.services.content_analytics_service.ContentAnalyticsService", return_value=mock_svc):
         run(_args(analytics_action="daily", days=30, pipeline_id=None))
     assert "2024-01-01" in capsys.readouterr().out
 
@@ -170,7 +170,7 @@ def test_trending_topics_empty(capsys):
     mock_svc = MagicMock()
     mock_svc.get_trending_topics = AsyncMock(return_value=[])
     with _init_patches(db)[0], _init_patches(db)[1], \
-         patch("src.services.trend_service.TrendService", return_value=mock_svc):
+         patch("tg_agent.services.trend_service.TrendService", return_value=mock_svc):
         run(_args(analytics_action="trending-topics", days=7, limit=20))
     assert "No trending" in capsys.readouterr().out
 
@@ -181,7 +181,7 @@ def test_trending_topics_with_data(capsys):
     mock_svc = MagicMock()
     mock_svc.get_trending_topics = AsyncMock(return_value=[t])
     with _init_patches(db)[0], _init_patches(db)[1], \
-         patch("src.services.trend_service.TrendService", return_value=mock_svc):
+         patch("tg_agent.services.trend_service.TrendService", return_value=mock_svc):
         run(_args(analytics_action="trending-topics", days=7, limit=20))
     assert "python" in capsys.readouterr().out
 
@@ -197,7 +197,7 @@ def test_trending_channels_with_data(capsys):
     mock_svc = MagicMock()
     mock_svc.get_trending_channels = AsyncMock(return_value=[ch])
     with _init_patches(db)[0], _init_patches(db)[1], \
-         patch("src.services.trend_service.TrendService", return_value=mock_svc):
+         patch("tg_agent.services.trend_service.TrendService", return_value=mock_svc):
         run(_args(analytics_action="trending-channels", days=7, limit=20))
     assert "NewsCh" in capsys.readouterr().out
 
@@ -213,7 +213,7 @@ def test_velocity_with_data(capsys):
     mock_svc = MagicMock()
     mock_svc.get_message_velocity = AsyncMock(return_value=[v])
     with _init_patches(db)[0], _init_patches(db)[1], \
-         patch("src.services.trend_service.TrendService", return_value=mock_svc):
+         patch("tg_agent.services.trend_service.TrendService", return_value=mock_svc):
         run(_args(analytics_action="velocity", days=30))
     assert "2024-01-01" in capsys.readouterr().out
 
@@ -223,7 +223,7 @@ def test_velocity_empty(capsys):
     mock_svc = MagicMock()
     mock_svc.get_message_velocity = AsyncMock(return_value=[])
     with _init_patches(db)[0], _init_patches(db)[1], \
-         patch("src.services.trend_service.TrendService", return_value=mock_svc):
+         patch("tg_agent.services.trend_service.TrendService", return_value=mock_svc):
         run(_args(analytics_action="velocity", days=30))
     assert "No velocity" in capsys.readouterr().out
 
@@ -239,7 +239,7 @@ def test_peak_hours_with_data(capsys):
     mock_svc = MagicMock()
     mock_svc.get_peak_hours = AsyncMock(return_value=[h])
     with _init_patches(db)[0], _init_patches(db)[1], \
-         patch("src.services.trend_service.TrendService", return_value=mock_svc):
+         patch("tg_agent.services.trend_service.TrendService", return_value=mock_svc):
         run(_args(analytics_action="peak-hours"))
     out = capsys.readouterr().out
     assert "14:00" in out
@@ -250,7 +250,7 @@ def test_peak_hours_empty(capsys):
     mock_svc = MagicMock()
     mock_svc.get_peak_hours = AsyncMock(return_value=[])
     with _init_patches(db)[0], _init_patches(db)[1], \
-         patch("src.services.trend_service.TrendService", return_value=mock_svc):
+         patch("tg_agent.services.trend_service.TrendService", return_value=mock_svc):
         run(_args(analytics_action="peak-hours"))
     assert "No peak" in capsys.readouterr().out
 
@@ -265,7 +265,7 @@ def test_calendar_empty(capsys):
     mock_svc = MagicMock()
     mock_svc.get_upcoming = AsyncMock(return_value=[])
     with _init_patches(db)[0], _init_patches(db)[1], \
-         patch("src.services.content_calendar_service.ContentCalendarService", return_value=mock_svc):
+         patch("tg_agent.services.content_calendar_service.ContentCalendarService", return_value=mock_svc):
         run(_args(analytics_action="calendar", limit=20, pipeline_id=None))
     assert "No upcoming" in capsys.readouterr().out
 
@@ -277,7 +277,7 @@ def test_calendar_with_data(capsys):
     mock_svc = MagicMock()
     mock_svc.get_upcoming = AsyncMock(return_value=[e])
     with _init_patches(db)[0], _init_patches(db)[1], \
-         patch("src.services.content_calendar_service.ContentCalendarService", return_value=mock_svc):
+         patch("tg_agent.services.content_calendar_service.ContentCalendarService", return_value=mock_svc):
         run(_args(analytics_action="calendar", limit=20, pipeline_id=None))
     out = capsys.readouterr().out
     assert "Pipe" in out
@@ -291,7 +291,7 @@ def test_calendar_with_data(capsys):
 def test_trending_emojis_no_reactions(capsys):
     db = make_cli_db()
     init_db_patch, run_patch = _init_patches(db)
-    with init_db_patch, run_patch, patch("src.services.trend_service.TrendService") as mock_svc:
+    with init_db_patch, run_patch, patch("tg_agent.services.trend_service.TrendService") as mock_svc:
         mock_svc.return_value.get_trending_emojis = AsyncMock(return_value=[])
         run(_args(analytics_action="trending-emojis", days=7, limit=20))
     assert "No emoji reactions" in capsys.readouterr().out
@@ -302,7 +302,7 @@ def test_trending_emojis_with_reaction_emojis(capsys):
     db = make_cli_db()
     rows = [SimpleNamespace(emoji="🎉", count=2), SimpleNamespace(emoji="🌍", count=1)]
     init_db_patch, run_patch = _init_patches(db)
-    with init_db_patch, run_patch, patch("src.services.trend_service.TrendService") as mock_svc:
+    with init_db_patch, run_patch, patch("tg_agent.services.trend_service.TrendService") as mock_svc:
         mock_svc.return_value.get_trending_emojis = AsyncMock(return_value=rows)
         run(_args(analytics_action="trending-emojis", days=7, limit=20))
     out = capsys.readouterr().out
@@ -321,7 +321,7 @@ def test_channel_not_found(capsys):
     mock_svc = MagicMock()
     mock_svc.get_channel_overview = AsyncMock(return_value=ov)
     with _init_patches(db)[0], _init_patches(db)[1], \
-         patch("src.services.channel_analytics_service.ChannelAnalyticsService", return_value=mock_svc):
+         patch("tg_agent.services.channel_analytics_service.ChannelAnalyticsService", return_value=mock_svc):
         run(_args(analytics_action="channel", channel_id=999, days=30))
     assert "not found" in capsys.readouterr().out
 
@@ -342,7 +342,7 @@ def test_channel_found(capsys):
     mock_svc.get_cross_channel_citations = AsyncMock(return_value=[])
     mock_svc.get_heatmap = AsyncMock(return_value=[])
     with _init_patches(db)[0], _init_patches(db)[1], \
-         patch("src.services.channel_analytics_service.ChannelAnalyticsService", return_value=mock_svc):
+         patch("tg_agent.services.channel_analytics_service.ChannelAnalyticsService", return_value=mock_svc):
         run(_args(analytics_action="channel", channel_id=100, days=30))
     out = capsys.readouterr().out
     assert "TestCh" in out
@@ -359,13 +359,13 @@ def test_channel_rating_empty(capsys):
     mock_svc = MagicMock()
     mock_svc.list_ratings = AsyncMock(return_value=[])
     with _init_patches(db)[0], _init_patches(db)[1], \
-         patch("src.services.channel_analysis_service.ChannelAnalysisService", return_value=mock_svc):
+         patch("tg_agent.services.channel_analysis_service.ChannelAnalysisService", return_value=mock_svc):
         run(_args(analytics_action="channel-rating", useful=None, genre=None, limit=50))
     assert "No channel ratings" in capsys.readouterr().out
 
 
 def test_channel_rating_with_data(capsys):
-    from src.models import ChannelRating
+    from tg_agent.models import ChannelRating
 
     db = make_cli_db()
     rating = ChannelRating(
@@ -375,7 +375,7 @@ def test_channel_rating_with_data(capsys):
     mock_svc = MagicMock()
     mock_svc.list_ratings = AsyncMock(return_value=[rating])
     with _init_patches(db)[0], _init_patches(db)[1], \
-         patch("src.services.channel_analysis_service.ChannelAnalysisService", return_value=mock_svc):
+         patch("tg_agent.services.channel_analysis_service.ChannelAnalysisService", return_value=mock_svc):
         run(_args(analytics_action="channel-rating", useful="useful", genre=None, limit=50))
     out = capsys.readouterr().out
     assert "NewsCh" in out
@@ -423,8 +423,8 @@ def _make_analysis_svc(*, rating=None, posts=("post",), classify_error=None):
 
 def _run_rate(db, provider_svc, analysis_svc, **arg_overrides):
     with _init_patches(db)[0], _init_patches(db)[1], \
-         patch("src.services.provider_service.RuntimeProviderRegistry", return_value=provider_svc), \
-         patch("src.services.channel_analysis_service.ChannelAnalysisService", return_value=analysis_svc):
+         patch("tg_agent.services.provider_service.RuntimeProviderRegistry", return_value=provider_svc), \
+         patch("tg_agent.services.channel_analysis_service.ChannelAnalysisService", return_value=analysis_svc):
         run(_rate_args(**arg_overrides))
 
 
@@ -480,7 +480,7 @@ def test_channel_rate_provider_failure_exits_nonzero(capsys):
 
 
 def test_channel_rate_runs_judge(capsys):
-    from src.models import ChannelRating
+    from tg_agent.models import ChannelRating
 
     db = make_cli_db()
     provider_callable = AsyncMock(return_value="{}")
@@ -507,7 +507,7 @@ def test_channel_rate_runs_judge(capsys):
 
 def test_channel_rate_sample_size_clamped():
     """--sample-size is clamped to [1, 200]."""
-    from src.models import ChannelRating
+    from tg_agent.models import ChannelRating
 
     rating = ChannelRating(channel_id=100, useful="useful", genre="original")
 

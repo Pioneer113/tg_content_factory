@@ -33,7 +33,7 @@ dependencies = [
     "python-socks[asyncio]>=2.0",
     # Live dialog history reads (`dialogs read` / GET /dialogs/history, #1234
     # follow-up) reuse tg_messenger's StandaloneTelegramClient.history() for its
-    # model mapping and flood-wait retry — see src/telegram/dm_history.py for why
+    # model mapping and flood-wait retry — see tg_agent/telegram/dm_history.py for why
     # it never opens a second connection. Note its per-instance history TTL cache
     # does NOT apply here: we build a throwaway client per call, so every read
     # hits Telegram. Caching happens one level up, in runtime_snapshots.
@@ -50,7 +50,7 @@ dependencies = [
     "python-multipart>=0.0.29",
     # CLI framework (epic #959, argparse→Typer migration). Typer was already in
     # the tree transitively; pinning it directly makes the dependency explicit
-    # for the Wave-0 scaffold (src/cli/typer_app.py). 0.12 is the first release
+    # for the Wave-0 scaffold (tg_agent/cli/typer_app.py). 0.12 is the first release
     # with the modern click 8.x API the scaffold relies on.
     "typer>=0.12.0",
     "cryptography>=48.0.0",
@@ -126,7 +126,7 @@ dev = [
     "interrogate>=1.7.0",
     # Security scans wired into CI static-checks (issue #1053), advisory for now:
     # pip-audit scans installed deps for known CVEs, bandit flags security
-    # anti-patterns in src/. Dependabot (.github/dependabot.yml) opens the fix
+    # anti-patterns in tg_agent/. Dependabot (.github/dependabot.yml) opens the fix
     # PRs that pip-audit findings point at.
     "pip-audit>=2.7.3",
     "bandit>=1.8.0",
@@ -136,7 +136,7 @@ dev = [
     # browser binaries are installed separately with
     # `playwright install --with-deps chromium`; pytest-playwright pulls in the
     # `playwright` package and the e2e fixtures. The smoke test is gated behind
-    # RUN_E2E_CONSOLE_SMOKE=1, runs locally against a `python -m src.main serve`
+    # RUN_E2E_CONSOLE_SMOKE=1, runs locally against a `python -m tg_agent.main serve`
     # panel, and never runs in the default suite or in CI.
     "playwright>=1.59.0",
     "pytest-playwright>=0.8.0",
@@ -155,17 +155,17 @@ Repository = "https://github.com/axisrow/tg_content_factory"
 Issues = "https://github.com/axisrow/tg_content_factory/issues"
 
 [project.scripts]
-tg-agent = "src.main:main"
+tg-agent = "tg_agent.main:main"
 
 [tool.setuptools]
 include-package-data = true
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["src*"]
+include = ["tg_agent*"]
 
 [tool.setuptools.package-data]
-src = [
+tg_agent = [
     "web/templates/*.html",
     "web/static/*.css",
     "web/static/*.js",
@@ -238,20 +238,20 @@ markers = [
     "mutmut_skip: excluded from mutation runs (repo-contract AST/surface scans, out-of-process spawns, network-flaky); filtered by [tool.mutmut] pytest_add_cli_args `-m 'not mutmut_skip'`",
 ]
 
-# Static security analysis config for `bandit -c pyproject.toml -r src` (#1053).
+# Static security analysis config for `bandit -c pyproject.toml -r tg_agent` (#1053).
 # The CI step (static-checks) runs it advisory (continue-on-error) for now; this
-# scopes the scan to src/ and skips the test tree. Findings are triaged into a
+# scopes the scan to tg_agent/ and skips the test tree. Findings are triaged into a
 # skip-list / `# nosec` here before the step is ever made blocking.
 [tool.bandit]
 exclude_dirs = ["tests"]
 
 # Dead-code scan whitelist (vulture, #1136). vulture auto-reads this section,
-# so it applies both to `python -m vulture src/` and to scripts/code_health.py.
+# so it applies both to `python -m vulture tg_agent/` and to scripts/code_health.py.
 # Every name here is a VERIFIED false-positive — do not delete the code it
 # refers to; each entry must say why it is intentionally "unused".
 [tool.vulture]
 ignore_names = [
-    # src/utils/json.py safe_json_dumps(ensure_ascii=...): intentional
+    # tg_agent/utils/json.py safe_json_dumps(ensure_ascii=...): intentional
     # call-site-compatibility parameter after the orjson migration (#956) —
     # orjson is always UTF-8, the flag is accepted so existing
     # `safe_json_dumps(obj, ensure_ascii=True)` calls don't break, but has
@@ -265,7 +265,7 @@ ignore_names = [
 # as coverage climbs. interrogate ignores things that don't need a docstring
 # (magic/init/nested/private, overloads).
 # Ratchet history: 23 (#1072 floor) → 35 (#1134: documented the public-API
-# facade — src/models.py Pydantic models, db.repos bundles, repository CRUD —
+# facade — tg_agent/models.py Pydantic models, db.repos bundles, repository CRUD —
 # lifting coverage 27% → 40.6%; floor set to 35 to lock in the win with a
 # margin below the measured 40.6% so a stray docstring loss doesn't trip the
 # gate). Doc-coverage is NOT a CI gate (#1097) — stays a local script.
@@ -283,20 +283,21 @@ exclude = ["tests", "scripts", "build", "dist", "site", "mutants"]
 verbose = 1
 
 # Mutation testing (mutmut 3.8). Root-caused 07.10.26: stock mutmut is
-# incompatible with this repo's FLAT layout (import package literally named
-# `src`) — it strips a `src.` prefix from module names (breaking the trampoline
-# routing and stats keys) and asserts against `src.`-prefixed trampoline hits.
-# Fixed upstream-locally by the strip_src_prefix knob
-# (boxed/mutmut PR, branch fix/strip-src-prefix-knob; installed editable from
-# the local checkout of the fork until it lands on PyPI). The sandbox ships
-# everything tests read outside src/tests, both at collection time (root
+# incompatible with a FLAT layout whose import package is literally named
+# `src` (as this repo's was before the #1448 rename to tg_agent) — it strips a
+# `src.` prefix from module names (breaking the trampoline routing and stats
+# keys) and asserts against `src.`-prefixed trampoline hits. With the rename
+# stock mutmut works again; the strip_src_prefix knob stays until the upstream
+# PR (boxed/mutmut, branch fix/strip-src-prefix-knob) lands on PyPI — the fork
+# is installed editable from its local checkout. The sandbox ships
+# everything tests read outside tg_agent/tests, both at collection time (root
 # conftest.py, scripts/) and at run time (.github/workflows/ci.yml,
 # docs/reference/*, adk/). data/ is deliberately NOT copied — it holds the
 # live DB; sandbox tests run on tmp/in-memory databases. mutmut never prunes
-# a stale sandbox (deleted src files keep their old copies) — `rm -rf mutants`
+# a stale sandbox (deleted files keep their old copies) — `rm -rf mutants`
 # before a rerun.
 [tool.mutmut]
-source_paths = ["src"]
+source_paths = ["tg_agent"]
 also_copy = [
     "conftest.py",
     "scripts",

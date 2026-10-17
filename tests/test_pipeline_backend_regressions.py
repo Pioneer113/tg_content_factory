@@ -9,8 +9,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.database import Database
-from src.models import (
+from tests.test_publish_service import FakeClientPool
+from tg_agent.database import Database
+from tg_agent.models import (
     Channel,
     ContentPipeline,
     Message,
@@ -20,16 +21,15 @@ from src.models import (
     PipelineNodeType,
     PipelineTarget,
 )
-from src.search.engine import SearchEngine
-from src.services.content_generation_service import ContentGenerationService
-from src.services.pipeline_nodes.base import NodeContext
-from src.services.pipeline_nodes.handlers import DeleteMessageHandler, FilterHandler, ForwardHandler
-from src.services.pipeline_templates_builtin import get_builtin_templates
-from src.services.provider_service import RuntimeProviderRegistry
-from src.services.publish_service import PublishService
-from src.services.task_enqueuer import TaskEnqueuer
-from src.services.telegram_actions import TelegramActionService
-from tests.test_publish_service import FakeClientPool
+from tg_agent.search.engine import SearchEngine
+from tg_agent.services.content_generation_service import ContentGenerationService
+from tg_agent.services.pipeline_nodes.base import NodeContext
+from tg_agent.services.pipeline_nodes.handlers import DeleteMessageHandler, FilterHandler, ForwardHandler
+from tg_agent.services.pipeline_templates_builtin import get_builtin_templates
+from tg_agent.services.provider_service import RuntimeProviderRegistry
+from tg_agent.services.publish_service import PublishService
+from tg_agent.services.task_enqueuer import TaskEnqueuer
+from tg_agent.services.telegram_actions import TelegramActionService
 
 pytestmark = [pytest.mark.anyio, pytest.mark.aiosqlite_serial]
 
@@ -74,7 +74,7 @@ async def test_generation_dry_run_does_not_delete_or_generate_images(db, source_
         db, ContentPipeline(name="Dry-run safety", account_phone="+111", pipeline_json=graph), sources=[100]
     )
     actions = AsyncMock(spec=TelegramActionService)
-    monkeypatch.setattr("src.services.pipeline_nodes.handlers.TelegramActionService", lambda pool: actions)
+    monkeypatch.setattr("tg_agent.services.pipeline_nodes.handlers.TelegramActionService", lambda pool: actions)
     images = SimpleNamespace(generate=AsyncMock(return_value="https://image.invalid/generated.png"))
     service = ContentGenerationService(
         db,
@@ -237,7 +237,7 @@ async def test_builtin_forward_template_forwards_stored_messages(db, source_mess
         db, ContentPipeline(name="Builtin forwarding", pipeline_json=graph), sources=[100]
     )
     actions = AsyncMock(spec=TelegramActionService)
-    monkeypatch.setattr("src.services.pipeline_nodes.handlers.TelegramActionService", lambda pool: actions)
+    monkeypatch.setattr("tg_agent.services.pipeline_nodes.handlers.TelegramActionService", lambda pool: actions)
     service = ContentGenerationService(
         db, SearchEngine(db), client_pool=object(), provider_service=RuntimeProviderRegistry(env={})
     )

@@ -2,9 +2,9 @@
 
 1. Spawn `serve --no-worker`, wait for PID + /health 200 (legacy panel still
    hosts HTTP).
-2. Spawn `python -m src.main restart`. It stops the serve and blocks as the
+2. Spawn `python -m tg_agent.main restart`. It stops the serve and blocks as the
    replacement daemon — the worker runtime WITHOUT a web panel: no /health,
-   no uvicorn, and its cmdline stays `src.main restart`.
+   no uvicorn, and its cmdline stays `tg_agent.main restart`.
 3. Verify the daemon is recognized as managed (pid file + cmdline), that
    /health is NOT brought back, and tear it down through a final `stop`.
 """
@@ -90,9 +90,9 @@ def test_proc_restart_runs_worker_without_web_panel(run_cli_popen, cli_real_cli_
     if read_pid_file(cli_real_cli_env.pid_path) != restart_proc.pid:
         pytest.fail("post-restart PID file is not owned by the restart subprocess")
     command = _process_command(restart_proc.pid)
-    if "src.main" not in command or "restart" not in command.split():
+    if "tg_agent.main" not in command or "restart" not in command.split():
         pytest.fail(
-            f"replacement daemon is not a `src.main restart` worker process: {command!r}"
+            f"replacement daemon is not a `tg_agent.main restart` worker process: {command!r}"
         )
     if wait_for_http_200(f"http://127.0.0.1:{port}/health", timeout=5.0):
         restart_proc.terminate()

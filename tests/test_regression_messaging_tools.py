@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.database import Database
+from tg_agent.database import Database
 
 
 def _downloads_dir() -> Path:
@@ -41,10 +41,10 @@ def _get_messaging_handlers(mock_db, client_pool=None):
     captured_tools = []
 
     with patch(
-        "src.agent.tools.create_sdk_mcp_server",
+        "tg_agent.agent.tools.create_sdk_mcp_server",
         side_effect=lambda **kw: captured_tools.extend(kw.get("tools", [])),
     ):
-        from src.agent.tools import make_mcp_server
+        from tg_agent.agent.tools import make_mcp_server
         make_mcp_server(mock_db, client_pool=client_pool)
 
     return {t.name: t.handler for t in captured_tools if hasattr(t, "handler")}
@@ -76,7 +76,7 @@ class TestMessagingTools:
         pool = MagicMock()
         pool.get_native_client_by_phone = AsyncMock()
 
-        from src.models import Account
+        from tg_agent.models import Account
         acc = Account(id=1, phone="+1111", session_string="s", is_active=True, is_primary=True)
         mock_db.get_accounts = AsyncMock(return_value=[acc])
         mock_db.repos.settings = MagicMock()
@@ -253,7 +253,7 @@ class TestMessagingToolErrors:
         pool = MagicMock()
         pool.get_native_client_by_phone = AsyncMock(return_value=None)
 
-        from src.models import Account
+        from tg_agent.models import Account
         acc = Account(id=1, phone="+1111", session_string="s", is_active=True, is_primary=True)
         mock_db.get_accounts = AsyncMock(return_value=[acc])
         mock_db.repos.settings = MagicMock()
@@ -599,7 +599,7 @@ class TestMessagingPhonePermGates:
         import json
         mock_db = MagicMock(spec=Database)
         mock_db.repos = MagicMock()
-        from src.models import Account
+        from tg_agent.models import Account
         mock_db.get_accounts = AsyncMock(return_value=[
             Account(id=1, phone="+1111", session_string="s", is_active=True, is_primary=True),
         ])
@@ -785,7 +785,7 @@ class TestMessagingPhonePermGates:
     # Additional missing field validations
     async def test_pin_missing_fields(self, msg_phone_err_setup):
         h, _, _ = msg_phone_err_setup
-        from src.models import Account
+        from tg_agent.models import Account
         h2, _, db2 = msg_phone_err_setup
         acc = Account(id=1, phone="+1111", session_string="s", is_active=True, is_primary=True)
         db2.get_accounts = AsyncMock(return_value=[acc])
@@ -794,7 +794,7 @@ class TestMessagingPhonePermGates:
 
     async def test_unpin_missing_chat(self, msg_phone_err_setup):
         h, _, db = msg_phone_err_setup
-        from src.models import Account
+        from tg_agent.models import Account
         acc = Account(id=1, phone="+1111", session_string="s", is_active=True, is_primary=True)
         db.get_accounts = AsyncMock(return_value=[acc])
         r = await h["unpin_message"]({"phone": "+1111", "chat_id": ""})
@@ -802,7 +802,7 @@ class TestMessagingPhonePermGates:
 
     async def test_delete_message_no_valid_ids(self, msg_phone_err_setup):
         h, _, db = msg_phone_err_setup
-        from src.models import Account
+        from tg_agent.models import Account
         acc = Account(id=1, phone="+1111", session_string="s", is_active=True, is_primary=True)
         db.get_accounts = AsyncMock(return_value=[acc])
         r = await h["delete_message"]({
@@ -812,7 +812,7 @@ class TestMessagingPhonePermGates:
 
     async def test_forward_messages_no_valid_ids(self, msg_phone_err_setup):
         h, _, db = msg_phone_err_setup
-        from src.models import Account
+        from tg_agent.models import Account
         acc = Account(id=1, phone="+1111", session_string="s", is_active=True, is_primary=True)
         db.get_accounts = AsyncMock(return_value=[acc])
         r = await h["forward_messages"]({
@@ -823,7 +823,7 @@ class TestMessagingPhonePermGates:
 
     async def test_edit_admin_missing_fields(self, msg_phone_err_setup):
         h, _, db = msg_phone_err_setup
-        from src.models import Account
+        from tg_agent.models import Account
         acc = Account(id=1, phone="+1111", session_string="s", is_active=True, is_primary=True)
         db.get_accounts = AsyncMock(return_value=[acc])
         r = await h["edit_admin"]({
@@ -833,7 +833,7 @@ class TestMessagingPhonePermGates:
 
     async def test_kick_missing_fields(self, msg_phone_err_setup):
         h, _, db = msg_phone_err_setup
-        from src.models import Account
+        from tg_agent.models import Account
         acc = Account(id=1, phone="+1111", session_string="s", is_active=True, is_primary=True)
         db.get_accounts = AsyncMock(return_value=[acc])
         r = await h["kick_participant"]({
@@ -843,7 +843,7 @@ class TestMessagingPhonePermGates:
 
     async def test_broadcast_stats_missing_chat(self, msg_phone_err_setup):
         h, _, db = msg_phone_err_setup
-        from src.models import Account
+        from tg_agent.models import Account
         acc = Account(id=1, phone="+1111", session_string="s", is_active=True, is_primary=True)
         db.get_accounts = AsyncMock(return_value=[acc])
         r = await h["get_broadcast_stats"]({"phone": "+1111", "chat_id": ""})
@@ -851,7 +851,7 @@ class TestMessagingPhonePermGates:
 
     async def test_archive_missing_chat(self, msg_phone_err_setup):
         h, _, db = msg_phone_err_setup
-        from src.models import Account
+        from tg_agent.models import Account
         acc = Account(id=1, phone="+1111", session_string="s", is_active=True, is_primary=True)
         db.get_accounts = AsyncMock(return_value=[acc])
         r = await h["archive_chat"]({"phone": "+1111", "chat_id": "", "confirm": True})
@@ -859,7 +859,7 @@ class TestMessagingPhonePermGates:
 
     async def test_mark_read_missing_chat(self, msg_phone_err_setup):
         h, _, db = msg_phone_err_setup
-        from src.models import Account
+        from tg_agent.models import Account
         acc = Account(id=1, phone="+1111", session_string="s", is_active=True, is_primary=True)
         db.get_accounts = AsyncMock(return_value=[acc])
         r = await h["mark_read"]({"phone": "+1111", "chat_id": ""})
@@ -867,7 +867,7 @@ class TestMessagingPhonePermGates:
 
     async def test_participants_missing_chat(self, msg_phone_err_setup):
         h, _, db = msg_phone_err_setup
-        from src.models import Account
+        from tg_agent.models import Account
         acc = Account(id=1, phone="+1111", session_string="s", is_active=True, is_primary=True)
         db.get_accounts = AsyncMock(return_value=[acc])
         r = await h["get_participants"]({"phone": "+1111", "chat_id": ""})
@@ -887,7 +887,7 @@ class TestMessagingFinalEdgeCases:
         mock_db = MagicMock(spec=Database)
         mock_db.repos = MagicMock()
         pool = MagicMock()
-        from src.models import Account
+        from tg_agent.models import Account
         acc = Account(id=1, phone="+1111", session_string="s", is_active=True, is_primary=True)
         mock_db.get_accounts = AsyncMock(return_value=[acc])
         mock_db.repos.settings = MagicMock()

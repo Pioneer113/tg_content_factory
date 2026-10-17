@@ -7,11 +7,11 @@ from unittest.mock import AsyncMock, MagicMock
 import aiosqlite
 import pytest
 
-from src.database import Database
-from src.database.bundles import ChannelBundle
-from src.models import Channel, Message
-from src.services.channel_service import ChannelService
-from src.services.filter_deletion_service import FilterDeletionService
+from tg_agent.database import Database
+from tg_agent.database.bundles import ChannelBundle
+from tg_agent.models import Channel, Message
+from tg_agent.services.channel_service import ChannelService
+from tg_agent.services.filter_deletion_service import FilterDeletionService
 
 
 @pytest.fixture

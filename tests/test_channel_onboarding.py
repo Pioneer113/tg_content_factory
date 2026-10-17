@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.models import Channel
-from src.services.channel_onboarding import get_existing_channel
+from tg_agent.models import Channel
+from tg_agent.services.channel_onboarding import get_existing_channel
 
 
 class SyncChannelStore:

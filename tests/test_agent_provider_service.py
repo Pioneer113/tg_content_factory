@@ -8,8 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.agent.manager import AgentManager
-from src.agent.provider_registry import (
+from tg_agent.agent.manager import AgentManager
+from tg_agent.agent.provider_registry import (
     ZAI_CODING_BASE_URL,
     ZAI_GENERAL_BASE_URL,
     ProviderRuntimeConfig,
@@ -18,8 +18,8 @@ from src.agent.provider_registry import (
     normalize_provider_plain_fields,
     provider_spec,
 )
-from src.config import AppConfig
-from src.services.agent_provider_service import (
+from tg_agent.config import AppConfig
+from tg_agent.services.agent_provider_service import (
     MODEL_CACHE_SETTINGS_KEY,
     PROVIDER_SETTINGS_KEY,
     ProviderConfigService,
@@ -106,7 +106,7 @@ async def test_save_provider_configs_preserves_encrypted_secret_after_decrypt_fa
     read_config = AppConfig()
     read_config.security.session_encryption_key = "different-secret"
     reader = ProviderConfigService(db, read_config)
-    with caplog.at_level(logging.DEBUG, logger="src.services.agent_provider_service"):
+    with caplog.at_level(logging.DEBUG, logger="tg_agent.services.agent_provider_service"):
         loaded = await reader.load_provider_configs()
     await reader.save_provider_configs(loaded)
 
@@ -889,7 +889,7 @@ async def test_fetch_live_models_http_error_fallback_to_static(db, monkeypatch):
 
     monkeypatch.setattr(service, "_fetch_json", _broken_fetch_json)
 
-    from src.agent.provider_registry import provider_spec
+    from tg_agent.agent.provider_registry import provider_spec
 
     spec = provider_spec("openai")
 
@@ -918,7 +918,7 @@ async def test_fetch_live_models_success_updates_cache(db, monkeypatch):
 
     monkeypatch.setattr(service, "_fetch_json", _fake_fetch_json)
 
-    from src.agent.provider_registry import provider_spec
+    from tg_agent.agent.provider_registry import provider_spec
 
     spec = provider_spec("openai")
     models = await service._fetch_live_models(spec, cfg)

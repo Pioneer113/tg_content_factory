@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from starlette.responses import Response
 
-from src.web.csrf import (
+from tg_agent.web.csrf import (
     OriginCSRFMiddleware,
     _forwarded_values,
     _is_same_origin,
@@ -379,7 +379,7 @@ async def test_csrf_post_no_origin_no_referer_no_cookie():
 @pytest.mark.anyio
 async def test_csrf_post_no_origin_with_session_cookie():
     """POST without Origin/Referer but with session cookie is rejected."""
-    from src.web.session import COOKIE_NAME
+    from tg_agent.web.session import COOKIE_NAME
 
     request = MagicMock()
     request.method = "POST"

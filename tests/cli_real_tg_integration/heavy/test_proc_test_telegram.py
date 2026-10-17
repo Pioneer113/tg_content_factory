@@ -1,4 +1,4 @@
-"""`python -m src.main test telegram` — live TG self-check on a temp DB copy.
+"""`python -m tg_agent.main test telegram` — live TG self-check on a temp DB copy.
 
 src/cli/commands/test.py copies the live DB into a tempfile before running
 telegram-side checks (_init_db_copy → tg_iter_messages → cleanup), so this

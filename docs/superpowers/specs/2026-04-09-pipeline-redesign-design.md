@@ -26,21 +26,21 @@
 
 **Changes:**
 
-1. **Icon unification** (`src/web/templates/_macros.html`)
+1. **Icon unification** (`tg_agent/web/templates/_macros.html`)
    - Replace all emoji icons with Bootstrap Icons equivalents
    - Map: `edit` → `bi-pencil`, `delete` → `bi-trash`, `toggle_on` → `bi-pause-circle`, `toggle_off` → `bi-play-circle`, `run` → `bi-play-fill`, `test` → `bi-lightning`, etc.
 
-2. **Pipeline list redesign** (`src/web/templates/pipelines.html`)
+2. **Pipeline list redesign** (`tg_agent/web/templates/pipelines.html`)
    - Replace desktop table + mobile cards with unified card grid
    - Each card: type icon (Bootstrap Icon), name, status badge, source/target summary, quick actions
    - Consistent status indicators: `bi-circle-fill` (green) for active, `bi-circle` (gray) for inactive
 
-3. **Wizard improvements** (`src/web/templates/pipelines/create.html`)
+3. **Wizard improvements** (`tg_agent/web/templates/pipelines/create.html`)
    - Clearer step indicators with Bootstrap Icons
    - Better mobile responsive layout
    - Template cards with type icons instead of emoji
 
-4. **Edit page** (`src/web/templates/pipelines/edit.html`)
+4. **Edit page** (`tg_agent/web/templates/pipelines/edit.html`)
    - Context-aware fields: show only relevant configuration for pipeline type
    - Consistent button styling with Bootstrap Icons
 
@@ -48,12 +48,12 @@
    - Replace `&#x1F3AF;`, `&#x25BA;`, etc. with `<i class="bi-*">` throughout pipeline templates
 
 **Files affected:**
-- `src/web/templates/_macros.html` — icon macro overhaul
-- `src/web/templates/pipelines.html` — list page
-- `src/web/templates/pipelines/create.html` — wizard
-- `src/web/templates/pipelines/edit.html` — editor
-- `src/web/templates/pipelines/generate.html` — generation page
-- `src/web/templates/pipelines/templates.html` — template selection
+- `tg_agent/web/templates/_macros.html` — icon macro overhaul
+- `tg_agent/web/templates/pipelines.html` — list page
+- `tg_agent/web/templates/pipelines/create.html` — wizard
+- `tg_agent/web/templates/pipelines/edit.html` — editor
+- `tg_agent/web/templates/pipelines/generate.html` — generation page
+- `tg_agent/web/templates/pipelines/templates.html` — template selection
 
 ### Priority 2: Simple Actions (no LLM)
 
@@ -75,9 +75,9 @@
 - No LLM provider required — hide LLM config fields
 
 **Files affected:**
-- `src/web/templates/pipelines/create.html` — template cards for simple actions
-- `src/web/templates/pipelines/templates.html` — template definitions
-- `src/services/pipeline_service.py` — template registration
+- `tg_agent/web/templates/pipelines/create.html` — template cards for simple actions
+- `tg_agent/web/templates/pipelines/templates.html` — template definitions
+- `tg_agent/services/pipeline_service.py` — template registration
 - Backend node handlers already exist
 
 ### Priority 3: LLM Actions
@@ -111,9 +111,9 @@
 - Configuration: agent backend, system prompt, tool permissions
 
 **Files affected:**
-- `src/services/pipeline_executor.py` — new node handler
-- `src/agent/` — agent loop integration
-- `src/database/schema.py` — agent node config fields
+- `tg_agent/services/pipeline_executor.py` — new node handler
+- `tg_agent/agent/` — agent loop integration
+- `tg_agent/database/schema.py` — agent node config fields
 
 ## Testing Strategy
 

@@ -22,9 +22,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pydantic.root_model  # noqa: F401
 import pytest
 
-from src.cli import worker_handoff
-from src.config import AppConfig
-from src.models import Channel, CollectionTaskStatus
+from tg_agent.cli import worker_handoff
+from tg_agent.config import AppConfig
+from tg_agent.models import Channel, CollectionTaskStatus
 
 pytestmark = pytest.mark.aiosqlite_serial
 
@@ -45,7 +45,7 @@ def _ensure_db_open(db):
 def channel_cli(cli_db, cli_init_patch):
     with cli_init_patch(
         cli_db,
-        "src.cli.commands.channel.runtime.init_db",
+        "tg_agent.cli.commands.channel.runtime.init_db",
         config=AppConfig(),
     ):
         yield cli_db
@@ -102,8 +102,8 @@ def test_serve_is_running_accepts_worker_daemon(monkeypatch):
     monkeypatch.setattr(fresh, "read_pid", lambda path: 4242)
     monkeypatch.setattr(fresh, "is_expected_server_process", lambda pid: True)
     monkeypatch.setattr(
-        "src.cli.process_control._process_command",
-        lambda pid: "/usr/bin/python -m src.main restart",
+        "tg_agent.cli.process_control._process_command",
+        lambda pid: "/usr/bin/python -m tg_agent.main restart",
     )
     assert fresh.serve_is_running(config) is True
 
@@ -115,8 +115,8 @@ def test_serve_is_running_accepts_serve_with_embedded_worker(monkeypatch):
     monkeypatch.setattr(fresh, "read_pid", lambda path: 4242)
     monkeypatch.setattr(fresh, "is_expected_server_process", lambda pid: True)
     monkeypatch.setattr(
-        "src.cli.process_control._process_command",
-        lambda pid: "/usr/bin/python -m src.main serve",
+        "tg_agent.cli.process_control._process_command",
+        lambda pid: "/usr/bin/python -m tg_agent.main serve",
     )
     assert fresh.serve_is_running(config) is True
 
@@ -129,8 +129,8 @@ def test_serve_is_running_rejects_serve_no_worker(monkeypatch):
     monkeypatch.setattr(fresh, "read_pid", lambda path: 4242)
     monkeypatch.setattr(fresh, "is_expected_server_process", lambda pid: True)
     monkeypatch.setattr(
-        "src.cli.process_control._process_command",
-        lambda pid: "/usr/bin/python -m src.main serve --no-worker",
+        "tg_agent.cli.process_control._process_command",
+        lambda pid: "/usr/bin/python -m tg_agent.main serve --no-worker",
     )
     assert fresh.serve_is_running(config) is False
 
@@ -146,10 +146,10 @@ def test_collect_hands_off_to_worker_when_serve_is_running(channel_cli, capsys):
 
     init_pool = AsyncMock()
     with (
-        patch("src.cli.commands.channel.worker_handoff.serve_is_running", return_value=True),
-        patch("src.cli.commands.channel.runtime.init_pool", init_pool),
+        patch("tg_agent.cli.commands.channel.worker_handoff.serve_is_running", return_value=True),
+        patch("tg_agent.cli.commands.channel.runtime.init_pool", init_pool),
     ):
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="collect", identifier=str(pk), full=False, direct=False, wait=False))
 
@@ -173,17 +173,17 @@ def test_collect_runs_directly_when_serve_is_not_running(channel_cli, capsys):
     pool.disconnect_all = AsyncMock()
 
     async def fake_init_pool(config, db_arg):
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         return TelegramAuth(0, ""), pool
 
     with (
-        patch("src.cli.commands.channel.worker_handoff.serve_is_running", return_value=False),
-        patch("src.cli.commands.channel.runtime.init_pool", side_effect=fake_init_pool),
-        patch("src.cli.commands.channel.Collector") as collector_cls,
+        patch("tg_agent.cli.commands.channel.worker_handoff.serve_is_running", return_value=False),
+        patch("tg_agent.cli.commands.channel.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.channel.Collector") as collector_cls,
     ):
         collector_cls.return_value.collect_single_channel = AsyncMock(return_value=7)
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="collect", identifier=str(pk), full=False, direct=False, wait=False))
 
@@ -205,17 +205,17 @@ def test_direct_flag_overrides_running_serve(channel_cli, capsys):
     pool.disconnect_all = AsyncMock()
 
     async def fake_init_pool(config, db_arg):
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         return TelegramAuth(0, ""), pool
 
     with (
-        patch("src.cli.commands.channel.worker_handoff.serve_is_running", return_value=True),
-        patch("src.cli.commands.channel.runtime.init_pool", side_effect=fake_init_pool),
-        patch("src.cli.commands.channel.Collector") as collector_cls,
+        patch("tg_agent.cli.commands.channel.worker_handoff.serve_is_running", return_value=True),
+        patch("tg_agent.cli.commands.channel.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.channel.Collector") as collector_cls,
     ):
         collector_cls.return_value.collect_single_channel = AsyncMock(return_value=3)
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="collect", identifier=str(pk), full=False, direct=True, wait=False))
 
@@ -232,10 +232,10 @@ def test_handoff_reports_already_active_task(channel_cli, capsys):
     pk = _add_channel(db, 5004, "Duplicate")
 
     with (
-        patch("src.cli.commands.channel.worker_handoff.serve_is_running", return_value=True),
-        patch("src.cli.commands.channel.runtime.init_pool", AsyncMock()),
+        patch("tg_agent.cli.commands.channel.worker_handoff.serve_is_running", return_value=True),
+        patch("tg_agent.cli.commands.channel.runtime.init_pool", AsyncMock()),
     ):
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         args = dict(channel_action="collect", identifier=str(pk), full=False, direct=False, wait=False)
         run(_ns(**args))
@@ -260,10 +260,10 @@ def test_worker_picks_up_a_cli_enqueued_task(channel_cli):
     pk = _add_channel(db, 5005, "PulledByWorker")
 
     with (
-        patch("src.cli.commands.channel.worker_handoff.serve_is_running", return_value=True),
-        patch("src.cli.commands.channel.runtime.init_pool", AsyncMock()),
+        patch("tg_agent.cli.commands.channel.worker_handoff.serve_is_running", return_value=True),
+        patch("tg_agent.cli.commands.channel.runtime.init_pool", AsyncMock()),
     ):
-        from src.cli.commands.channel import run
+        from tg_agent.cli.commands.channel import run
 
         run(_ns(channel_action="collect", identifier=str(pk), full=False, direct=False, wait=False))
 

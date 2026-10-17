@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.models import Channel, CollectionTask
-from src.services.channel_service import ChannelService
+from tg_agent.models import Channel, CollectionTask
+from tg_agent.services.channel_service import ChannelService
 
 # ---------------------------------------------------------------------------
 # Helpers

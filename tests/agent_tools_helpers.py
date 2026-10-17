@@ -20,10 +20,10 @@ def _get_tool_handlers(mock_db, client_pool=None, config=None, **kwargs):
     _normalize_get_setting_mock(mock_db)
     captured_tools = []
     with patch(
-        "src.agent.tools.create_sdk_mcp_server",
+        "tg_agent.agent.tools.create_sdk_mcp_server",
         side_effect=lambda **kw: captured_tools.extend(kw.get("tools", [])),
     ):
-        from src.agent.tools import make_mcp_server
+        from tg_agent.agent.tools import make_mcp_server
 
         make_mcp_server(mock_db, client_pool=client_pool, config=config, **kwargs)
     return {t.name: t.handler for t in captured_tools}

@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 import json
 
-from src.web.session import (
+from tg_agent.web.session import (
     _b64url_decode,
     _b64url_encode,
     _signer,

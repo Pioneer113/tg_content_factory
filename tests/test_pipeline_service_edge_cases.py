@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.database.bundles import PipelineBundle
-from src.models import (
+from tg_agent.database.bundles import PipelineBundle
+from tg_agent.models import (
     Account,
     Channel,
     ContentPipeline,
@@ -16,7 +16,7 @@ from src.models import (
     PipelineNode,
     PipelineNodeType,
 )
-from src.services.pipeline_service import (
+from tg_agent.services.pipeline_service import (
     PipelineService,
     PipelineTargetRef,
     PipelineValidationError,
@@ -731,7 +731,7 @@ async def test_import_json_preserves_explicit_channel_ids(svc):
 @pytest.mark.anyio
 async def test_list_templates_no_repo(db):
     """When pipeline_templates is None, returns empty list."""
-    from src.database.bundles import PipelineBundle
+    from tg_agent.database.bundles import PipelineBundle
 
     bundle = PipelineBundle(
         content_pipelines=db.repos.content_pipelines,
@@ -769,7 +769,7 @@ async def test_list_templates_with_repo(svc, db):
 @pytest.mark.anyio
 async def test_create_from_template_no_repo(db):
     """When pipeline_templates is None, raises error."""
-    from src.database.bundles import PipelineBundle
+    from tg_agent.database.bundles import PipelineBundle
 
     bundle = PipelineBundle(
         content_pipelines=db.repos.content_pipelines,
@@ -942,7 +942,7 @@ async def test_edit_via_llm_success(svc, db, pipeline_id):
 
     mock_provider = AsyncMock(return_value=new_graph_json)
 
-    with patch("src.services.provider_service.RuntimeProviderRegistry") as mock_aps:
+    with patch("tg_agent.services.provider_service.RuntimeProviderRegistry") as mock_aps:
         instance = mock_aps.return_value
         instance.get_provider_callable.return_value = mock_provider
 
@@ -962,7 +962,7 @@ async def test_edit_via_llm_with_markdown_fences(svc, db, pipeline_id):
 
     mock_provider = AsyncMock(return_value=wrapped)
 
-    with patch("src.services.provider_service.RuntimeProviderRegistry") as mock_aps:
+    with patch("tg_agent.services.provider_service.RuntimeProviderRegistry") as mock_aps:
         instance = mock_aps.return_value
         instance.get_provider_callable.return_value = mock_provider
 
@@ -976,7 +976,7 @@ async def test_edit_via_llm_provider_failure(svc, db, pipeline_id):
     """edit_via_llm returns error when provider raises."""
     mock_provider = AsyncMock(side_effect=RuntimeError("API down"))
 
-    with patch("src.services.provider_service.RuntimeProviderRegistry") as mock_aps:
+    with patch("tg_agent.services.provider_service.RuntimeProviderRegistry") as mock_aps:
         instance = mock_aps.return_value
         instance.get_provider_callable.return_value = mock_provider
 
@@ -994,7 +994,7 @@ async def test_edit_via_llm_dict_result(svc, db, pipeline_id):
 
     mock_provider = AsyncMock(return_value={"text": new_graph_json})
 
-    with patch("src.services.provider_service.RuntimeProviderRegistry") as mock_aps:
+    with patch("tg_agent.services.provider_service.RuntimeProviderRegistry") as mock_aps:
         instance = mock_aps.return_value
         instance.get_provider_callable.return_value = mock_provider
 
@@ -1012,7 +1012,7 @@ async def test_edit_via_llm_pipeline_without_graph(svc, db, pipeline_id):
     new_graph = {"nodes": [], "edges": []}
     mock_provider = AsyncMock(return_value=json.dumps(new_graph))
 
-    with patch("src.services.provider_service.RuntimeProviderRegistry") as mock_aps:
+    with patch("tg_agent.services.provider_service.RuntimeProviderRegistry") as mock_aps:
         instance = mock_aps.return_value
         instance.get_provider_callable.return_value = mock_provider
 
@@ -1236,7 +1236,7 @@ async def test_add_edge_rejecting_back_edge_that_closes_cycle(svc, graph_pipelin
     """#1077 (fail-closed, defence in depth): the fixture graph is src->fetch->gen.
     Adding gen->src would close a cycle (src reachable from gen), so add_edge must
     reject it with PipelineValidationError and NOT persist the edge."""
-    from src.services.pipeline_service import PipelineValidationError
+    from tg_agent.services.pipeline_service import PipelineValidationError
 
     with pytest.raises(PipelineValidationError):
         await svc.add_edge(graph_pipeline_id, "gen", "src")
@@ -1249,7 +1249,7 @@ async def test_add_edge_rejecting_back_edge_that_closes_cycle(svc, graph_pipelin
 @pytest.mark.anyio
 async def test_add_edge_rejects_self_loop(svc, graph_pipeline_id):
     """A self-loop (node -> itself) is the minimal cycle and is rejected too."""
-    from src.services.pipeline_service import PipelineValidationError
+    from tg_agent.services.pipeline_service import PipelineValidationError
 
     with pytest.raises(PipelineValidationError):
         await svc.add_edge(graph_pipeline_id, "gen", "gen")
@@ -1298,7 +1298,7 @@ async def test_remove_edge_not_found(svc, graph_pipeline_id):
 @pytest.mark.anyio
 async def test_resolve_scope_no_lister_returns_unscoped():
     """With no source lister, scope is the pipeline name and no channel."""
-    from src.services.pipeline_service import resolve_retrieval_scope
+    from tg_agent.services.pipeline_service import resolve_retrieval_scope
 
     pipeline = ContentPipeline(id=5, name="Unscoped", prompt_template="t")
     scope = await resolve_retrieval_scope(pipeline, list_sources=None)
@@ -1318,7 +1318,7 @@ async def test_resolve_scope_source_lookup_error_fails_closed():
     generated/published from channels outside the configured sources (a
     trust-boundary breach). Fail-closed means the pipeline run aborts instead
     of leaking: no scope is ever widened by a failed lookup."""
-    from src.services.pipeline_service import PipelineScopeError, resolve_retrieval_scope
+    from tg_agent.services.pipeline_service import PipelineScopeError, resolve_retrieval_scope
 
     pipeline = ContentPipeline(id=7, name="Boom", prompt_template="t")
 
@@ -1334,7 +1334,7 @@ async def test_resolve_scope_error_does_not_widen_to_unscoped():
     """Mutation-guard for the fail-closed fix: prove the failed-lookup path never
     yields an unscoped (channel_id=None) result. If the fix regresses to
     swallowing the error, this test sees a returned scope instead of the raise."""
-    from src.services.pipeline_service import PipelineScopeError, resolve_retrieval_scope
+    from tg_agent.services.pipeline_service import PipelineScopeError, resolve_retrieval_scope
 
     pipeline = ContentPipeline(id=8, name="Leak", prompt_template="t")
 
@@ -1364,7 +1364,7 @@ async def test_get_retrieval_scope_method_source_lookup_error_fails_closed(svc):
     surface. We assert end-to-end through the method that a source-lookup
     failure FAILS CLOSED with ``PipelineScopeError`` instead of returning an
     unscoped scope — closing the dup at the layer the issue named."""
-    from src.services.pipeline_service import PipelineScopeError
+    from tg_agent.services.pipeline_service import PipelineScopeError
 
     pipeline = ContentPipeline(id=4242, name="MethodBoom", prompt_template="t")
 
@@ -1387,7 +1387,7 @@ async def test_get_retrieval_scope_method_source_lookup_error_fails_closed(svc):
 @pytest.mark.anyio
 async def test_resolve_scope_multi_source_is_unscoped():
     """More than one source → no single-channel scope (retrieve across all)."""
-    from src.services.pipeline_service import resolve_retrieval_scope
+    from tg_agent.services.pipeline_service import resolve_retrieval_scope
 
     pipeline = ContentPipeline(id=9, name="Multi", prompt_template="t")
 
@@ -1401,7 +1401,7 @@ async def test_resolve_scope_multi_source_is_unscoped():
 @pytest.mark.anyio
 async def test_resolve_scope_single_source_is_scoped():
     """Exactly one source → scope narrows to that channel id."""
-    from src.services.pipeline_service import resolve_retrieval_scope
+    from tg_agent.services.pipeline_service import resolve_retrieval_scope
 
     pipeline = ContentPipeline(id=11, name="Solo", prompt_template="t")
 
@@ -1415,7 +1415,7 @@ async def test_resolve_scope_single_source_is_scoped():
 @pytest.mark.anyio
 async def test_resolve_scope_empty_name_yields_empty_query():
     """A nameless pipeline degrades to an empty retrieval query, not None."""
-    from src.services.pipeline_service import resolve_retrieval_scope
+    from tg_agent.services.pipeline_service import resolve_retrieval_scope
 
     pipeline = ContentPipeline(id=13, name="", prompt_template="t")
     scope = await resolve_retrieval_scope(pipeline, list_sources=None)
@@ -1429,7 +1429,7 @@ async def test_resolve_scope_empty_name_yields_empty_query():
 
 def test_to_since_hours_converts_units():
     """m -> /60, d -> *24, anything else -> float hours (pipeline_service.py)."""
-    from src.services.pipeline_service import to_since_hours
+    from tg_agent.services.pipeline_service import to_since_hours
 
     assert to_since_hours(90, "m") == 1.5
     assert to_since_hours(2, "d") == 48.0
@@ -1440,7 +1440,7 @@ def test_coerce_target_ref_string_dict_and_garbage():
     """_coerce_target_ref: string partition, dict form, and None for garbage
     (#1246, #mutation slice 4). partition (not rpartition) keeps the phone part
     left of the FIRST pipe."""
-    from src.services.pipeline_service import _coerce_target_ref
+    from tg_agent.services.pipeline_service import _coerce_target_ref
 
     ref = _coerce_target_ref("+100|77")
     assert ref == PipelineTargetRef(phone="+100", dialog_id=77)
@@ -1472,7 +1472,7 @@ async def test_edit_via_llm_saves_parsed_graph_without_json_fence(svc, db, pipel
     })
     mock_provider = AsyncMock(return_value=f"```\n{graph_payload}\n```")
 
-    with patch("src.services.provider_service.RuntimeProviderRegistry") as mock_aps:
+    with patch("tg_agent.services.provider_service.RuntimeProviderRegistry") as mock_aps:
         instance = mock_aps.return_value
         instance.get_provider_callable.return_value = mock_provider
 
@@ -1505,7 +1505,7 @@ async def test_edit_via_llm_dict_falls_back_to_generated_text(svc, db, pipeline_
 
     # text present and non-empty: it must be used, generated_text ignored
     mock_provider = AsyncMock(return_value={"text": payload_a, "generated_text": "not json"})
-    with patch("src.services.provider_service.RuntimeProviderRegistry") as mock_aps:
+    with patch("tg_agent.services.provider_service.RuntimeProviderRegistry") as mock_aps:
         instance = mock_aps.return_value
         instance.get_provider_callable.return_value = mock_provider
 
@@ -1517,7 +1517,7 @@ async def test_edit_via_llm_dict_falls_back_to_generated_text(svc, db, pipeline_
 
     # empty text: fallback to generated_text
     mock_provider = AsyncMock(return_value={"text": "", "generated_text": payload_b})
-    with patch("src.services.provider_service.RuntimeProviderRegistry") as mock_aps:
+    with patch("tg_agent.services.provider_service.RuntimeProviderRegistry") as mock_aps:
         instance = mock_aps.return_value
         instance.get_provider_callable.return_value = mock_provider
 
@@ -1626,7 +1626,7 @@ async def test_update_injects_react_dag_and_filter_configs(svc, db):
     )
     assert ok is True
 
-    from src.services.pipeline_filters import normalize_filter_config
+    from tg_agent.services.pipeline_filters import normalize_filter_config
 
     graph = await svc.get_graph(pid)
     by_id = {n.id: n for n in graph.nodes}

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from src.models import (
+from tg_agent.models import (
     CollectionTask,
     CollectionTaskStatus,
     CollectionTaskType,
@@ -20,7 +20,7 @@ from src.models import (
     TelegramCommand,
     TelegramCommandStatus,
 )
-from src.services.jobs_read_model import JobsReadModel
+from tg_agent.services.jobs_read_model import JobsReadModel
 
 NOW = datetime(2026, 6, 22, 12, 0, 0, tzinfo=timezone.utc)
 FUTURE = NOW + timedelta(hours=1)

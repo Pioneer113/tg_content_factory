@@ -45,7 +45,7 @@ def _command_path_resolves(argv: list[str]) -> bool:
     import click
     import typer
 
-    from src.cli.typer_commands import app
+    from tg_agent.cli.typer_commands import app
 
     node: click.BaseCommand = typer.main.get_command(app)
     for token in argv:
@@ -66,14 +66,14 @@ def test_issue_303_command_signatures_parse():
 def test_dialogs_parse():
     from typer.testing import CliRunner
 
-    from src.cli.typer_app import app
+    from tg_agent.cli.typer_app import app
 
     # Drive the real Typer surface: `dialogs topics --channel-id 123` must parse
     # and reach the body with the resolved channel_id (argparse-parity flags).
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.dialogs_cmd._dispatch", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.dialogs_cmd._dispatch", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = CliRunner().invoke(app, ["dialogs", "topics", "--channel-id", "123"])
     assert result.exit_code == 0
@@ -85,7 +85,7 @@ def test_dialogs_parse():
 def test_dialogs_help_lists_subcommands():
     from typer.testing import CliRunner
 
-    from src.cli.typer_app import app
+    from tg_agent.cli.typer_app import app
 
     result = CliRunner().invoke(app, ["dialogs", "--help"])
 
@@ -115,15 +115,15 @@ def test_dialogs_run_is_primary_entrypoint(cli_db, cli_init_patch, capsys):
     ]
 
     with (
-        cli_init_patch(cli_db, "src.cli.commands.dialogs.runtime.init_db"),
-        patch("src.cli.commands.dialogs.runtime.init_pool", side_effect=fake_init_pool),
+        cli_init_patch(cli_db, "tg_agent.cli.commands.dialogs.runtime.init_db"),
+        patch("tg_agent.cli.commands.dialogs.runtime.init_pool", side_effect=fake_init_pool),
         patch(
-            "src.cli.commands.dialogs.ChannelService.get_my_dialogs",
+            "tg_agent.cli.commands.dialogs.ChannelService.get_my_dialogs",
             new_callable=AsyncMock,
             return_value=dialogs_payload,
         ),
     ):
-        from src.cli.commands.dialogs import run
+        from tg_agent.cli.commands.dialogs import run
 
         run(cli_ns(dialogs_action="list", phone="+79001234567"))
 

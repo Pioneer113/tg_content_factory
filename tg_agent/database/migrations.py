@@ -1,0 +1,1171 @@
+from __future__ import annotations
+
+import logging
+import sqlite3
+from collections.abc import Callable, Mapping, Sequence
+from pathlib import Path
+from typing import cast
+
+import aiosqlite
+
+from tg_agent.database.schema import SCHEMA_SQL
+
+logger = logging.getLogger(__name__)
+
+_PRIVATE_CHANNEL_PROVENANCE_MARKER = "_migration_private_channel_provenance_v1"
+_PRIVATE_CHANNEL_PROVENANCE_REASON = "backfill: private group, owner-supplied"
+_CHANNEL_USERNAME_REPAIR_MARKER = "_migration_channels_username_repaired_v1"
+
+
+ColumnSpec = Mapping[str, str]
+
+
+SCHEMA_REPAIR_COLUMNS: Mapping[str, ColumnSpec] = {
+    "accounts": {
+        "is_primary": "is_primary INTEGER DEFAULT 0",
+        "active_origin": "active_origin TEXT NOT NULL DEFAULT 'auto'",
+        "flood_wait_until": "flood_wait_until TEXT",
+        "is_premium": "is_premium INTEGER DEFAULT 0",
+    },
+    "channels": {
+        "channel_type": "channel_type TEXT",
+        "username_state": "username_state TEXT NOT NULL DEFAULT 'known'",
+        "is_filtered": "is_filtered INTEGER DEFAULT 0",
+        "active_origin": "active_origin TEXT NOT NULL DEFAULT 'auto'",
+        "filtered_origin": "filtered_origin TEXT NOT NULL DEFAULT 'auto'",
+        "approval_state": "approval_state TEXT NOT NULL DEFAULT 'approved'",
+        "filter_flags": "filter_flags TEXT DEFAULT ''",
+        "about": "about TEXT",
+        "linked_chat_id": "linked_chat_id INTEGER",
+        "has_comments": "has_comments INTEGER DEFAULT 0",
+        "created_at": "created_at TEXT",
+        "preferred_phone": "preferred_phone TEXT",
+        "last_collected_id": "last_collected_id INTEGER DEFAULT 0",
+        "needs_review": "needs_review INTEGER DEFAULT 0",
+        "review_reason": "review_reason TEXT",
+    },
+    "messages": {
+        "sender_first_name": "sender_first_name TEXT",
+        "sender_last_name": "sender_last_name TEXT",
+        "sender_username": "sender_username TEXT",
+        "message_kind": "message_kind TEXT",
+        "media_type": "media_type TEXT",
+        "service_action_raw": "service_action_raw TEXT",
+        "service_action_semantic": "service_action_semantic TEXT",
+        "service_action_payload_json": "service_action_payload_json TEXT",
+        "sender_kind": "sender_kind TEXT",
+        "topic_id": "topic_id INTEGER",
+        "reactions_json": "reactions_json TEXT",
+        "entities_json": "entities_json TEXT",
+        "views": "views INTEGER",
+        "forwards": "forwards INTEGER",
+        "reply_count": "reply_count INTEGER",
+        "collected_at": "collected_at TEXT",
+        "forward_from_channel_id": "forward_from_channel_id INTEGER",
+        "detected_lang": "detected_lang TEXT",
+        "translation_en": "translation_en TEXT",
+        "translation_custom": "translation_custom TEXT",
+        "translation_custom_lang": "translation_custom_lang TEXT",
+        "premium_search_query": "premium_search_query TEXT",
+    },
+    "collection_tasks": {
+        "channel_username": "channel_username TEXT",
+        "task_type": "task_type TEXT NOT NULL DEFAULT 'channel_collect'",
+        "note": "note TEXT",
+        "run_after": "run_after TEXT",
+        "payload": "payload TEXT",
+        "parent_task_id": "parent_task_id INTEGER",
+        # Required before SCHEMA_SQL creates the jobs-pagination index on legacy
+        # collection_tasks tables. Nullable because SQLite cannot ADD COLUMN with
+        # the canonical non-constant datetime('now') default in place.
+        "created_at": "created_at TEXT",
+        "last_progress_at": "last_progress_at TEXT",
+        # Interop tasks (#961): result written back by an external worker.
+        "result_payload": "result_payload TEXT",
+        "idempotency_key": "idempotency_key TEXT",
+    },
+    "telegram_commands": {
+        "run_after": "run_after TEXT",
+    },
+    # Nullable on purpose: ADD COLUMN ... NOT NULL is rejected on the existing
+    # 6.8M-row table. Existing rows are filled by _backfill_message_reactions_date.
+    "message_reactions": {
+        "date": "date TEXT",
+    },
+    "search_queries": {
+        "is_regex": "is_regex INTEGER DEFAULT 0",
+        "is_fts": "is_fts INTEGER DEFAULT 0",
+        "notify_on_collect": "notify_on_collect INTEGER DEFAULT 0",
+        "track_stats": "track_stats INTEGER DEFAULT 1",
+        "exclude_patterns": "exclude_patterns TEXT DEFAULT ''",
+        "max_length": "max_length INTEGER DEFAULT NULL",
+        "chat_filter": "chat_filter TEXT DEFAULT ''",
+    },
+    "notification_bots": {
+        "tg_username": "tg_username TEXT",
+        "bot_id": "bot_id INTEGER",
+        "bot_username": "bot_username TEXT",
+        "bot_token": "bot_token TEXT",
+        "created_at": "created_at TEXT",
+    },
+    "content_pipelines": {
+        "llm_model": "llm_model TEXT",
+        "image_model": "image_model TEXT",
+        "publish_mode": "publish_mode TEXT NOT NULL DEFAULT 'moderated'",
+        "generation_backend": "generation_backend TEXT NOT NULL DEFAULT 'chain'",
+        "is_active": "is_active INTEGER NOT NULL DEFAULT 1",
+        "last_generated_id": "last_generated_id INTEGER NOT NULL DEFAULT 0",
+        "generate_interval_minutes": "generate_interval_minutes INTEGER NOT NULL DEFAULT 60",
+        "publish_times": "publish_times TEXT",
+        "refinement_steps": "refinement_steps TEXT",
+        "pipeline_json": "pipeline_json TEXT",
+        "account_phone": "account_phone TEXT",
+        "ab_num_variants": "ab_num_variants INTEGER NOT NULL DEFAULT 1",
+        "ab_auto_select": "ab_auto_select INTEGER NOT NULL DEFAULT 0",
+    },
+    "pipeline_targets": {
+        "target_title": "target_title TEXT",
+        "target_type": "target_type TEXT",
+    },
+    "generation_runs": {
+        "pipeline_id": "pipeline_id INTEGER",
+        "status": "status TEXT NOT NULL DEFAULT 'pending'",
+        "prompt": "prompt TEXT",
+        "generated_text": "generated_text TEXT",
+        "metadata": "metadata TEXT",
+        "created_at": "created_at TEXT",
+        "updated_at": "updated_at TEXT",
+        "image_url": "image_url TEXT",
+        "moderation_status": "moderation_status TEXT DEFAULT 'pending'",
+        "moderation_origin": "moderation_origin TEXT NOT NULL DEFAULT 'auto'",
+        "published_at": "published_at TEXT",
+        "quality_score": "quality_score REAL",
+        "quality_issues": "quality_issues TEXT",
+        "variants": "variants TEXT",
+        "selected_variant": "selected_variant INTEGER",
+    },
+    "message_embeddings_json": {
+        "embedding": "embedding TEXT",
+        "dims": "dims INTEGER NOT NULL DEFAULT 0",
+    },
+    "generated_images": {
+        "model": "model TEXT",
+        "image_url": "image_url TEXT",
+        "local_path": "local_path TEXT",
+        "created_at": "created_at TEXT",
+    },
+    "pipeline_templates": {
+        "description": "description TEXT",
+        "category": "category TEXT",
+        "template_json": "template_json TEXT",
+        "is_builtin": "is_builtin INTEGER DEFAULT 0",
+        "created_at": "created_at TEXT",
+    },
+    # Per-target delivery dedup for forward nodes (issue #1537). NULL on legacy
+    # rows is read back as "delivered everywhere" (safe against duplicates).
+    "pipeline_action_log": {
+        "target": "target TEXT",
+    },
+    "agent_threads": {
+        "title": "title TEXT NOT NULL DEFAULT 'Новый тред'",
+        "created_at": "created_at TEXT",
+    },
+    "agent_messages": {
+        "thread_id": "thread_id INTEGER",
+        "role": "role TEXT",
+        "content": "content TEXT",
+        "created_at": "created_at TEXT",
+    },
+    "dialog_batch_operations": {
+        "phone": "phone TEXT",
+        "op_type": "op_type TEXT",
+        "status": "status TEXT DEFAULT 'pending'",
+        "created_at": "created_at TEXT",
+        "finished_at": "finished_at TEXT",
+        "lease_owner": "lease_owner TEXT",
+        "lease_until": "lease_until TEXT",
+    },
+    "dialog_batch_items": {
+        "batch_id": "batch_id INTEGER",
+        "phone": "phone TEXT",
+        "dialog_id": "dialog_id INTEGER",
+        "channel_type": "channel_type TEXT DEFAULT 'channel'",
+        "status": "status TEXT DEFAULT 'pending'",
+        "error": "error TEXT",
+        "attempts": "attempts INTEGER DEFAULT 0",
+        "created_at": "created_at TEXT",
+        "finished_at": "finished_at TEXT",
+        "lease_owner": "lease_owner TEXT",
+        "lease_until": "lease_until TEXT",
+    },
+}
+
+
+SCHEMA_REPAIR_INDEXES: Sequence[str] = (
+    "CREATE INDEX IF NOT EXISTS idx_messages_detected_lang ON messages(detected_lang)",
+    # NOTE: idx_message_reactions_date_emoji is intentionally NOT here — it is created
+    # by _backfill_message_reactions_date AFTER the one-off date backfill, so the
+    # 6.8M-row UPDATE doesn't pay index-maintenance cost on every row (#760, PR #945 review).
+    """
+    CREATE INDEX IF NOT EXISTS idx_messages_fwd_from_channel
+    ON messages(forward_from_channel_id) WHERE forward_from_channel_id IS NOT NULL
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_messages_premium_search_query
+    ON messages(premium_search_query) WHERE premium_search_query IS NOT NULL
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_collection_tasks_type_status_run_after
+    ON collection_tasks(task_type, status, run_after)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_collection_tasks_created_id
+    ON collection_tasks(created_at DESC, id DESC)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_telegram_commands_status_run_after_id
+    ON telegram_commands(status, run_after, id)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_telegram_commands_created_id
+    ON telegram_commands(created_at DESC, id DESC)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_photo_batch_items_created_id
+    ON photo_batch_items(created_at DESC, id DESC)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_generation_runs_pipeline_status
+    ON generation_runs(pipeline_id, status)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_generation_runs_moderation
+    ON generation_runs(moderation_status, pipeline_id)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_pipeline_action_log_lookup
+    ON pipeline_action_log(pipeline_id, node_id, action)
+    """,
+    # Dedup keys for the action log, split by target scope (#1537): per-target
+    # rows must each persist (a message forwarded to A must not block logging
+    # it to B), while NULL-target rows (react/delete: once per message) keep
+    # the old single-row dedup — plain UNIQUE treats NULLs as distinct, so the
+    # NULL branch needs its own partial index.
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_pipeline_action_log_targeted
+    ON pipeline_action_log(pipeline_id, node_id, action, channel_id, message_id, target)
+    WHERE target IS NOT NULL
+    """,
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_pipeline_action_log_untargeted
+    ON pipeline_action_log(pipeline_id, node_id, action, channel_id, message_id)
+    WHERE target IS NULL
+    """,
+    # Enforce at-most-one primary account (#733). Partial unique index: at most
+    # one row may have is_primary = 1. Existing duplicate primaries are collapsed
+    # by _dedupe_primary_accounts() before this index is created.
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_single_primary
+    ON accounts(is_primary) WHERE is_primary = 1
+    """,
+)
+
+
+async def table_exists(db: aiosqlite.Connection, table: str) -> bool:
+    cur = await db.execute(
+        "SELECT 1 FROM sqlite_master WHERE type IN ('table', 'view') AND name = ? LIMIT 1",
+        (table,),
+    )
+    return await cur.fetchone() is not None
+
+
+async def table_columns(db: aiosqlite.Connection, table: str) -> set[str]:
+    if not await table_exists(db, table):
+        return set()
+    cur = await db.execute(f"PRAGMA table_info({table})")
+    return {row["name"] if hasattr(row, "keys") else row[1] for row in await cur.fetchall()}
+
+
+async def ensure_columns(db: aiosqlite.Connection, table: str, columns: ColumnSpec) -> None:
+    existing = await table_columns(db, table)
+    if not existing:
+        return
+    for column_name, column_sql in columns.items():
+        if column_name not in existing:
+            try:
+                await db.execute(f"ALTER TABLE {table} ADD COLUMN {column_sql}")
+            except sqlite3.OperationalError as exc:
+                # Two split-deployment processes can both observe the old schema
+                # before either ALTER commits. The first ALTER wins; the second
+                # should treat the resulting duplicate-column error as the same
+                # idempotent end state rather than aborting startup.
+                if "duplicate column name" not in str(exc).lower():
+                    raise
+                logger.debug("Column %s.%s was added concurrently", table, column_name)
+
+
+async def ensure_indexes(db: aiosqlite.Connection, index_statements: Sequence[str]) -> None:
+    for statement in index_statements:
+        await db.execute(statement)
+
+
+async def _dedupe_primary_accounts(db: aiosqlite.Connection) -> None:
+    """Collapse multiple primary accounts to a single one (#733).
+
+    A pre-existing race (two accounts both reading an empty table and both
+    inserting is_primary=1) could leave more than one primary row. Before the
+    partial unique index idx_accounts_single_primary can be created, any such
+    duplicates must be demoted — otherwise the CREATE UNIQUE INDEX fails. Keep
+    the lowest-id primary, demote the rest. No-op when the table is absent or
+    already has <=1 primary.
+    """
+    if not await table_exists(db, "accounts"):
+        return
+    if "is_primary" not in await table_columns(db, "accounts"):
+        return
+    cur = await db.execute("SELECT id FROM accounts WHERE is_primary = 1 ORDER BY id ASC")
+    # aiosqlite stubs declare fetchall() as Iterable[Row]; at runtime it is a list.
+    rows = cast("list[aiosqlite.Row]", await cur.fetchall())
+    if len(rows) <= 1:
+        return
+    keep_id = rows[0][0]
+    await db.execute(
+        "UPDATE accounts SET is_primary = 0 WHERE is_primary = 1 AND id != ?",
+        (keep_id,),
+    )
+
+
+async def _rebuild_collection_tasks_if_channel_id_notnull(db: aiosqlite.Connection) -> None:
+    if not await table_exists(db, "collection_tasks"):
+        return
+
+    cur = await db.execute("PRAGMA table_info(collection_tasks)")
+    rows = await cur.fetchall()
+    columns = {row["name"]: row for row in rows}
+    channel_id_row = columns.get("channel_id")
+    if channel_id_row is None or not bool(channel_id_row["notnull"]):
+        return
+
+    def expr(column: str, fallback: str = "NULL") -> str:
+        return column if column in columns else fallback
+
+    channel_id_expr = "CASE WHEN channel_id = 0 THEN NULL ELSE channel_id END"
+    task_type_expr = (
+        "task_type"
+        if "task_type" in columns
+        else "CASE WHEN channel_id = 0 THEN 'stats_all' ELSE 'channel_collect' END"
+    )
+
+    # Clean up any orphan tmp left by a previous crashed run (this is throwaway
+    # scratch data, not the live table — safe to drop outside the transaction).
+    await db.execute("DROP TABLE IF EXISTS collection_tasks_tmp")
+
+    # The connection runs in autocommit (isolation_level=None). The ENTIRE rebuild —
+    # snapshot copy, drop, rename — must run under one BEGIN IMMEDIATE write lock,
+    # not just the swap: with only the swap wrapped, a concurrent writer (e.g. the
+    # web process in a split deploy enqueuing a task) could INSERT into
+    # collection_tasks AFTER the snapshot SELECT but BEFORE the lock, and that row
+    # would be permanently lost when the stale tmp replaces the live table. Taking
+    # the lock before the copy blocks any interleaved write for the whole operation
+    # (audit #836/7, #868 review).
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        await db.execute("""
+            CREATE TABLE collection_tasks_tmp (
+                id INTEGER PRIMARY KEY,
+                channel_id INTEGER,
+                channel_title TEXT,
+                channel_username TEXT,
+                task_type TEXT NOT NULL DEFAULT 'channel_collect',
+                status TEXT DEFAULT 'pending',
+                messages_collected INTEGER DEFAULT 0,
+                error TEXT,
+                note TEXT,
+                run_after TEXT,
+                payload TEXT,
+                parent_task_id INTEGER,
+                created_at TEXT DEFAULT (datetime('now')),
+                started_at TEXT,
+                completed_at TEXT
+            )
+            """)
+        await db.execute(
+            f"""
+            INSERT INTO collection_tasks_tmp (
+                id,
+                channel_id,
+                channel_title,
+                channel_username,
+                task_type,
+                status,
+                messages_collected,
+                error,
+                note,
+                run_after,
+                payload,
+                parent_task_id,
+                created_at,
+                started_at,
+                completed_at
+            )
+            SELECT
+                {expr("id")},
+                {channel_id_expr},
+                {expr("channel_title")},
+                {expr("channel_username")},
+                {task_type_expr},
+                {expr("status", "'pending'")},
+                {expr("messages_collected", "0")},
+                {expr("error")},
+                {expr("note")},
+                {expr("run_after")},
+                {expr("payload")},
+                {expr("parent_task_id")},
+                {expr("created_at", "datetime('now')")},
+                {expr("started_at")},
+                {expr("completed_at")}
+            FROM collection_tasks
+            """
+        )
+        await db.execute("DROP TABLE collection_tasks")
+        await db.execute("ALTER TABLE collection_tasks_tmp RENAME TO collection_tasks")
+    except Exception:
+        await db.execute("ROLLBACK")
+        raise
+    await db.commit()
+    logger.info("Migrated collection_tasks: removed NOT NULL from channel_id")
+
+
+async def _ensure_fts5_available(db: aiosqlite.Connection) -> bool:
+    try:
+        await db.execute("CREATE VIRTUAL TABLE IF NOT EXISTS temp._fts5_probe USING fts5(content)")
+        await db.execute("DROP TABLE IF EXISTS temp._fts5_probe")
+    except Exception as exc:
+        logger.warning("FTS5 unavailable; full-text search will use fallback queries: %s", exc)
+        return False
+    return True
+
+
+async def _repair_channel_last_collected_ids_from_messages(db: aiosqlite.Connection) -> None:
+    """Raise channel cursors to the newest message already stored locally."""
+    if not await table_exists(db, "channels") or not await table_exists(db, "messages"):
+        return
+
+    await db.execute(
+        """
+        UPDATE channels
+        SET last_collected_id = COALESCE((
+            SELECT MAX(m.message_id)
+            FROM messages m
+            WHERE m.channel_id = channels.channel_id
+        ), last_collected_id)
+        WHERE COALESCE(last_collected_id, 0) < COALESCE((
+            SELECT MAX(m.message_id)
+            FROM messages m
+            WHERE m.channel_id = channels.channel_id
+        ), 0)
+        """
+    )
+
+
+async def _drop_legacy_pipelines_table_if_empty(db: aiosqlite.Connection) -> None:
+    """Remove the obsolete denormalized ``pipelines`` table (schema v1).
+
+    It was superseded by ``content_pipelines`` (+ ``pipeline_sources`` /
+    ``pipeline_targets``) and is never read or written by the app. Older
+    databases still carry an empty leftover copy. We only drop it when it holds
+    no rows, so a database that somehow still has v1 data is left untouched
+    instead of silently losing it.
+    """
+    if not await table_exists(db, "pipelines"):
+        return
+    cur = await db.execute("SELECT COUNT(*) FROM pipelines")
+    row = await cur.fetchone()
+    count = (row[0] if row is not None else 0) or 0
+    if count == 0:
+        await db.execute("DROP TABLE pipelines")
+
+
+async def _backfill_messages_fts_if_empty(db: aiosqlite.Connection) -> None:
+    """Populate the ``messages_fts`` full-text index from existing messages.
+
+    The FTS index is kept in sync by AFTER INSERT/DELETE triggers, so it only
+    ever sees messages written *after* the virtual table was created. A database
+    that already held messages before ``messages_fts`` existed — or one rebuilt
+    from a dump / restored backup — starts with an empty index. Search code then
+    silently falls through to the slow ``LIKE '%..%'`` path (``fts_available``
+    stays True but ``MATCH`` finds nothing), scanning millions of rows per query.
+
+    This rebuilds the index from the ``content=messages`` table whenever the
+    index is empty but ``messages`` is not. It is gated on the *actual* state of
+    the index rather than a one-shot settings flag, so it stays correct if it
+    first runs on an empty database and messages are imported later. ``rebuild``
+    on an already-populated index is skipped, keeping the migration idempotent
+    and cheap on every boot after the first.
+
+    ``messages.text`` is never updated in place (only metadata columns are), so
+    the missing AFTER UPDATE trigger cannot desync the index — a wholesale empty
+    index is the only drift this code needs to repair.
+    """
+    # Both the FTS virtual table and its ``messages_fts_docsize`` shadow table must
+    # exist before probing. They are created together by SCHEMA_SQL, but a partially
+    # built / legacy schema (or a SQLite without the expected FTS5 layout) may have
+    # neither — querying the shadow table directly would raise "no such table".
+    if not await table_exists(db, "messages_fts") or not await table_exists(
+        db, "messages_fts_docsize"
+    ):
+        return
+
+    # Fast path for every normal boot: the index is external-content, so its row
+    # data lives in the ``messages_fts_docsize`` shadow table. A single row there
+    # means the index is populated and there is nothing to do — bail before the
+    # (cheap, but pointless) ``messages`` probe. No COUNT(*) over millions of rows.
+    cur = await db.execute("SELECT 1 FROM messages_fts_docsize LIMIT 1")
+    if await cur.fetchone() is not None:
+        return
+
+    if not await table_exists(db, "messages"):
+        return
+    cur = await db.execute("SELECT 1 FROM messages LIMIT 1")
+    if await cur.fetchone() is None:
+        return
+
+    logger.info("messages_fts is empty but messages exist; rebuilding full-text index")
+    await db.execute("INSERT INTO messages_fts(messages_fts) VALUES('rebuild')")
+    logger.info("messages_fts rebuild complete")
+
+
+async def _drop_obsolete_indexes(db: aiosqlite.Connection) -> None:
+    """Drop indexes that the schema no longer creates and no query relies on.
+
+    ``idx_messages_text`` (a plain B-tree on ``messages(text)``) cannot serve
+    ``LIKE '%..%'`` — a leading wildcard forces a full scan whether or not the
+    index exists — and full-text search runs through ``messages_fts``, never this
+    column. On a 48 GB production database it weighed ~21 GB (roughly half the
+    file) and slowed every message insert, while a measured A/B showed it saving
+    only ~1.5% on the rarely-used LIKE fallback. Removing it from SCHEMA_SQL only
+    stops new databases from creating it; this drops it from existing ones.
+
+    The freed pages are not returned to the OS until a manual ``VACUUM`` (a long,
+    blocking operation on a large DB) — intentionally left to the operator. See #760.
+    """
+    await db.execute("DROP INDEX IF EXISTS idx_messages_text")
+
+
+async def _backfill_message_reactions_date(db: aiosqlite.Connection) -> None:
+    """Fill ``message_reactions.date`` from the parent message for legacy rows.
+
+    The column is added nullable (ADD COLUMN cannot be NOT NULL on a populated
+    table), and new reactions are written with their message's date going forward.
+    Rows that predate the column stay NULL until this one-off backfill copies the
+    date down from ``messages``. Reaction analytics filter on ``mr.date``; until a
+    row is backfilled it falls out of the recency window, so this is what makes the
+    historical data complete.
+
+    The ``(date, emoji)`` index is created here, AFTER the backfill UPDATE, rather
+    than alongside the other repair indexes: building it first would force SQLite to
+    maintain it for each of the 6.8M rows the UPDATE rewrites (index write
+    amplification). Creating it after means the UPDATE touches a bare table and the
+    index is built once over the final data.
+
+    The expensive UPDATE is gated on a settings flag so it runs once; the index
+    creation is NOT gated — it runs every boot (cheap ``IF NOT EXISTS`` no-op once
+    present) so the index can never be permanently missing on a DB that has the flag
+    but somehow lacks the index (version skew / partial repair). The UPDATE itself is
+    also idempotent via ``WHERE date IS NULL``, so a partial run simply resumes.
+    See issue #760.
+    """
+    if not await table_exists(db, "message_reactions") or not await table_exists(db, "messages"):
+        return
+    if "date" not in await table_columns(db, "message_reactions"):
+        return
+
+    # The one-off backfill UPDATE is the expensive part — gate it on the flag.
+    cur = await db.execute(
+        "SELECT value FROM settings WHERE key = '_migration_reactions_date_backfill_v1' LIMIT 1"
+    )
+    if not await cur.fetchone():
+        logger.info("Backfilling message_reactions.date from messages (one-off, may take a while)")
+        await db.execute(
+            """
+            UPDATE message_reactions
+               SET date = (
+                   SELECT m.date FROM messages m
+                   WHERE m.channel_id = message_reactions.channel_id
+                     AND m.message_id = message_reactions.message_id
+               )
+             WHERE date IS NULL
+            """
+        )
+        await db.execute(
+            "INSERT OR IGNORE INTO settings (key, value) "
+            "VALUES ('_migration_reactions_date_backfill_v1', '1')"
+        )
+        logger.info("message_reactions.date backfill complete")
+
+    # Always ensure the index exists, regardless of the backfill flag — it is the
+    # only creation path (removed from SCHEMA_SQL / SCHEMA_REPAIR_INDEXES to avoid
+    # write amplification during the UPDATE above). IF NOT EXISTS makes this a no-op
+    # once present. This runs after the UPDATE so the bulk write hits a bare table.
+    await db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_message_reactions_date_emoji "
+        "ON message_reactions(date, emoji)"
+    )
+
+
+async def _ensure_initial_analyze(db: aiosqlite.Connection) -> None:
+    """Run a one-off ANALYZE so the planner has table statistics from day one.
+
+    ``PRAGMA optimize`` (run on connection close, #940) only re-analyzes tables
+    that changed *measurably since the last ANALYZE* — on a database where ANALYZE
+    has never run there is no baseline to compare against, so ``sqlite_stat1`` can
+    stay empty and the planner picks blind plans on multi-million-row tables.
+    Confirmed in practice: a live DB had no ``sqlite_stat1`` despite optimize-on-close
+    already shipping.
+
+    Gated on a settings flag so the (minutes-long on a big DB) ANALYZE runs once.
+    Bounded by ``PRAGMA analysis_limit`` so it samples rather than scanning every
+    index in full. Best-effort: a failure must not abort the migration. See #760.
+    """
+    cur = await db.execute(
+        "SELECT value FROM settings WHERE key = '_migration_analyze_v1' LIMIT 1"
+    )
+    if await cur.fetchone():
+        return
+
+    try:
+        logger.info("Running one-off ANALYZE to seed planner statistics (sampled)")
+        # 400 mirrors ConnectionTuning.analysis_limit (src/database/connection.py) —
+        # the same sampling bound used by PRAGMA optimize on connection close.
+        await db.execute("PRAGMA analysis_limit=400")
+        await db.execute("ANALYZE")
+        logger.info("Initial ANALYZE complete")
+    except Exception:
+        logger.warning("Initial ANALYZE failed (best-effort)", exc_info=True)
+        return
+
+    await db.execute(
+        "INSERT OR IGNORE INTO settings (key, value) VALUES ('_migration_analyze_v1', '1')"
+    )
+
+
+async def backfill_private_channel_provenance(
+    db: aiosqlite.Connection,
+    *,
+    username_column_known: bool = True,
+) -> list[dict[str, object]]:
+    """Run the private-channel provenance backfill as one atomic migration.
+
+    When upgrading a database from before ``channels.username`` existed, a
+    repaired NULL in that column is not evidence that a channel is private.
+    Skip that ambiguous batch rather than marking every legacy channel as
+    owner-supplied.
+    """
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        result = await _backfill_private_channel_provenance(
+            db, username_column_known=username_column_known
+        )
+        await db.execute("COMMIT")
+        return result
+    except Exception:
+        await db.execute("ROLLBACK")
+        raise
+
+
+async def _backfill_private_channel_provenance(
+    db: aiosqlite.Connection,
+    *,
+    username_column_known: bool,
+) -> list[dict[str, object]]:
+    """Mark legacy private channels as owner-supplied without changing filters.
+
+    A private Telegram group has no public username, so its presence in the
+    database is already evidence that the owner supplied it.  The migration is
+    guarded by a settings marker and also filters on ``filtered_origin`` so a
+    partially completed run cannot duplicate journal rows.  The returned rows
+    are the private channels that were filtered before the backfill; callers can
+    show those to the owner for an explicit decision instead of silently
+    unfiltering them.
+    """
+    cur = await db.execute(
+        "SELECT value FROM settings WHERE key = ? LIMIT 1",
+        (_PRIVATE_CHANNEL_PROVENANCE_MARKER,),
+    )
+    if await cur.fetchone():
+        return []
+
+    if not username_column_known:
+        unknown_cur = await db.execute(
+            "SELECT COUNT(*) FROM channels WHERE username_state = 'unknown'"
+        )
+        unknown_count = (await unknown_cur.fetchone())[0]
+        if unknown_count:
+            logger.info(
+                "Deferring private channel provenance for %d channels until "
+                "Telegram metadata resolves their usernames",
+                unknown_count,
+            )
+
+    cur = await db.execute(
+        "SELECT id, channel_id, title, is_filtered, filtered_origin "
+        "FROM channels WHERE (username IS NULL OR username = '') "
+        "AND username_state = 'known' AND filtered_origin != 'human' ORDER BY id ASC"
+    )
+    rows = await cur.fetchall()
+    filtered_private = [
+        {
+            "id": row["id"],
+            "channel_id": row["channel_id"],
+            "title": row["title"],
+            "is_filtered": bool(row["is_filtered"]),
+        }
+        for row in rows
+        if row["is_filtered"]
+    ]
+
+    for row in rows:
+        update_cur = await db.execute(
+            "UPDATE channels SET filtered_origin = 'human' "
+            "WHERE id = ? AND filtered_origin != 'human'",
+            (row["id"],),
+        )
+        if update_cur.rowcount != 1:
+            continue
+        await db.execute(
+            "INSERT INTO decisions "
+            "(entity, entity_key, entity_name, field, old_value, new_value, origin, actor, reason) "
+            "VALUES ('channel', ?, ?, 'filtered_origin', ?, 'human', 'human', 'migration', ?)",
+            (
+                row["channel_id"],
+                row["title"],
+                row["filtered_origin"],
+                _PRIVATE_CHANNEL_PROVENANCE_REASON,
+            ),
+        )
+
+    unknown_cur = await db.execute(
+        "SELECT COUNT(*) FROM channels WHERE username_state = 'unknown'"
+    )
+    unknown_count = (await unknown_cur.fetchone())[0]
+    if unknown_count:
+        logger.info(
+            "Private channel provenance backfill deferred: %d channels still have "
+            "unresolved usernames",
+            unknown_count,
+        )
+        return filtered_private
+
+    await db.execute(
+        "INSERT OR IGNORE INTO settings (key, value) VALUES (?, '1')",
+        (_PRIVATE_CHANNEL_PROVENANCE_MARKER,),
+    )
+    if filtered_private:
+        details = ", ".join(
+            f"{row['channel_id']} ({row['title'] or 'Без названия'})" for row in filtered_private
+        )
+        logger.warning(
+            "Private filtered channels require explicit owner decision (%d): %s",
+            len(filtered_private),
+            details,
+        )
+    logger.info(
+        "Private channel provenance backfill complete: %d channels marked human; "
+        "%d filtered channels left unchanged",
+        len(rows),
+        len(filtered_private),
+    )
+    return filtered_private
+
+
+async def run_migrations(db: aiosqlite.Connection) -> bool:
+    """Repair the SQLite schema without rewriting existing user data.
+
+    SQLite's ``CREATE TABLE IF NOT EXISTS`` does not add columns to existing
+    tables. This function keeps the app bootable on older local databases by
+    creating missing tables from the canonical schema and adding missing columns
+    that SQLite can add in place. A small set of legacy upgrade migrations is
+    retained where additive repair cannot preserve existing runtime contracts.
+    """
+    await _rebuild_collection_tasks_if_channel_id_notnull(db)
+
+    channels_columns_before_repair = await table_columns(db, "channels")
+    username_column_known = "username" in channels_columns_before_repair
+    username_state_column_known = "username_state" in channels_columns_before_repair
+    if channels_columns_before_repair and not username_column_known:
+        # Keep the schema repair and its marker in the same transaction. If a
+        # process is interrupted after ALTER TABLE, the next startup must not
+        # mistake the resulting NULLs for genuine private-channel usernames.
+        await db.execute("BEGIN IMMEDIATE")
+        try:
+            await db.execute(
+                "CREATE TABLE IF NOT EXISTS settings "
+                "(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+            )
+            await ensure_columns(
+                db,
+                "channels",
+                {
+                    "username": "username TEXT",
+                    "username_state": "username_state TEXT NOT NULL DEFAULT 'unknown'",
+                },
+            )
+            await db.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES (?, '1')",
+                (_CHANNEL_USERNAME_REPAIR_MARKER,),
+            )
+            await db.execute("COMMIT")
+        except Exception:
+            await db.execute("ROLLBACK")
+            raise
+    elif channels_columns_before_repair:
+        # A partially initialized legacy database may already have the
+        # repaired channels table but not the settings table yet.
+        await db.execute(
+            "CREATE TABLE IF NOT EXISTS settings "
+            "(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+        )
+        repair_cur = await db.execute(
+            "SELECT value FROM settings WHERE key = ? LIMIT 1",
+            (_CHANNEL_USERNAME_REPAIR_MARKER,),
+        )
+        repair_pending = await repair_cur.fetchone()
+        username_column_known = not repair_pending
+        if repair_pending and not username_state_column_known:
+            await db.execute("BEGIN IMMEDIATE")
+            try:
+                await ensure_columns(
+                    db,
+                    "channels",
+                    {"username_state": "username_state TEXT NOT NULL DEFAULT 'unknown'"},
+                )
+                await db.execute("UPDATE channels SET username_state = 'unknown'")
+                await db.execute("COMMIT")
+            except Exception:
+                await db.execute("ROLLBACK")
+                raise
+    else:
+        # The canonical schema below creates channels.username for a fresh DB.
+        username_column_known = True
+
+    for table, columns in SCHEMA_REPAIR_COLUMNS.items():
+        await ensure_columns(db, table, columns)
+
+    # Collapse any pre-existing duplicate primary accounts (#733) BEFORE applying
+    # SCHEMA_SQL — it contains the single-primary partial unique index, whose
+    # creation would fail on a DB that already has >1 primary row.
+    await _dedupe_primary_accounts(db)
+
+    await db.executescript(SCHEMA_SQL)
+
+    # Drop the obsolete v1 ``pipelines`` table left behind in older databases.
+    await _drop_legacy_pipelines_table_if_empty(db)
+
+    # Drop indexes the schema no longer creates (e.g. the ~21 GB idx_messages_text).
+    await _drop_obsolete_indexes(db)
+
+    for table, columns in SCHEMA_REPAIR_COLUMNS.items():
+        await ensure_columns(db, table, columns)
+
+    # The target-scoped dedup key requires a table rebuild on legacy DBs —
+    # ALTER cannot change UNIQUE constraints. Runs after ensure_columns (so
+    # target exists) and before ensure_indexes (so the partial unique indexes
+    # land on the final table).
+    await _rebuild_pipeline_action_log_for_target_scope(db)
+
+    await ensure_indexes(db, SCHEMA_REPAIR_INDEXES)
+
+    # One-off: private channels are owner-supplied by construction. Do not
+    # change ``is_filtered`` here; filtered private channels are reported for
+    # explicit owner review instead (#1311).
+    await backfill_private_channel_provenance(
+        db, username_column_known=username_column_known
+    )
+
+    # One-off: fill message_reactions.date for rows that predate the column so
+    # reaction analytics can filter by date without joining messages (#760).
+    await _backfill_message_reactions_date(db)
+
+    fts_available = await _ensure_fts5_available(db)
+    if fts_available:
+        await _backfill_messages_fts_if_empty(db)
+
+    cur = await db.execute(
+        "SELECT value FROM settings WHERE key = '_migration_channel_cursor_repair_v1' LIMIT 1"
+    )
+    if not await cur.fetchone():
+        await _repair_channel_last_collected_ids_from_messages(db)
+        await db.execute(
+            "INSERT OR IGNORE INTO settings (key, value) "
+            "VALUES ('_migration_channel_cursor_repair_v1', '1')"
+        )
+
+    legacy_dialog_search_key = "_".join(("search", "my", "telegram"))
+    await _migrate_tool_permission_key(db, "list_dialogs", legacy_dialog_search_key)
+    await _migrate_tool_permission_key(db, legacy_dialog_search_key, "search_dialogs")
+
+    cur = await db.execute(
+        "SELECT value FROM settings WHERE key = '_migration_zai_base_url_v1' LIMIT 1"
+    )
+    if not await cur.fetchone():
+        await _migrate_zai_legacy_base_url(db)
+        await db.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES ('_migration_zai_base_url_v1', '1')"
+        )
+
+    cur = await db.execute(
+        "SELECT value FROM settings WHERE key = '_migration_zai_base_url_v2' LIMIT 1"
+    )
+    if not await cur.fetchone():
+        await _migrate_zai_empty_base_url_to_coding(db)
+        await db.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES ('_migration_zai_base_url_v2', '1')"
+        )
+
+    # Seed the 447 pre-computed channel ratings once (#966), idempotent by marker.
+    await _seed_channel_ratings(db)
+
+    # Seed planner statistics last, after every table and index is in place (#760).
+    await _ensure_initial_analyze(db)
+
+    await db.commit()
+    return fts_available
+
+
+_CHANNEL_RATINGS_SEED = Path(__file__).resolve().parent / "seeds" / "channel_ratings.csv"
+
+
+async def _seed_channel_ratings(db: aiosqlite.Connection) -> None:
+    """Idempotently import the pre-computed channel ratings CSV (#966).
+
+    Gated on a settings marker so it runs once; rows are inserted with
+    ``INSERT OR IGNORE`` so a manually-rated channel is never overwritten by the
+    seed. A no-op when the seed file is absent (e.g. a trimmed deployment).
+    """
+    cur = await db.execute(
+        "SELECT value FROM settings WHERE key = '_seed_channel_ratings_v1' LIMIT 1"
+    )
+    if await cur.fetchone():
+        return
+    if not _CHANNEL_RATINGS_SEED.exists():
+        return
+
+    import csv
+
+    rows: list[tuple] = []
+    with _CHANNEL_RATINGS_SEED.open(encoding="utf-8") as fh:
+        for r in csv.DictReader(fh):
+            try:
+                channel_id = int(r["channel_id"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            rows.append(
+                (
+                    channel_id,
+                    r.get("title") or None,
+                    r.get("username") or None,
+                    r.get("useful") or "useless",
+                    r.get("genre") or "original",
+                    float(r["confidence"]) if r.get("confidence") else 0.0,
+                    r.get("reason") or None,
+                    float(r["emoji_trash_score"]) if r.get("emoji_trash_score") else None,
+                    int(r["flag_count"]) if r.get("flag_count") else 0,
+                    int(r["n_total"]) if r.get("n_total") else 0,
+                )
+            )
+    if rows:
+        await db.executemany(
+            "INSERT OR IGNORE INTO channel_ratings "
+            "(channel_id, title, username, useful, genre, confidence, reason, "
+            " emoji_trash_score, flag_count, n_total) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            rows,
+        )
+        logger.info("Seeded %d channel ratings from CSV (#966)", len(rows))
+    await db.execute(
+        "INSERT OR IGNORE INTO settings (key, value) VALUES ('_seed_channel_ratings_v1', '1')"
+    )
+
+
+async def _rebuild_pipeline_action_log_for_target_scope(db: aiosqlite.Connection) -> None:
+    """Extend the action-log dedup key with the target column (#1537).
+
+    Legacy rows keep their target as NULL, which processed_message_ids reads
+    back as "delivered everywhere" — the conservative post-migration behavior
+    (skip rather than re-deliver). The partial unique indexes themselves are
+    created by ensure_indexes right after this runs.
+    """
+    if not await table_exists(db, "pipeline_action_log"):
+        return
+    cur = await db.execute("PRAGMA index_list(pipeline_action_log)")
+    names = {row["name"] for row in await cur.fetchall()}
+    if "idx_pipeline_action_log_targeted" in names:
+        return  # fresh schema or already rebuilt
+
+    # Same discipline as _rebuild_collection_tasks: orphan tmp cleanup outside
+    # the transaction, the entire copy+swap under one BEGIN IMMEDIATE so a
+    # concurrent writer cannot lose a row between snapshot and rename.
+    await db.execute("DROP TABLE IF EXISTS pipeline_action_log_tmp")
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        await db.execute("""
+            CREATE TABLE pipeline_action_log_tmp (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                pipeline_id INTEGER NOT NULL,
+                node_id     TEXT NOT NULL,
+                action      TEXT NOT NULL,
+                channel_id  INTEGER NOT NULL,
+                message_id  INTEGER NOT NULL,
+                target      TEXT,
+                created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+            """)
+        await db.execute(
+            """
+            INSERT INTO pipeline_action_log_tmp (
+                id, pipeline_id, node_id, action, channel_id, message_id, target, created_at
+            )
+            SELECT id, pipeline_id, node_id, action, channel_id, message_id, target, created_at
+            FROM pipeline_action_log
+            """
+        )
+        await db.execute("DROP TABLE pipeline_action_log")
+        # A plain RENAME re-parses every trigger body in the schema; on legacy
+        # databases whose messages_fts_ai trigger predates the messages.id
+        # column that parse fails ("no such column: new.id") even though no
+        # trigger or view references pipeline_action_log (grep: none exist).
+        # Legacy mode skips trigger rewriting entirely.
+        await db.execute("PRAGMA legacy_alter_table = 1")
+        try:
+            await db.execute("ALTER TABLE pipeline_action_log_tmp RENAME TO pipeline_action_log")
+        finally:
+            await db.execute("PRAGMA legacy_alter_table = 0")
+    except Exception:
+        await db.execute("ROLLBACK")
+        raise
+    await db.commit()
+    logger.info("Migrated pipeline_action_log: dedup key scoped by target")
+
+
+async def _migrate_vec_to_portable(db: aiosqlite.Connection) -> None:
+    """Deprecated compatibility shim; data migrations are no longer run."""
+    _ = db
+
+
+async def _rewrite_zai_base_urls(
+    db: aiosqlite.Connection,
+    *,
+    should_rewrite: Callable[[str], bool],
+    new_base_url: str,
+    log_message: str,
+) -> None:
+    """Rewrite ``base_url`` of stored Z.AI provider configs matching a predicate.
+
+    Shared body of the two Z.AI base_url migrations: load the
+    ``agent_deepagents_providers_v1`` JSON, rewrite ``plain_fields.base_url``
+    (clearing ``last_validation_error``) on every zai item whose current raw
+    value satisfies ``should_rewrite``, and save only when something changed.
+    """
+    import json
+
+    cur = await db.execute(
+        "SELECT value FROM settings WHERE key = 'agent_deepagents_providers_v1' LIMIT 1"
+    )
+    row = await cur.fetchone()
+    if not row or not row["value"]:
+        return
+    try:
+        data = json.loads(row["value"])
+    except (json.JSONDecodeError, TypeError):
+        return
+    if not isinstance(data, list):
+        return
+
+    changed = False
+    for item in data:
+        if not isinstance(item, dict) or item.get("provider") != "zai":
+            continue
+        plain = item.get("plain_fields")
+        if not isinstance(plain, dict):
+            continue
+        current = str(plain.get("base_url", "") or "")
+        if should_rewrite(current):
+            plain["base_url"] = new_base_url
+            item["last_validation_error"] = ""
+            changed = True
+
+    if not changed:
+        return
+
+    await db.execute(
+        "UPDATE settings SET value = ? WHERE key = 'agent_deepagents_providers_v1'",
+        (json.dumps(data, ensure_ascii=False),),
+    )
+    logger.info(log_message, new_base_url)
+
+
+async def _migrate_zai_legacy_base_url(db: aiosqlite.Connection) -> None:
+    """Rewrite legacy Z.AI Anthropic-compatible base_url to the OpenAI-compatible default."""
+    from tg_agent.agent.provider_registry import (
+        ZAI_GENERAL_BASE_URL,
+        is_zai_legacy_anthropic_base_url,
+    )
+
+    await _rewrite_zai_base_urls(
+        db,
+        should_rewrite=is_zai_legacy_anthropic_base_url,
+        new_base_url=ZAI_GENERAL_BASE_URL,
+        log_message="Migrated legacy Z.AI Anthropic-compatible base_url to %s",
+    )
+
+
+async def _migrate_zai_empty_base_url_to_coding(db: aiosqlite.Connection) -> None:
+    """Backfill empty Z.AI base_url values to the Coding Plan endpoint."""
+    from tg_agent.agent.provider_registry import ZAI_CODING_BASE_URL
+
+    await _rewrite_zai_base_urls(
+        db,
+        should_rewrite=lambda current: current.strip().rstrip("/") == "",
+        new_base_url=ZAI_CODING_BASE_URL,
+        log_message="Migrated empty Z.AI base_url to %s",
+    )
+
+
+async def _migrate_tool_permission_key(
+    db: aiosqlite.Connection,
+    old_key: str,
+    new_key: str,
+) -> None:
+    """Rename a tool key inside the agent_tool_permissions JSON setting."""
+    import json
+
+    cur = await db.execute("SELECT value FROM settings WHERE key = 'agent_tool_permissions' LIMIT 1")
+    row = await cur.fetchone()
+    if not row or not row["value"]:
+        return
+    try:
+        data = json.loads(row["value"])
+    except (json.JSONDecodeError, TypeError):
+        return
+    if not isinstance(data, dict):
+        return
+
+    changed = False
+    first_val = next(iter(data.values()), None) if data else None
+    if isinstance(first_val, dict):
+        for perms in data.values():
+            if isinstance(perms, dict) and old_key in perms:
+                perms[new_key] = perms.pop(old_key)
+                changed = True
+    elif old_key in data:
+        data[new_key] = data.pop(old_key)
+        changed = True
+
+    if not changed:
+        return
+
+    await db.execute(
+        "UPDATE settings SET value = ? WHERE key = 'agent_tool_permissions'",
+        (json.dumps(data, ensure_ascii=False),),
+    )
+    logger.info("Migrated tool permission key %r -> %r in agent_tool_permissions", old_key, new_key)

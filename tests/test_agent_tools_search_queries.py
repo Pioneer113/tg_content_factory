@@ -14,7 +14,7 @@ async def sq_handlers(db):
 
 async def _add_query(db, query="test query", interval_minutes=30, is_active=True):
     """Helper: add a search query via the service and return its id."""
-    from src.services.search_query_service import SearchQueryService
+    from tg_agent.services.search_query_service import SearchQueryService
 
     svc = SearchQueryService(db)
     sq_id = await svc.add(query, interval_minutes=interval_minutes)

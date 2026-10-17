@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from src.models import Message, SearchQuery
-from src.services.notification_matcher import (
+from tg_agent.models import Message, SearchQuery
+from tg_agent.services.notification_matcher import (
     _REGEX_TIMEOUT_SECONDS,
     NotificationMatcher,
     _fts_query_matches,
@@ -536,7 +536,7 @@ async def test_notification_uses_query_name_not_raw_query():
 
 
 def test_dry_run_matches_regex_query():
-    from src.services.notification_matcher import dry_run_matches
+    from tg_agent.services.notification_matcher import dry_run_matches
 
     msgs = [
         make_message("продаю квартиру срочно", message_id=1),
@@ -549,7 +549,7 @@ def test_dry_run_matches_regex_query():
 
 
 def test_dry_run_matches_partial_substring():
-    from src.services.notification_matcher import dry_run_matches
+    from tg_agent.services.notification_matcher import dry_run_matches
 
     msgs = [
         make_message("теплоход отправляется", message_id=1),

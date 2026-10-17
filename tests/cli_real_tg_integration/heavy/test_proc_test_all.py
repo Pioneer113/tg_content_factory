@@ -1,4 +1,4 @@
-"""`python -m src.main test all` — runs read + write + telegram self-checks.
+"""`python -m tg_agent.main test all` — runs read + write + telegram self-checks.
 
 The write part copies the live DB into a tempfile and exercises mutating
 operations on that copy (account_toggle, search_query CRUD, channel toggle,

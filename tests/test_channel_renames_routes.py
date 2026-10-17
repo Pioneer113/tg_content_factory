@@ -12,17 +12,17 @@ import base64
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.database import Database
-from src.models import Channel
 from tests.helpers import make_test_config
+from tg_agent.database import Database
+from tg_agent.models import Channel
 
 
 async def _build_app_with_db(tmp_path):
-    from src.scheduler.service import SchedulerManager
-    from src.search.ai_search import AISearchEngine
-    from src.search.engine import SearchEngine
-    from src.telegram.auth import TelegramAuth
-    from src.web.app import create_app
+    from tg_agent.scheduler.service import SchedulerManager
+    from tg_agent.search.ai_search import AISearchEngine
+    from tg_agent.search.engine import SearchEngine
+    from tg_agent.telegram.auth import TelegramAuth
+    from tg_agent.web.app import create_app
 
     config = make_test_config(tmp_path)
     app = create_app(config)
@@ -272,7 +272,7 @@ async def test_rename_events_count_nonzero(tmp_path):
 
 def test_rename_required_flags_title_and_username():
     """Both title and username changed."""
-    from src.web.routes.channel_renames import _rename_required_flags
+    from tg_agent.web.routes.channel_renames import _rename_required_flags
     flags = _rename_required_flags({
         "old_title": "A", "new_title": "B",
         "old_username": "a", "new_username": "b",
@@ -282,7 +282,7 @@ def test_rename_required_flags_title_and_username():
 
 def test_rename_required_flags_title_only():
     """Only title changed."""
-    from src.web.routes.channel_renames import _rename_required_flags
+    from tg_agent.web.routes.channel_renames import _rename_required_flags
     flags = _rename_required_flags({
         "old_title": "A", "new_title": "B",
         "old_username": "same", "new_username": "same",
@@ -292,7 +292,7 @@ def test_rename_required_flags_title_only():
 
 def test_rename_required_flags_username_only():
     """Only username changed."""
-    from src.web.routes.channel_renames import _rename_required_flags
+    from tg_agent.web.routes.channel_renames import _rename_required_flags
     flags = _rename_required_flags({
         "old_title": "same", "new_title": "same",
         "old_username": "a", "new_username": "b",
@@ -302,7 +302,7 @@ def test_rename_required_flags_username_only():
 
 def test_rename_required_flags_no_change():
     """No change detected — fallback to username_changed."""
-    from src.web.routes.channel_renames import _rename_required_flags
+    from tg_agent.web.routes.channel_renames import _rename_required_flags
     flags = _rename_required_flags({
         "old_title": "same", "new_title": "same",
         "old_username": "same", "new_username": "same",

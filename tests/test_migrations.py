@@ -5,7 +5,7 @@ import json
 import aiosqlite
 import pytest
 
-from src.database.migrations import (
+from tg_agent.database.migrations import (
     SCHEMA_REPAIR_INDEXES,
     _backfill_messages_fts_if_empty,
     _ensure_initial_analyze,

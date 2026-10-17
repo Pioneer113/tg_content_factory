@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from src.web.routes.scheduler import (
+from tg_agent.web.routes.scheduler import (
     _collector_health_border_severity,
     _collector_health_recommendations,
     _compute_load_level,

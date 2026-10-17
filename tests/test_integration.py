@@ -15,15 +15,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.cli.runtime import init_pool
-from src.config import AppConfig, SchedulerConfig, load_config
-from src.database import Database
-from src.models import Channel, Message, SearchQuery
-from src.scheduler.service import SchedulerManager
-from src.search.engine import SearchEngine
-from src.telegram.client_pool import ClientPool
-from src.telegram.collector import Collector
-from src.web.app import create_app
 from tests.helpers import (
     FakeCliTelethonClient,
     build_web_app,
@@ -31,6 +22,15 @@ from tests.helpers import (
     make_channel_entity,
 )
 from tests.helpers import make_mock_pool as _make_pool
+from tg_agent.cli.runtime import init_pool
+from tg_agent.config import AppConfig, SchedulerConfig, load_config
+from tg_agent.database import Database
+from tg_agent.models import Channel, Message, SearchQuery
+from tg_agent.scheduler.service import SchedulerManager
+from tg_agent.search.engine import SearchEngine
+from tg_agent.telegram.client_pool import ClientPool
+from tg_agent.telegram.collector import Collector
+from tg_agent.web.app import create_app
 
 
 def _resolved_channel_entity(identifier: object) -> SimpleNamespace:
@@ -449,7 +449,7 @@ class TestSchedulerStartStop:
     async def test_trigger_enqueues_channels(self, app_with_db):
         """POST /scheduler/trigger enqueues collection tasks via the queue."""
         app, db = app_with_db
-        from src.models import Channel
+        from tg_agent.models import Channel
 
         await db.add_channel(Channel(channel_id=-100801, title="Ch1", username="ch1"))
         await db.add_channel(Channel(channel_id=-100802, title="Ch2", username="ch2"))
@@ -590,7 +590,7 @@ class TestFloodWaitRotation:
 
     @pytest.mark.anyio
     async def test_report_flood_marks_account(self, test_db):
-        from src.models import Account
+        from tg_agent.models import Account
 
         acc1 = Account(phone="+70001111111", session_string="s1", is_primary=True)
         acc2 = Account(phone="+70002222222", session_string="s2")
@@ -850,7 +850,7 @@ class TestAPICredentialsFallback:
 
     @pytest.mark.anyio
     async def test_api_credentials_fallback_via_lifespan(self, tmp_path):
-        from src.web.app import lifespan
+        from tg_agent.web.app import lifespan
 
         # Pre-seed DB with credentials
         db_path = str(tmp_path / "test.db")
@@ -875,7 +875,7 @@ class TestAPICredentialsFallback:
 
     @pytest.mark.anyio
     async def test_invalid_api_id_in_db_does_not_crash_lifespan(self, tmp_path):
-        from src.web.app import lifespan
+        from tg_agent.web.app import lifespan
 
         db_path = str(tmp_path / "bad-web.db")
         db = Database(db_path)

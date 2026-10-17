@@ -7,7 +7,7 @@ import base64
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.models import TelegramCommand, TelegramCommandStatus
+from tg_agent.models import TelegramCommand, TelegramCommandStatus
 
 
 @pytest.fixture

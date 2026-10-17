@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.agent.tools.permissions import (
+from tg_agent.agent.tools.permissions import (
     BUILTIN_TOOLS,
     MCP_PREFIX,
     MODULE_GROUPS,
@@ -61,7 +61,7 @@ def test_module_groups_cover_all_tools():
 
 def test_pipeline_safe_tools_are_read_only():
     """All tools in _PIPELINE_SAFE_TOOLS must exist in TOOL_CATEGORIES and be READ-only."""
-    from src.agent.tools import _PIPELINE_SAFE_TOOLS
+    from tg_agent.agent.tools import _PIPELINE_SAFE_TOOLS
 
     for tool_name in _PIPELINE_SAFE_TOOLS:
         assert tool_name in TOOL_CATEGORIES, (
@@ -354,7 +354,7 @@ class TestLoadToolPermissionsUnion:
 
     @pytest.mark.anyio
     async def test_cache_returns_same_result(self):
-        import src.agent.tools.permissions as perm_mod
+        import tg_agent.agent.tools.permissions as perm_mod
         # Clear the module-level cache so we get a fresh start
         perm_mod._permissions_cache = None
 

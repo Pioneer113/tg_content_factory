@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.agent.zai_errors import format_provider_error, format_zai_api_error
+from tg_agent.agent.zai_errors import format_provider_error, format_zai_api_error
 
 
 def _exc_with_body(body: dict | str) -> Exception:

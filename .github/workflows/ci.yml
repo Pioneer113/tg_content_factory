@@ -86,7 +86,7 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Ruff
-        run: ruff check src tests conftest.py
+        run: ruff check tg_agent tests conftest.py
 
   # Static gates run as their own job so they fail fast and in parallel with the
   # long tests jobs (#944, #1097 §5). Holds the import-architecture contracts and
@@ -130,7 +130,7 @@ jobs:
       # (review #918: @claude/@codex supply-chain note).
       - name: Code duplication guard (advisory)
         continue-on-error: true
-        run: npx -y jscpd@5.0.10 --min-tokens 70 --format python --threshold 1 src
+        run: npx -y jscpd@5.0.10 --min-tokens 70 --format python --threshold 1 tg_agent
 
       # Dependency CVE scan (#1053, #1097 §4). Advisory for now (continue-on-error)
       # so a pre-existing transitive CVE never reds CI — pip-audit LOCATES,
@@ -145,10 +145,10 @@ jobs:
       # duplication guard: the codebase has ~hundreds of broad `except Exception`
       # blocks that bandit flags (B110/B112) — kept non-blocking to avoid noise
       # until a baseline/skip-list is curated. Config lives in [tool.bandit] in
-      # pyproject.toml (recurses src, excludes tests).
+      # pyproject.toml (recurses tg_agent, excludes tests).
       - name: Code security scan (advisory)
         continue-on-error: true
-        run: bandit -c pyproject.toml -r src -q
+        run: bandit -c pyproject.toml -r tg_agent -q
 
       # Doc-coverage (interrogate) is intentionally NOT a CI step (#1097 §3): it
       # stays a LOCAL script (scripts/doc_coverage.py, #1072) the owner runs on

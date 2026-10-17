@@ -19,8 +19,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.models import Account, PhotoAutoUploadJob, PhotoSendMode
 from tests.agent_tools_helpers import _get_tool_handlers, _text
+from tg_agent.models import Account, PhotoAutoUploadJob, PhotoSendMode
 
 
 def _make_account(phone: str = "+79001234567") -> MagicMock:
@@ -289,7 +289,7 @@ async def test_add_search_query_string_false_flags_disabled(db):
     )
     assert "создан" in _text(result)
 
-    from src.services.search_query_service import SearchQueryService
+    from tg_agent.services.search_query_service import SearchQueryService
 
     queries = await SearchQueryService(db).list_queries()
     assert len(queries) == 1
@@ -307,7 +307,7 @@ async def test_add_search_query_string_false_flags_disabled(db):
 @pytest.mark.anyio
 async def test_collect_channel_string_false_force_respects_filter(db):
     """force="false" must keep the filtered-channel guard active."""
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     await db.add_channel(Channel(channel_id=2002, title="Filtered", username="filtered"))
     ch = (await db.get_channels(include_filtered=True))[0]
@@ -337,7 +337,7 @@ async def test_add_pipeline_invalid_ab_num_variants_rejected(mock_db, bad_varian
     from unittest.mock import patch
 
     handlers = _get_tool_handlers(mock_db)
-    with patch("src.services.pipeline_service.PipelineService") as mock_svc:
+    with patch("tg_agent.services.pipeline_service.PipelineService") as mock_svc:
         mock_svc.return_value.add = AsyncMock(return_value=10)
         result = await handlers["add_pipeline"](
             {

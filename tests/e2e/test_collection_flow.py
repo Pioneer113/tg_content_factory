@@ -27,10 +27,10 @@ from unittest.mock import patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.config import AppConfig, DatabaseConfig
-from src.database import Database
-from src.models import Account, Channel, CollectionTaskStatus, Message, RuntimeSnapshot
-from src.web.app import create_app
+from tg_agent.config import AppConfig, DatabaseConfig
+from tg_agent.database import Database
+from tg_agent.models import Account, Channel, CollectionTaskStatus, Message, RuntimeSnapshot
+from tg_agent.web.app import create_app
 
 _PASS = "testpass"
 
@@ -150,10 +150,10 @@ async def test_trigger_collection_persists_messages_via_embedded_worker(tmp_path
     hangs on the message-count assertion rather than passing silently.
     """
     with patch(
-        "src.telegram.collector.Collector.collect_single_channel",
+        "tg_agent.telegram.collector.Collector.collect_single_channel",
         new=_fake_collect_single_channel,
     ), patch(
-        "src.telegram.collector.Collector.get_collection_availability",
+        "tg_agent.telegram.collector.Collector.get_collection_availability",
         return_value=SimpleNamespace(state="available"),
     ):
         async with _serve_app(tmp_path, embed_worker=True) as (client, config):
@@ -175,7 +175,7 @@ async def test_trigger_collection_stuck_without_worker(tmp_path):
     isn't passing by coincidence (e.g. DB writes happening on the web side).
     """
     with patch(
-        "src.telegram.collector.Collector.collect_single_channel",
+        "tg_agent.telegram.collector.Collector.collect_single_channel",
         new=_fake_collect_single_channel,
     ):
         async with _serve_app(tmp_path, embed_worker=False) as (client, config):
@@ -200,7 +200,7 @@ async def test_embedded_worker_publishes_heartbeat(tmp_path):
     always flip to `worker_down`.
     """
     with patch(
-        "src.telegram.collector.Collector.collect_single_channel",
+        "tg_agent.telegram.collector.Collector.collect_single_channel",
         new=_fake_collect_single_channel,
     ):
         async with _serve_app(tmp_path, embed_worker=True) as (_, config):

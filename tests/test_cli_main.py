@@ -18,7 +18,7 @@ from unittest.mock import patch
 
 import pytest
 
-from src.cli.main import main
+from tg_agent.cli.main import main
 
 
 def _run_main(argv: list[str]):
@@ -89,24 +89,24 @@ class TestMainEntryPoint:
         Confirms the entry point actually dispatches into a command (not just
         help handling) and threads the default config.
         """
-        with patch("src.cli.typer_commands.serve_cmd.serve_web") as mock_serve:
+        with patch("tg_agent.cli.typer_commands.serve_cmd.serve_web") as mock_serve:
             code = _run_main(["serve"])
         assert code == 0
         mock_serve.assert_called_once_with("config.yaml", web_pass=None, no_worker=False)
 
     def test_global_config_option_threads_to_body(self):
         """The global ``--config`` reaches the command body (argparse parity)."""
-        with patch("src.cli.typer_commands.serve_cmd.serve_web") as mock_serve:
+        with patch("tg_agent.cli.typer_commands.serve_cmd.serve_web") as mock_serve:
             code = _run_main(["--config", "prod.yaml", "serve"])
         assert code == 0
         mock_serve.assert_called_once_with("prod.yaml", web_pass=None, no_worker=False)
 
 
 def test_main_is_module_entrypoint():
-    """``python -m src.main`` resolves ``main`` from ``src.cli.main``."""
-    import src.main
+    """``python -m tg_agent.main`` resolves ``main`` from ``src.cli.main``."""
+    import tg_agent.main
 
-    assert src.main.main is main
+    assert tg_agent.main.main is main
 
 
 @pytest.mark.parametrize(
@@ -137,25 +137,25 @@ class TestNegativeIdPositionalParity:
     """
 
     def test_search_negative_query(self):
-        with patch("src.cli.typer_commands.search_cmd.search_impl") as mock_impl:
+        with patch("tg_agent.cli.typer_commands.search_cmd.search_impl") as mock_impl:
             code = _run_main(["search", "-100500"])
         assert code == 0
         assert mock_impl.call_args.kwargs["query"] == "-100500"
 
     def test_collect_sample_negative_channel_id(self):
-        with patch("src.cli.typer_commands.collect_cmd.collect_sample_impl") as mock_impl:
+        with patch("tg_agent.cli.typer_commands.collect_cmd.collect_sample_impl") as mock_impl:
             code = _run_main(["collect", "sample", "-100123"])
         assert code == 0
         assert mock_impl.call_args.kwargs["channel_id"] == -100123
 
     def test_messages_read_negative_identifier(self):
-        with patch("src.cli.typer_commands.messages_cmd.messages_read_impl") as mock_impl:
+        with patch("tg_agent.cli.typer_commands.messages_cmd.messages_read_impl") as mock_impl:
             code = _run_main(["messages", "read", "-100500"])
         assert code == 0
         assert mock_impl.call_args.kwargs["identifier"] == "-100500"
 
     def test_analytics_channel_negative_id(self):
-        with patch("src.cli.typer_commands.analytics_cmd.channel_impl") as mock_impl:
+        with patch("tg_agent.cli.typer_commands.analytics_cmd.channel_impl") as mock_impl:
             code = _run_main(["analytics", "channel", "-100123456"])
         assert code == 0
         assert mock_impl.call_args.kwargs["channel_id"] == -100123456
@@ -168,7 +168,7 @@ class TestNegativeIdPositionalParity:
             ["dialogs", "leave", "-100111", "--yes"],
             ["dialogs", "leave", "--yes", "-100111"],
         ):
-            with patch("src.cli.typer_commands.dialogs_cmd._dispatch") as mock_dispatch:
+            with patch("tg_agent.cli.typer_commands.dialogs_cmd._dispatch") as mock_dispatch:
                 code = _run_main(argv)
             assert code == 0, argv
             ns = mock_dispatch.call_args.args[0]
@@ -178,7 +178,7 @@ class TestNegativeIdPositionalParity:
     def test_negative_value_as_option_value_is_untouched(self):
         """``--channel-id -100123`` — the negative is the *option's* value, parsed
         natively (collect carries no positional / context override either way)."""
-        with patch("src.cli.typer_commands.collect_cmd.collect_impl") as mock_impl:
+        with patch("tg_agent.cli.typer_commands.collect_cmd.collect_impl") as mock_impl:
             code = _run_main(["collect", "--channel-id", "-100123"])
         assert code == 0
         assert mock_impl.call_args.kwargs["channel_id"] == -100123
@@ -186,7 +186,7 @@ class TestNegativeIdPositionalParity:
     def test_negative_id_interleaves_with_flag_after(self):
         """``analytics channel -100123456 --days 14`` — option AFTER the negative
         positional (free interleaving, the case a flat ``--`` insertion broke)."""
-        with patch("src.cli.typer_commands.analytics_cmd.channel_impl") as mock_impl:
+        with patch("tg_agent.cli.typer_commands.analytics_cmd.channel_impl") as mock_impl:
             code = _run_main(["analytics", "channel", "-100123456", "--days", "14"])
         assert code == 0
         assert mock_impl.call_args.kwargs["channel_id"] == -100123456
@@ -194,7 +194,7 @@ class TestNegativeIdPositionalParity:
 
     def test_negative_id_interleaves_with_flag_before(self):
         """``analytics channel --days 14 -100123456`` — option BEFORE the negative."""
-        with patch("src.cli.typer_commands.analytics_cmd.channel_impl") as mock_impl:
+        with patch("tg_agent.cli.typer_commands.analytics_cmd.channel_impl") as mock_impl:
             code = _run_main(["analytics", "channel", "--days", "14", "-100123456"])
         assert code == 0
         assert mock_impl.call_args.kwargs["channel_id"] == -100123456
@@ -242,7 +242,7 @@ class TestNegIdScopeIsNarrow:
         This test pins the *known, accepted* behaviour so a reviewer sees it is
         intentional, not an oversight: ``search --typo`` searches for ``--typo``.
         """
-        with patch("src.cli.typer_commands.search_cmd.search_impl") as mock_impl:
+        with patch("tg_agent.cli.typer_commands.search_cmd.search_impl") as mock_impl:
             code = _run_main(["search", "--typo"])
         assert code == 0
         assert mock_impl.call_args.kwargs["query"] == "--typo"

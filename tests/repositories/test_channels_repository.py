@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.models import Channel
+from tg_agent.models import Channel
 
 
 def make_channel(channel_id: int, title: str = "Test Channel", **kwargs) -> Channel:

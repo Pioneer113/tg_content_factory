@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.models import (
+from tg_agent.models import (
     Channel,
     CollectionTask,
     CollectionTaskStatus,
@@ -20,7 +20,7 @@ from src.models import (
     SqStatsTaskPayload,
     StatsAllTaskPayload,
 )
-from src.services.unified_dispatcher import HANDLED_TYPES, UnifiedDispatcher
+from tg_agent.services.unified_dispatcher import HANDLED_TYPES, UnifiedDispatcher
 
 
 @pytest.fixture
@@ -250,7 +250,7 @@ async def test_run_loop_busy_does_not_log_loop_failure(
     'loop failure' with a full traceback (it floods the log on every lock)."""
     import logging
 
-    from src.database import DatabaseBusyError
+    from tg_agent.database import DatabaseBusyError
 
     calls = [0]
 
@@ -288,7 +288,7 @@ async def test_run_loop_busy_after_claim_requeues_task(
     return to pending so the next poll can retry it without a worker restart."""
     import logging
 
-    from src.database import DatabaseBusyError
+    from tg_agent.database import DatabaseBusyError
 
     task = CollectionTask(
         id=77,
@@ -327,7 +327,7 @@ async def test_run_loop_busy_after_side_effecting_task_marks_failed_without_requ
     """Side-effecting task types must not be blindly retried after a DB lock."""
     import logging
 
-    from src.database import DatabaseBusyError
+    from tg_agent.database import DatabaseBusyError
 
     task = CollectionTask(
         id=88,
@@ -1108,7 +1108,7 @@ async def test_handle_pipeline_run_success_with_mocked_services(
     mock_run.metadata = {}
 
     with patch(
-        "src.services.content_generation_service.ContentGenerationService"
+        "tg_agent.services.content_generation_service.ContentGenerationService"
     ) as mock_gen_service:
         mock_gen_instance = MagicMock()
         mock_gen_instance.generate = AsyncMock(return_value=mock_run)
@@ -1173,7 +1173,7 @@ async def test_handle_pipeline_run_generation_exception(dispatcher, mock_tasks_r
     )
 
     with patch(
-        "src.services.content_generation_service.ContentGenerationService"
+        "tg_agent.services.content_generation_service.ContentGenerationService"
     ) as mock_gen_service:
         mock_gen_instance = MagicMock()
         mock_gen_instance.generate = AsyncMock(side_effect=RuntimeError("LLM error"))
@@ -1195,7 +1195,7 @@ async def test_handle_content_generate_with_auto_publish(dispatcher, mock_tasks_
     """_handle_content_generate publishes automatically when mode is AUTO."""
     from unittest.mock import patch
 
-    from src.models import ContentPipeline, PipelinePublishMode
+    from tg_agent.models import ContentPipeline, PipelinePublishMode
 
     mock_pipeline = MagicMock(spec=ContentPipeline)
     mock_pipeline.id = 1
@@ -1225,9 +1225,9 @@ async def test_handle_content_generate_with_auto_publish(dispatcher, mock_tasks_
 
     with (
         patch(
-            "src.services.content_generation_service.ContentGenerationService"
+            "tg_agent.services.content_generation_service.ContentGenerationService"
         ) as mock_gen_service,
-        patch("src.services.publish_service.PublishService") as mock_publish_service,
+        patch("tg_agent.services.publish_service.PublishService") as mock_publish_service,
     ):
         mock_gen_instance = MagicMock()
         mock_gen_instance.generate = AsyncMock(return_value=mock_run)
@@ -1253,7 +1253,7 @@ async def test_handle_content_generate_without_auto_publish(
     """_handle_content_generate does not publish when mode is not AUTO."""
     from unittest.mock import patch
 
-    from src.models import ContentPipeline, PipelinePublishMode
+    from tg_agent.models import ContentPipeline, PipelinePublishMode
 
     mock_pipeline = MagicMock(spec=ContentPipeline)
     mock_pipeline.id = 1
@@ -1281,7 +1281,7 @@ async def test_handle_content_generate_without_auto_publish(
     mock_run.id = 42
 
     with patch(
-        "src.services.content_generation_service.ContentGenerationService"
+        "tg_agent.services.content_generation_service.ContentGenerationService"
     ) as mock_gen_service:
         mock_gen_instance = MagicMock()
         mock_gen_instance.generate = AsyncMock(return_value=mock_run)
@@ -1345,7 +1345,7 @@ async def test_handle_content_generate_exception(dispatcher, mock_tasks_repo):
     )
 
     with patch(
-        "src.services.content_generation_service.ContentGenerationService"
+        "tg_agent.services.content_generation_service.ContentGenerationService"
     ) as mock_gen_service:
         mock_gen_service.side_effect = RuntimeError("Generation failed")
 
@@ -1434,7 +1434,7 @@ async def test_handle_content_publish_success(dispatcher, mock_tasks_repo):
         payload=ContentPublishTaskPayload(pipeline_id=None),
     )
 
-    with patch("src.services.publish_service.PublishService") as mock_publish_service:
+    with patch("tg_agent.services.publish_service.PublishService") as mock_publish_service:
         mock_publish_instance = MagicMock()
         mock_publish_instance.publish_run = AsyncMock(
             return_value=[MagicMock(success=True)]
@@ -1442,7 +1442,7 @@ async def test_handle_content_publish_success(dispatcher, mock_tasks_repo):
         mock_publish_service.return_value = mock_publish_instance
 
         with patch(
-            "src.database.repositories.generation_runs.GenerationRunsRepository"
+            "tg_agent.database.repositories.generation_runs.GenerationRunsRepository"
         ) as mock_repo:
             mock_repo._to_generation_run = staticmethod(
                 lambda row: MagicMock(
@@ -1601,8 +1601,8 @@ async def test_build_image_service_with_db_config(
     """DB-configured provider creates adapter from stored key."""
     import json
 
-    from src.config import AppConfig
-    from src.security import SessionCipher
+    from tg_agent.config import AppConfig
+    from tg_agent.security import SessionCipher
 
     config = AppConfig()
     config.security.session_encryption_key = "test-secret"
@@ -1631,7 +1631,7 @@ async def test_build_image_service_disabled_blocks_env(
     """Disabled DB provider blocks env-var fallback."""
     import json
 
-    from src.config import AppConfig
+    from tg_agent.config import AppConfig
 
     config = AppConfig()
     config.security.session_encryption_key = "test-secret"

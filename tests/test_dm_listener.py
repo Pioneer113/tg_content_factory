@@ -7,11 +7,11 @@ import time
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from src.database import Database
-from src.models import Account
-from src.telegram.auth import TelegramAuth
-from src.telegram.client_pool import ClientPool
-from src.telegram.dm_listener import DmListener, IncomingDmEvent
+from tg_agent.database import Database
+from tg_agent.models import Account
+from tg_agent.telegram.auth import TelegramAuth
+from tg_agent.telegram.client_pool import ClientPool
+from tg_agent.telegram.dm_listener import DmListener, IncomingDmEvent
 
 
 class _FakeRawClient:

@@ -6,9 +6,9 @@ from unittest.mock import patch
 
 import pytest
 
-from src.database import Database
-from src.models import RuntimeSnapshot, TelegramCommand, TelegramCommandStatus
-from src.services.telegram_command_service import TelegramCommandService
+from tg_agent.database import Database
+from tg_agent.models import RuntimeSnapshot, TelegramCommand, TelegramCommandStatus
+from tg_agent.services.telegram_command_service import TelegramCommandService
 
 
 @pytest.mark.anyio
@@ -38,7 +38,7 @@ async def test_telegram_commands_repository_round_trip(tmp_path):
 @pytest.mark.anyio
 async def test_get_messages_collected_since(tmp_path):
     """Notification dry-run scans messages collected since a timestamp (audit #838/3)."""
-    from src.models import Channel, Message
+    from tg_agent.models import Channel, Message
 
     db = Database(str(tmp_path / "test.db"))
     await db.initialize()
@@ -61,7 +61,7 @@ async def test_iter_messages_collected_since_pages_entire_window(tmp_path):
     """iter_messages_collected_since must yield EVERY message in the window across pages,
     so the dry-run total is uncapped (the live notification path has no LIMIT) — a single
     capped fetch would undercount when the window exceeds one page (#838/3 review)."""
-    from src.models import Channel, Message
+    from tg_agent.models import Channel, Message
 
     db = Database(str(tmp_path / "test.db"))
     await db.initialize()

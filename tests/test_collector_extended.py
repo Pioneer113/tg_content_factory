@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from telethon.errors import FloodWaitError
 
-from src.models import Channel, ChannelStats, Message, SearchQuery
-from src.services.notification_matcher import NotificationMatcher
-from src.telegram.collector import AllStatsClientsFloodedError, Collector, NoActiveStatsClientsError
+from tg_agent.models import Channel, ChannelStats, Message, SearchQuery
+from tg_agent.services.notification_matcher import NotificationMatcher
+from tg_agent.telegram.collector import AllStatsClientsFloodedError, Collector, NoActiveStatsClientsError
 
 
 @pytest.fixture
@@ -57,7 +57,7 @@ def mock_db():
 
 @pytest.fixture
 def collector(mock_pool, mock_db):
-    from src.config import SchedulerConfig
+    from tg_agent.config import SchedulerConfig
 
     return Collector(mock_pool, mock_db, SchedulerConfig())
 
@@ -271,7 +271,7 @@ async def test_seeded_ledger_replays_backlog_for_retry(collector, mock_db):
 
 @pytest.mark.anyio
 async def test_fts_query_matches_logic():
-    from src.services.notification_matcher import _fts_query_matches
+    from tg_agent.services.notification_matcher import _fts_query_matches
 
     assert _fts_query_matches("(apple OR orange) AND fruit", "I love apple fruit")
     assert not _fts_query_matches("(apple OR orange) AND fruit", "I love apple juice")
@@ -288,7 +288,7 @@ async def test_collect_channel_stats_flooded_error(collector, mock_pool):
     channel = Channel(channel_id=123)
     mock_pool.get_available_client.return_value = None
 
-    from src.telegram.client_pool import StatsClientAvailability
+    from tg_agent.telegram.client_pool import StatsClientAvailability
 
     mock_pool.get_stats_availability = AsyncMock(
         return_value=StatsClientAvailability(
@@ -417,7 +417,7 @@ async def test_resolve_channel_entity_username_flood_keeps_resolve_username_oper
     inline block preserved before the #923 extraction."""
     from telethon_floodgate import FloodWaitInfo, HandledFloodWaitError
 
-    from src.telegram.collector import RESOLVE_USERNAME_OPERATION
+    from tg_agent.telegram.collector import RESOLVE_USERNAME_OPERATION
 
     channel = Channel(channel_id=123, title="Ch", username="somech")
     info = FloodWaitInfo(
@@ -464,7 +464,7 @@ async def test_resolve_channel_entity_numeric_flood_uses_exc_operation(collector
 async def test_resolve_channel_entity_rate_limit_rotates(collector):
     """A resolve rate-limit with a free account to rotate to yields a 'retry'
     outcome and records the attempted phone."""
-    from src.telegram.collector import UsernameResolveRateLimitedError
+    from tg_agent.telegram.collector import UsernameResolveRateLimitedError
 
     channel = Channel(channel_id=123, title="Ch", username="somech")
     collector._resolve_channel_input_entity = AsyncMock(
@@ -531,7 +531,7 @@ async def test_pre_filter_min_subs_boundaries(collector, mock_db):
     """min_subs filtering: exact subscriber_count must PASS (strict <), a zero
     filter (min_subs<=1 boundary) still filters a 0-subscriber channel
     (#mutation slice 5)."""
-    from src.models import Channel, ChannelStats
+    from tg_agent.models import Channel, ChannelStats
 
     channel = Channel(channel_id=123, title="Ch", channel_type="channel")
     collector._maybe_auto_delete = AsyncMock()
@@ -559,7 +559,7 @@ async def test_pre_filter_min_subs_boundaries(collector, mock_db):
 async def test_pre_filter_ratio_boundary(collector, mock_db):
     """ratio == threshold must KEEP (strict '<'), for both broadcast and chat
     thresholds (#mutation slice 5)."""
-    from src.models import Channel, ChannelStats
+    from tg_agent.models import Channel, ChannelStats
 
     # broadcast: threshold 1.0, ratio 10/10 == 1.0 → keep
     mock_db.get_channel_stats.return_value = [ChannelStats(channel_id=123, subscriber_count=10)]
@@ -585,7 +585,7 @@ async def test_pre_filter_ratio_boundary(collector, mock_db):
 async def test_pre_filter_cross_dupe_sample_and_ratio_boundaries(collector, mock_db):
     """Cross-dupe precheck runs at exactly MIN_SAMPLE unique prefixes and filters
     at exactly RATIO; a low match ratio keeps the channel (#mutation slice 5)."""
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     channel = Channel(channel_id=123, title="Ch")
     collector._maybe_auto_delete = AsyncMock()
@@ -624,7 +624,7 @@ async def test_pre_filter_cross_dupe_sample_and_ratio_boundaries(collector, mock
 async def test_pre_collection_filters_skip_keep_channel(collector, mock_db):
     """Keep-тег выводит канал из авто-метрик pre-фильтра (#1516): min_subs и
     ratio не применяются, сбор продолжается; без тега — фильтрует как раньше."""
-    from src.models import Channel, ChannelStats
+    from tg_agent.models import Channel, ChannelStats
 
     channel = Channel(channel_id=123, title="Ch", channel_type="channel")
     collector._maybe_auto_delete = AsyncMock()
@@ -675,7 +675,7 @@ async def test_post_collection_low_uniqueness_skips_keep_channel(collector, mock
 async def test_pre_filter_suppression_stops_only_when_channel_is_filtered(collector, mock_db):
     """A suppressed filter decision defers to _stop_if_channel_filtered: channel
     not in filtered state → collection proceeds (#mutation slice 5)."""
-    from src.models import Channel, ChannelStats
+    from tg_agent.models import Channel, ChannelStats
 
     channel = Channel(channel_id=123, title="Ch", channel_type="channel")
     collector._maybe_auto_delete = AsyncMock()
@@ -705,7 +705,7 @@ async def test_collect_all_channels_gates_stats_and_counter(collector, mock_db):
     """collect_all_channels queries active+unfiltered only, forwards the loaded
     min_subs, sums the stats, and rebalances the concurrency counter to 0
     (#mutation slice 5)."""
-    from src.models import Channel
+    from tg_agent.models import Channel
 
     channels = [Channel(channel_id=123, title="A"), Channel(channel_id=456, title="B")]
     mock_db.get_channels = AsyncMock(return_value=channels)
@@ -740,11 +740,11 @@ async def test_collect_all_channels_gates_stats_and_counter(collector, mock_db):
 async def test_post_collection_flood_transient_resolve_sleeps_and_continues(collector):
     """A transient (<60s) resolve flood sleeps it off and retries the same
     channel without touching backoff (#mutation slice 5)."""
-    from src.telegram.collector_mixins.collection import RESOLVE_USERNAME_OPERATION
+    from tg_agent.telegram.collector_mixins.collection import RESOLVE_USERNAME_OPERATION
 
     channel = Channel(channel_id=123, title="Ch")
     with patch(
-        "src.telegram.collector_mixins.collection.sleep_for_flood_wait_seconds", AsyncMock()
+        "tg_agent.telegram.collector_mixins.collection.sleep_for_flood_wait_seconds", AsyncMock()
     ) as slept:
         kind, total, ch = await collector._handle_post_collection_flood(
             channel, "+1", 10, RESOLVE_USERNAME_OPERATION, set(), 5, 2
@@ -758,7 +758,7 @@ async def test_post_collection_flood_transient_resolve_sleeps_and_continues(coll
 async def test_post_collection_flood_short_resolve_returns_without_backoff(collector, mock_pool):
     """At exactly the 300s threshold the resolve flood skips just this channel —
     no backoff is recorded and the run returns (#mutation slice 5)."""
-    from src.telegram.collector_mixins.collection import RESOLVE_USERNAME_OPERATION
+    from tg_agent.telegram.collector_mixins.collection import RESOLVE_USERNAME_OPERATION
 
     mock_pool.get_resolve_username_backoff_until = MagicMock(return_value=None)
     mock_pool.set_resolve_username_backoff = MagicMock()
@@ -777,7 +777,7 @@ async def test_post_collection_flood_long_resolve_sets_backoff_then_rotates(coll
     (#mutation slice 5)."""
     from datetime import timedelta
 
-    from src.telegram.collector_mixins.collection import RESOLVE_USERNAME_OPERATION
+    from tg_agent.telegram.collector_mixins.collection import RESOLVE_USERNAME_OPERATION
 
     deadline = datetime.now(timezone.utc) + timedelta(seconds=400)
     mock_pool.get_resolve_username_backoff_until = MagicMock(return_value=None)
@@ -804,7 +804,7 @@ async def test_post_collection_flood_no_rotation_raises_deferred_with_future_dea
 
     from telethon_floodgate import UsernameResolveFloodWaitDeferredError
 
-    from src.telegram.collector_mixins.collection import RESOLVE_USERNAME_OPERATION
+    from tg_agent.telegram.collector_mixins.collection import RESOLVE_USERNAME_OPERATION
 
     deadline = datetime.now(timezone.utc) + timedelta(seconds=400)
     mock_pool.get_resolve_username_backoff_until = MagicMock(return_value=None)

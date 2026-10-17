@@ -2,9 +2,9 @@ from datetime import datetime, timezone
 
 import pytest
 
-from src.models import Message, SearchResult
-from src.services.generation_service import GenerationService
 from tests.helpers import fast_llm_error_recovery
+from tg_agent.models import Message, SearchResult
+from tg_agent.services.generation_service import GenerationService
 
 
 class DummySearchEngine:

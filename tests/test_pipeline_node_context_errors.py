@@ -1,7 +1,7 @@
 """NodeContext.record_error / get_errors API — issue #463 observability."""
 from __future__ import annotations
 
-from src.services.pipeline_nodes.base import NodeContext
+from tg_agent.services.pipeline_nodes.base import NodeContext
 
 
 def test_record_error_stores_structured_entry():

@@ -25,7 +25,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.models import (
+from tg_agent.models import (
     CollectionTask,
     CollectionTaskStatus,
     CollectionTaskType,
@@ -36,10 +36,10 @@ from src.models import (
     PipelineTarget,
     SearchResult,
 )
-from src.services.content_generation_service import ContentGenerationService
-from src.services.publish_service import PublishResult, PublishService
-from src.services.task_handlers.base import TaskHandlerContext
-from src.services.task_handlers.content import ContentTaskHandler
+from tg_agent.services.content_generation_service import ContentGenerationService
+from tg_agent.services.publish_service import PublishResult, PublishService
+from tg_agent.services.task_handlers.base import TaskHandlerContext
+from tg_agent.services.task_handlers.content import ContentTaskHandler
 
 
 def _make_context(db) -> TaskHandlerContext:
@@ -127,9 +127,9 @@ def _patch_handler_collaborators(db, pipeline):
         return PublishResult(success=True, message_id=1, phone=target.phone, dialog_id=target.dialog_id)
 
     return (
-        patch("src.services.pipeline_service.PipelineService.get", AsyncMock(return_value=pipeline)),
+        patch("tg_agent.services.pipeline_service.PipelineService.get", AsyncMock(return_value=pipeline)),
         patch(
-            "src.services.task_handlers.content.build_content_generation_service",
+            "tg_agent.services.task_handlers.content.build_content_generation_service",
             AsyncMock(side_effect=lambda c: _build_real_service(c)),
         ),
         patch.object(PublishService, "_publish_to_target", fake_deliver),
@@ -174,9 +174,9 @@ async def test_auto_run_never_pending_even_before_publish(db):
         return PublishResult(success=False, error="no client")
 
     with (
-        patch("src.services.pipeline_service.PipelineService.get", AsyncMock(return_value=pipeline)),
+        patch("tg_agent.services.pipeline_service.PipelineService.get", AsyncMock(return_value=pipeline)),
         patch(
-            "src.services.task_handlers.content.build_content_generation_service",
+            "tg_agent.services.task_handlers.content.build_content_generation_service",
             AsyncMock(side_effect=lambda c: _build_real_service(c)),
         ),
         patch.object(PublishService, "_publish_to_target", failing_deliver),
@@ -211,9 +211,9 @@ async def test_moderated_run_stays_pending_in_queue(db):
         return PublishResult(success=True, message_id=1)
 
     with (
-        patch("src.services.pipeline_service.PipelineService.get", AsyncMock(return_value=pipeline)),
+        patch("tg_agent.services.pipeline_service.PipelineService.get", AsyncMock(return_value=pipeline)),
         patch(
-            "src.services.task_handlers.content.build_content_generation_service",
+            "tg_agent.services.task_handlers.content.build_content_generation_service",
             AsyncMock(side_effect=lambda c: _build_real_service(c)),
         ),
         patch.object(PublishService, "_publish_to_target", tracking_deliver),
@@ -256,13 +256,13 @@ async def test_dag_auto_publish_updates_run(db):
     # The graph executor would normally need real nodes; stub it to return text
     # with an explicit AUTO effective mode (mirrors a publish node in AUTO).
     with (
-        patch("src.services.pipeline_service.PipelineService.get", AsyncMock(return_value=pipeline)),
+        patch("tg_agent.services.pipeline_service.PipelineService.get", AsyncMock(return_value=pipeline)),
         patch(
-            "src.services.task_handlers.content.build_content_generation_service",
+            "tg_agent.services.task_handlers.content.build_content_generation_service",
             AsyncMock(side_effect=lambda c: _build_real_service(c)),
         ),
         patch(
-            "src.services.pipeline_executor.PipelineExecutor.execute",
+            "tg_agent.services.pipeline_executor.PipelineExecutor.execute",
             AsyncMock(return_value={
                 "generated_text": "graph content",
                 "publish_mode": PipelinePublishMode.AUTO.value,

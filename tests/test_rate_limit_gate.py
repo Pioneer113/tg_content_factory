@@ -16,8 +16,8 @@ from telethon_floodgate import (
     TelegramRateLimitGate,
 )
 
-from src.telegram.backends import TelegramTransportSession
-from src.telegram.client_pool import HISTORY_CALIBRATED_SPEC
+from tg_agent.telegram.backends import TelegramTransportSession
+from tg_agent.telegram.client_pool import HISTORY_CALIBRATED_SPEC
 
 
 class _Clock:
@@ -47,7 +47,7 @@ def test_sweep_budget_covers_every_pass_the_loop_will_attempt() -> None:
     """
     from telethon_floodgate.rate_limit_gate import DIALOG_SWEEP_MAX_CALLS
 
-    from src.telegram.pool_dialogs import DIALOG_FETCH_MAX_PASSES
+    from tg_agent.telegram.pool_dialogs import DIALOG_FETCH_MAX_PASSES
 
     assert DIALOG_SWEEP_MAX_CALLS >= DIALOG_FETCH_MAX_PASSES
 
@@ -440,7 +440,7 @@ def test_pool_applies_production_history_calibration() -> None:
     at 115 fetches/min.  The override lives in the pool, so the pool is what
     this pins; the remaining categories must stay untouched package defaults.
     """
-    from src.telegram.client_pool import ClientPool
+    from tg_agent.telegram.client_pool import ClientPool
 
     pool = ClientPool(MagicMock(api_id=1, api_hash="h"), MagicMock())
     history = pool._rate_limit_gate._limiters["history"]

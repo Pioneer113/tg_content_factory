@@ -6,10 +6,10 @@ from types import SimpleNamespace
 import pytest
 from telethon.errors import FloodWaitError
 
-from src.config import SchedulerConfig
-from src.models import Channel
-from src.telegram.collector import Collector
 from tests.helpers import AsyncIterMessages, FakeCliTelethonClient
+from tg_agent.config import SchedulerConfig
+from tg_agent.models import Channel
+from tg_agent.telegram.collector import Collector
 
 
 def _resolved_channel_entity(channel_id: int, username: str | None = None):

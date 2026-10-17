@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.cli.commands.debug import run
 from tests.helpers import cli_ns, fake_asyncio_run, make_cli_config
+from tg_agent.cli.commands.debug import run
 
 
 def _args(**overrides):
@@ -32,8 +32,8 @@ def test_logs_file_exists(capsys, tmp_path):
     log_file.write_text("line1\nline2\nline3\n", encoding="utf-8")
     db = make_debug_db()
     config = make_cli_config()
-    with patch("src.cli.commands.debug.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.debug.APP_LOG_PATH", log_file), \
+    with patch("tg_agent.cli.commands.debug.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.debug.APP_LOG_PATH", log_file), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(debug_action="logs", limit=2))
     out = capsys.readouterr().out
@@ -45,8 +45,8 @@ def test_logs_file_missing(capsys, tmp_path):
     missing = tmp_path / "nonexistent.log"
     db = make_debug_db()
     config = make_cli_config()
-    with patch("src.cli.commands.debug.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("src.cli.commands.debug.APP_LOG_PATH", missing), \
+    with patch("tg_agent.cli.commands.debug.runtime.init_db", AsyncMock(return_value=(config, db))), \
+         patch("tg_agent.cli.commands.debug.APP_LOG_PATH", missing), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(debug_action="logs", limit=10))
     out = capsys.readouterr().out
@@ -61,7 +61,7 @@ def test_logs_file_missing(capsys, tmp_path):
 def test_memory(capsys):
     db = make_debug_db()
     config = make_cli_config()
-    with patch("src.cli.commands.debug.runtime.init_db", AsyncMock(return_value=(config, db))), \
+    with patch("tg_agent.cli.commands.debug.runtime.init_db", AsyncMock(return_value=(config, db))), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(debug_action="memory"))
     out = capsys.readouterr().out
@@ -74,7 +74,7 @@ def test_memory_with_db_file(capsys, tmp_path):
     db_file.write_bytes(b"x" * (2 * 1024 * 1024))  # 2MB
     db = make_debug_db(_path=str(db_file))
     config = make_cli_config()
-    with patch("src.cli.commands.debug.runtime.init_db", AsyncMock(return_value=(config, db))), \
+    with patch("tg_agent.cli.commands.debug.runtime.init_db", AsyncMock(return_value=(config, db))), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(debug_action="memory"))
     out = capsys.readouterr().out
@@ -89,7 +89,7 @@ def test_memory_with_db_file(capsys, tmp_path):
 def test_timing(capsys):
     db = make_debug_db()
     config = make_cli_config()
-    with patch("src.cli.commands.debug.runtime.init_db", AsyncMock(return_value=(config, db))), \
+    with patch("tg_agent.cli.commands.debug.runtime.init_db", AsyncMock(return_value=(config, db))), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(debug_action="timing"))
     out = capsys.readouterr().out
@@ -104,7 +104,7 @@ def test_timing(capsys):
 def test_errors_aggregates_live_instances(capsys):
     import weakref
 
-    from src.services.error_recovery_service import ErrorCategory, ErrorRecoveryService
+    from tg_agent.services.error_recovery_service import ErrorCategory, ErrorRecoveryService
 
     fresh: weakref.WeakSet = weakref.WeakSet()
     a = ErrorRecoveryService()
@@ -116,7 +116,7 @@ def test_errors_aggregates_live_instances(capsys):
 
     db = make_debug_db()
     config = make_cli_config()
-    with patch("src.cli.commands.debug.runtime.init_db", AsyncMock(return_value=(config, db))), \
+    with patch("tg_agent.cli.commands.debug.runtime.init_db", AsyncMock(return_value=(config, db))), \
          patch.object(ErrorRecoveryService, "_instances", fresh), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(debug_action="errors", json=False))
@@ -129,12 +129,12 @@ def test_errors_aggregates_live_instances(capsys):
 def test_errors_empty_process(capsys):
     import weakref
 
-    from src.services.error_recovery_service import ErrorRecoveryService
+    from tg_agent.services.error_recovery_service import ErrorRecoveryService
 
     fresh: weakref.WeakSet = weakref.WeakSet()
     db = make_debug_db()
     config = make_cli_config()
-    with patch("src.cli.commands.debug.runtime.init_db", AsyncMock(return_value=(config, db))), \
+    with patch("tg_agent.cli.commands.debug.runtime.init_db", AsyncMock(return_value=(config, db))), \
          patch.object(ErrorRecoveryService, "_instances", fresh), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(debug_action="errors", json=False))
@@ -147,7 +147,7 @@ def test_errors_json_output(capsys):
     import json as json_mod
     import weakref
 
-    from src.services.error_recovery_service import ErrorCategory, ErrorRecoveryService
+    from tg_agent.services.error_recovery_service import ErrorCategory, ErrorRecoveryService
 
     fresh: weakref.WeakSet = weakref.WeakSet()
     a = ErrorRecoveryService()
@@ -156,7 +156,7 @@ def test_errors_json_output(capsys):
 
     db = make_debug_db()
     config = make_cli_config()
-    with patch("src.cli.commands.debug.runtime.init_db", AsyncMock(return_value=(config, db))), \
+    with patch("tg_agent.cli.commands.debug.runtime.init_db", AsyncMock(return_value=(config, db))), \
          patch.object(ErrorRecoveryService, "_instances", fresh), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(debug_action="errors", json=True))

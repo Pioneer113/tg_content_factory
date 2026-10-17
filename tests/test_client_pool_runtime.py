@@ -7,9 +7,9 @@ from telethon.errors import FloodWaitError
 from telethon_cli.errors import CLIError
 from telethon_floodgate import HandledFloodWaitError
 
-from src.services.notification_target_service import NotificationTargetService
-from src.telegram.backends import TelegramTransportSession
 from tests.helpers import FakeCliTelethonClient
+from tg_agent.services.notification_target_service import NotificationTargetService
+from tg_agent.telegram.backends import TelegramTransportSession
 
 
 @pytest.mark.anyio

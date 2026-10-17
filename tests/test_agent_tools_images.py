@@ -11,7 +11,7 @@ from tests.agent_tools_helpers import _get_tool_handlers, _text
 
 class TestImagesToolGenerateImage:
     def test_mcp_schema_allows_omitted_model(self, mock_db):
-        from src.agent.tools import images
+        from tg_agent.agent.tools import images
 
         tools = images.register(mock_db, None, MagicMock(), config={})
         schema = next(tool.input_schema for tool in tools if tool.name == "generate_image")
@@ -30,7 +30,7 @@ class TestImagesToolGenerateImage:
 
     @pytest.mark.anyio
     async def test_not_available(self, mock_db):
-        with patch("src.services.image_generation_service.ImageGenerationService") as mock_svc:
+        with patch("tg_agent.services.image_generation_service.ImageGenerationService") as mock_svc:
             mock_svc.return_value.is_available = AsyncMock(return_value=False)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["generate_image"]({"prompt": "a cat"})
@@ -38,7 +38,7 @@ class TestImagesToolGenerateImage:
 
     @pytest.mark.anyio
     async def test_local_path_result(self, mock_db):
-        with patch("src.services.image_generation_service.ImageGenerationService") as mock_svc:
+        with patch("tg_agent.services.image_generation_service.ImageGenerationService") as mock_svc:
             mock_svc.return_value.is_available = AsyncMock(return_value=True)
             mock_svc.return_value.adapter_names = ["together"]
             mock_svc.return_value.generate = AsyncMock(return_value="/local/path/image.png")
@@ -49,7 +49,7 @@ class TestImagesToolGenerateImage:
 
     @pytest.mark.anyio
     async def test_no_result(self, mock_db):
-        with patch("src.services.image_generation_service.ImageGenerationService") as mock_svc:
+        with patch("tg_agent.services.image_generation_service.ImageGenerationService") as mock_svc:
             mock_svc.return_value.is_available = AsyncMock(return_value=True)
             mock_svc.return_value.adapter_names = ["together"]
             mock_svc.return_value.generate = AsyncMock(return_value=None)
@@ -60,9 +60,9 @@ class TestImagesToolGenerateImage:
 
     @pytest.mark.anyio
     async def test_timeout_failure_returns_specific_text(self, mock_db):
-        from src.services.image_generation_service import ImageGenerationFailure
+        from tg_agent.services.image_generation_service import ImageGenerationFailure
 
-        with patch("src.services.image_generation_service.ImageGenerationService") as mock_svc:
+        with patch("tg_agent.services.image_generation_service.ImageGenerationService") as mock_svc:
             mock_svc.return_value.is_available = AsyncMock(return_value=True)
             mock_svc.return_value.adapter_names = ["codex"]
             mock_svc.return_value.generate = AsyncMock(return_value=None)
@@ -79,7 +79,7 @@ class TestImagesToolGenerateImage:
 
     @pytest.mark.anyio
     async def test_error_returns_text(self, mock_db):
-        with patch("src.services.image_generation_service.ImageGenerationService") as mock_svc:
+        with patch("tg_agent.services.image_generation_service.ImageGenerationService") as mock_svc:
             mock_svc.return_value.is_available = AsyncMock(side_effect=Exception("provider down"))
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["generate_image"]({"prompt": "test"})
@@ -88,7 +88,7 @@ class TestImagesToolGenerateImage:
     @pytest.mark.anyio
     async def test_omitted_model_uses_db_default(self, mock_db):
         mock_db.get_setting = AsyncMock(return_value="openai:gpt-image-1")
-        with patch("src.services.image_generation_service.ImageGenerationService") as mock_svc:
+        with patch("tg_agent.services.image_generation_service.ImageGenerationService") as mock_svc:
             mock_svc.return_value.is_available = AsyncMock(return_value=True)
             mock_svc.return_value.adapter_names = ["openai"]
             mock_svc.return_value.generate = AsyncMock(return_value="/local/path/image.png")
@@ -102,7 +102,7 @@ class TestImagesToolGenerateImage:
     @pytest.mark.anyio
     async def test_stale_db_default_falls_back_to_available_adapter_default(self, mock_db):
         mock_db.get_setting = AsyncMock(return_value="openai:gpt-image-1")
-        with patch("src.services.image_generation_service.ImageGenerationService") as mock_svc:
+        with patch("tg_agent.services.image_generation_service.ImageGenerationService") as mock_svc:
             mock_svc.return_value.is_available = AsyncMock(return_value=True)
             mock_svc.return_value.adapter_names = ["together"]
             mock_svc.return_value.generate = AsyncMock(return_value="/local/path/image.png")
@@ -115,7 +115,7 @@ class TestImagesToolGenerateImage:
 
     @pytest.mark.anyio
     async def test_none_model_codex_only_uses_codex_default(self, mock_db):
-        with patch("src.services.image_generation_service.ImageGenerationService") as mock_svc:
+        with patch("tg_agent.services.image_generation_service.ImageGenerationService") as mock_svc:
             mock_svc.return_value.is_available = AsyncMock(return_value=True)
             mock_svc.return_value.adapter_names = ["codex"]
             mock_svc.return_value.generate = AsyncMock(return_value="/local/path/image.png")
@@ -128,7 +128,7 @@ class TestImagesToolGenerateImage:
 
     @pytest.mark.anyio
     async def test_blank_model_uses_adapter_default(self, mock_db):
-        with patch("src.services.image_generation_service.ImageGenerationService") as mock_svc:
+        with patch("tg_agent.services.image_generation_service.ImageGenerationService") as mock_svc:
             mock_svc.return_value.is_available = AsyncMock(return_value=True)
             mock_svc.return_value.adapter_names = ["together"]
             mock_svc.return_value.generate = AsyncMock(return_value="/local/path/image.png")
@@ -142,7 +142,7 @@ class TestImagesToolGenerateImage:
     @pytest.mark.anyio
     async def test_explicit_model_is_not_overwritten(self, mock_db):
         mock_db.get_setting = AsyncMock(return_value="openai:gpt-image-1")
-        with patch("src.services.image_generation_service.ImageGenerationService") as mock_svc:
+        with patch("tg_agent.services.image_generation_service.ImageGenerationService") as mock_svc:
             mock_svc.return_value.is_available = AsyncMock(return_value=True)
             mock_svc.return_value.adapter_names = ["codex"]
             mock_svc.return_value.generate = AsyncMock(return_value="/local/path/image.png")
@@ -155,7 +155,7 @@ class TestImagesToolGenerateImage:
 
     @pytest.mark.anyio
     async def test_available_service_without_default_returns_actionable_message(self, mock_db):
-        with patch("src.services.image_generation_service.ImageGenerationService") as mock_svc:
+        with patch("tg_agent.services.image_generation_service.ImageGenerationService") as mock_svc:
             mock_svc.return_value.is_available = AsyncMock(return_value=True)
             mock_svc.return_value.adapter_names = ["custom"]
             mock_svc.return_value.generate = AsyncMock(return_value="/local/path/image.png")
@@ -177,7 +177,7 @@ class TestImagesToolListImageModels:
 
     @pytest.mark.anyio
     async def test_empty_models(self, mock_db):
-        with patch("src.services.image_generation_service.ImageGenerationService") as mock_svc:
+        with patch("tg_agent.services.image_generation_service.ImageGenerationService") as mock_svc:
             mock_svc.return_value.search_models = AsyncMock(return_value=[])
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["list_image_models"]({"provider": "together"})
@@ -189,7 +189,7 @@ class TestImagesToolListImageModels:
             {"id": "flux-schnell", "run_count": 10000, "rank": 1},
             {"id": "flux-dev", "run_count": 5000},
         ]
-        with patch("src.services.image_generation_service.ImageGenerationService") as mock_svc:
+        with patch("tg_agent.services.image_generation_service.ImageGenerationService") as mock_svc:
             mock_svc.return_value.search_models = AsyncMock(return_value=models)
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["list_image_models"]({"provider": "together", "query": "flux"})
@@ -202,7 +202,7 @@ class TestImagesToolListImageModels:
 class TestImagesToolListImageProviders:
     @pytest.mark.anyio
     async def test_no_providers(self, mock_db):
-        with patch("src.services.image_generation_service.ImageGenerationService") as mock_svc:
+        with patch("tg_agent.services.image_generation_service.ImageGenerationService") as mock_svc:
             mock_svc.return_value.adapter_names = []
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["list_image_providers"]({})
@@ -210,7 +210,7 @@ class TestImagesToolListImageProviders:
 
     @pytest.mark.anyio
     async def test_with_providers(self, mock_db):
-        with patch("src.services.image_generation_service.ImageGenerationService") as mock_svc:
+        with patch("tg_agent.services.image_generation_service.ImageGenerationService") as mock_svc:
             mock_svc.return_value.adapter_names = ["together", "hf", "replicate"]
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["list_image_providers"]({})
@@ -222,7 +222,7 @@ class TestImagesToolListImageProviders:
 
     @pytest.mark.anyio
     async def test_error(self, mock_db):
-        with patch("src.services.image_generation_service.ImageGenerationService") as mock_svc:
+        with patch("tg_agent.services.image_generation_service.ImageGenerationService") as mock_svc:
             mock_svc.side_effect = Exception("provider fail")
             handlers = _get_tool_handlers(mock_db)
             result = await handlers["list_image_providers"]({})

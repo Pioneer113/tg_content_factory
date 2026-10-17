@@ -27,8 +27,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-from src.cli.main import main
-from src.cli.typer_app import app
+from tg_agent.cli.main import main
+from tg_agent.cli.typer_app import app
 
 runner = CliRunner()
 
@@ -57,8 +57,8 @@ def _bare_group_exit_code(argv: list[str]) -> object:
 def test_analytics_top_defaults():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.analytics_cmd.top_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.analytics_cmd.top_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["analytics", "top"])
     assert result.exit_code == 0
@@ -68,8 +68,8 @@ def test_analytics_top_defaults():
 def test_analytics_top_flags():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.analytics_cmd.top_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.analytics_cmd.top_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(
             app, ["analytics", "top", "--limit", "5", "--date-from", "2024-01-01"]
@@ -81,8 +81,8 @@ def test_analytics_top_flags():
 def test_analytics_content_types():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.analytics_cmd.content_types_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.analytics_cmd.content_types_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["analytics", "content-types"])
     assert result.exit_code == 0
@@ -92,8 +92,8 @@ def test_analytics_content_types():
 def test_analytics_daily_flags():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.analytics_cmd.daily_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.analytics_cmd.daily_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["analytics", "daily", "--days", "7", "--pipeline-id", "3"])
     assert result.exit_code == 0
@@ -103,8 +103,8 @@ def test_analytics_daily_flags():
 def test_analytics_summary():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.analytics_cmd.summary_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.analytics_cmd.summary_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["analytics", "summary"])
     assert result.exit_code == 0
@@ -114,8 +114,8 @@ def test_analytics_summary():
 def test_analytics_peak_hours():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.analytics_cmd.peak_hours_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.analytics_cmd.peak_hours_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["analytics", "peak-hours"])
     assert result.exit_code == 0
@@ -125,8 +125,8 @@ def test_analytics_peak_hours():
 def test_analytics_trending_emojis_flags():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.analytics_cmd.trending_emojis_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.analytics_cmd.trending_emojis_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["analytics", "trending-emojis", "--days", "3", "--limit", "10"])
     assert result.exit_code == 0
@@ -137,8 +137,8 @@ def test_analytics_channel_positional():
     """Negative channel_id passes through (positional after ``--`` on prod path)."""
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.analytics_cmd.channel_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.analytics_cmd.channel_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["analytics", "channel", "--days", "10", "--", "-100123"])
     assert result.exit_code == 0
@@ -148,8 +148,8 @@ def test_analytics_channel_positional():
 def test_analytics_channel_rating_enums():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.analytics_cmd.channel_rating_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.analytics_cmd.channel_rating_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(
             app, ["analytics", "channel-rating", "--useful", "useful", "--genre", "ad"]
@@ -160,7 +160,7 @@ def test_analytics_channel_rating_enums():
 
 def test_analytics_channel_rating_bad_enum_rejected():
     """An unknown --useful choice is rejected (str-Enum closed set, like argparse)."""
-    with patch("src.cli.typer_commands.run_async"):
+    with patch("tg_agent.cli.typer_commands.run_async"):
         result = runner.invoke(app, ["analytics", "channel-rating", "--useful", "bogus"])
     assert result.exit_code != 0
 
@@ -168,8 +168,8 @@ def test_analytics_channel_rating_bad_enum_rejected():
 def test_analytics_channel_rate():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.analytics_cmd.channel_rate_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.analytics_cmd.channel_rate_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(
             app, ["analytics", "channel-rate", "123", "--model", "openai:gpt-4", "--sample-size", "10"]
@@ -194,8 +194,8 @@ def test_analytics_bare_shows_help_exit0():
     """
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.analytics_cmd.top_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.analytics_cmd.top_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         assert _bare_group_exit_code(["analytics"]) == 0
     mock_impl.assert_not_called()
@@ -205,8 +205,8 @@ def test_analytics_channel_negative_id_positional():
     """Negative channel_id is accepted as the positional via the ``--`` separator."""
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.analytics_cmd.channel_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.analytics_cmd.channel_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["analytics", "channel", "--days", "14", "--", "-100123456"])
     assert result.exit_code == 0
@@ -221,8 +221,8 @@ def test_analytics_channel_negative_id_positional():
 def test_channel_list():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.channel_cmd.list_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.channel_cmd.list_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["channel", "list"])
     assert result.exit_code == 0
@@ -232,8 +232,8 @@ def test_channel_list():
 def test_channel_add():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.channel_cmd.add_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.channel_cmd.add_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["channel", "add", "@somechan"])
     assert result.exit_code == 0
@@ -243,8 +243,8 @@ def test_channel_add():
 def test_channel_collect_full():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.channel_cmd.collect_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.channel_cmd.collect_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["channel", "collect", "5", "--full"])
     assert result.exit_code == 0
@@ -254,8 +254,8 @@ def test_channel_collect_full():
 def test_channel_stats_all():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.channel_cmd.stats_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.channel_cmd.stats_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["channel", "stats", "--all", "--max-channels", "10"])
     assert result.exit_code == 0
@@ -267,8 +267,8 @@ def test_channel_stats_all():
 def test_channel_refresh_meta_single():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.channel_cmd.refresh_meta_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.channel_cmd.refresh_meta_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["channel", "refresh-meta", "@chan"])
     assert result.exit_code == 0
@@ -278,8 +278,8 @@ def test_channel_refresh_meta_single():
 def test_channel_add_bulk():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.channel_cmd.add_bulk_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.channel_cmd.add_bulk_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(
             app, ["channel", "add-bulk", "--phone", "+123", "--dialog-ids", "1,2,3"]
@@ -291,8 +291,8 @@ def test_channel_add_bulk():
 def test_channel_list_for_import_json():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.channel_cmd.list_for_import_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.channel_cmd.list_for_import_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["channel", "list-for-import", "--json"])
     assert result.exit_code == 0
@@ -305,8 +305,8 @@ def test_channel_list_for_import_json():
 def test_channel_tag_list_nested():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.channel_cmd._tag_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.channel_cmd._tag_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["channel", "tag", "list"])
     assert result.exit_code == 0
@@ -316,8 +316,8 @@ def test_channel_tag_list_nested():
 def test_channel_tag_add_nested():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.channel_cmd._tag_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.channel_cmd._tag_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["channel", "tag", "add", "sports"])
     assert result.exit_code == 0
@@ -327,8 +327,8 @@ def test_channel_tag_add_nested():
 def test_channel_tag_set_two_positionals_nested():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.channel_cmd._tag_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.channel_cmd._tag_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["channel", "tag", "set", "5", "a,b,c"])
     assert result.exit_code == 0
@@ -338,8 +338,8 @@ def test_channel_tag_set_two_positionals_nested():
 def test_channel_tag_get_nested():
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.channel_cmd._tag_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.channel_cmd._tag_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["channel", "tag", "get", "10"])
     assert result.exit_code == 0
@@ -376,8 +376,8 @@ def _dialogs_ns_of(mock_dispatch):
 def test_dialogs_list():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.dialogs_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.dialogs_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["dialogs", "list", "--phone", "+1"])
     assert result.exit_code == 0
@@ -390,8 +390,8 @@ def test_dialogs_list():
 def test_dialogs_send_with_yes():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.dialogs_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.dialogs_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["dialogs", "send", "@user", "hello", "--yes"])
     assert result.exit_code == 0
@@ -402,8 +402,8 @@ def test_dialogs_send_with_yes():
 def test_dialogs_leave_variadic():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.dialogs_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.dialogs_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["dialogs", "leave", "100", "200", "300"])
     assert result.exit_code == 0
@@ -415,8 +415,8 @@ def test_dialogs_leave_variadic():
 def test_dialogs_topics_required_channel_id():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.dialogs_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.dialogs_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["dialogs", "topics", "--channel-id", "555"])
     assert result.exit_code == 0
@@ -425,7 +425,7 @@ def test_dialogs_topics_required_channel_id():
 
 def test_dialogs_topics_missing_channel_id_rejected():
     """--channel-id is required (argparse required=True parity)."""
-    with patch("src.cli.typer_commands.run_async"):
+    with patch("tg_agent.cli.typer_commands.run_async"):
         result = runner.invoke(app, ["dialogs", "topics"])
     assert result.exit_code != 0
 
@@ -433,8 +433,8 @@ def test_dialogs_topics_missing_channel_id_rejected():
 def test_dialogs_react_optional_emoji():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.dialogs_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.dialogs_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["dialogs", "react", "123", "99", "👍"])
     assert result.exit_code == 0
@@ -445,8 +445,8 @@ def test_dialogs_react_optional_emoji():
 def test_dialogs_react_clear_no_emoji():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.dialogs_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.dialogs_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["dialogs", "react", "123", "99", "--clear"])
     assert result.exit_code == 0
@@ -457,8 +457,8 @@ def test_dialogs_react_clear_no_emoji():
 def test_dialogs_edit_admin_no_admin_flag():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.dialogs_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.dialogs_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["dialogs", "edit-admin", "chat", "user", "--no-admin"])
     assert result.exit_code == 0
@@ -468,8 +468,8 @@ def test_dialogs_edit_admin_no_admin_flag():
 def test_dialogs_create_channel_required_title():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.dialogs_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.dialogs_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["dialogs", "create-channel", "--title", "My Chan"])
     assert result.exit_code == 0
@@ -483,8 +483,8 @@ def test_dialogs_create_channel_required_title():
 def test_dialogs_queue_status_nested():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.dialogs_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.dialogs_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["dialogs", "queue", "status", "--limit", "5"])
     assert result.exit_code == 0
@@ -495,8 +495,8 @@ def test_dialogs_queue_status_nested():
 def test_dialogs_queue_cancel_nested():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.dialogs_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.dialogs_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["dialogs", "queue", "cancel", "42", "--yes"])
     assert result.exit_code == 0
@@ -507,8 +507,8 @@ def test_dialogs_queue_cancel_nested():
 def test_dialogs_queue_clear_pending_nested():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.dialogs_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.dialogs_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(
             app, ["dialogs", "queue", "clear-pending", "--command-type", "dialogs.react"]
@@ -544,8 +544,8 @@ def _pipeline_ns_of(mock_dispatch):
 def test_pipeline_list():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.pipeline_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.pipeline_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["pipeline", "list"])
     assert result.exit_code == 0
@@ -555,8 +555,8 @@ def test_pipeline_list():
 def test_pipeline_show():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.pipeline_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.pipeline_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["pipeline", "show", "5"])
     assert result.exit_code == 0
@@ -567,8 +567,8 @@ def test_pipeline_show():
 def test_pipeline_add_variadic_source():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.pipeline_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.pipeline_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(
             app,
@@ -583,7 +583,7 @@ def test_pipeline_add_variadic_source():
 
 def test_pipeline_add_bad_publish_mode_rejected():
     """Unknown --publish-mode choice rejected (str-Enum closed set)."""
-    with patch("src.cli.typer_commands.run_async"):
+    with patch("tg_agent.cli.typer_commands.run_async"):
         result = runner.invoke(app, ["pipeline", "add", "P", "--publish-mode", "bogus"])
     assert result.exit_code != 0
 
@@ -591,8 +591,8 @@ def test_pipeline_add_bad_publish_mode_rejected():
 def test_pipeline_edit_active_tristate():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.pipeline_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.pipeline_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["pipeline", "edit", "5", "--inactive"])
     assert result.exit_code == 0
@@ -602,8 +602,8 @@ def test_pipeline_edit_active_tristate():
 def test_pipeline_generate_stream():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.pipeline_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.pipeline_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["pipeline", "generate-stream", "7", "--model", "gpt-4"])
     assert result.exit_code == 0
@@ -614,8 +614,8 @@ def test_pipeline_generate_stream():
 def test_pipeline_bulk_approve_variadic_positional():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.pipeline_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.pipeline_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["pipeline", "bulk-approve", "1", "2", "3"])
     assert result.exit_code == 0
@@ -625,8 +625,8 @@ def test_pipeline_bulk_approve_variadic_positional():
 def test_pipeline_export_force():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.pipeline_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.pipeline_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["pipeline", "export", "5", "--force", "-o", "out.json"])
     assert result.exit_code == 0
@@ -640,8 +640,8 @@ def test_pipeline_export_force():
 def test_pipeline_filter_set_nested():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.pipeline_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.pipeline_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(
             app, ["pipeline", "filter", "set", "3", "--keyword", "a", "--keyword", "b", "--forwarded", "true"]
@@ -655,8 +655,8 @@ def test_pipeline_filter_set_nested():
 def test_pipeline_filter_show_nested():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.pipeline_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.pipeline_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["pipeline", "filter", "show", "3"])
     assert result.exit_code == 0
@@ -667,8 +667,8 @@ def test_pipeline_filter_show_nested():
 def test_pipeline_node_add_nested():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.pipeline_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.pipeline_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["pipeline", "node", "add", "5", "fetch:limit=10"])
     assert result.exit_code == 0
@@ -681,8 +681,8 @@ def test_pipeline_node_add_nested():
 def test_pipeline_node_replace_three_positionals_nested():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.pipeline_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.pipeline_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["pipeline", "node", "replace", "5", "n1", "llm:model=gpt"])
     assert result.exit_code == 0
@@ -695,8 +695,8 @@ def test_pipeline_node_replace_three_positionals_nested():
 def test_pipeline_edge_add_nested():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.pipeline_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.pipeline_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["pipeline", "edge", "add", "5", "n1", "n2"])
     assert result.exit_code == 0
@@ -709,8 +709,8 @@ def test_pipeline_edge_add_nested():
 def test_pipeline_graph_flat():
     mock = MagicMock()
     with (
-        patch("src.cli.typer_commands.pipeline_cmd._dispatch", mock),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.pipeline_cmd._dispatch", mock),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["pipeline", "graph", "5"])
     assert result.exit_code == 0

@@ -82,9 +82,9 @@ tg-agent account add
 
 Они продолжают работать, но **заморожены**: разработка приостановлена на неопределённый срок, новые возможности на них не строятся. Активно развивается только CLI + скилл.
 
-- **Веб-панель** (FastAPI + Bootstrap 5) — `python -m src.main serve`, затем http://localhost:8080 (пароль из `WEB_PASS`)
+- **Веб-панель** (FastAPI + Bootstrap 5) — `python -m tg_agent.main serve`, затем http://localhost:8080 (пароль из `WEB_PASS`)
 - **TUI** и **встроенный агент-чат** (`tg-agent agent chat`; бэкенды `claude-agent-sdk` / `deepagents`)
-- **MCP-сервер** (`python -m src.main mcp-server`)
+- **MCP-сервер** (`python -m tg_agent.main mcp-server`)
 
 ### Легаси: split-деплой (Docker / k8s)
 
@@ -93,10 +93,10 @@ tg-agent account add
 
 ```bash
 # контейнер 1 — только веб-панель и API
-python -m src.main serve --no-worker
+python -m tg_agent.main serve --no-worker
 
 # контейнер 2 — Telegram-воркер (общий SQLite-том)
-python -m src.main worker
+python -m tg_agent.main worker
 ```
 
 ## Docker
@@ -234,10 +234,10 @@ telethon-cli users get-me --output json
  pytest tests/test_web.py::test_health_endpoint -v
 
  # Сравнить serial и safe mixed-mode прогон всего suite
- python -m src.main test benchmark
+ python -m tg_agent.main test benchmark
 
  # Линтер
- ruff check src/ tests/ conftest.py
+ ruff check tg_agent/ tests/ conftest.py
  ```
 
 ### Важное замечание по CI

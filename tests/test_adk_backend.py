@@ -3,7 +3,7 @@
 Uses a fake ``google.adk`` / ``google.genai`` / ``mcp`` module set (no live ADK),
 mirroring the fake-SDK pattern used by ``test_codex_backend``. Verifies the
 backend turns ADK ``run_async`` events into the same SSE shape the other backends
-emit and wires the project MCP server (``python -m src.main mcp-server``) into the
+emit and wires the project MCP server (``python -m tg_agent.main mcp-server``) into the
 ADK toolset.
 """
 
@@ -132,9 +132,9 @@ def _install_fake_adk(monkeypatch, *, events, hang=False, close_hangs=False):
 
 
 def _make_backend(client_pool=None):
-    from src.agent.adk_backend import AdkSdkBackend
-    from src.config import AppConfig
-    from src.database import Database
+    from tg_agent.agent.adk_backend import AdkSdkBackend
+    from tg_agent.config import AppConfig
+    from tg_agent.database import Database
 
     return AdkSdkBackend(Database(":memory:"), AppConfig(), client_pool=client_pool)
 
@@ -475,7 +475,7 @@ async def test_chat_stream_wires_project_mcp_server(monkeypatch):
     )
 
     args = captured["mcp_args"]
-    assert args[:2] == ["-m", "src.main"]
+    assert args[:2] == ["-m", "tg_agent.main"]
     assert "mcp-server" in args
     # No client pool → the subprocess must run with --no-pool.
     assert "--no-pool" in args
@@ -651,7 +651,7 @@ async def test_chat_stream_does_not_hang_on_stuck_close(monkeypatch):
     The backend bounds the close, so the turn still completes and emits its done
     frame. The pytest timeout fails loudly if cleanup is ever unbounded again.
     """
-    import src.agent.adk_backend as ab
+    import tg_agent.agent.adk_backend as ab
 
     # Short close bound so the test is fast; well under total_timeout so we
     # exercise the close-bound path, not the outer turn deadline.
@@ -701,7 +701,7 @@ async def test_chat_stream_prepends_history(monkeypatch):
 
 
 def test_available_requires_sdk_and_api_key(monkeypatch):
-    import src.agent.adk_backend as ab
+    import tg_agent.agent.adk_backend as ab
 
     backend = _make_backend()
     # No SDK installed → unavailable regardless of key.

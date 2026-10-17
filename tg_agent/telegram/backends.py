@@ -1,0 +1,1187 @@
+from __future__ import annotations
+
+import asyncio
+import inspect
+import logging
+from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator, Callable
+from dataclasses import dataclass
+from types import SimpleNamespace
+from typing import Any
+
+from telethon import TelegramClient
+from telethon.errors import AuthKeyDuplicatedError
+from telethon.tl.functions.messages import GetDialogsRequest, GetHistoryRequest
+from telethon_cli import runtime as telethon_cli_runtime
+from telethon_cli.errors import CLIError
+from telethon_floodgate import (
+    FloodCircuitBreaker,
+    HandledFloodWaitError,
+    TelegramPeerRateLimitedError,
+    TelegramRateLimitedError,
+    TelegramRateLimitGate,
+    handle_flood_wait,
+)
+from telethon_floodgate.peer import peer_key
+
+from tg_agent.models import Account
+from tg_agent.telegram.auth import TelegramAuth, connect_with_auth_key_retry
+from tg_agent.telegram.mtproto_watchdog import bind_telethon_base_logger
+from tg_agent.telegram.outgoing_ceiling import OutgoingRateCeiling
+from tg_agent.telegram.reactions import normalize_outgoing_reaction_emoji
+from tg_agent.telegram.schema_drift import translate_schema_drift
+from tg_agent.telegram.session_lock import acquire_session_lock
+from tg_agent.telegram.session_materializer import SessionMaterializer
+
+logger = logging.getLogger(__name__)
+
+STREAM_ITERATOR_CLOSE_TIMEOUT_SEC = 10.0
+
+
+class _DialogRequestGateClient:
+    """Proxy a Telethon client so paginated requests pass transport gating.
+
+    ``TelegramClient.iter_dialogs``/``iter_messages`` return a ``RequestIter``
+    whose ``client`` attribute is used for every page request.  Gating only
+    the surrounding iterator therefore reserves one slot but leaves later
+    page RPCs unprotected.  The enclosing ``_run``/``_stream`` reserves the
+    logical-operation slot, while every page request is dispatched through
+    ``_run`` too: dialogs pages draw their own bounded page budget
+    (``page_category``), history pages charge only the process-wide ceiling
+    (``page_category=None`` -> ``gate_reserved=True``), keeping the #1418
+    per-account history calibration on logical streams.
+    """
+
+    def __init__(
+        self,
+        session: TelegramTransportSession,
+        client: Any,
+        operation: str,
+        *,
+        request_type: Any,
+        page_category: str | None,
+    ) -> None:
+        self._session = session
+        self._client = client
+        self._operation = operation
+        self._request_type = request_type
+        self._page_category = page_category
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._client, name)
+
+    def __call__(self, request: Any) -> Any:
+        # Telethon keeps this client on emitted Dialog/Draft/Message objects.
+        # Those objects may later use the client for unrelated requests; only
+        # the iterator's own page requests belong to the page budget.
+        if not isinstance(request, self._request_type):
+            return self._client(request)
+        awaitable = self._client(request)
+        # Pages outsource ALL breaker accounting to the enclosing stream
+        # (check and record): re-checking the same (operation, phone) key
+        # mid-stream would reject the stream's own half-open probe and strand
+        # it — the stream can then never report back.
+        #
+        # Accepted trade (final review round on #1444): without a per-page
+        # check, an admitted stream keeps pulling pages after another caller
+        # trips their shared key OPEN.  For dialogs that scenario needs two
+        # concurrent same-phone sweeps, which pool_dialogs prevents by
+        # joining the in-flight refresh (pool_dialogs.py:1370); for history
+        # the base never checked pages at all.  Restore per-page checks when
+        # telethon-floodgate grows an OPEN-only, non-claiming peek.
+        if self._page_category is not None:
+            return self._session._run(
+                self._operation,
+                awaitable,
+                gate_category=self._page_category,
+                record_flood_breaker=False,
+                check_flood_breaker=False,
+            )
+        return self._session._run(
+            self._operation,
+            awaitable,
+            gate_reserved=True,
+            record_flood_breaker=False,
+            check_flood_breaker=False,
+        )
+
+    def iter_dialogs(self, *args: Any, **kwargs: Any) -> Any:
+        iterator = self._client.iter_dialogs(*args, **kwargs)
+        _bind_page_request_gate(
+            iterator,
+            self._session,
+            self._operation,
+            request_type=GetDialogsRequest,
+            page_category="dialogs_page",
+        )
+        return iterator
+
+
+def _bind_page_request_gate(
+    iterator: Any,
+    session: TelegramTransportSession,
+    operation: str,
+    *,
+    request_type: Any,
+    page_category: str | None,
+) -> Any:
+    """Bind a page-request proxy to a Telethon ``RequestIter`` when possible."""
+    pool = getattr(session, "_pool", None)
+    phone = getattr(session, "_phone", None)
+    if (
+        pool is None
+        or phone is None
+        or not isinstance(getattr(pool, "_rate_limit_gate", None), TelegramRateLimitGate)
+    ):
+        return iterator
+    client = getattr(iterator, "client", None)
+    if client is not session._client:
+        return iterator
+    try:
+        iterator.client = _DialogRequestGateClient(
+            session,
+            client,
+            operation,
+            request_type=request_type,
+            page_category=page_category,
+        )
+    except (AttributeError, TypeError):
+        # Third-party/fake iterators may expose a read-only client attribute.
+        # The surrounding transport gate remains in force in that case.
+        return iterator
+    return iterator
+
+
+async def fetch_message_reaction_users_raw(client: Any, peer: Any, message_id: int, *, limit: int) -> Any:
+    """Fetch raw Telegram reaction-user rows for a message."""
+    from telethon.tl.functions.messages import GetMessageReactionsListRequest
+
+    return await client(
+        GetMessageReactionsListRequest(
+            peer=peer,
+            id=int(message_id),
+            limit=limit,
+        )
+    )
+
+
+async def transcribe_audio_raw(client: Any, peer: Any, message_id: int) -> Any:
+    """Issue one native Premium ``messages.transcribeAudio`` request (#1545).
+
+    Long recordings come back ``pending=True``; the caller polls by re-invoking
+    this until the transcript matures or its attempt budget runs out.
+    """
+    from telethon.tl.functions.messages import TranscribeAudioRequest
+
+    return await client(TranscribeAudioRequest(peer=peer, msg_id=int(message_id)))
+
+
+async def _disconnect_client_safely(client: Any, *, phone: str) -> None:
+    try:
+        result = client.disconnect()
+        if inspect.isawaitable(result):
+            await result
+    except Exception:
+        logger.debug("Failed to disconnect partially acquired client for %s", phone, exc_info=True)
+
+
+class BackendAcquireError(RuntimeError):
+    """Raised when a backend cannot provide a usable authorized client."""
+
+
+class UnsupportedBackendOperationError(RuntimeError):
+    """Raised when a backend cannot support the requested transport/mode."""
+
+
+class TelegramTransportSession:
+    """Thin operation adapter that keeps raw Telethon calls inside backend code."""
+
+    def __init__(
+        self,
+        client: Any,
+        *,
+        disconnect_on_close: bool = True,
+        phone: str | None = None,
+        pool: Any | None = None,
+        logger_: logging.Logger | None = None,
+        report_flood_wait: bool = True,
+    ):
+        self._client = client
+        self._disconnect_on_close = disconnect_on_close
+        self._phone = phone
+        self._pool = pool
+        self._logger = logger_ or logger
+        self._report_flood_wait = report_flood_wait
+
+    @property
+    def raw_client(self) -> Any:
+        return self._client
+
+    def with_flood_context(
+        self,
+        *,
+        phone: str | None = None,
+        pool: Any | None = None,
+        logger_: logging.Logger | None = None,
+        report_flood_wait: bool = True,
+    ) -> TelegramTransportSession:
+        return TelegramTransportSession(
+            self._client,
+            disconnect_on_close=self._disconnect_on_close,
+            phone=phone,
+            pool=pool,
+            logger_=logger_ or self._logger,
+            report_flood_wait=report_flood_wait,
+        )
+
+    async def _translate_flood_wait(self, exc: Exception, operation: str) -> HandledFloodWaitError:
+        """Convert a raw Telethon FloodWaitError into a HandledFloodWaitError.
+
+        Re-raises ``exc`` unchanged when it is not a FloodWaitError or when no
+        phone is bound. Otherwise records the flood wait and returns the wrapped
+        error for the caller to ``raise ... from exc``.
+        """
+        from telethon.errors import FloodWaitError
+
+        if not isinstance(exc, FloodWaitError):
+            raise exc
+        if self._phone is None:
+            raise exc
+        info = await handle_flood_wait(
+            exc,
+            operation=operation,
+            phone=self._phone,
+            pool=self._pool if self._report_flood_wait else None,
+            logger_=self._logger,
+        )
+        return HandledFloodWaitError(info)
+
+    async def _run(
+        self,
+        operation: str,
+        awaitable: Any,
+        *,
+        gate_reserved: bool = False,
+        gate_category: str | None = None,
+        gate_peer: str | None = None,
+        record_flood_breaker: bool = True,
+        check_flood_breaker: bool = True,
+    ) -> Any:
+        try:
+            # Ceiling FIRST (dual review on #1444): every limit must hold at
+            # DISPATCH time.  Waiting after the gate had spent per-account and
+            # per-peer slots lets independently permitted calls bundle into a
+            # burst the peer bucket already consumed (two same-peer sends
+            # firing in the same instant after a shared ceiling wait).
+            # Waiting first, then re-checking gate and breaker synchronously
+            # right before the RPC, keeps both accurate; a gate refusal after
+            # the wait surrenders its ceiling slot to window expiry — an
+            # accepted cost, refusals are rare since the #1418 calibration.
+            await self._await_outgoing_ceiling()
+            if check_flood_breaker:
+                self._check_flood_breaker(operation)
+            if not gate_reserved:
+                self._reserve_gate_slot(operation, category=gate_category, peer=gate_peer)
+        except BaseException:
+            close = getattr(awaitable, "close", None)
+            if close is not None:
+                close()
+            raise
+        try:
+            result = await awaitable
+        except HandledFloodWaitError:
+            if record_flood_breaker:
+                self._record_flood_breaker(operation, flooded=True)
+            raise
+        except Exception as exc:
+            # _translate_flood_wait re-raises non-flood errors unchanged.
+            try:
+                translated = await self._translate_flood_wait(exc, operation)
+            except Exception as untranslated:
+                # #1549: TypeNotFoundError is a TL-schema mismatch, not a
+                # missing entity — re-raise as SchemaDriftError so it stops
+                # reading as "no such chat".
+                raise translate_schema_drift(untranslated, operation) from untranslated
+            if record_flood_breaker:
+                self._record_flood_breaker(
+                    operation, flooded=isinstance(translated, HandledFloodWaitError)
+                )
+            raise translated from exc
+        if record_flood_breaker:
+            self._record_flood_breaker(operation, flooded=False)
+        return result
+
+    async def _stream(self, operation: str, iterator: AsyncIterator[Any]) -> AsyncIterator[Any]:
+        try:
+            # Same ceiling-first order as _run (see there for the rationale).
+            await self._await_outgoing_ceiling()
+            self._check_flood_breaker(operation)
+            self._reserve_gate_slot(operation)
+        except BaseException:
+            close = getattr(iterator, "aclose", None)
+            if close is not None:
+                result = close()
+                if inspect.isawaitable(result):
+                    await result
+            raise
+        try:
+            try:
+                async for item in iterator:
+                    yield item
+            finally:
+                aclose = getattr(iterator, "aclose", None)
+                if aclose is not None:
+                    result = aclose()
+                    if inspect.isawaitable(result):
+                        try:
+                            await asyncio.wait_for(
+                                result, timeout=STREAM_ITERATOR_CLOSE_TIMEOUT_SEC
+                            )
+                        except asyncio.TimeoutError:
+                            self._logger.warning(
+                                "%s: iterator close timed out after %.1fs",
+                                operation,
+                                STREAM_ITERATOR_CLOSE_TIMEOUT_SEC,
+                            )
+                        except Exception:
+                            self._logger.debug("%s: iterator close failed", operation, exc_info=True)
+        except HandledFloodWaitError:
+            self._record_flood_breaker(operation, flooded=True)
+            raise
+        except Exception as exc:
+            # Same non-flood re-raise + schema-drift translation as _run (#1549).
+            try:
+                translated = await self._translate_flood_wait(exc, operation)
+            except Exception as untranslated:
+                raise translate_schema_drift(untranslated, operation) from untranslated
+            self._record_flood_breaker(
+                operation, flooded=isinstance(translated, HandledFloodWaitError)
+            )
+            raise translated from exc
+        else:
+            # A stream that drained without flooding clears the account's
+            # accumulated flood waits for this operation.
+            self._record_flood_breaker(operation, flooded=False)
+
+    def _reserve_gate_slot(
+        self,
+        operation: str,
+        *,
+        slots: int = 1,
+        category: str | None = None,
+        peer: str | None = None,
+    ) -> None:
+        """Reserve a proactive slot; unbound adapter sessions remain no-op safe."""
+        if self._pool is None or self._phone is None:
+            return
+        gate = getattr(self._pool, "_rate_limit_gate", None)
+        if not isinstance(gate, TelegramRateLimitGate):
+            return
+        category = category or gate.category_for(operation)
+        if peer is not None:
+            retry_after = gate.try_acquire(self._phone, category, slots=slots, peer=peer)
+        elif slots == 1:
+            retry_after = gate.try_acquire(self._phone, category)
+        else:
+            retry_after = gate.try_acquire(self._phone, category, slots=slots)
+        if retry_after > 0:
+            if peer is not None:
+                self._logger.info(
+                    "%s: per-peer %s rate-limited for %s; retry in %.1fs",
+                    operation,
+                    peer,
+                    self._phone,
+                    retry_after,
+                )
+                raise TelegramPeerRateLimitedError(self._phone, peer, retry_after)
+            raise TelegramRateLimitedError(self._phone, category, retry_after)
+
+    async def _await_outgoing_ceiling(self) -> None:
+        """Pace this call through the pool's process-wide outgoing ceiling.
+
+        WAITS instead of refusing (#1417) — unlike the per-account gate, no
+        caller needs a new exception handler.  Unbound adapter sessions remain
+        no-op safe, mirroring ``_reserve_gate_slot``.
+        """
+        if self._pool is None or self._phone is None:
+            return
+        ceiling = getattr(self._pool, "_outgoing_ceiling", None)
+        if not isinstance(ceiling, OutgoingRateCeiling):
+            return
+        await ceiling.acquire()
+
+    def _flood_breaker(self) -> FloodCircuitBreaker | None:
+        """The pool's breaker, when this session is bound to one."""
+        if self._pool is None or self._phone is None:
+            return None
+        breaker = getattr(self._pool, "_flood_breaker", None)
+        return breaker if isinstance(breaker, FloodCircuitBreaker) else None
+
+    def _check_flood_breaker(self, operation: str) -> None:
+        """Refuse the call when this operation is suspended for this account.
+
+        Telegram publishes no rate limits to pre-empt, so this reacts to being
+        throttled rather than trying to predict it (#1330/#1368).
+        """
+        breaker = self._flood_breaker()
+        if breaker is not None:
+            breaker.check(operation, self._phone)
+
+    def _record_flood_breaker(self, operation: str, *, flooded: bool) -> None:
+        breaker = self._flood_breaker()
+        if breaker is None:
+            return
+        if flooded:
+            breaker.record_flood(operation, self._phone)
+        else:
+            breaker.record_success(operation, self._phone)
+
+    def reserve_rate_limit_slots(self, operation: str, *, slots: int = 1) -> None:
+        """Atomically reserve slots before a compound Telegram operation."""
+        self._reserve_gate_slot(operation, slots=slots)
+
+    async def close(self) -> None:
+        if self._disconnect_on_close:
+            await self._client.disconnect()
+
+    async def abort(self) -> None:
+        """Disconnect the underlying client, cancelling pending requests."""
+        disconnect = getattr(self._client, "disconnect", None)
+        if disconnect is None:
+            return
+        result = disconnect()
+        if inspect.isawaitable(result):
+            await result
+
+    async def fetch_me(self) -> Any:
+        return await self._run("telegram_fetch_me", self._client.get_me())
+
+    async def fetch_profile_photo(self, entity: Any, *, file: Any) -> Any:
+        return await self._run(
+            "telegram_fetch_profile_photo",
+            self._client.download_profile_photo(entity, file=file),
+        )
+
+    async def resolve_entity(self, peer: Any) -> Any:
+        return await self._run("telegram_resolve_entity", self._client.get_entity(peer))
+
+    async def get_entity(self, peer: Any) -> Any:
+        return await self.resolve_entity(peer)
+
+    async def resolve_input_entity(self, peer: Any) -> Any:
+        return await self._run(
+            "telegram_resolve_input_entity",
+            self._client.get_input_entity(peer),
+        )
+
+    async def get_input_entity(self, peer: Any) -> Any:
+        return await self.resolve_input_entity(peer)
+
+    async def resolve_cached_input_entity(self, peer: Any) -> Any:
+        """Resolve an InputPeer from Telethon's local session cache only."""
+        try:
+            session = object.__getattribute__(self._client, "session")
+            resolver = session.get_input_entity
+        except AttributeError as exc:
+            raise ValueError("No local entity cache is available") from exc
+        result = resolver(peer)
+        if inspect.isawaitable(result):
+            return await result
+        return result
+
+    async def warm_dialog_cache(self) -> Any:
+        operation = "telegram_warm_dialog_cache"
+        get_dialogs = self._client.get_dialogs
+        is_native_get_dialogs = (
+            isinstance(self._client, TelegramClient)
+            and getattr(get_dialogs, "__func__", None) is TelegramClient.get_dialogs
+        )
+        if is_native_get_dialogs and self._pool is not None and self._phone is not None:
+            # ``get_dialogs`` is implemented as ``iter_dialogs().collect()``.
+            # Call the Telethon implementation with a proxy so every
+            # paginated GetDialogsRequest, not just the logical operation, is
+            # subject to the same per-phone gate.
+            proxy = _DialogRequestGateClient(
+                self,
+                self._client,
+                operation,
+                request_type=GetDialogsRequest,
+                page_category="dialogs_page",
+            )
+            awaitable = TelegramClient.get_dialogs(proxy)
+        else:
+            awaitable = get_dialogs()
+        return await self._run(operation, awaitable)
+
+    async def get_dialogs(self) -> Any:
+        return await self.warm_dialog_cache()
+
+    def stream_dialogs(self, **kwargs: Any) -> AsyncIterator[Any]:
+        """Stream dialogs, optionally resuming from an offset.
+
+        ``kwargs`` are forwarded to Telethon's ``iter_dialogs`` so a caller can
+        resume a truncated sweep (``offset_date`` / ``offset_id`` /
+        ``offset_peer``).  Passing none of them keeps the original behaviour:
+        every dialog from the start, archived ones included (``folder=None``).
+        """
+        operation = "telegram_stream_dialogs"
+        iterator = self._client.iter_dialogs(**kwargs)
+        _bind_page_request_gate(
+            iterator,
+            self,
+            operation,
+            request_type=GetDialogsRequest,
+            page_category="dialogs_page",
+        )
+        return self._stream(operation, iterator)
+
+    def iter_dialogs(self) -> AsyncIterator[Any]:
+        return self.stream_dialogs()
+
+    def stream_messages(self, entity: Any, **kwargs: Any) -> AsyncIterator[Any]:
+        operation = "telegram_stream_messages"
+        iterator = self._client.iter_messages(entity, **kwargs)
+        # History pages are ceiling-only (gate_reserved=True inside the
+        # proxy): the #1418 history calibration (24/30s) prices LOGICAL
+        # streams, so per-account gating stays on the enclosing operation
+        # while every raw GetHistory RPC draws a process-wide ceiling slot.
+        _bind_page_request_gate(
+            iterator,
+            self,
+            operation,
+            request_type=GetHistoryRequest,
+            page_category=None,
+        )
+        return self._stream(operation, iterator)
+
+    def iter_messages(self, entity: Any, **kwargs: Any) -> AsyncIterator[Any]:
+        return self.stream_messages(entity, **kwargs)
+
+    async def publish_files(
+        self,
+        entity: Any,
+        files: Any,
+        *,
+        caption: str | None = None,
+        schedule: Any = None,
+    ) -> Any:
+        peer = peer_key(entity)
+        return await self._run(
+            "telegram_publish_files",
+            self._client.send_file(entity, files, caption=caption, schedule=schedule),
+            gate_peer=peer,
+        )
+
+    async def send_message(self, entity: Any, message: Any, **kwargs: Any) -> Any:
+        peer = peer_key(entity)
+        return await self._run(
+            "telegram_send_message",
+            self._client.send_message(entity, message, **kwargs),
+            gate_peer=peer,
+        )
+
+    async def forward_messages(self, entity: Any, messages: Any, from_peer: Any) -> Any:
+        peer = peer_key(entity)
+        return await self._run(
+            "telegram_forward_messages",
+            self._client.forward_messages(entity, messages, from_peer),
+            gate_peer=peer,
+        )
+
+    async def edit_message(self, entity: Any, message: int, text: str, **kwargs: Any) -> Any:
+        peer = peer_key(entity)
+        return await self._run(
+            "telegram_edit_message",
+            self._client.edit_message(entity, message, text, **kwargs),
+            gate_peer=peer,
+        )
+
+    async def pin_message(self, entity: Any, message: Any, *, notify: bool = False) -> Any:
+        return await self._run(
+            "telegram_pin_message",
+            self._client.pin_message(entity, message, notify=notify),
+        )
+
+    async def unpin_message(self, entity: Any, message: Any = None) -> Any:
+        return await self._run(
+            "telegram_unpin_message",
+            self._client.unpin_message(entity, message),
+        )
+
+    async def delete_messages(self, entity: Any, message_ids: list[int]) -> Any:
+        return await self._run(
+            "telegram_delete_messages",
+            self._client.delete_messages(entity, message_ids),
+        )
+
+    async def delete_scheduled_messages(self, entity: Any, message_ids: list[int]) -> Any:
+        """Cancel server-side scheduled messages (Telethon raw API)."""
+        try:
+            from telethon.tl.functions.messages import DeleteScheduledMessagesRequest
+        except ImportError:
+            # Telethon not available (e.g. test env with stub backend).
+            return None
+        return await self._run(
+            "telegram_delete_scheduled_messages",
+            self._client(DeleteScheduledMessagesRequest(peer=entity, id=list(message_ids))),
+        )
+
+    async def send_reaction(self, entity: Any, message_id: int, emoji: str | None) -> Any:
+        """Set or clear a reaction to a message using the Telethon raw API."""
+        try:
+            from telethon.tl.functions.messages import SendReactionRequest
+            from telethon.tl.types import ReactionEmoji
+
+            normalized_emoji = normalize_outgoing_reaction_emoji(emoji, allow_clear=True)
+            reaction = [] if normalized_emoji is None else [ReactionEmoji(emoticon=normalized_emoji)]
+            return await self._run(
+                "telegram_send_reaction",
+                self._client(
+                    SendReactionRequest(
+                        peer=entity,
+                        msg_id=message_id,
+                        reaction=reaction,
+                    )
+                ),
+            )
+        except ImportError:
+            # Telethon not available (e.g. test env with stub backend)
+            return None
+
+    async def create_channel(
+        self,
+        *,
+        title: str,
+        about: str = "",
+        broadcast: bool = True,
+        megagroup: bool = False,
+        _rate_limit_reserved: bool = False,
+    ) -> Any:
+        """Create a Telegram channel/chat using the Telethon raw API."""
+        from telethon.tl.functions.channels import CreateChannelRequest
+
+        return await self._run(
+            "telegram_create_channel",
+            self._client(
+                CreateChannelRequest(
+                    title=title,
+                    about=about,
+                    broadcast=broadcast,
+                    megagroup=megagroup,
+                )
+            ),
+            gate_reserved=_rate_limit_reserved,
+        )
+
+    async def update_channel_username(
+        self,
+        channel: Any,
+        username: str,
+        *,
+        _rate_limit_reserved: bool = False,
+    ) -> Any:
+        """Set a public username for a channel using the Telethon raw API."""
+        from telethon.tl.functions.channels import UpdateUsernameRequest
+
+        return await self._run(
+            "telegram_update_channel_username",
+            self._client(UpdateUsernameRequest(channel, username)),
+            gate_reserved=_rate_limit_reserved,
+        )
+
+    async def join_channel(self, channel: Any) -> Any:
+        """Join a public channel or megagroup using the Telethon raw API."""
+        from telethon.tl.functions.channels import JoinChannelRequest
+
+        return await self._run("telegram_join_channel", self._client(JoinChannelRequest(channel)))
+
+    async def import_chat_invite(self, invite_hash: str) -> Any:
+        """Join a private chat/channel through an invite hash."""
+        from telethon.tl.functions.messages import ImportChatInviteRequest
+
+        return await self._run(
+            "telegram_import_chat_invite",
+            self._client(ImportChatInviteRequest(invite_hash)),
+        )
+
+    async def download_media(self, message: Any, *, file: Any = None) -> Any:
+        return await self._run(
+            "telegram_download_media",
+            self._client.download_media(message, file=file),
+        )
+
+    async def get_participants(self, entity: Any, *, limit: int | None = None, search: str = "") -> Any:
+        kwargs: dict[str, Any] = {}
+        if limit is not None:
+            kwargs["limit"] = limit
+        if search:
+            kwargs["search"] = search
+        return await self._run(
+            "telegram_get_participants",
+            self._client.get_participants(entity, **kwargs),
+        )
+
+    def stream_participants(self, entity: Any, **kwargs: Any) -> AsyncIterator[Any]:
+        return self._stream(
+            "telegram_stream_participants",
+            self._client.iter_participants(entity, **kwargs),
+        )
+
+    def iter_participants(self, entity: Any, **kwargs: Any) -> AsyncIterator[Any]:
+        return self.stream_participants(entity, **kwargs)
+
+    async def edit_admin(self, entity: Any, user: Any, **kwargs: Any) -> Any:
+        return await self._run(
+            "telegram_edit_admin",
+            self._client.edit_admin(entity, user, **kwargs),
+        )
+
+    async def edit_permissions(self, entity: Any, user: Any, until_date: Any = None, **kwargs: Any) -> Any:
+        if until_date is not None:
+            kwargs["until_date"] = until_date
+        return await self._run(
+            "telegram_edit_permissions",
+            self._client.edit_permissions(entity, user, **kwargs),
+        )
+
+    async def kick_participant(self, entity: Any, user: Any) -> Any:
+        return await self._run(
+            "telegram_kick_participant",
+            self._client.kick_participant(entity, user),
+        )
+
+    async def edit_folder(self, entity: Any, folder: int) -> Any:
+        return await self._run(
+            "telegram_edit_folder",
+            self._client.edit_folder(entity, folder),
+        )
+
+    async def send_read_acknowledge(self, entity: Any, *, max_id: int | None = None) -> Any:
+        kwargs: dict[str, Any] = {}
+        if max_id is not None:
+            kwargs["max_id"] = max_id
+        return await self._run(
+            "telegram_send_read_acknowledge",
+            self._client.send_read_acknowledge(entity, **kwargs),
+        )
+
+    # --- base ---
+
+    def set_proxy(self, proxy: Any) -> None:
+        self._client.set_proxy(proxy)
+
+    # --- uploads ---
+
+    async def upload_file(self, file: Any, **kwargs: Any) -> Any:
+        return await self._run("telegram_upload_file", self._client.upload_file(file, **kwargs))
+
+    # --- downloads ---
+
+    async def download_file(self, input_location: Any, file: Any = None, **kwargs: Any) -> Any:
+        return await self._run(
+            "telegram_download_file",
+            self._client.download_file(input_location, file, **kwargs),
+        )
+
+    def stream_download(self, file: Any, **kwargs: Any) -> AsyncIterator[Any]:
+        return self._stream(
+            "telegram_stream_download",
+            self._client.iter_download(file, **kwargs),
+        )
+
+    # --- dialogs ---
+
+    def stream_drafts(self) -> AsyncIterator[Any]:
+        return self._stream("telegram_stream_drafts", self._client.iter_drafts())
+
+    async def get_drafts(self) -> Any:
+        return await self._run("telegram_get_drafts", self._client.get_drafts())
+
+    def conversation(self, entity: Any, **kwargs: Any) -> Any:
+        return self._client.conversation(entity, **kwargs)
+
+    # --- users ---
+
+    async def is_bot(self) -> bool:
+        return await self._run("telegram_is_bot", self._client.is_bot())
+
+    async def is_user_authorized(self) -> bool:
+        return await self._run(
+            "telegram_is_user_authorized",
+            self._client.is_user_authorized(),
+        )
+
+    async def get_me(self) -> Any:
+        return await self.fetch_me()
+
+    async def get_peer_id(self, peer: Any) -> int:
+        return await self._run("telegram_get_peer_id", self._client.get_peer_id(peer))
+
+    # --- chats ---
+
+    def stream_admin_log(self, entity: Any, **kwargs: Any) -> AsyncIterator[Any]:
+        return self._stream(
+            "telegram_stream_admin_log",
+            self._client.iter_admin_log(entity, **kwargs),
+        )
+
+    async def get_admin_log(self, entity: Any, **kwargs: Any) -> Any:
+        return await self._run(
+            "telegram_get_admin_log",
+            self._client.get_admin_log(entity, **kwargs),
+        )
+
+    def stream_profile_photos(self, entity: Any, **kwargs: Any) -> AsyncIterator[Any]:
+        return self._stream(
+            "telegram_stream_profile_photos",
+            self._client.iter_profile_photos(entity, **kwargs),
+        )
+
+    async def get_profile_photos(self, entity: Any, **kwargs: Any) -> Any:
+        return await self._run(
+            "telegram_get_profile_photos",
+            self._client.get_profile_photos(entity, **kwargs),
+        )
+
+    def action(self, entity: Any, action: str, **kwargs: Any) -> Any:
+        return self._client.action(entity, action, **kwargs)
+
+    async def get_permissions(self, entity: Any, user: Any = None) -> Any:
+        return await self._run(
+            "telegram_get_permissions",
+            self._client.get_permissions(entity, user),
+        )
+
+    # --- updates ---
+
+    async def set_receive_updates(self, enabled: bool) -> None:
+        await self._run("telegram_set_receive_updates", self._client.set_receive_updates(enabled))
+
+    async def run_until_disconnected(self) -> None:
+        await self._run("telegram_run_until_disconnected", self._client.run_until_disconnected())
+
+    def on(self, event: Any) -> Any:
+        return self._client.on(event)
+
+    def add_event_handler(self, callback: Any, event: Any = None) -> None:
+        self._client.add_event_handler(callback, event)
+
+    def remove_event_handler(self, callback: Any, event: Any = None) -> bool:
+        return self._client.remove_event_handler(callback, event)
+
+    def list_event_handlers(self) -> list:
+        return self._client.list_event_handlers()
+
+    async def catch_up(self) -> None:
+        await self._run("telegram_catch_up", self._client.catch_up())
+
+    # --- bots ---
+
+    async def inline_query(self, bot: Any, query: str, **kwargs: Any) -> Any:
+        return await self._run(
+            "telegram_inline_query",
+            self._client.inline_query(bot, query, **kwargs),
+        )
+
+    # --- buttons ---
+
+    def build_reply_markup(self, buttons: Any) -> Any:
+        return self._client.build_reply_markup(buttons)
+
+    # --- account ---
+
+    def takeout(self, **kwargs: Any) -> Any:
+        return self._client.takeout(**kwargs)
+
+    async def end_takeout(self, success: bool) -> None:
+        await self._run("telegram_end_takeout", self._client.end_takeout(success))
+
+    # --- existing ---
+
+    async def remove_dialog(self, entity: Any) -> None:
+        await self._run("telegram_remove_dialog", self._client.delete_dialog(entity))
+
+    async def delete_channel(self, entity: Any) -> None:
+        """Permanently delete a channel/supergroup (only the creator may do this)."""
+        from telethon.tl.functions.channels import DeleteChannelRequest
+
+        await self._run(
+            "telegram_delete_channel",
+            self._client(DeleteChannelRequest(channel=entity)),
+        )
+
+    async def delete_chat(self, chat_id: int) -> None:
+        """Permanently delete a legacy small group."""
+        from telethon.tl.functions.messages import DeleteChatRequest
+
+        await self._run(
+            "telegram_delete_chat",
+            self._client(DeleteChatRequest(chat_id=chat_id)),
+        )
+
+    async def invoke_request(self, request: Any) -> Any:
+        return await self._run("telegram_invoke_request", self._client(request))
+
+    async def __call__(self, request: Any) -> Any:
+        return await self.invoke_request(request)
+
+    async def lookup_search_posts_flood(self, query: str = "") -> Any:
+        from telethon.tl.functions.channels import CheckSearchPostsFloodRequest
+
+        return await self.invoke_request(CheckSearchPostsFloodRequest(query=query))
+
+    async def search_posts_batch(
+        self,
+        query: str,
+        *,
+        offset_rate: int,
+        offset_peer: Any,
+        offset_id: int,
+        limit: int,
+    ) -> Any:
+        from telethon.tl.functions.channels import SearchPostsRequest
+
+        return await self.invoke_request(
+            SearchPostsRequest(
+                query=query,
+                offset_rate=offset_rate,
+                offset_peer=offset_peer,
+                offset_id=offset_id,
+                limit=limit,
+            )
+        )
+
+    async def fetch_full_channel(self, entity: Any) -> Any:
+        from telethon.tl.functions.channels import GetFullChannelRequest
+
+        return await self.invoke_request(GetFullChannelRequest(entity))
+
+    async def fetch_full_chat(self, entity: Any) -> Any:
+        from telethon.tl.functions.messages import GetFullChatRequest
+
+        return await self.invoke_request(GetFullChatRequest(entity))
+
+    async def get_broadcast_stats(self, entity: Any) -> Any:
+        from telethon.tl.functions.stats import GetBroadcastStatsRequest
+
+        return await self.invoke_request(GetBroadcastStatsRequest(channel=entity))
+
+    async def fetch_forum_topics(self, entity: Any, *, limit: int = 100) -> Any:
+        from telethon.tl.functions.messages import GetForumTopicsRequest
+
+        return await self.invoke_request(
+            GetForumTopicsRequest(
+                peer=entity,
+                offset_date=None,
+                offset_id=0,
+                offset_topic=0,
+                limit=limit,
+            )
+        )
+
+
+def adapt_transport_session(
+    candidate: Any,
+    *,
+    disconnect_on_close: bool = False,
+    phone: str | None = None,
+    pool: Any | None = None,
+) -> TelegramTransportSession:
+    if isinstance(candidate, TelegramTransportSession):
+        # Preserve the object identity: callers and tests may instrument the
+        # leased session methods.  Binding is per leased account, so updating
+        # this adapter is safe and avoids losing those wrappers.
+        if phone is not None:
+            candidate._phone = phone
+        if pool is not None:
+            candidate._pool = pool
+        return candidate
+    return TelegramTransportSession(
+        candidate,
+        disconnect_on_close=disconnect_on_close,
+        phone=phone,
+        pool=pool,
+    )
+
+
+@dataclass
+class BackendClientLease:
+    phone: str
+    session: TelegramTransportSession
+    backend_name: str
+    disconnect_on_release: bool = True
+
+
+class TelegramBackend(ABC):
+    name: str
+
+    @abstractmethod
+    async def acquire_client(self, account: Account) -> BackendClientLease:
+        raise NotImplementedError
+
+    async def release(self, lease: BackendClientLease) -> None:
+        if lease.disconnect_on_release:
+            await lease.session.close()
+
+
+class NativeTelethonBackend(TelegramBackend):
+    name = "native"
+
+    def __init__(
+        self,
+        auth: TelegramAuth,
+        client_logger_provider: Callable[[str], logging.Logger] | None = None,
+    ):
+        self._auth = auth
+        # Per-phone Telethon base loggers for the MTProto watchdog (#556).
+        self.client_logger_provider = client_logger_provider
+
+    async def acquire_client(
+        self, account: Account, *, ephemeral: bool = False
+    ) -> BackendClientLease:
+        # Ephemeral (force_native) sessions are short-lived and never replace
+        # the pooled client — giving them the per-phone watchdog logger would
+        # misattribute their security warnings to the phone and reconnect the
+        # healthy pooled client instead (#817 review P2).
+        base_logger = (
+            self.client_logger_provider(account.phone)
+            if self.client_logger_provider is not None and not ephemeral
+            else None
+        )
+        client = await self._auth.create_client_from_session(
+            account.session_string, base_logger=base_logger
+        )
+        # Surface every FloodWaitError so run_with_flood_wait can call
+        # pool.report_flood and rotate accounts (#495). Telethon's default
+        # silently sleeps on waits ≤ threshold and hides the flood from us.
+        client.flood_sleep_threshold = 0
+        return BackendClientLease(
+            phone=account.phone,
+            session=TelegramTransportSession(client),
+            backend_name=self.name,
+        )
+
+
+class TelethonCliBackend(TelegramBackend):
+    name = "telethon_cli"
+
+    def __init__(
+        self,
+        auth: TelegramAuth,
+        materializer: SessionMaterializer,
+        transport: str = "hybrid",
+        client_logger_provider: Callable[[str], logging.Logger] | None = None,
+    ):
+        self._auth = auth
+        self._materializer = materializer
+        self._transport = transport
+        # Per-phone Telethon base loggers for the MTProto watchdog (#556).
+        self.client_logger_provider = client_logger_provider
+
+    async def acquire_client(self, account: Account) -> BackendClientLease:
+        if self._transport == "subprocess":
+            raise UnsupportedBackendOperationError(
+                "subprocess transport cannot expose a live TelegramClient"
+            )
+
+        session_path = self._materializer.materialize(account.phone, account.session_string)
+        env_file = self._materializer.ensure_empty_env_file()
+        namespace = SimpleNamespace(
+            api_id=self._auth.api_id,
+            api_hash=self._auth.api_hash,
+            session=session_path,
+            password=None,
+            env_file=env_file,
+        )
+        client: TelegramClient | None = None
+        try:
+            client = telethon_cli_runtime.create_client(namespace)
+            client._connection_retries = None
+            client._retry_delay = 2
+            client.flood_sleep_threshold = 0
+            # Network-level MTProto proxy (TG_PROXY → Telethon proxy= dict);
+            # safe before connect(). Unrelated to _DialogRequestGateClient,
+            # whose "proxy" is a request wrapper, not a network route.
+            if self._auth.proxy is not None:
+                client.set_proxy(self._auth.proxy)
+            if self.client_logger_provider is not None:
+                # create_client() does not expose Telethon's base_logger=, and
+                # MTProtoSender captures its logger in __init__ — rebind both
+                # BEFORE connect() so the watchdog sees this client (#556).
+                bind_telethon_base_logger(
+                    client, self.client_logger_provider(account.phone)
+                )
+            await connect_with_auth_key_retry(client, phone=account.phone)
+            if not await client.is_user_authorized():
+                await _disconnect_client_safely(client, phone=account.phone)
+                client = None
+                raise BackendAcquireError(f"Session is no longer valid for {account.phone}")
+            return BackendClientLease(
+                phone=account.phone,
+                session=TelegramTransportSession(client),
+                backend_name=self.name,
+            )
+        except CLIError as exc:
+            if client is not None:
+                await _disconnect_client_safely(client, phone=account.phone)
+            raise BackendAcquireError(str(exc)) from exc
+        except Exception:
+            if client is not None:
+                await _disconnect_client_safely(client, phone=account.phone)
+            raise
+
+
+class BackendRouter:
+    def __init__(
+        self,
+        *,
+        mode: str,
+        primary: TelegramBackend,
+        native: NativeTelethonBackend,
+    ):
+        self._mode = mode
+        self._primary = primary
+        self._native = native
+
+    async def acquire_client(
+        self,
+        account: Account,
+        *,
+        force_native: bool = False,
+    ) -> BackendClientLease:
+        # Cross-process guard (#1548): while the worker daemon holds this
+        # session, a one-shot CLI process must not open a second MTProto
+        # connection with the same auth key (AuthKeyDuplicatedError risk).
+        # Waits out the holder within the configured grace, then raises
+        # SessionLockError naming the holder PID. No-op for a fresh/empty
+        # session string (interactive auth flows), re-entrant in-process.
+        await acquire_session_lock(account.session_string, phone=account.phone)
+        if force_native or self._mode == "native":
+            return await self._native.acquire_client(account, ephemeral=force_native)
+
+        if self._mode == "auto":
+            try:
+                return await self._primary.acquire_client(account)
+            except AuthKeyDuplicatedError:
+                # The auth key is duplicated at Telegram's side: the native
+                # fallback materialises the SAME session string and would only
+                # repeat the (bounded) retry storm against an angry session.
+                raise
+            except Exception as exc:
+                logger.warning(
+                    "Primary backend failed for %s, falling back to native: %s",
+                    account.phone,
+                    exc,
+                )
+                return await self._native.acquire_client(account)
+
+        if self._mode == "telethon_cli":
+            return await self._primary.acquire_client(account)
+
+        raise ValueError(f"Unknown backend mode: {self._mode!r}")
+
+    async def release(self, lease: BackendClientLease) -> None:
+        if lease.backend_name == "direct":
+            return  # persistent session, nothing to release
+        backend = self._native if lease.backend_name == self._native.name else self._primary
+        await backend.release(lease)

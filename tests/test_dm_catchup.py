@@ -23,14 +23,14 @@ from telethon_floodgate import (
     TelegramRateLimitGate,
 )
 
-from src.models import (
+from tg_agent.models import (
     DM_CATCHUP_SETTING_KEY,
     DmCatchupOverride,
     DmCatchupSettings,
     IncomingDm,
 )
-from src.telegram import dm_catchup
-from src.telegram.dm_catchup import DmCatchupService, load_dm_catchup_settings
+from tg_agent.telegram import dm_catchup
+from tg_agent.telegram.dm_catchup import DmCatchupService, load_dm_catchup_settings
 
 
 def _utc(**kwargs) -> datetime:
@@ -97,7 +97,7 @@ def _stub_history_since(messages_by_chat: dict[int, list[_FakeMessage]]):
 
 
 async def _make_db(tmp_path):
-    from src.database import Database
+    from tg_agent.database import Database
 
     db = Database(str(tmp_path / "dm_catchup.db"))
     await db.initialize()
@@ -738,7 +738,7 @@ async def test_broken_dialog_tl_type_logs_warning_not_error(tmp_path, monkeypatc
         )
         service = DmCatchupService(_FakePool(client), db)
 
-        with caplog.at_level(logging.WARNING, logger="src.telegram.dm_catchup"):
+        with caplog.at_level(logging.WARNING, logger="tg_agent.telegram.dm_catchup"):
             stats = await service.run_for_phone("+111")
 
         assert stats["errors"] == 1
@@ -766,7 +766,7 @@ async def test_all_dialogs_failing_flags_systemic_breakage(tmp_path, monkeypatch
         )
         service = DmCatchupService(_FakePool(client), db)
 
-        with caplog.at_level(logging.WARNING, logger="src.telegram.dm_catchup"):
+        with caplog.at_level(logging.WARNING, logger="tg_agent.telegram.dm_catchup"):
             stats = await service.run_for_phone("+111")
 
         assert stats["errors"] == 2  # оба диалога упали, но проход завершён

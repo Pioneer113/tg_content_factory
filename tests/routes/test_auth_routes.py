@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from src.models import TelegramCommand, TelegramCommandStatus
-from src.services.telegram_command_dispatcher import TelegramCommandDispatcher
+from tg_agent.models import TelegramCommand, TelegramCommandStatus
+from tg_agent.services.telegram_command_dispatcher import TelegramCommandDispatcher
 
 
 @pytest.fixture
@@ -465,7 +465,7 @@ async def test_send_code_connect_timeout_marks_failed_and_shows_error(client, mo
     db = app.state.db
     pool = app.state.pool
     auth = app.state.auth
-    monkeypatch.setattr("src.telegram.auth.AUTH_CONNECT_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr("tg_agent.telegram.auth.AUTH_CONNECT_TIMEOUT_SECONDS", 0.01)
 
     async def hang_forever():
         await asyncio.Event().wait()
@@ -475,7 +475,7 @@ async def test_send_code_connect_timeout_marks_failed_and_shows_error(client, mo
     mock_client.disconnect = AsyncMock()
     mock_client.send_code_request = AsyncMock()
 
-    with patch("src.telegram.auth.TelegramClient", return_value=mock_client):
+    with patch("tg_agent.telegram.auth.TelegramClient", return_value=mock_client):
         resp = await client.post(
             "/auth/send-code",
             data={"phone": "+1234567890"},

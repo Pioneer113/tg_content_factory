@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.config import SchedulerConfig
-from src.database.bundles import SchedulerBundle
-from src.scheduler.service import SchedulerManager
+from tg_agent.config import SchedulerConfig
+from tg_agent.database.bundles import SchedulerBundle
+from tg_agent.scheduler.service import SchedulerManager
 
 
 @pytest.mark.anyio
@@ -96,7 +96,7 @@ async def test_get_all_jobs_next_run_logs_on_apscheduler_error(caplog):
     manager._scheduler = scheduler
     manager._jobs_cache_ts = -1e9  # force a fresh (non-cached) read
 
-    with caplog.at_level(logging.ERROR, logger="src.scheduler.service"):
+    with caplog.at_level(logging.ERROR, logger="tg_agent.scheduler.service"):
         result = manager.get_all_jobs_next_run()
 
     # Safe fallback preserved...

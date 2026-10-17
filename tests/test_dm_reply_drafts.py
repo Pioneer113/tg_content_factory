@@ -18,11 +18,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import typer
 
-from src.cli.commands import dm as dm_cli
-from src.config import AppConfig
-from src.models import IncomingDm, TelegramCommandStatus
-from src.services.dispatcher._errors import TelegramCommandRetryLaterError
-from src.services.telegram_command_dispatcher import TelegramCommandDispatcher
+from tg_agent.cli.commands import dm as dm_cli
+from tg_agent.config import AppConfig
+from tg_agent.models import IncomingDm, TelegramCommandStatus
+from tg_agent.services.dispatcher._errors import TelegramCommandRetryLaterError
+from tg_agent.services.telegram_command_dispatcher import TelegramCommandDispatcher
 
 
 async def _make_draft(db, *, status: str = "draft", incoming_dm_id: int = 1) -> int:
@@ -168,7 +168,7 @@ def _patched_action(send_message: AsyncMock):
     """TelegramActionService в dm_mixin — единственная точка Telegram-транспорта."""
     svc_cls = MagicMock()
     svc_cls.return_value.send_message = send_message
-    return patch("src.services.dispatcher.dm_mixin.TelegramActionService", svc_cls)
+    return patch("tg_agent.services.dispatcher.dm_mixin.TelegramActionService", svc_cls)
 
 
 def _send_result_mock(phone: str, message_id: int | None):
@@ -356,7 +356,7 @@ def _run_dm_impl(coro_factory, cli_db, capsys):
     async def fake_init_db(_):
         return config, cli_db
 
-    with patch("src.cli.commands.dm.runtime.init_db", side_effect=fake_init_db):
+    with patch("tg_agent.cli.commands.dm.runtime.init_db", side_effect=fake_init_db):
         dm_cli.run_async(coro_factory())
     return capsys.readouterr().out
 

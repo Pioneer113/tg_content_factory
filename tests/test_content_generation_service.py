@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
-from src.models import ContentPipeline, Message, PipelineGenerationBackend, PipelinePublishMode, SearchResult
-from src.services.content_generation_service import ContentGenerationService
+from tg_agent.models import ContentPipeline, Message, PipelineGenerationBackend, PipelinePublishMode, SearchResult
+from tg_agent.services.content_generation_service import ContentGenerationService
 
 
 class DummySearchEngine:
@@ -22,7 +22,7 @@ class FakeGenerationRunsRepo:
         self._next_id = 1
 
     async def create_run(self, pipeline_id, prompt):
-        from src.models import GenerationRun
+        from tg_agent.models import GenerationRun
         run_id = self._next_id
         self._next_id += 1
         run = GenerationRun(
@@ -128,7 +128,7 @@ async def test_content_generation_service_rag():
         publish_mode=PipelinePublishMode.MODERATED,
     )
 
-    from src.services import provider_service
+    from tg_agent.services import provider_service
     original_get = getattr(provider_service.RuntimeProviderRegistry, "get_provider_callable", None)
     provider_service.RuntimeProviderRegistry.get_provider_callable = lambda self, model: fake_provider
     try:
@@ -168,7 +168,7 @@ async def test_content_generation_service_deep_agents_stub():
         publish_mode=PipelinePublishMode.MODERATED,
     )
 
-    from src.services import provider_service
+    from tg_agent.services import provider_service
     original_get = getattr(provider_service.RuntimeProviderRegistry, "get_provider_callable", None)
     provider_service.RuntimeProviderRegistry.get_provider_callable = lambda self, model: fake_provider
     try:
@@ -210,7 +210,7 @@ async def test_content_generation_service_skips_image_generation_without_service
         publish_mode=PipelinePublishMode.MODERATED,
     )
 
-    from src.services import provider_service
+    from tg_agent.services import provider_service
 
     original_get = getattr(provider_service.RuntimeProviderRegistry, "get_provider_callable", None)
     provider_service.RuntimeProviderRegistry.get_provider_callable = lambda self, model: fake_provider
@@ -239,7 +239,7 @@ class FakeQualityService:
         self.calls = []
 
     async def score_content(self, text, model=None):
-        from src.services.quality_scoring_service import QualityScore
+        from tg_agent.services.quality_scoring_service import QualityScore
 
         self.calls.append((text, model))
         return QualityScore(
@@ -280,7 +280,7 @@ async def test_content_generation_service_notifies_for_moderated_drafts():
         publish_mode=PipelinePublishMode.MODERATED,
     )
 
-    from src.services import provider_service
+    from tg_agent.services import provider_service
 
     original_get = getattr(provider_service.RuntimeProviderRegistry, "get_provider_callable", None)
     provider_service.RuntimeProviderRegistry.get_provider_callable = lambda self, model: fake_provider
@@ -322,7 +322,7 @@ async def test_content_generation_service_skips_notification_for_auto_publish():
         publish_mode=PipelinePublishMode.AUTO,
     )
 
-    from src.services import provider_service
+    from tg_agent.services import provider_service
 
     original_get = getattr(provider_service.RuntimeProviderRegistry, "get_provider_callable", None)
     provider_service.RuntimeProviderRegistry.get_provider_callable = lambda self, model: fake_provider
@@ -362,7 +362,7 @@ async def test_content_generation_service_records_quality_score():
         publish_mode=PipelinePublishMode.MODERATED,
     )
 
-    from src.services import provider_service
+    from tg_agent.services import provider_service
 
     original_get = getattr(provider_service.RuntimeProviderRegistry, "get_provider_callable", None)
     provider_service.RuntimeProviderRegistry.get_provider_callable = lambda self, model: fake_provider
@@ -507,8 +507,8 @@ async def test_run_graph_copies_node_errors_from_executor(monkeypatch):
     """
     from unittest.mock import AsyncMock, MagicMock
 
-    from src.models import ContentPipeline, PipelineGraph, PipelineNode, PipelineNodeType
-    from src.services.content_generation_service import ContentGenerationService
+    from tg_agent.models import ContentPipeline, PipelineGraph, PipelineNode, PipelineNodeType
+    from tg_agent.services.content_generation_service import ContentGenerationService
 
     pipeline = ContentPipeline(
         id=1,
@@ -537,7 +537,7 @@ async def test_run_graph_copies_node_errors_from_executor(monkeypatch):
             return executor_result
 
     monkeypatch.setattr(
-        "src.services.pipeline_executor.PipelineExecutor",
+        "tg_agent.services.pipeline_executor.PipelineExecutor",
         _FakeExecutor,
     )
     # resolve_retrieval_scope + list_sources path
@@ -547,7 +547,7 @@ async def test_run_graph_copies_node_errors_from_executor(monkeypatch):
         s.channel_id = None
         return s
 
-    monkeypatch.setattr("src.services.pipeline_service.resolve_retrieval_scope", _fake_scope)
+    monkeypatch.setattr("tg_agent.services.pipeline_service.resolve_retrieval_scope", _fake_scope)
 
     db = MagicMock()
     db.repos = MagicMock()
@@ -571,8 +571,8 @@ async def test_run_graph_reuses_orphan_image_for_retry_run(monkeypatch):
     to the executor via services["reusable_image"]."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from src.models import ContentPipeline, PipelineGraph, PipelineNode, PipelineNodeType
-    from src.services.content_generation_service import ContentGenerationService
+    from tg_agent.models import ContentPipeline, PipelineGraph, PipelineNode, PipelineNodeType
+    from tg_agent.services.content_generation_service import ContentGenerationService
 
     pipeline = ContentPipeline(
         id=1,
@@ -592,7 +592,7 @@ async def test_run_graph_reuses_orphan_image_for_retry_run(monkeypatch):
             return {"generated_text": "ok"}
 
     monkeypatch.setattr(
-        "src.services.pipeline_executor.PipelineExecutor",
+        "tg_agent.services.pipeline_executor.PipelineExecutor",
         _CaptureExecutor,
     )
 
@@ -602,7 +602,7 @@ async def test_run_graph_reuses_orphan_image_for_retry_run(monkeypatch):
         s.channel_id = None
         return s
 
-    monkeypatch.setattr("src.services.pipeline_service.resolve_retrieval_scope", _fake_scope)
+    monkeypatch.setattr("tg_agent.services.pipeline_service.resolve_retrieval_scope", _fake_scope)
 
     db = MagicMock()
     db.repos = MagicMock()
@@ -632,8 +632,8 @@ async def test_run_graph_skips_orphan_lookup_for_dry_run(monkeypatch):
     """Dry runs never generate an image, so the orphan lookup must not run."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from src.models import ContentPipeline, PipelineGraph, PipelineNode, PipelineNodeType
-    from src.services.content_generation_service import ContentGenerationService
+    from tg_agent.models import ContentPipeline, PipelineGraph, PipelineNode, PipelineNodeType
+    from tg_agent.services.content_generation_service import ContentGenerationService
 
     pipeline = ContentPipeline(
         id=1,
@@ -650,7 +650,7 @@ async def test_run_graph_skips_orphan_lookup_for_dry_run(monkeypatch):
             return {}
 
     monkeypatch.setattr(
-        "src.services.pipeline_executor.PipelineExecutor",
+        "tg_agent.services.pipeline_executor.PipelineExecutor",
         _NoopExecutor,
     )
 
@@ -660,7 +660,7 @@ async def test_run_graph_skips_orphan_lookup_for_dry_run(monkeypatch):
         s.channel_id = None
         return s
 
-    monkeypatch.setattr("src.services.pipeline_service.resolve_retrieval_scope", _fake_scope)
+    monkeypatch.setattr("tg_agent.services.pipeline_service.resolve_retrieval_scope", _fake_scope)
 
     db = MagicMock()
     db.repos = MagicMock()
@@ -688,8 +688,8 @@ async def test_run_graph_result_contract_defaults(monkeypatch):
     result_count 0, empty citations/action_counts/node_errors, no publish."""
     from unittest.mock import AsyncMock, MagicMock
 
-    from src.models import ContentPipeline, PipelineGraph, PipelineNode, PipelineNodeType
-    from src.services.content_generation_service import ContentGenerationService
+    from tg_agent.models import ContentPipeline, PipelineGraph, PipelineNode, PipelineNodeType
+    from tg_agent.services.content_generation_service import ContentGenerationService
 
     pipeline = ContentPipeline(
         id=1,
@@ -706,7 +706,7 @@ async def test_run_graph_result_contract_defaults(monkeypatch):
             return {}
 
     monkeypatch.setattr(
-        "src.services.pipeline_executor.PipelineExecutor",
+        "tg_agent.services.pipeline_executor.PipelineExecutor",
         _EmptyExecutor,
     )
 
@@ -716,7 +716,7 @@ async def test_run_graph_result_contract_defaults(monkeypatch):
         s.channel_id = None
         return s
 
-    monkeypatch.setattr("src.services.pipeline_service.resolve_retrieval_scope", _fake_scope)
+    monkeypatch.setattr("tg_agent.services.pipeline_service.resolve_retrieval_scope", _fake_scope)
 
     db = MagicMock()
     db.repos = MagicMock()

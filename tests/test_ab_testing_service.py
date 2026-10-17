@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.models import ContentPipeline, PipelineGenerationBackend, PipelinePublishMode
-from src.services.ab_testing_service import ABTestingService
+from tg_agent.models import ContentPipeline, PipelineGenerationBackend, PipelinePublishMode
+from tg_agent.services.ab_testing_service import ABTestingService
 
 
 class FakeQualityScoringService:
@@ -12,7 +12,7 @@ class FakeQualityScoringService:
         self._idx = 0
 
     async def score_and_check(self, text: str):
-        from src.services.quality_scoring_service import QualityScore
+        from tg_agent.services.quality_scoring_service import QualityScore
 
         score = self._scores[self._idx]
         self._idx += 1
@@ -93,7 +93,7 @@ async def test_ab_testing_service_generate_variants_includes_base_text(db, monke
     )
     service = ABTestingService(db)
 
-    from src.services import provider_service
+    from tg_agent.services import provider_service
 
     async def fake_provider(**kwargs):
         return f"variant::{kwargs['prompt'][:12]}"
@@ -251,7 +251,7 @@ async def test_generate_variants_builds_provider_service_with_config(db):
     mock_registry.get_provider_callable.return_value = AsyncMock(return_value="variant-x")
     builder = AsyncMock(return_value=mock_registry)
 
-    with patch("src.services.provider_service.build_provider_service", builder):
+    with patch("tg_agent.services.provider_service.build_provider_service", builder):
         variants = await service.generate_variants(pipeline, "base", num_variants=2)
 
     builder.assert_awaited_once_with(db, cfg)
@@ -276,7 +276,7 @@ async def test_generate_variants_accepts_injected_provider_service(db):
     )
 
     builder = AsyncMock()
-    with patch("src.services.provider_service.build_provider_service", builder):
+    with patch("tg_agent.services.provider_service.build_provider_service", builder):
         variants = await service.generate_variants(pipeline, "base", num_variants=2)
 
     builder.assert_not_awaited()

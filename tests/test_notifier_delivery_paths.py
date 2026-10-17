@@ -9,10 +9,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pybreaker
 import pytest
 
-from src.database.bundles import NotificationBundle
-from src.models import NotificationBot
-from src.telegram.notifier import Notifier, _send_via_bot_api
 from tests.helpers import wait_until
+from tg_agent.database.bundles import NotificationBundle
+from tg_agent.models import NotificationBot
+from tg_agent.telegram.notifier import Notifier, _send_via_bot_api
 
 
 @pytest.fixture
@@ -59,7 +59,7 @@ class TestNotifierFastPath:
         notifier._cached_me_id = 123
 
         with patch(
-            "src.telegram.notifier._send_via_bot_api",
+            "tg_agent.telegram.notifier._send_via_bot_api",
             new_callable=AsyncMock,
             return_value=True,
         ) as mock_send:
@@ -130,7 +130,7 @@ class TestNotifierSlowPath:
         assert notifier._cached_me_id is None
 
         with patch(
-            "src.telegram.notifier._send_via_bot_api",
+            "tg_agent.telegram.notifier._send_via_bot_api",
             new_callable=AsyncMock,
             return_value=True,
         ):
@@ -309,7 +309,7 @@ class TestNotifierCircuitBreaker:
     async def test_recovers_after_cooldown(self, mock_target_service):
         notifier = self._failing_notifier(mock_target_service, threshold=2, cooldown=100.0)
 
-        with patch("src.telegram.notifier.time.monotonic", return_value=1000.0):
+        with patch("tg_agent.telegram.notifier.time.monotonic", return_value=1000.0):
             assert await notifier.notify("x") is False
             assert await notifier.notify("x") is False
             assert notifier.is_degraded is True
@@ -318,7 +318,7 @@ class TestNotifierCircuitBreaker:
             assert mock_target_service.use_client.call_count == 2
 
         # After cooldown the breaker half-opens and attempts again.
-        with patch("src.telegram.notifier.time.monotonic", return_value=1101.0):
+        with patch("tg_agent.telegram.notifier.time.monotonic", return_value=1101.0):
             assert await notifier.notify("x") is False
             assert mock_target_service.use_client.call_count == 3
 
@@ -376,7 +376,7 @@ class TestNotifierCircuitBreaker:
 
         mock_client.get_me = AsyncMock(return_value=SimpleNamespace(id=42))
         mock_client.send_message = AsyncMock(return_value=None)
-        with caplog.at_level("INFO", logger="src.telegram.notifier"):
+        with caplog.at_level("INFO", logger="tg_agent.telegram.notifier"):
             assert await notifier.notify("x") is True
 
         assert any("recovered" in r.message.lower() for r in caplog.records), (
@@ -401,7 +401,7 @@ class TestNotifierCircuitBreaker:
             failure_threshold=3,
         )
 
-        with caplog.at_level("INFO", logger="src.telegram.notifier"):
+        with caplog.at_level("INFO", logger="tg_agent.telegram.notifier"):
             assert await notifier.notify("x") is True
             assert await notifier.notify("x") is True
 
@@ -414,7 +414,7 @@ class TestNotifierCircuitBreaker:
         """The 'recovered' INFO must fire when a half-open probe succeeds."""
         notifier = self._failing_notifier(mock_target_service, threshold=2, cooldown=100.0)
 
-        with patch("src.telegram.notifier.time.monotonic", return_value=1000.0):
+        with patch("tg_agent.telegram.notifier.time.monotonic", return_value=1000.0):
             assert await notifier.notify("x") is False
             assert await notifier.notify("x") is False
             assert notifier.is_degraded is True
@@ -429,8 +429,8 @@ class TestNotifierCircuitBreaker:
         mock_target_service.use_client.return_value = mock_cm
         notifier._notification_bundle = None  # take the direct send_message path
 
-        with caplog.at_level("INFO", logger="src.telegram.notifier"):
-            with patch("src.telegram.notifier.time.monotonic", return_value=1101.0):
+        with caplog.at_level("INFO", logger="tg_agent.telegram.notifier"):
+            with patch("tg_agent.telegram.notifier.time.monotonic", return_value=1101.0):
                 assert await notifier.notify("x") is True
 
         assert any("recovered" in r.message.lower() for r in caplog.records), (
@@ -445,14 +445,14 @@ class TestNotifierCircuitBreaker:
         not grant another full failure_threshold window of error logs (#553)."""
         notifier = self._failing_notifier(mock_target_service, threshold=3, cooldown=100.0)
 
-        with patch("src.telegram.notifier.time.monotonic", return_value=1000.0):
+        with patch("tg_agent.telegram.notifier.time.monotonic", return_value=1000.0):
             for _ in range(3):
                 assert await notifier.notify("x") is False
             assert notifier.is_degraded is True
             assert mock_target_service.use_client.call_count == 3
 
         # Cooldown elapsed → exactly one probe attempt, which fails → re-degraded.
-        with patch("src.telegram.notifier.time.monotonic", return_value=1101.0):
+        with patch("tg_agent.telegram.notifier.time.monotonic", return_value=1101.0):
             assert await notifier.notify("x") is False
             assert mock_target_service.use_client.call_count == 4  # one probe only
             assert notifier.is_degraded is True
@@ -482,7 +482,7 @@ class TestNotifierCircuitBreaker:
         notifier = self._failing_notifier(mock_target_service, threshold=2, cooldown=100.0)
         assert notifier._breaker.current_state == pybreaker.STATE_CLOSED
 
-        with patch("src.telegram.notifier.time.monotonic", return_value=1000.0):
+        with patch("tg_agent.telegram.notifier.time.monotonic", return_value=1000.0):
             await notifier.notify("x")
             await notifier.notify("x")
             assert notifier._breaker.current_state == pybreaker.STATE_OPEN
@@ -498,7 +498,7 @@ class TestNotifierCircuitBreaker:
         mock_target_service.use_client.return_value = mock_cm
         notifier._notification_bundle = None  # direct send_message path
 
-        with patch("src.telegram.notifier.time.monotonic", return_value=1101.0):
+        with patch("tg_agent.telegram.notifier.time.monotonic", return_value=1101.0):
             assert await notifier.notify("x") is True
         assert notifier._breaker.current_state == pybreaker.STATE_CLOSED
         assert notifier._breaker.fail_counter == 0
@@ -570,7 +570,7 @@ class TestNotifierCircuitBreaker:
             cooldown_seconds=100.0,
         )
 
-        with patch("src.telegram.notifier.time.monotonic", return_value=1000.0):
+        with patch("tg_agent.telegram.notifier.time.monotonic", return_value=1000.0):
             # Trip the breaker open with one failure (gate already releasable).
             gate.set()
             assert await notifier.notify("x") is False
@@ -580,7 +580,7 @@ class TestNotifierCircuitBreaker:
         # only one real send; the second waits, then sees the breaker open again
         # (the first probe failed) and skips.
         gate.clear()
-        with patch("src.telegram.notifier.time.monotonic", return_value=1101.0):
+        with patch("tg_agent.telegram.notifier.time.monotonic", return_value=1101.0):
             before = mock_target_service.use_client.call_count
             task_a = asyncio.create_task(notifier.notify("x"))
             task_b = asyncio.create_task(notifier.notify("x"))
@@ -626,7 +626,7 @@ class TestNotifierCircuitBreaker:
             cooldown_seconds=100.0,
         )
 
-        with patch("src.telegram.notifier.time.monotonic", return_value=1000.0):
+        with patch("tg_agent.telegram.notifier.time.monotonic", return_value=1000.0):
             # Trip open with one failed (hanging) send that we cancel.
             task = asyncio.create_task(notifier.notify("x"))
             await started.wait()
@@ -685,7 +685,7 @@ class TestSendViaBotApi:
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("src.telegram.notifier.aiohttp.ClientSession", return_value=mock_session):
+        with patch("tg_agent.telegram.notifier.aiohttp.ClientSession", return_value=mock_session):
             result = await _send_via_bot_api("123456:ABC-DEF", 789, "Test message")
 
         assert result is True
@@ -706,7 +706,7 @@ class TestSendViaBotApi:
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("src.telegram.notifier.aiohttp.ClientSession", return_value=mock_session):
+        with patch("tg_agent.telegram.notifier.aiohttp.ClientSession", return_value=mock_session):
             result = await _send_via_bot_api("123456:ABC-DEF", 789, "Test message")
 
         assert result is False
@@ -720,7 +720,7 @@ class TestSendViaBotApi:
         mock_session.__aenter__ = AsyncMock(side_effect=ConnectionError("Network unreachable"))
         mock_session.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("src.telegram.notifier.aiohttp.ClientSession", return_value=mock_session):
+        with patch("tg_agent.telegram.notifier.aiohttp.ClientSession", return_value=mock_session):
             result = await _send_via_bot_api("123456:ABC-DEF", 789, "Test message")
 
         assert result is False
@@ -732,7 +732,7 @@ class TestSendViaBotApi:
         mock_session.__aenter__ = AsyncMock(side_effect=asyncio.CancelledError)
         mock_session.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("src.telegram.notifier.aiohttp.ClientSession", return_value=mock_session):
+        with patch("tg_agent.telegram.notifier.aiohttp.ClientSession", return_value=mock_session):
             with pytest.raises(asyncio.CancelledError):
                 await _send_via_bot_api("123456:ABC-DEF", 789, "Test message")
 
@@ -743,7 +743,7 @@ class TestSendViaBotApi:
         mock_session.__aenter__ = AsyncMock(side_effect=asyncio.TimeoutError)
         mock_session.__aexit__ = AsyncMock(return_value=None)
 
-        with patch("src.telegram.notifier.aiohttp.ClientSession", return_value=mock_session):
+        with patch("tg_agent.telegram.notifier.aiohttp.ClientSession", return_value=mock_session):
             result = await _send_via_bot_api("123456:ABC-DEF", 789, "Test message")
 
         assert result is False
@@ -794,7 +794,7 @@ class TestNotifierSendTimeoutUnconfirmed:
         mock_client.send_message = AsyncMock(side_effect=asyncio.TimeoutError)
         notifier = self._direct_send_notifier(mock_target_service, mock_client)
 
-        with caplog.at_level("ERROR", logger="src.telegram.notifier"):
+        with caplog.at_level("ERROR", logger="tg_agent.telegram.notifier"):
             result = await notifier.notify("Test message")
 
         assert result is True, (
