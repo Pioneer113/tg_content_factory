@@ -20,7 +20,6 @@ from src.database.bundles import (
     CollectionBundle,
     NotificationBundle,
     PhotoLoaderBundle,
-    PingMonitorBundle,
     PipelineBundle,
     SchedulerBundle,
     SearchBundle,
@@ -311,7 +310,7 @@ async def build_container_with_templates(
         # TelegramActionService path as `dialogs read/send` — worker-only,
         # web snapshots never open Telegram connections.
         ping_monitor_service = PingMonitorService(
-            PingMonitorBundle.from_database(db),
+            db.repos.ping_monitors,
             TelegramActionService(live_pool),
         )
         notifier = Notifier(

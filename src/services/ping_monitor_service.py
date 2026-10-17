@@ -8,7 +8,7 @@
 (тот же путь, что `dialogs read`; второе MTProto-соединение не открывается —
 см. `src/telegram/dm_history.py`).
 
-Сервис не зависит от scheduler/CLI-обвязки — только бандл БД + действия
+Сервис не зависит от scheduler/CLI-обвязки — только репозиторий БД + действия
 Telegram; задуман для переноса в будущий пакет tg_messenger как есть.
 """
 
@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from src.database.bundles import PingMonitorBundle
+from src.database.repositories.ping_monitors import PingMonitorRepository
 from src.models import PingMonitor
 from src.services.telegram_actions import TelegramActionService
 from src.utils.datetime import normalize_utc
@@ -42,25 +42,25 @@ def _next_threshold_days(base_days: int, cycle_count: int) -> int:
 
 
 class PingMonitorService:
-    def __init__(self, bundle: PingMonitorBundle, actions: TelegramActionService):
-        self._bundle = bundle
+    def __init__(self, repo: PingMonitorRepository, actions: TelegramActionService):
+        self._repo = repo
         self._actions = actions
 
     async def create_monitor(self, monitor: PingMonitor) -> int:
-        return await self._bundle.create(monitor)
+        return await self._repo.create(monitor)
 
     async def get_monitor(self, monitor_id: int) -> PingMonitor | None:
-        return await self._bundle.get(monitor_id)
+        return await self._repo.get(monitor_id)
 
     async def list_monitors(self, active_only: bool = False) -> list[PingMonitor]:
-        return await self._bundle.list(active_only)
+        return await self._repo.list(active_only)
 
     async def update_monitor(self, monitor_id: int, **fields) -> None:
         """Частично обновить монитор; kwargs — как `PingMonitorRepository.update`."""
-        await self._bundle.update(monitor_id, **fields)
+        await self._repo.update(monitor_id, **fields)
 
     async def delete_monitor(self, monitor_id: int) -> None:
-        await self._bundle.delete(monitor_id)
+        await self._repo.delete(monitor_id)
 
     async def run_due(self) -> int:
         """Проверить все активные мониторы; вернуть число проверенных.
@@ -68,7 +68,7 @@ class PingMonitorService:
         Ошибка на одном мониторе пишется в его `error` и не прерывает остальные
         (как в `PhotoAutoUploadService.run_job`).
         """
-        monitors = await self._bundle.list(active_only=True)
+        monitors = await self._repo.list(active_only=True)
         now = datetime.now(timezone.utc)
         checked = 0
         for monitor in monitors:
@@ -81,7 +81,7 @@ class PingMonitorService:
                     monitor.phone,
                     monitor.dialog_id,
                 )
-                await self._bundle.update(
+                await self._repo.update(
                     monitor.id or 0, error=str(exc), last_checked_at=now
                 )
                 continue
@@ -95,13 +95,13 @@ class PingMonitorService:
         )
         last = result.messages[0] if result.messages else None
         if last is None:
-            await self._bundle.update(monitor_id, last_checked_at=now)
+            await self._repo.update(monitor_id, last_checked_at=now)
             return
         last_date = normalize_utc(last.date)
         if not last.out:
             # Контакт ответил: прогрессия сбрасывается, следующая тишина снова
             # стартует с базового порога N. Пинг не шлём, мониторинг продолжается.
-            await self._bundle.update(
+            await self._repo.update(
                 monitor_id,
                 cycle_count=0,
                 last_incoming_message_at=last_date,
@@ -109,7 +109,7 @@ class PingMonitorService:
                 error="",
             )
             return
-        await self._bundle.update(
+        await self._repo.update(
             monitor_id,
             last_outgoing_message_at=last_date,
             last_checked_at=now,
@@ -125,6 +125,6 @@ class PingMonitorService:
         await self._actions.send_message(
             phone=monitor.phone, recipient=monitor.dialog_id, text=monitor.nudge_text
         )
-        await self._bundle.update(
+        await self._repo.update(
             monitor_id, cycle_count=monitor.cycle_count + 1, last_nudge_sent_at=now
         )

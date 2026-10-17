@@ -139,12 +139,11 @@ async def run_due_impl(config_path: str) -> None:
     config, db = await runtime.init_db(config_path)
     _, pool = await runtime.init_pool(config, db)
     try:
-        from src.database.bundles import PingMonitorBundle
         from src.services.ping_monitor_service import PingMonitorService
         from src.services.telegram_actions import TelegramActionService
 
         service = PingMonitorService(
-            PingMonitorBundle.from_database(db),
+            db.repos.ping_monitors,
             TelegramActionService(pool),
         )
         checked = await service.run_due()

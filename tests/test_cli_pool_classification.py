@@ -48,6 +48,11 @@ RUNS_ANYWAY = {
     ("pipeline.py", "_pipeline_run"),
     ("pipeline.py", "_pipeline_publish"),
     ("pipeline.py", "_pipeline_generate"),
+    # ping (#1415): --username resolve is a read-only RPC; run-due is the manual
+    # trigger of the worker's own hourly check — same shape as photo_loader
+    # run-due (real reads/sends, operator-invoked).
+    ("ping.py", "create_impl"),
+    ("ping.py", "run_due_impl"),
 }
 
 # Intentionally untouched: interactive auth (a live phone_code_hash bound to the

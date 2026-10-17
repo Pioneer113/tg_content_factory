@@ -42,14 +42,14 @@ def _monitor(**overrides) -> PingMonitor:
     return PingMonitor(**defaults)
 
 
-def _bundle(monitors: list[PingMonitor] | None = None) -> MagicMock:
-    bundle = MagicMock()
-    bundle.create = AsyncMock(return_value=1)
-    bundle.list = AsyncMock(return_value=monitors or [])
-    bundle.get = AsyncMock(return_value=None)
-    bundle.update = AsyncMock()
-    bundle.delete = AsyncMock()
-    return bundle
+def _repo(monitors: list[PingMonitor] | None = None) -> MagicMock:
+    repo = MagicMock()
+    repo.create = AsyncMock(return_value=1)
+    repo.list = AsyncMock(return_value=monitors or [])
+    repo.get = AsyncMock(return_value=None)
+    repo.update = AsyncMock()
+    repo.delete = AsyncMock()
+    return repo
 
 
 def _actions(last_message: DialogMessage | None) -> MagicMock:
@@ -98,21 +98,21 @@ def test_next_threshold_days_progression(base_days, cycle_count, expected):
 # --- CRUD-делегирование ---
 
 
-async def test_crud_delegates_to_bundle():
-    bundle = _bundle()
-    service = PingMonitorService(bundle, MagicMock())
+async def test_crud_delegates_to_repo():
+    repo = _repo()
+    service = PingMonitorService(repo, MagicMock())
     monitor = _monitor()
 
     assert await service.create_monitor(monitor) == 1
-    bundle.create.assert_awaited_once_with(monitor)
+    repo.create.assert_awaited_once_with(monitor)
     await service.get_monitor(1)
-    bundle.get.assert_awaited_once_with(1)
+    repo.get.assert_awaited_once_with(1)
     await service.list_monitors(active_only=True)
-    bundle.list.assert_awaited_once_with(True)
+    repo.list.assert_awaited_once_with(True)
     await service.update_monitor(1, nudge_text="новый")
-    bundle.update.assert_awaited_once_with(1, nudge_text="новый")
+    repo.update.assert_awaited_once_with(1, nudge_text="новый")
     await service.delete_monitor(1)
-    bundle.delete.assert_awaited_once_with(1)
+    repo.delete.assert_awaited_once_with(1)
 
 
 # --- run_due: правило тишины ---
@@ -120,15 +120,15 @@ async def test_crud_delegates_to_bundle():
 
 async def test_run_due_contact_replied_resets_cycle_without_ping():
     monitor = _monitor(cycle_count=3, silence_threshold_days=30)
-    bundle = _bundle([monitor])
+    repo = _repo([monitor])
     actions = _actions(_msg(out=False, minutes_ago=5))
-    service = PingMonitorService(bundle, actions)
+    service = PingMonitorService(repo, actions)
 
     checked = await service.run_due()
 
     assert checked == 1
     actions.send_message.assert_not_awaited()
-    bundle.update.assert_awaited_once_with(
+    repo.update.assert_awaited_once_with(
         1,
         cycle_count=0,
         last_incoming_message_at=NOW - timedelta(minutes=5),
@@ -140,15 +140,15 @@ async def test_run_due_contact_replied_resets_cycle_without_ping():
 async def test_run_due_outgoing_below_threshold_no_ping():
     # Моё сообщение 10 дней назад, базовый порог 30 — тишины ещё недостаточно.
     monitor = _monitor(cycle_count=0, silence_threshold_days=30)
-    bundle = _bundle([monitor])
+    repo = _repo([monitor])
     actions = _actions(_msg(out=True, minutes_ago=10 * 24 * 60))
-    service = PingMonitorService(bundle, actions)
+    service = PingMonitorService(repo, actions)
 
     checked = await service.run_due()
 
     assert checked == 1
     actions.send_message.assert_not_awaited()
-    bundle.update.assert_awaited_once_with(
+    repo.update.assert_awaited_once_with(
         1,
         last_outgoing_message_at=NOW - timedelta(minutes=10 * 24 * 60),
         last_checked_at=NOW,
@@ -158,10 +158,10 @@ async def test_run_due_outgoing_below_threshold_no_ping():
 
 async def test_run_due_first_ping_after_base_threshold():
     monitor = _monitor(cycle_count=0, silence_threshold_days=30)
-    bundle = _bundle([monitor])
+    repo = _repo([monitor])
     # Моё сообщение 31 день назад, пингов не было → порог base=30 пройден.
     actions = _actions(_msg(out=True, minutes_ago=31 * 24 * 60))
-    service = PingMonitorService(bundle, actions)
+    service = PingMonitorService(repo, actions)
 
     checked = await service.run_due()
 
@@ -169,7 +169,7 @@ async def test_run_due_first_ping_after_base_threshold():
     actions.send_message.assert_awaited_once_with(
         phone="+1234", recipient=777, text="привет, как ты?"
     )
-    update_kwargs = bundle.update.call_args.kwargs
+    update_kwargs = repo.update.call_args.kwargs
     assert update_kwargs["cycle_count"] == 1
     assert update_kwargs["last_nudge_sent_at"] == NOW
 
@@ -177,23 +177,23 @@ async def test_run_due_first_ping_after_base_threshold():
 async def test_run_due_second_ping_one_day_after_first():
     first_ping = NOW - timedelta(days=2)
     monitor = _monitor(cycle_count=1, silence_threshold_days=30, last_nudge_sent_at=first_ping)
-    bundle = _bundle([monitor])
+    repo = _repo([monitor])
     # Последнее сообщение — мой пинг двухдневной давности; цикл 1 → +1 день.
     actions = _actions(_msg(out=True, minutes_ago=2 * 24 * 60))
-    service = PingMonitorService(bundle, actions)
+    service = PingMonitorService(repo, actions)
 
     await service.run_due()
 
     actions.send_message.assert_awaited_once()
-    assert bundle.update.call_args.kwargs["cycle_count"] == 2
+    assert repo.update.call_args.kwargs["cycle_count"] == 2
 
 
 async def test_run_due_second_ping_not_yet_due():
     first_ping = NOW - timedelta(hours=12)
     monitor = _monitor(cycle_count=1, silence_threshold_days=30, last_nudge_sent_at=first_ping)
-    bundle = _bundle([monitor])
+    repo = _repo([monitor])
     actions = _actions(_msg(out=True, minutes_ago=12 * 60))
-    service = PingMonitorService(bundle, actions)
+    service = PingMonitorService(repo, actions)
 
     await service.run_due()
 
@@ -208,9 +208,9 @@ async def test_run_due_reply_older_than_recent_own_message_uses_own_message_anch
         silence_threshold_days=30,
         last_nudge_sent_at=NOW - timedelta(days=40),
     )
-    bundle = _bundle([monitor])
+    repo = _repo([monitor])
     actions = _actions(_msg(out=True, minutes_ago=31 * 24 * 60))
-    service = PingMonitorService(bundle, actions)
+    service = PingMonitorService(repo, actions)
 
     await service.run_due()
 
@@ -219,21 +219,21 @@ async def test_run_due_reply_older_than_recent_own_message_uses_own_message_anch
 
 async def test_run_due_empty_dialog_just_checks_in():
     monitor = _monitor()
-    bundle = _bundle([monitor])
+    repo = _repo([monitor])
     actions = _actions(None)
-    service = PingMonitorService(bundle, actions)
+    service = PingMonitorService(repo, actions)
 
     checked = await service.run_due()
 
     assert checked == 1
     actions.send_message.assert_not_awaited()
-    bundle.update.assert_awaited_once_with(1, last_checked_at=NOW)
+    repo.update.assert_awaited_once_with(1, last_checked_at=NOW)
 
 
 async def test_run_due_error_on_one_monitor_does_not_stop_others():
     failing = _monitor(id=1)
     healthy = _monitor(id=2)
-    bundle = _bundle([failing, healthy])
+    repo = _repo([failing, healthy])
     actions = MagicMock()
     call_count = {"n": 0}
 
@@ -249,13 +249,13 @@ async def test_run_due_error_on_one_monitor_does_not_stop_others():
 
     actions.read_history = AsyncMock(side_effect=read_history)
     actions.send_message = AsyncMock()
-    service = PingMonitorService(bundle, actions)
+    service = PingMonitorService(repo, actions)
 
     checked = await service.run_due()
 
     assert checked == 1
     error_calls = [
-        c for c in bundle.update.call_args_list if c.kwargs.get("error") == "flood wait"
+        c for c in repo.update.call_args_list if c.kwargs.get("error") == "flood wait"
     ]
     assert len(error_calls) == 1
     actions.send_message.assert_awaited_once()  # здоровый монитор дошёл до пинга
@@ -263,16 +263,16 @@ async def test_run_due_error_on_one_monitor_does_not_stop_others():
 
 async def test_run_due_send_failure_records_error_without_cycle_bump():
     monitor = _monitor()
-    bundle = _bundle([monitor])
+    repo = _repo([monitor])
     actions = _actions(_msg(out=True, minutes_ago=31 * 24 * 60))
     actions.send_message = AsyncMock(side_effect=RuntimeError("cannot send"))
-    service = PingMonitorService(bundle, actions)
+    service = PingMonitorService(repo, actions)
 
     checked = await service.run_due()
 
     # Ошибка записи обновления — монитор не считается проверенным, но
     # cycle_count не растёт: ретрай на следующем прогоне снова пришлёт пинг.
     assert checked == 0
-    last_update = bundle.update.call_args.kwargs
+    last_update = repo.update.call_args.kwargs
     assert last_update["error"] == "cannot send"
     assert "cycle_count" not in last_update
