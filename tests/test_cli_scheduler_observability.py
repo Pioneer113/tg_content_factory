@@ -16,6 +16,7 @@ Tests are fake-first: snapshots are seeded directly into the DB, no worker.
 
 from __future__ import annotations
 
+import re
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
@@ -155,7 +156,8 @@ async def test_status_stale_heartbeat_reports_down(tmp_path, capsys):
 
     out = capsys.readouterr().out
     assert "Worker: down (stale heartbeat" in out
-    assert "300s ago" in out
+    # Age is 300s + the time between seeding and the read — exact digits jitter.
+    assert re.search(r"last \d+s ago", out)
     assert "Running:" not in out
 
 

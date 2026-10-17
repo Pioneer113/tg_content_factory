@@ -560,6 +560,9 @@ class TestSchedulerStatus:
             ("scheduler_job_disabled:job_b", "0"),
             ("other_setting", "value"),
         ])
+        # The live-worker section reads runtime_snapshots (#1570); no snapshot
+        # -> "Worker: down" fallback, config asserts below stay valid.
+        db.repos.runtime_snapshots.get_snapshot = AsyncMock(return_value=None)
         db.close = AsyncMock()
 
         config = MagicMock()
@@ -860,6 +863,7 @@ class TestSchedulerNoAccounts:
         db.close = AsyncMock()
         db.get_setting = AsyncMock(return_value="0")
         db.repos.settings.list_all = AsyncMock(return_value=[])
+        db.repos.runtime_snapshots.get_snapshot = AsyncMock(return_value=None)
 
         config = MagicMock()
         config.scheduler.collect_interval_minutes = 60
