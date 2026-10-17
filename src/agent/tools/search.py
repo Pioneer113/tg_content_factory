@@ -58,7 +58,13 @@ def register(db: Any, client_pool: Any, embedding_service: Any, **kwargs: Any) -
             preview = (message.text or "")[:300]
             channel = format_channel_identity(message)
             sender = format_sender_identity(message)
-            lines.append(f"- [{channel}, date={message.date}, sender={sender}]: {preview}")
+            # Заголовок форум-топика из кэша рядом с topic_id (#1552); без
+            # заголовка в кэше — голый id, выдачу не роняем.
+            topic = ""
+            if message.topic_id is not None:
+                title = f' "{message.topic_title}"' if message.topic_title else ""
+                topic = f", topic={message.topic_id}{title}"
+            lines.append(f"- [{channel}, date={message.date}, sender={sender}{topic}]: {preview}")
         return "\n".join(lines)
 
     # ------------------------------------------------------------------

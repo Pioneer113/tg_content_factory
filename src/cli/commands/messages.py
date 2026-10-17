@@ -30,6 +30,13 @@ from src.telegram.reactions import (
 from src.utils.text_safety import csv_safe_cell
 
 
+def _format_topic(msg: Message) -> str:
+    """``topic=1 (General)`` / ``topic=1`` без заголовка в кэше (#1552)."""
+    if msg.topic_title:
+        return f"topic={msg.topic_id} ({msg.topic_title})"
+    return f"topic={msg.topic_id}"
+
+
 def _print_messages(messages: list[Message], fmt: str, total: int, has_more: bool = False) -> None:
     if fmt == "json":
         items = []
@@ -40,6 +47,8 @@ def _print_messages(messages: list[Message], fmt: str, total: int, has_more: boo
                 "message_id": msg.message_id,
                 "date": str(msg.date) if msg.date else None,
                 "text": msg.text,
+                "topic_id": msg.topic_id,
+                "topic_title": msg.topic_title,
                 "views": msg.views,
                 "forwards": msg.forwards,
                 "reactions": parse_reactions_json(msg.reactions_json),
@@ -48,12 +57,17 @@ def _print_messages(messages: list[Message], fmt: str, total: int, has_more: boo
     elif fmt == "csv":
         buf = io.StringIO()
         writer = csv.writer(buf)
-        writer.writerow(["id", "channel_id", "message_id", "date", "text", "views", "forwards", "reactions"])
+        writer.writerow(
+            ["id", "channel_id", "message_id", "date", "text",
+             "topic_id", "topic_title", "views", "forwards", "reactions"]
+        )
         for msg in messages:
             writer.writerow([
                 msg.id, msg.channel_id, msg.message_id,
                 str(msg.date) if msg.date else "",
                 csv_safe_cell((msg.text or "")[:500]),
+                msg.topic_id,
+                csv_safe_cell(msg.topic_title or ""),
                 msg.views, msg.forwards,
                 format_reactions_json(msg.reactions_json),
             ])
@@ -70,6 +84,8 @@ def _print_messages(messages: list[Message], fmt: str, total: int, has_more: boo
                 preview += "..."
             reactions = format_reactions_json(msg.reactions_json)
             fields = [f"#{msg.message_id}"]
+            if msg.topic_id is not None:
+                fields.append(_format_topic(msg))
             if msg.views:
                 fields.append(f"views={msg.views}")
             if reactions:

@@ -370,9 +370,10 @@ class TestDialogsToolGetForumTopics:
 
     @pytest.mark.anyio
     async def test_with_topics(self, mock_db):
+        # Реальный контракт ChannelsRepository.get_forum_topics: ключ "id" (#1552).
         topics = [
-            {"topic_id": 1, "title": "General"},
-            {"topic_id": 2, "title": "Off-topic"},
+            {"id": 1, "title": "General"},
+            {"id": 2, "title": "Off-topic"},
         ]
         mock_db.get_forum_topics = AsyncMock(return_value=topics)
         handlers = _get_tool_handlers(mock_db)

@@ -68,6 +68,9 @@ search-query list | get | add | edit | delete | toggle | run | stats
 
 - `messages read` accepts t.me links, @usernames or internal ids as `<identifier>`;
   `--live` reads directly from Telegram instead of the local DB.
+- Forum messages carry `topic_id` plus the cached `topic_title` (#1552): text output
+  renders `topic=<id> (<title>)`, JSON/CSV expose both fields. Titles come from the
+  collector-maintained cache; an unknown/deleted topic renders without a title.
 - Commands with an optional `--phone` default to the **primary account** (DB flag);
   if the primary is not connected, the first connected account is used (#1480).
 - `search --mode` picks local DB (FTS5), direct Telegram API, or AI-powered search.
