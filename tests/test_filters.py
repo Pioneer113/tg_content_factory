@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from src.filters.analyzer import ChannelAnalyzer
-from src.filters.criteria import VALID_FLAGS, contains_cyrillic
+from src.filters.criteria import AUTHOR_CONTENT_TAG, VALID_FLAGS, WHITELIST_FLAG, contains_cyrillic
 from src.filters.models import ChannelFilterResult, FilterReport
 
 
@@ -113,7 +113,8 @@ class TestValidFlags:
         assert "auto_feed" in VALID_FLAGS
         assert "low_engagement" in VALID_FLAGS
         assert "forwarder" in VALID_FLAGS
-        assert len(VALID_FLAGS) == 13
+        assert "no_author_content" in VALID_FLAGS
+        assert len(VALID_FLAGS) == 14
 
 
 class TestAnalyzerLowUniqueness:
@@ -776,6 +777,28 @@ class TestAnalyzerStickyFlags:
         )
         row = await cur.fetchone()
         assert "title_changed" in row["filter_flags"]
+
+    async def test_manual_preserved_after_apply(self, db, raw_db):
+        # Ручной вердикт без смены origin (массовый сценарий 07.10.26, raw UPDATE):
+        # sticky-скан apply_filters обязан вернуть канал в фильтр после reset (#1499).
+        await _insert_channel(raw_db, 712, username="durov")
+        await _insert_messages(raw_db, 712, ["unique a", "unique b", "unique c"])
+        await raw_db.execute(
+            "UPDATE channels SET is_filtered = 1, filter_flags = 'low_uniqueness,manual' "
+            "WHERE channel_id = 712"
+        )
+        await raw_db.commit()
+
+        analyzer = ChannelAnalyzer(db)
+        report = await analyzer.analyze_all()
+        await analyzer.apply_filters(report)
+
+        cur = await raw_db.execute(
+            "SELECT is_filtered, filter_flags FROM channels WHERE channel_id = ?", (712,)
+        )
+        row = await cur.fetchone()
+        assert row["is_filtered"] == 1
+        assert "manual" in row["filter_flags"]
 
 
 class TestChannelAnalyzer:
@@ -1520,3 +1543,232 @@ class TestAnalyzerForwardShare:
         quick = await analyzer.analyze_all(quick=True, sample_size=50)
         result = next(r for r in quick.results if r.channel_id == 4304)
         assert "forwarder" in result.flags
+
+
+class TestApplyWhitelist:
+    """Whitelist-режим #1490 (MVP): доверие по тегу «авторский контент»."""
+
+    async def test_untagged_channels_filtered_with_flag(self, db, raw_db):
+        await _insert_channel(raw_db, 5001)
+        await raw_db.execute(
+            "UPDATE channels SET is_filtered = 1, filter_flags = 'low_uniqueness' "
+            "WHERE channel_id = 5001"
+        )
+        await _insert_channel(raw_db, 5002)
+        await raw_db.commit()
+
+        analyzer = ChannelAnalyzer(db)
+        count = await analyzer.apply_whitelist()
+
+        assert count == 2
+        cur = await raw_db.execute(
+            "SELECT channel_id, is_filtered, filter_flags FROM channels "
+            "WHERE channel_id IN (5001, 5002) ORDER BY channel_id"
+        )
+        rows = {r[0]: (r[1], r[2]) for r in await cur.fetchall()}
+        # Старые флаги сохраняются как метки, whitelist-флаг доложен.
+        assert rows[5001] == (1, "low_uniqueness,no_author_content")
+        assert rows[5002] == (1, WHITELIST_FLAG)
+
+    async def test_tagged_channel_trusted_despite_flags(self, db, raw_db):
+        await _insert_channel(raw_db, 5011, username="S0IMD1EDUAW")
+        await raw_db.execute(
+            "UPDATE channels SET is_filtered = 1, "
+            "filter_flags = 'low_uniqueness,suspicious_username' WHERE channel_id = 5011"
+        )
+        await _tag_channel(raw_db, 5011, AUTHOR_CONTENT_TAG)
+
+        analyzer = ChannelAnalyzer(db)
+        count = await analyzer.apply_whitelist()
+
+        assert count == 0
+        cur = await raw_db.execute(
+            "SELECT is_filtered, filter_flags FROM channels WHERE channel_id = 5011"
+        )
+        is_filtered, flags = await cur.fetchone()
+        assert is_filtered == 0
+        # Флаги остаются метками (их видит filter suspects), доверие сильнее флагов.
+        assert "low_uniqueness" in flags
+        assert "suspicious_username" in flags
+
+    async def test_human_decisions_untouched_both_ways(self, db, raw_db):
+        # 5021: human-вердикт «фильтровать» — whitelist не переигрывает и не
+        # доложает флаг; 5022: human «не фильтровать» — не фильтруется;
+        # 5023: тегированный, но human отфильтровал — доверие не сильнее человека.
+        await _insert_channel(raw_db, 5021)
+        await raw_db.execute(
+            "UPDATE channels SET is_filtered = 1, filtered_origin = 'human', "
+            "filter_flags = 'manual' WHERE channel_id = 5021"
+        )
+        await _insert_channel(raw_db, 5022)
+        await raw_db.execute(
+            "UPDATE channels SET is_filtered = 0, filtered_origin = 'human', "
+            "filter_flags = '' WHERE channel_id = 5022"
+        )
+        await _insert_channel(raw_db, 5023)
+        await raw_db.execute(
+            "UPDATE channels SET is_filtered = 1, filtered_origin = 'human', "
+            "filter_flags = 'manual' WHERE channel_id = 5023"
+        )
+        await _tag_channel(raw_db, 5023, AUTHOR_CONTENT_TAG)
+        await raw_db.commit()
+
+        analyzer = ChannelAnalyzer(db)
+        await analyzer.apply_whitelist()
+
+        cur = await raw_db.execute(
+            "SELECT channel_id, is_filtered, filter_flags FROM channels "
+            "WHERE channel_id IN (5021, 5022, 5023) ORDER BY channel_id"
+        )
+        rows = {r[0]: (r[1], r[2]) for r in await cur.fetchall()}
+        assert rows[5021] == (1, "manual")
+        assert rows[5022] == (0, "")
+        assert rows[5023] == (1, "manual")
+
+    async def test_keep_tag_trusted(self, db, raw_db):
+        from src.filters.criteria import KEEP_TAG
+
+        await _insert_channel(raw_db, 5031)
+        await raw_db.execute(
+            "UPDATE channels SET is_filtered = 1, filter_flags = 'low_subscriber_ratio' "
+            "WHERE channel_id = 5031"
+        )
+        await _tag_channel(raw_db, 5031, KEEP_TAG)
+
+        analyzer = ChannelAnalyzer(db)
+        count = await analyzer.apply_whitelist()
+
+        assert count == 0
+        cur = await raw_db.execute(
+            "SELECT is_filtered, filter_flags FROM channels WHERE channel_id = 5031"
+        )
+        is_filtered, flags = await cur.fetchone()
+        assert is_filtered == 0
+        assert "low_subscriber_ratio" in flags
+        assert WHITELIST_FLAG not in flags
+
+    async def test_idempotent_second_run(self, db, raw_db):
+        await _insert_channel(raw_db, 5041)
+        await _insert_channel(raw_db, 5042)
+        await _tag_channel(raw_db, 5042, AUTHOR_CONTENT_TAG)
+        await raw_db.commit()
+
+        analyzer = ChannelAnalyzer(db)
+        first = await analyzer.apply_whitelist()
+        second = await analyzer.apply_whitelist()
+
+        assert first == 1
+        assert second == 1
+        cur = await raw_db.execute(
+            "SELECT channel_id, is_filtered, filter_flags FROM channels "
+            "WHERE channel_id IN (5041, 5042) ORDER BY channel_id"
+        )
+        rows = {r[0]: (r[1], r[2]) for r in await cur.fetchall()}
+        assert rows[5041] == (1, WHITELIST_FLAG)
+        assert rows[5042][0] == 0
+        assert WHITELIST_FLAG not in (rows[5042][1] or "")
+
+    async def test_regular_apply_clears_whitelist_flag(self, db, raw_db):
+        # Whitelist — явный режим: обычный blacklist-цикл (reset→apply) сносит
+        # no_author_content и возвращает канал под авто-вердикты (семантика
+        # зафиксирована сознательно — открытый вопрос Q4 из #1490).
+        await _insert_channel(raw_db, 5051)
+        analyzer = ChannelAnalyzer(db)
+        await analyzer.apply_whitelist()
+        report = await analyzer.analyze_all()
+        await analyzer.apply_filters(report)
+
+        cur = await raw_db.execute(
+            "SELECT is_filtered, filter_flags FROM channels WHERE channel_id = 5051"
+        )
+        is_filtered, flags = await cur.fetchone()
+        assert is_filtered == 0
+        assert WHITELIST_FLAG not in (flags or "")
+
+
+class TestMergeFilterFlag:
+    """Операторские sticky-флаги #1499: merge_filter_flag."""
+
+    async def _pk(self, raw_db, channel_id: int) -> int:
+        cur = await raw_db.execute("SELECT id FROM channels WHERE channel_id = ?", (channel_id,))
+        return (await cur.fetchone())[0]
+
+    async def test_set_marks_durable_human_verdict(self, db, raw_db):
+        await _insert_channel(raw_db, 6001, username="durov")
+        await raw_db.execute(
+            "UPDATE channels SET filter_flags = 'username_changed' WHERE channel_id = 6001"
+        )
+        await raw_db.commit()
+        pk = await self._pk(raw_db, 6001)
+
+        applied = await db.repos.channels.merge_filter_flag(pk, "manual", add=True)
+
+        assert applied is True
+        cur = await raw_db.execute(
+            "SELECT is_filtered, filtered_origin, filter_flags FROM channels WHERE id = ?",
+            (pk,),
+        )
+        is_filtered, origin, flags = await cur.fetchone()
+        assert (is_filtered, origin, flags) == (1, "human", "manual,username_changed")
+
+    async def test_unset_returns_to_auto_and_keeps_other_flags(self, db, raw_db):
+        await _insert_channel(raw_db, 6002)
+        await raw_db.execute(
+            "UPDATE channels SET is_filtered = 1, filtered_origin = 'human', "
+            "filter_flags = 'manual,title_changed' WHERE channel_id = 6002"
+        )
+        await raw_db.commit()
+        pk = await self._pk(raw_db, 6002)
+
+        applied = await db.repos.channels.merge_filter_flag(pk, "manual", add=False)
+
+        assert applied is True
+        cur = await raw_db.execute(
+            "SELECT is_filtered, filtered_origin, filter_flags FROM channels WHERE id = ?",
+            (pk,),
+        )
+        is_filtered, origin, flags = await cur.fetchone()
+        # is_filtered не меняется — его пересчитает следующий apply.
+        assert (is_filtered, origin, flags) == (1, "auto", "title_changed")
+
+    async def test_unset_absent_flag_is_noop(self, db, raw_db):
+        # Холостой unset не должен снимать чужое human-решение «не фильтровать».
+        await _insert_channel(raw_db, 6003)
+        await raw_db.execute(
+            "UPDATE channels SET is_filtered = 0, filtered_origin = 'human', "
+            "filter_flags = '' WHERE channel_id = 6003"
+        )
+        await raw_db.commit()
+        pk = await self._pk(raw_db, 6003)
+
+        applied = await db.repos.channels.merge_filter_flag(pk, "manual", add=False)
+
+        assert applied is True
+        cur = await raw_db.execute(
+            "SELECT is_filtered, filtered_origin, filter_flags FROM channels WHERE id = ?",
+            (pk,),
+        )
+        is_filtered, origin, flags = await cur.fetchone()
+        assert (is_filtered, origin, flags) == (0, "human", "")
+
+    async def test_missing_pk_returns_false(self, db):
+        applied = await db.repos.channels.merge_filter_flag(424242, "manual", add=True)
+        assert applied is False
+
+    async def test_manual_verdict_survives_apply_filters(self, db, raw_db):
+        # Инвариант #1499: вердикт через merge_filter_flag переживает полный
+        # цикл analyze + apply (reset не сносит human-origin).
+        await _insert_channel(raw_db, 6005)
+        pk = await self._pk(raw_db, 6005)
+        await db.repos.channels.merge_filter_flag(pk, "manual", add=True)
+
+        analyzer = ChannelAnalyzer(db)
+        report = await analyzer.analyze_all()
+        await analyzer.apply_filters(report)
+
+        cur = await raw_db.execute(
+            "SELECT is_filtered, filter_flags FROM channels WHERE id = ?", (pk,)
+        )
+        is_filtered, flags = await cur.fetchone()
+        assert is_filtered == 1
+        assert "manual" in flags

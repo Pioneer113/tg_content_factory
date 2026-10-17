@@ -524,3 +524,128 @@ def test_hard_delete_confirm_rejects_other_words(tmp_path, cli_init_patch, capsy
     out = capsys.readouterr().out
     assert "Aborted." in out
     svc.hard_delete_channels_by_pks.assert_not_awaited()
+
+
+# ── filter flag: операторские sticky-флаги (#1499) ───────────────────────────
+
+
+def _read_channel_filter_row(db_path: str, pk: int) -> tuple:
+    """(is_filtered, filtered_origin, filter_flags) через свежий sqlite3-коннект."""
+    import sqlite3
+
+    conn = sqlite3.connect(db_path)
+    try:
+        cur = conn.execute(
+            "SELECT is_filtered, filtered_origin, filter_flags FROM channels WHERE id = ?",
+            (pk,),
+        )
+        return cur.fetchone()
+    finally:
+        conn.close()
+
+
+def test_filter_flag_set_and_unset(tmp_path, cli_init_patch, capsys):
+    """`filter flag --set/--unset manual` (#1499): durable-вердикт и возврат под авто."""
+    db_path = str(tmp_path / "filter_flag.db")
+    seed = Database(db_path, session_encryption_secret="test-session-encryption-key")
+    asyncio.run(seed.initialize())
+    try:
+        pk = asyncio.run(
+            seed.add_channel(Channel(channel_id=900_100, title="FlagCh", is_filtered=False))
+        )
+
+        with cli_init_patch(seed, _FILTER_INIT_DB_TARGET, fresh_database=True):
+            from src.cli.commands.filter import run
+
+            run(_ns(filter_action="flag", pk=pk, set_flag="manual", unset_flag=None))
+
+        assert _read_channel_filter_row(db_path, pk) == (1, "human", "manual")
+        assert "sticky flag 'manual' set" in capsys.readouterr().out
+
+        with cli_init_patch(seed, _FILTER_INIT_DB_TARGET, fresh_database=True):
+            from src.cli.commands.filter import run
+
+            run(_ns(filter_action="flag", pk=pk, set_flag=None, unset_flag="manual"))
+
+        assert _read_channel_filter_row(db_path, pk) == (1, "auto", "")
+        assert "back under auto verdicts" in capsys.readouterr().out
+    finally:
+        asyncio.run(seed.close())
+
+
+def test_filter_flag_invalid_flag_rejected(tmp_path, cli_init_patch, capsys):
+    """Чужие флаги анализатора руками не ставятся (#1499)."""
+    db_path = str(tmp_path / "filter_flag_invalid.db")
+    seed = Database(db_path, session_encryption_secret="test-session-encryption-key")
+    asyncio.run(seed.initialize())
+    try:
+        pk = asyncio.run(
+            seed.add_channel(Channel(channel_id=900_101, title="FlagCh2", is_filtered=False))
+        )
+
+        with cli_init_patch(seed, _FILTER_INIT_DB_TARGET, fresh_database=True):
+            from src.cli.commands.filter import run
+
+            run(_ns(filter_action="flag", pk=pk, set_flag="low_uniqueness", unset_flag=None))
+
+        out = capsys.readouterr().out
+        assert "Unknown operator flag 'low_uniqueness'" in out
+        assert _read_channel_filter_row(db_path, pk)[0] == 0
+    finally:
+        asyncio.run(seed.close())
+
+
+def test_filter_flag_requires_exactly_one_action(tmp_path, cli_init_patch, capsys):
+    db_path = str(tmp_path / "filter_flag_actions.db")
+    seed = Database(db_path, session_encryption_secret="test-session-encryption-key")
+    asyncio.run(seed.initialize())
+    try:
+        with cli_init_patch(seed, _FILTER_INIT_DB_TARGET, fresh_database=True):
+            from src.cli.commands.filter import run
+
+            run(_ns(filter_action="flag", pk=1, set_flag=None, unset_flag=None))
+            run(_ns(filter_action="flag", pk=1, set_flag="manual", unset_flag="manual"))
+    finally:
+        asyncio.run(seed.close())
+
+    out = capsys.readouterr().out
+    assert out.count("Usage: filter flag") == 2
+
+
+def test_filter_flag_not_found(tmp_path, cli_init_patch, capsys):
+    db_path = str(tmp_path / "filter_flag_missing.db")
+    seed = Database(db_path, session_encryption_secret="test-session-encryption-key")
+    asyncio.run(seed.initialize())
+    try:
+        with cli_init_patch(seed, _FILTER_INIT_DB_TARGET, fresh_database=True):
+            from src.cli.commands.filter import run
+
+            run(_ns(filter_action="flag", pk=424242, set_flag="manual", unset_flag=None))
+    finally:
+        asyncio.run(seed.close())
+
+    assert "Channel pk=424242 not found." in capsys.readouterr().out
+
+
+def test_filter_apply_whitelist_mode(tmp_path, cli_init_patch, capsys):
+    """`filter apply --whitelist` зовёт apply_whitelist; analyze не запускается (#1490)."""
+    db_path = str(tmp_path / "filter_whitelist.db")
+    db = Database(db_path, session_encryption_secret="test-session-encryption-key")
+    asyncio.run(db.initialize())
+    try:
+        with cli_init_patch(db, _FILTER_INIT_DB_TARGET, fresh_database=True):
+            from src.cli.commands.filter import run
+
+            with patch("src.cli.commands.filter.ChannelAnalyzer") as mock_analyzer:
+                mock_instance = MagicMock()
+                mock_instance.apply_whitelist = AsyncMock(return_value=3)
+                mock_analyzer.return_value = mock_instance
+
+                run(_ns(filter_action="apply", whitelist=True))
+
+        out = capsys.readouterr().out
+        assert "Whitelist applied: 3" in out
+        mock_instance.apply_whitelist.assert_awaited_once_with()
+        mock_instance.analyze_all.assert_not_called()
+    finally:
+        asyncio.run(db.close())

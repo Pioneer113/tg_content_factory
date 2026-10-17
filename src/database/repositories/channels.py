@@ -402,6 +402,44 @@ class ChannelsRepository:
         )
         await write_conn.execute(sql, (flags, pk))
 
+    async def merge_filter_flag(self, pk: int, flag: str, *, add: bool) -> bool:
+        """Добавить/снять операторский sticky-флаг (#1499), не трогая остальные.
+
+        add — вердикт «фильтровать вручную»: is_filtered=1 + filtered_origin='human'
+        (авто-reset/apply его не сносят, sticky-скан apply_filters подхватывает).
+        unset — снять только flag; если флага не было — no-op без смены origin
+        (чтобы не разблокировать чужое human-решение «не фильтровать»), иначе
+        filtered_origin='auto' — канал возвращается под авто-вердикты, is_filtered
+        пересчитает следующий apply. Read-modify-write внутри Database.transaction()
+        (#569). False — канал не найден.
+        """
+        assert self._database is not None, (
+            "ChannelsRepository.merge_filter_flag requires a Database reference"
+        )
+        async with self._database.transaction() as conn:
+            cur = await conn.execute("SELECT filter_flags FROM channels WHERE id = ?", (pk,))
+            row = await cur.fetchone()
+            if row is None:
+                return False
+            flags = {f.strip() for f in (row["filter_flags"] or "").split(",") if f.strip()}
+            if add:
+                flags.add(flag)
+                await conn.execute(
+                    "UPDATE channels SET is_filtered = 1, filtered_origin = 'human', "
+                    "filter_flags = ? WHERE id = ?",
+                    (",".join(sorted(flags)), pk),
+                )
+            else:
+                if flag not in flags:
+                    return True
+                flags.discard(flag)
+                await conn.execute(
+                    "UPDATE channels SET filtered_origin = 'auto', filter_flags = ? "
+                    "WHERE id = ?",
+                    (",".join(sorted(flags)), pk),
+                )
+        return True
+
     async def list_channels_for_review(self) -> list[Channel]:
         """Channels currently quarantined for human review (needs_review = 1)."""
         cur = await self._db.execute(
