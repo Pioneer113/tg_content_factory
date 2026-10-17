@@ -20,6 +20,11 @@ Starter keyword set (extend per request): `ИИ`, `нейросети`, `LLM`, `
 `релиз`, `OpenAI`, `Anthropic`, `Google DeepMind`, `benchmark`. If the sweep is
 thin, `--mode hybrid` or `--mode semantic` improve recall.
 
+The JSON envelope carries `total`, `has_more` and `error`. Before building the
+digest: `error` non-null = the keyword was NOT searched (do not pretend it
+was); `has_more=true` = the window is truncated — raise `--limit` (or split
+the window) and re-run, otherwise the digest is silently incomplete.
+
 ## 2. Build the structured digest
 
 Merge all hits into ONE JSON object — the schema every consumer can rely on:

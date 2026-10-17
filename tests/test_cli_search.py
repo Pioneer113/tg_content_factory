@@ -48,12 +48,17 @@ def test_search_json_respects_date_window(cli_env, capsys):
 
     _run_search(date_from="2025-01-01", date_to="2025-01-01", output_format="json")
 
-    items = json.loads(capsys.readouterr().out)
-    assert len(items) == 1
-    assert items[0]["message_id"] == 1
-    assert items[0]["date"].startswith("2025-01-01")
-    assert items[0]["channel_title"] == "DigestCh"
-    assert "нейросети от OpenAI" in items[0]["text"]
+    data = json.loads(capsys.readouterr().out)
+    assert data["error"] is None
+    assert data["total"] == 1
+    assert data["has_more"] is False
+    assert data["query"] == "нейросети"
+    assert len(data["messages"]) == 1
+    hit = data["messages"][0]
+    assert hit["message_id"] == 1
+    assert hit["date"].startswith("2025-01-01")
+    assert hit["channel_title"] == "DigestCh"
+    assert "нейросети от OpenAI" in hit["text"]
 
 
 def test_search_json_without_window_returns_all(cli_env, capsys):
@@ -61,8 +66,8 @@ def test_search_json_without_window_returns_all(cli_env, capsys):
 
     _run_search(output_format="json")
 
-    items = json.loads(capsys.readouterr().out)
-    assert {item["message_id"] for item in items} == {1, 2}
+    data = json.loads(capsys.readouterr().out)
+    assert {item["message_id"] for item in data["messages"]} == {1, 2}
 
 
 def test_search_text_format_unchanged(cli_env, capsys):

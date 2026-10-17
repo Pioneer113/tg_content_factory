@@ -51,7 +51,21 @@ def _print_search_result(result, fmt: str) -> None:
             }
             for msg in result.messages
         ]
-        print(safe_json_dumps(items, indent=2))
+        # Wrap in the full result object: a consumer with --limit N must see
+        # has_more/total (silent truncation = #1350 class) and error, not a
+        # bare [] that reads as "nothing found".
+        print(
+            safe_json_dumps(
+                {
+                    "query": result.query,
+                    "total": result.total,
+                    "has_more": result.has_more,
+                    "error": result.error,
+                    "messages": items,
+                },
+                indent=2,
+            )
+        )
         return
     if fmt == "csv":
         buf = io.StringIO()
