@@ -182,6 +182,8 @@ scheduler start | trigger | status | stop | job-toggle | set-interval | task-can
 scheduler start    # writes scheduler_autostart=1 + reconciles the running worker; exits
 scheduler clear-pending | queue-pause | queue-resume
 scheduler queue-status [--format json]    # live collection queue: remaining, throughput, ETA
+# scheduler status: shows live worker state from runtime_snapshots (heartbeat age, is_running,
+# next-run per job, queue paused/running) when a worker publishes; config-only otherwise.
 worker    # long-lived process: collection queue, scheduler, dispatchers — run in background
 ```
 
@@ -202,6 +204,9 @@ account send-code | verify-code        # interactive first-time auth — user do
 account flood-status | flood-clear
 notification setup | status | delete | test | dry-run | set-account
 settings get | set | info | server-time | agent | filter-criteria | reactions | semantic
+# settings set: runtime keys reach the live worker too — collection_queue_paused
+# (values true/1/yes/on → pause, else resume) enqueues collection.pause/resume;
+# scheduler_autostart, *_interval_minutes, scheduler_job_disabled:* enqueue scheduler.reconcile.
 export json | csv | rss
 translate stats | detect | run | message
 image generate | models | providers | generated

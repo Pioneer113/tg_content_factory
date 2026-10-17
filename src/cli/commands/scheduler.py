@@ -29,6 +29,7 @@ from src.database import Database
 from src.database.bundles import ChannelBundle
 from src.models import CollectionTaskType
 from src.services.collection_service import CollectionService
+from src.services.runtime_diagnostics import evaluate_worker_heartbeat
 from src.services.telegram_command_service import TelegramCommandService
 from src.telegram.collector import Collector
 from src.utils.datetime import parse_datetime
@@ -97,8 +98,50 @@ async def trigger_impl(config_path: str) -> None:
         await db.close()
 
 
+async def _print_live_worker_status(db: Database, config_interval: int) -> None:
+    """Append the live worker section read from ``runtime_snapshots`` (#1570).
+
+    The config block describes what will happen on the next worker start; this
+    is what the running worker actually does right now — the same snapshots the
+    web side renders (worker_heartbeat / scheduler_status / scheduler_jobs /
+    collection_queue_status). Heartbeat freshness is classified by the shared
+    ``evaluate_worker_heartbeat`` so CLI cannot drift from the web banner.
+    """
+    heartbeat = await db.repos.runtime_snapshots.get_snapshot("worker_heartbeat")
+    health = evaluate_worker_heartbeat(heartbeat)
+    if not health.alive:
+        detail = "stale heartbeat" if health.stale else (health.status or "no heartbeat")
+        age = f", last {health.age_sec:.0f}s ago" if health.age_sec is not None else ""
+        print(f"Worker: down ({detail}{age}) — live state unavailable, showing config only")
+        return
+    age = f"{health.age_sec:.0f}s ago" if health.age_sec is not None else "just now"
+    print(f"Worker: alive (heartbeat {age})")
+
+    sched = await db.repos.runtime_snapshots.get_snapshot("scheduler_status")
+    payload = sched.payload if sched is not None else {}
+    print("Live scheduler:")
+    print(f"  Running: {'yes' if payload.get('is_running') else 'no'}")
+    print(f"  Interval: {payload.get('interval_minutes', config_interval)} min")
+    queue = await db.repos.runtime_snapshots.get_snapshot("collection_queue_status")
+    qpayload = queue.payload if queue is not None else {}
+    if qpayload:
+        print(
+            f"  Queue: paused={'yes' if qpayload.get('paused') else 'no'}"
+            f", running={qpayload.get('running_count', 0)}"
+            f"/{qpayload.get('target_worker_count', 0)}"
+        )
+    jobs_snap = await db.repos.runtime_snapshots.get_snapshot("scheduler_jobs")
+    jobs = jobs_snap.payload.get("jobs", []) if jobs_snap is not None else []
+    if isinstance(jobs, list) and jobs:
+        print("  Jobs:")
+        for job in jobs:
+            if not isinstance(job, dict):
+                continue
+            print(f"    - {job.get('job_id')}: next run {job.get('next_run') or 'n/a'}")
+
+
 async def status_impl(config_path: str) -> None:
-    """Show scheduler configuration and disabled-job status."""
+    """Show scheduler configuration, disabled jobs, and live worker state."""
     config, db = await runtime.init_db(config_path)
     try:
         interval = config.scheduler.collect_interval_minutes
@@ -118,6 +161,7 @@ async def status_impl(config_path: str) -> None:
             for job_id, val in disabled_jobs:
                 if val == "1":
                     print(f"    - {job_id}")
+        await _print_live_worker_status(db, interval)
     finally:
         await db.close()
 
