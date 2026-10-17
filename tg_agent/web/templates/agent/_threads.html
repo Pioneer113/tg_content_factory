@@ -83,7 +83,7 @@
 {# ── OOB: composer footer (subtle hint + model select / backend hint) ──
    The Claude model <select> is the only real UI model picker. Other backends
    pick their model elsewhere (deepagents from saved settings; codex/adk have a
-   fixed/managed model with no display-name table — see src/agent/models.py), so
+   fixed/managed model with no display-name table — see tg_agent/agent/models.py), so
    showing a Claude-labelled dropdown there is a dead control: select_model()
    only validates Claude IDs and chat_stream drops foreign IDs for those
    backends. Render the picker for claude only; everyone else gets a hint (#1002). #}
