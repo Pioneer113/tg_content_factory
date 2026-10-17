@@ -42,8 +42,11 @@ filter analyze | apply | reset | precheck | suspects | toggle | purge | purge-me
 ```
 
 - `channel collect [--channel-id ID]` — incremental collection for one channel; without flags
-  interactive selection. One-off; exit when done.
-- `channel stats` — per-channel collection status (`last_collected_id`, counts).
+  interactive selection. One-off; exit when done. With a live daemon the channel is queued
+  to the worker (no second MTProto client); `TGCF_CLI_DIRECT=1` forces the in-process path.
+- `channel stats` — queue stats collection: one channel by identifier, `--all` for every
+  active channel without fresh stats (`--max-channels N` caps the list). The worker collects
+  asynchronously; numbers land in DB — read them via `channel list` / `analytics channel`.
 - `channel candidates [--json] [--limit N]` — read-only list of channels discovered by
   premium search (`search --mode tg`): inactive rows whose cached messages carry the
   search-query tag. Pick ones worth collecting, then `channel toggle <identifier>`
@@ -141,6 +144,7 @@ inspectable via `pipeline runs` / `run-show`.
 
 ```
 scheduler start | trigger | status | stop | job-toggle | set-interval | task-cancel
+scheduler start    # writes scheduler_autostart=1 + reconciles the running worker; exits
 scheduler clear-pending | queue-pause | queue-resume
 scheduler queue-status [--format json]    # live collection queue: remaining, throughput, ETA
 worker    # long-lived process: collection queue, scheduler, dispatchers — run in background

@@ -16,7 +16,7 @@ from src.cli.commands.common import (
     run_async,
 )
 from src.database.bundles import ChannelBundle
-from src.models import Channel, CollectionTaskStatus
+from src.models import Channel, CollectionTaskStatus, StatsAllTaskPayload
 from src.parsers import deduplicate_identifiers, parse_file, parse_identifiers
 from src.services.channel_onboarding import (
     channel_from_resolved_info,
@@ -26,6 +26,7 @@ from src.services.channel_onboarding import (
 )
 from src.services.channel_service import ChannelService
 from src.services.collection_service import CollectionService
+from src.services.telegram_command_service import TelegramCommandService
 from src.telegram.backends import adapt_transport_session
 from src.telegram.collector import (
     RESOLVE_USERNAME_BACKOFF_BUFFER_SEC,
@@ -420,45 +421,58 @@ async def import_impl(config_path: str, *, source: str) -> None:
 
 
 async def stats_impl(config_path: str, *, all_channels: bool, identifier: str | None, max_channels: int | None) -> None:
-    """``channel stats`` — collect stats for one channel or all active ones."""
-    config, db = await runtime.init_db(config_path)
-    pool = None
-    try:
-        _, pool = await runtime.init_pool(config, db)
-        if not pool.clients:
-            logging.error("No connected accounts.")
-            return
-        collector = Collector(pool, db, config.scheduler)
+    """``channel stats`` — queue stats collection instead of opening a pool.
 
+    The worker owns the Telegram sessions; the web panel already runs this same
+    work through ``channels.collect_stats`` commands and STATS_ALL tasks. The CLI
+    now uses those queues too, so a live daemon never races a second pool (#1569).
+    """
+    _, db = await runtime.init_db(config_path)
+    try:
         if all_channels:
             if max_channels is not None and max_channels <= 0:
                 print("--max-channels must be a positive integer")
                 return
-            result = await collector.collect_all_stats(max_channels=max_channels)
-            print(f"Stats collected: {result}")
-        elif not identifier:
+            if await db.get_active_stats_task():
+                print("A stats task is already active; not queueing a duplicate.")
+                return
+            channels = await db.repos.channels.get_channels(
+                active_only=True, include_filtered=False
+            )
+            latest_stats = await db.get_latest_stats_for_all()
+            channel_ids = [
+                ch.channel_id for ch in channels if ch.channel_id not in latest_stats
+            ]
+            if not channel_ids:
+                print("All active channels already have stats.")
+                return
+            if max_channels is not None:
+                channel_ids = channel_ids[:max_channels]
+            task_id = await db.create_stats_task(StatsAllTaskPayload(channel_ids=channel_ids))
+            print(
+                f"Queued stats task #{task_id} for {len(channel_ids)} channels; "
+                "the running worker collects it."
+            )
+            return
+        if not identifier:
             print("Specify a channel identifier or use --all")
             return
-        else:
-            channels = await db.get_channels()
-            ch = resolve_channel(channels, identifier)
-            if not ch:
-                print(f"Channel '{identifier}' not found")
-                return
-            st = await collector.collect_channel_stats(ch)
-            if st:
-                print(
-                    f"Channel {ch.channel_id} ({ch.title}):\n"
-                    f"  Subscribers: {st.subscriber_count}\n"
-                    f"  Avg views: {st.avg_views}\n"
-                    f"  Avg reactions: {st.avg_reactions}\n"
-                    f"  Avg forwards: {st.avg_forwards}"
-                )
-            else:
-                print("No client available to collect stats")
+        channels = await db.get_channels()
+        ch = resolve_channel(channels, identifier)
+        if not ch:
+            print(f"Channel '{identifier}' not found")
+            return
+        cmd_id = await TelegramCommandService(db).enqueue(
+            "channels.collect_stats",
+            payload={"channel_pk": ch.id},
+            requested_by="cli:channel.stats",
+        )
+        print(
+            f"Queued stats collection for channel {ch.channel_id} ({ch.title}) "
+            f"as command #{cmd_id}; the running worker collects it. "
+            "Fresh numbers appear in 'channel list'."
+        )
     finally:
-        if pool:
-            await pool.disconnect_all()
         await db.close()
 
 

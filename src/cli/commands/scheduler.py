@@ -5,7 +5,7 @@ Migrated off the argparse dispatcher onto the Typer ``app`` (see
 *_impl`` here — no local ``asyncio.run`` and no ``argparse.Namespace``. A thin
 ``run(args)`` adapter is kept for the argparse leaf audit and existing tests.
 
-Only ``start`` / ``trigger`` talk to Telegram; every other action is a pure DB
+Only ``trigger`` talks to Telegram; every other action is a pure DB
 operation and must not pay (or risk) a full multi-account pool connect.
 """
 
@@ -28,9 +28,7 @@ from src.cli.commands.common import (
 from src.database import Database
 from src.database.bundles import ChannelBundle
 from src.models import CollectionTaskType
-from src.scheduler.service import SchedulerManager
 from src.services.collection_service import CollectionService
-from src.services.task_enqueuer import TaskEnqueuer
 from src.services.telegram_command_service import TelegramCommandService
 from src.telegram.collector import Collector
 from src.utils.datetime import parse_datetime
@@ -53,34 +51,22 @@ async def _enqueue_reconcile(db: Database, command: str) -> None:
 
 
 async def start_impl(config_path: str) -> None:
-    """Start the scheduler in the foreground (needs a connected account)."""
-    config, db = await runtime.init_db(config_path)
-    pool = None
-    try:
-        _, pool = await runtime.init_pool(config, db)
-        if not pool.clients:
-            logging.error("No connected accounts.")
-            return
-        collector = Collector(pool, db, config.scheduler)
-        channel_bundle = ChannelBundle.from_database(db)
-        collection_service = CollectionService(channel_bundle, collector, collection_queue=None)
-        task_enqueuer = TaskEnqueuer(db, collection_service)
+    """Enable scheduler autostart; the running worker applies it via reconcile.
 
-        manager = SchedulerManager(config.scheduler, task_enqueuer=task_enqueuer)
-        await manager.start()
+    The old behaviour ran a foreground SchedulerManager on its own pool — a
+    second collector racing the daemon for the same flood-wait budget (#1569).
+    Writing the setting + enqueueing ``scheduler.reconcile`` is the same live
+    path the web routes use.
+    """
+    _, db = await runtime.init_db(config_path)
+    try:
+        await db.set_setting("scheduler_autostart", "1")
+        await _enqueue_reconcile(db, "start")
         print(
-            f"Scheduler started (every {config.scheduler.collect_interval_minutes} min). "
-            "Press Ctrl+C to stop."
+            "Scheduler autostart enabled. The running worker starts its scheduler "
+            "on reconcile; the next daemon start picks it up via autostart."
         )
-        try:
-            while True:
-                await asyncio.sleep(1)
-        except (KeyboardInterrupt, asyncio.CancelledError):
-            await manager.stop()
-            print("\nScheduler stopped.")
     finally:
-        if pool is not None:
-            await pool.disconnect_all()
         await db.close()
 
 
@@ -378,7 +364,7 @@ scheduler_app = typer.Typer(no_args_is_help=True, help="Scheduler control")
 
 @scheduler_app.command("start")
 def scheduler_start(ctx: typer.Context) -> None:
-    """Start scheduler (foreground)."""
+    """Enable scheduler autostart (the worker applies it via reconcile)."""
     apply_startup(ctx)
     run_async(start_impl(ctx.obj.config))
 

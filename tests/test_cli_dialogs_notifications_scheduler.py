@@ -552,15 +552,17 @@ class TestNotificationCommand:
 class TestSchedulerCommand:
     """Tests for scheduler CLI command."""
 
-    def test_start_no_clients(self, cli_env_with_pool, capsys, caplog):
-        """Test scheduler start when no accounts connected."""
+    def test_start_writes_autostart_and_exits(self, cli_env_with_pool, capsys):
+        """`scheduler start` no longer runs a foreground pool (#1569) — it writes
+        the autostart setting, enqueues reconcile and exits."""
         cli_env, fake_pool = cli_env_with_pool
-        fake_pool.clients = {}
 
         from src.cli.commands.scheduler import run
 
         run(_ns(scheduler_action="start"))
-        assert "No connected accounts" in caplog.text
+
+        out = capsys.readouterr().out
+        assert "autostart enabled" in out.lower()
 
     def test_trigger_no_clients(self, cli_env_with_pool, capsys, caplog):
         """Test scheduler trigger when no accounts connected."""

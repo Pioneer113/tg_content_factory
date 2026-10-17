@@ -401,8 +401,8 @@ class TestCLIChannelPool:
         from src.cli.commands.channel import run
 
         run(_ns(channel_action="stats", identifier=None, all=False))
-        # Pool has no clients → logs error
-        assert "No connected accounts" in caplog.text
+        # stats_impl no longer opens a pool (#1569) — it just asks for a target.
+        assert "Specify a channel identifier or use --all" in capsys.readouterr().out
 
     def test_import_no_identifiers(self, cli_env_with_pool, capsys):
         from src.cli.commands.channel import run

@@ -51,6 +51,26 @@ def channel_cli(cli_db, cli_init_patch):
         yield cli_db
 
 
+@pytest.fixture
+def collect_cli(cli_db, cli_init_patch):
+    with cli_init_patch(
+        cli_db,
+        "src.cli.commands.collect.runtime.init_db",
+        config=AppConfig(),
+    ):
+        yield cli_db
+
+
+@pytest.fixture
+def scheduler_cli(cli_db, cli_init_patch):
+    with cli_init_patch(
+        cli_db,
+        "src.cli.commands.scheduler.runtime.init_db",
+        config=AppConfig(),
+    ):
+        yield cli_db
+
+
 def _add_channel(db, channel_id: int, title: str) -> int:
     return asyncio.run(db.add_channel(Channel(channel_id=channel_id, title=title)))
 
@@ -250,3 +270,118 @@ def test_worker_picks_up_a_cli_enqueued_task(channel_cli):
     _ensure_db_open(db)
     pending = asyncio.run(db.get_pending_channel_tasks())
     assert [t.channel_id for t in pending] == [5005]
+
+
+# ---------------------------------------------------------------------------
+# `collect --channel-id` and `scheduler start` (#1569) — same rule, three commands
+# ---------------------------------------------------------------------------
+
+
+def test_collect_channel_id_hands_off_to_worker_when_serve_is_running(collect_cli, capsys):
+    """`collect --channel-id` must enqueue instead of opening its own pool.
+
+    Before #1569 this command always collected in-process — a second consumer
+    of the daemon's flood-wait budget with no queue guards at all.
+    """
+    db = collect_cli
+    _add_channel(db, 5006, "CollectHandOff")
+
+    init_pool = AsyncMock()
+    with (
+        patch("src.cli.commands.collect.worker_handoff.serve_is_running", return_value=True),
+        patch("src.cli.commands.collect.runtime.init_pool", init_pool),
+    ):
+        from src.cli.commands.collect import collect_impl
+
+        asyncio.run(collect_impl("config.yaml", channel_id=5006, full=False))
+
+    init_pool.assert_not_awaited()
+    assert "очередь" in capsys.readouterr().out.lower()
+
+    _ensure_db_open(db)
+    tasks = asyncio.run(db.get_collection_tasks(limit=5))
+    assert [t.channel_id for t in tasks] == [5006]
+    assert tasks[0].status == CollectionTaskStatus.PENDING
+
+
+def test_collect_channel_id_still_refuses_filtered_channel(collect_cli, capsys):
+    """The pre-#1569 is_filtered refusal survives the hand-off."""
+    db = collect_cli
+    pk = _add_channel(db, 5007, "FilteredChan")
+    asyncio.run(db.set_channel_filtered(pk, True))
+
+    init_pool = AsyncMock()
+    with (
+        patch("src.cli.commands.collect.worker_handoff.serve_is_running", return_value=True),
+        patch("src.cli.commands.collect.runtime.init_pool", init_pool),
+    ):
+        from src.cli.commands.collect import collect_impl
+
+        asyncio.run(collect_impl("config.yaml", channel_id=5007, full=False))
+
+    init_pool.assert_not_awaited()
+    assert "filtered" in capsys.readouterr().out
+    _ensure_db_open(db)
+    assert asyncio.run(db.get_collection_tasks(limit=5)) == []
+
+
+def test_collect_channel_id_unknown_channel(collect_cli, capsys):
+    with (
+        patch("src.cli.commands.collect.worker_handoff.serve_is_running", return_value=True),
+        patch("src.cli.commands.collect.runtime.init_pool", AsyncMock()),
+    ):
+        from src.cli.commands.collect import collect_impl
+
+        asyncio.run(collect_impl("config.yaml", channel_id=999999, full=False))
+
+    assert "not found in DB" in capsys.readouterr().out
+
+
+def test_collect_channel_id_tgcf_cli_direct_forces_pool(collect_cli, capsys, monkeypatch):
+    """TGCF_CLI_DIRECT=1 is the escape hatch; it takes the direct path."""
+    db = collect_cli
+    _add_channel(db, 5008, "ForcedDirectCollect")
+
+    pool = AsyncMock()
+    pool.clients = {"+70001112233": MagicMock()}
+    pool.disconnect_all = AsyncMock()
+
+    async def fake_init_pool(config, db_arg):
+        from src.telegram.auth import TelegramAuth
+
+        return TelegramAuth(0, ""), pool
+
+    monkeypatch.setenv(worker_handoff.DIRECT_ENV_VAR, "1")
+    with (
+        patch("src.cli.commands.collect.worker_handoff.serve_is_running", return_value=True),
+        patch("src.cli.commands.collect.runtime.init_pool", side_effect=fake_init_pool),
+        patch("src.cli.commands.collect.Collector") as collector_cls,
+    ):
+        collector_cls.return_value.collect_single_channel = AsyncMock(return_value=5)
+        from src.cli.commands.collect import collect_impl
+
+        asyncio.run(collect_impl("config.yaml", channel_id=5008, full=False))
+
+    assert "Collected 5 messages" in capsys.readouterr().out
+
+
+def test_scheduler_start_enqueues_reconcile(scheduler_cli, capsys):
+    """`scheduler start` must not spawn a foreground pool+SchedulerManager.
+
+    It writes ``scheduler_autostart=1`` and enqueues ``scheduler.reconcile`` —
+    the live path the web routes and `scheduler stop` already use (#1569).
+    """
+    db = scheduler_cli
+    init_pool = AsyncMock()
+    with patch("src.cli.commands.scheduler.runtime.init_pool", init_pool):
+        from src.cli.commands.scheduler import start_impl
+
+        asyncio.run(start_impl("config.yaml"))
+
+    init_pool.assert_not_awaited()
+    assert "autostart enabled" in capsys.readouterr().out.lower()
+
+    _ensure_db_open(db)
+    assert asyncio.run(db.get_setting("scheduler_autostart")) == "1"
+    commands = asyncio.run(db.repos.telegram_commands.list_commands(limit=5))
+    assert [c.command_type for c in commands] == ["scheduler.reconcile"]

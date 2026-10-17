@@ -11,7 +11,7 @@ import pytest
 from telethon_floodgate import FloodWaitInfo
 
 from src.config import AppConfig
-from src.models import Channel, ChannelStats, CollectionTaskStatus
+from src.models import Channel, ChannelStats, CollectionTaskStatus, StatsAllTaskPayload
 
 pytestmark = pytest.mark.aiosqlite_serial
 
@@ -147,79 +147,68 @@ class TestCLIChannelExtended:
         assert "Skipped: 1" in out
         assert "Failed: 1" in out
 
-    def test_stats_single_success(self, cli_env_with_mock_pool, capsys):
-        db, pool = cli_env_with_mock_pool
-        ch_id = asyncio.run(
-            db.add_channel(
-                Channel(channel_id=100, title="StatsChan"),
-            )
-        )
+    def test_stats_single_queues_worker_command(self, cli_env, capsys):
+        """`channel stats <id>` hands off to the worker; no own pool (#1569)."""
+        db = cli_env
+        pk = asyncio.run(db.add_channel(Channel(channel_id=100, title="StatsChan")))
 
-        mock_stats = ChannelStats(
-            channel_id=100,
-            subscriber_count=500,
-            avg_views=10.5,
-            avg_reactions=2.0,
-            avg_forwards=1.0,
-        )
-
-        with patch(
-            "src.cli.commands.channel.Collector",
-        ) as mock_collector:
-            inst = mock_collector.return_value
-            inst.collect_channel_stats = AsyncMock(
-                return_value=mock_stats,
-            )
-
+        init_pool = AsyncMock()
+        with patch("src.cli.commands.channel.runtime.init_pool", init_pool):
             from src.cli.commands.channel import run
 
-            run(
-                _ns(
-                    channel_action="stats",
-                    identifier=str(ch_id),
-                    all=False,
-                )
-            )
+            run(_ns(channel_action="stats", identifier=str(pk), all=False))
 
-        out = capsys.readouterr().out
-        assert "Subscribers: 500" in out
-        assert "Avg views: 10.5" in out
+        init_pool.assert_not_awaited()
+        assert "Queued stats collection" in capsys.readouterr().out
 
-    def test_stats_all_success(self, cli_env_with_mock_pool, capsys):
-        db, pool = cli_env_with_mock_pool
-        with patch(
-            "src.cli.commands.channel.Collector",
-        ) as mock_collector:
-            inst = mock_collector.return_value
-            inst.collect_all_stats = AsyncMock(
-                return_value={"channels": 5, "errors": 0},
-            )
+        _ensure_db_open(db)
+        commands = asyncio.run(db.repos.telegram_commands.list_commands(limit=5))
+        assert [c.command_type for c in commands] == ["channels.collect_stats"]
+        assert commands[0].payload == {"channel_pk": pk}
 
+    def test_stats_all_queues_stats_task(self, cli_env, capsys):
+        """`channel stats --all` creates a STATS_ALL task like the web route."""
+        db = cli_env
+        asyncio.run(db.add_channel(Channel(channel_id=111, title="NoStats")))
+        asyncio.run(db.add_channel(Channel(channel_id=444, title="NoStats2")))
+        asyncio.run(db.add_channel(Channel(channel_id=222, title="HasStats")))
+        asyncio.run(
+            db.save_channel_stats(ChannelStats(channel_id=222, subscriber_count=10))
+        )
+
+        init_pool = AsyncMock()
+        with patch("src.cli.commands.channel.runtime.init_pool", init_pool):
+            from src.cli.commands.channel import run
+
+            run(_ns(channel_action="stats", identifier=None, all=True, max_channels=1))
+
+        init_pool.assert_not_awaited()
+        assert "Queued stats task" in capsys.readouterr().out
+
+        _ensure_db_open(db)
+        task = asyncio.run(db.get_active_stats_task())
+        assert task is not None
+        # --max-channels caps the payload list; channels with fresh stats are skipped.
+        assert task.payload.channel_ids == [111]
+
+    def test_stats_all_skips_when_task_already_active(self, cli_env, capsys):
+        """An active STATS_ALL task must not get a duplicate (#1569 race)."""
+        db = cli_env
+        asyncio.run(db.add_channel(Channel(channel_id=333, title="Ch")))
+        asyncio.run(db.create_stats_task(StatsAllTaskPayload(channel_ids=[333])))
+
+        with patch("src.cli.commands.channel.runtime.init_pool", AsyncMock()):
             from src.cli.commands.channel import run
 
             run(_ns(channel_action="stats", identifier=None, all=True))
 
         out = capsys.readouterr().out
-        assert "Stats collected: {'channels': 5, 'errors': 0}" in out
+        assert "already active" in out
 
-    def test_stats_all_passes_max_channels(self, cli_env_with_mock_pool, capsys):
-        db, pool = cli_env_with_mock_pool
-        with patch(
-            "src.cli.commands.channel.Collector",
-        ) as mock_collector:
-            inst = mock_collector.return_value
-            inst.collect_all_stats = AsyncMock(
-                return_value={"channels": 3, "errors": 0, "remaining": 7, "limited": True},
-            )
-
-            from src.cli.commands.channel import run
-
-            run(_ns(channel_action="stats", identifier=None, all=True, max_channels=3))
-
-        inst.collect_all_stats.assert_awaited_once_with(max_channels=3)
-        out = capsys.readouterr().out
-        assert "'remaining': 7" in out
-        assert "'limited': True" in out
+        _ensure_db_open(db)
+        tasks = asyncio.run(db.get_collection_tasks(limit=10))
+        stats_tasks = [t for t in tasks if t.task_type.value == "stats_all"]
+        assert len(stats_tasks) == 1
 
     def test_refresh_types_success(self, cli_env_with_mock_pool, capsys):
         db, pool = cli_env_with_mock_pool
@@ -305,29 +294,13 @@ class TestCLIChannelExtended:
         out = capsys.readouterr().out
         assert "Нет доступных аккаунтов Telegram. Импорт прерван" in out
 
-    def test_stats_no_client_available(self, cli_env_with_mock_pool, capsys):
-        db, pool = cli_env_with_mock_pool
-        ch_id = asyncio.run(
-            db.add_channel(
-                Channel(channel_id=100, title="StatsChan"),
-            )
-        )
-        with patch(
-            "src.cli.commands.channel.Collector",
-        ) as mock_collector:
-            inst = mock_collector.return_value
-            inst.collect_channel_stats = AsyncMock(return_value=None)
+    def test_stats_unknown_identifier(self, cli_env, capsys):
+        with patch("src.cli.commands.channel.runtime.init_pool", AsyncMock()):
             from src.cli.commands.channel import run
 
-            run(
-                _ns(
-                    channel_action="stats",
-                    identifier=str(ch_id),
-                    all=False,
-                )
-            )
+            run(_ns(channel_action="stats", identifier="99999", all=False))
         out = capsys.readouterr().out
-        assert "No client available" in out
+        assert "Channel '99999' not found" in out
 
     def test_refresh_types_resolve_exception(self, cli_env_with_mock_pool, capsys):
         db, pool = cli_env_with_mock_pool
