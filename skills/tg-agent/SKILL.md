@@ -40,6 +40,7 @@ Task → group (details in [reference.md](reference.md)):
 
 | Task | Group |
 |------|-------|
+| AI news digest (structured, schema-first) | [digest.md](digest.md) — window search → schema JSON → format per request → publish on approval |
 | Read message history | `messages read <id> [--query TEXT --date-from D --date-to D --topic-id ID --limit N --format json]` |
 | Search collected history | `search "query" [--limit N --mode local|tg|ai]` |
 | Search-discovered channel candidates (premium search cache) | `channel candidates [--json]` |
