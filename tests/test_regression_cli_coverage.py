@@ -52,7 +52,7 @@ class TestSchedulerSyncJobState:
         mgr._scheduler.add_job.assert_called_once()
 
     async def test_sync_job_enable_ping_due(self):
-        from src.scheduler.service import SchedulerManager
+        from tg_agent.scheduler.service import SchedulerManager
         mgr = SchedulerManager()
         mgr._scheduler = MagicMock()
         mgr._scheduler.running = True

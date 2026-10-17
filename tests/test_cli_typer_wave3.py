@@ -250,8 +250,8 @@ def test_filter_apply_whitelist_forwards():
     """`filter apply --whitelist` включает whitelist-режим (#1490)."""
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.filter_cmd.apply_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.filter_cmd.apply_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         result = runner.invoke(app, ["filter", "apply", "--whitelist"])
     assert result.exit_code == 0, result.output
@@ -262,8 +262,8 @@ def test_filter_flag_delegates_set_and_unset():
     """`filter flag <pk> --set/--unset manual` пробрасывает pk и действие (#1499)."""
     mock_impl = MagicMock()
     with (
-        patch("src.cli.typer_commands.filter_cmd.flag_impl", mock_impl),
-        patch("src.cli.typer_commands.run_async"),
+        patch("tg_agent.cli.typer_commands.filter_cmd.flag_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
     ):
         set_result = runner.invoke(app, ["filter", "flag", "7", "--set", "manual"])
         unset_result = runner.invoke(app, ["filter", "flag", "8", "--unset", "manual"])

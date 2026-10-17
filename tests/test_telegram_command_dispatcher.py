@@ -50,7 +50,7 @@ async def test_download_media_creates_output_dir(tmp_path, monkeypatch):
     await db.initialize()
     try:
         root = tmp_path / "app"
-        fake_dispatcher_py = root / "src" / "services" / "telegram_command_dispatcher.py"
+        fake_dispatcher_py = root / "tg_agent" / "services" / "telegram_command_dispatcher.py"
         fake_dispatcher_py.parent.mkdir(parents=True)
         fake_dispatcher_py.touch()
 
@@ -90,7 +90,7 @@ async def test_download_media_rejects_path_escape(tmp_path, monkeypatch):
     await db.initialize()
     try:
         root = tmp_path / "app"
-        fake_dispatcher_py = root / "src" / "services" / "telegram_command_dispatcher.py"
+        fake_dispatcher_py = root / "tg_agent" / "services" / "telegram_command_dispatcher.py"
         fake_dispatcher_py.parent.mkdir(parents=True)
         fake_dispatcher_py.touch()
         monkeypatch.setattr(mod, "__file__", str(fake_dispatcher_py))
@@ -413,7 +413,7 @@ async def test_collection_cancel_task_sets_cancel_event_of_running_task():
     # finishes — the same mechanic the web cancel route relies on.
     import asyncio
 
-    from src.collection_queue import CollectionQueue
+    from tg_agent.collection_queue import CollectionQueue
 
     channels = MagicMock()
     channels.cancel_collection_task = AsyncMock(return_value=True)
@@ -449,8 +449,8 @@ async def test_collection_clear_pending_drains_live_queue():
 async def test_collection_clear_pending_drains_real_queue_memory():
     # Acceptance #1568: clear-pending must empty the worker's in-memory queue
     # (and flood-wait requeues / known ids), not just delete DB rows.
-    from src.collection_queue import CollectionQueue
-    from src.models import Channel
+    from tg_agent.collection_queue import CollectionQueue
+    from tg_agent.models import Channel
 
     channels = MagicMock()
     channels.delete_pending_channel_tasks = AsyncMock(return_value=2)
@@ -2738,7 +2738,7 @@ async def test_download_media_message_not_found(tmp_path, monkeypatch):
     await db.initialize()
     try:
         root = tmp_path / "app"
-        fake_dispatcher_py = root / "src" / "services" / "telegram_command_dispatcher.py"
+        fake_dispatcher_py = root / "tg_agent" / "services" / "telegram_command_dispatcher.py"
         fake_dispatcher_py.parent.mkdir(parents=True)
         fake_dispatcher_py.touch()
         monkeypatch.setattr(mod, "__file__", str(fake_dispatcher_py))
@@ -2774,7 +2774,7 @@ async def test_download_media_no_media(tmp_path, monkeypatch):
     await db.initialize()
     try:
         root = tmp_path / "app"
-        fake_dispatcher_py = root / "src" / "services" / "telegram_command_dispatcher.py"
+        fake_dispatcher_py = root / "tg_agent" / "services" / "telegram_command_dispatcher.py"
         fake_dispatcher_py.parent.mkdir(parents=True)
         fake_dispatcher_py.touch()
         monkeypatch.setattr(mod, "__file__", str(fake_dispatcher_py))

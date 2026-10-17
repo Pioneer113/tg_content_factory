@@ -23,11 +23,11 @@ from unittest.mock import patch
 
 import pytest
 
-from src.cli.commands.scheduler import status_impl
-from src.cli.commands.settings import set_impl
-from src.config import AppConfig
-from src.database import Database
-from src.models import (
+from tg_agent.cli.commands.scheduler import status_impl
+from tg_agent.cli.commands.settings import set_impl
+from tg_agent.config import AppConfig
+from tg_agent.database import Database
+from tg_agent.models import (
     RuntimeSnapshot,
     TelegramCommandStatus,
 )
@@ -44,7 +44,7 @@ def _patched_init_db(db_path: str):
         await db.initialize()
         return AppConfig(), db
 
-    with patch("src.cli.runtime.init_db", side_effect=fake_init_db):
+    with patch("tg_agent.cli.runtime.init_db", side_effect=fake_init_db):
         yield
 
 

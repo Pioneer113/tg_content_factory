@@ -104,7 +104,7 @@ def _is_telegram_action_service_receiver(node: ast.AST) -> bool:
 
 def test_raw_telethon_function_imports_stay_in_backend_allowlist():
     offenders: list[str] = []
-    for path in sorted((PROJECT_ROOT / "src").rglob("*.py")):
+    for path in sorted((PROJECT_ROOT / "tg_agent").rglob("*.py")):
         relative = path.relative_to(PROJECT_ROOT)
         if relative in RAW_TELETHON_ALLOWED:
             continue
@@ -121,7 +121,7 @@ def test_raw_telethon_function_imports_stay_in_backend_allowlist():
 
 def test_raw_telethon_request_constructors_stay_in_backend_allowlist():
     offenders: list[str] = []
-    for path in sorted((PROJECT_ROOT / "src").rglob("*.py")):
+    for path in sorted((PROJECT_ROOT / "tg_agent").rglob("*.py")):
         relative = path.relative_to(PROJECT_ROOT)
         if relative in RAW_TELETHON_ALLOWED:
             continue
@@ -136,7 +136,7 @@ def test_raw_telethon_request_constructors_stay_in_backend_allowlist():
 
 def test_entrypoints_delegate_telegram_actions_to_service_contract():
     offenders: list[str] = []
-    for path in sorted((PROJECT_ROOT / "src").rglob("*.py")):
+    for path in sorted((PROJECT_ROOT / "tg_agent").rglob("*.py")):
         relative = path.relative_to(PROJECT_ROOT)
         if not _is_entrypoint_path(relative):
             continue

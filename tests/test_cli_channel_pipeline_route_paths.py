@@ -8,11 +8,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from tests.helpers import cli_add_channel as _add_channel
+from tests.helpers import cli_ns as _ns
 from tg_agent.config import AppConfig
 from tg_agent.database import Database
 from tg_agent.models import Account, Channel
-from tests.helpers import cli_add_channel as _add_channel
-from tests.helpers import cli_ns as _ns
 
 # ---------------------------------------------------------------------------
 # Helpers shared across CLI tests

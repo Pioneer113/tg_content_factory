@@ -1267,7 +1267,7 @@ class PingMonitor(BaseModel):
     (`dialog_id`) мониторим, `nudge_text` — текст дружеского пинга,
     `silence_threshold_days` — базовый порог N. `cycle_count` — счётчик затухающей
     прогрессии повторов (см. `_next_threshold_days` в
-    `src/services/ping_monitor_service.py`); ответ контакта сбрасывает его в 0.
+    `tg_agent/services/ping_monitor_service.py`); ответ контакта сбрасывает его в 0.
     Метки времени (`last_incoming_message_at`/`last_outgoing_message_at`) —
     снимки с живой истории диалога при каждой проверке.
     """

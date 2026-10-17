@@ -61,6 +61,7 @@ def test_wheel_ships_tg_agent_package_not_src(tmp_path: Path) -> None:
         ).decode("utf-8")
 
     assert "tg_agent/__init__.py" in names
+    # ponytail: the literal below names the OLD package on purpose — do not sweep it
     assert not any(n == "src" or n.startswith("src/") for n in names), (
         "wheel must not ship a top-level src package (#1448)"
     )

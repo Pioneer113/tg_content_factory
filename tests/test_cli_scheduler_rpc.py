@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.cli.commands import scheduler as scheduler_cmd
-from src.models import TelegramCommandStatus
+from tg_agent.cli.commands import scheduler as scheduler_cmd
+from tg_agent.models import TelegramCommandStatus
 
 
 class _NoCloseDb:

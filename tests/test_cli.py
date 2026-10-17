@@ -10,11 +10,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from tests.helpers import cli_add_channel as _add_channel
+from tests.helpers import cli_ns as _ns
 from tg_agent.config import AppConfig
 from tg_agent.database import Database
 from tg_agent.models import Account, Message
-from tests.helpers import cli_add_channel as _add_channel
-from tests.helpers import cli_ns as _ns
 
 NOW = datetime(2025, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
 pytestmark = pytest.mark.aiosqlite_serial

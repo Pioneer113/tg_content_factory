@@ -80,7 +80,7 @@ async def set_impl(config_path: str, *, key: str, value: str) -> None:
         if followup is None:
             print(f"Set {key} = {value}")
         else:
-            from src.services.telegram_command_service import TelegramCommandService
+            from tg_agent.services.telegram_command_service import TelegramCommandService
 
             await TelegramCommandService(db).enqueue(
                 followup, payload={}, requested_by="cli:settings.set"

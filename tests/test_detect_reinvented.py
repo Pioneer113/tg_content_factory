@@ -9,7 +9,7 @@ interrogate на фейках формы, а не на реальном инст
     false-positive.
 
 Верификационный кейс эпика (#1083: «детектор находит ≥1 известный кейс из #782»)
-— hand-rolled HMAC-JWT из src/web/session.py (#782 / пункт #1). Эталонная
+— hand-rolled HMAC-JWT из tg_agent/web/session.py (#782 / пункт #1). Эталонная
 функция собирала `base64url(HMAC-SHA256(secret, payload))` руками; детектор
 обязан её поймать. При этом ТЕКУЩИЙ session.py уже переехал на itsdangerous.Signer
 (#953) — и на нём детектор молчать НЕ обязан по этой эвристике, что тоже
@@ -411,14 +411,14 @@ def test_load_baseline_missing_returns_none(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Прогон по реальному src/web/session.py: текущий код НЕ должен давать
+# Прогон по реальному tg_agent/web/session.py: текущий код НЕ должен давать
 # handrolled-signing (он на itsdangerous). Защищает от регресса эвристики.
 # --------------------------------------------------------------------------- #
 
 
 def test_real_session_py_not_flagged_as_handrolled() -> None:
-    """Текущий src/web/session.py (itsdangerous) не ловится как hand-rolled signing."""
-    session_py = Path(__file__).resolve().parents[1] / "src" / "web" / "session.py"
+    """Текущий tg_agent/web/session.py (itsdangerous) не ловится как hand-rolled signing."""
+    session_py = Path(__file__).resolve().parents[1] / "tg_agent" / "web" / "session.py"
     if not session_py.exists():  # pragma: no cover - файл есть в репозитории
         pytest.skip("tg_agent/web/session.py отсутствует")
     findings = detect_in_source(session_py.read_text(encoding="utf-8"), "tg_agent/web/session.py")

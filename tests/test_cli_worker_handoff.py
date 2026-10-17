@@ -55,7 +55,7 @@ def channel_cli(cli_db, cli_init_patch):
 def collect_cli(cli_db, cli_init_patch):
     with cli_init_patch(
         cli_db,
-        "src.cli.commands.collect.runtime.init_db",
+        "tg_agent.cli.commands.collect.runtime.init_db",
         config=AppConfig(),
     ):
         yield cli_db
@@ -65,7 +65,7 @@ def collect_cli(cli_db, cli_init_patch):
 def scheduler_cli(cli_db, cli_init_patch):
     with cli_init_patch(
         cli_db,
-        "src.cli.commands.scheduler.runtime.init_db",
+        "tg_agent.cli.commands.scheduler.runtime.init_db",
         config=AppConfig(),
     ):
         yield cli_db
@@ -288,10 +288,10 @@ def test_collect_channel_id_hands_off_to_worker_when_serve_is_running(collect_cl
 
     init_pool = AsyncMock()
     with (
-        patch("src.cli.commands.collect.worker_handoff.serve_is_running", return_value=True),
-        patch("src.cli.commands.collect.runtime.init_pool", init_pool),
+        patch("tg_agent.cli.commands.collect.worker_handoff.serve_is_running", return_value=True),
+        patch("tg_agent.cli.commands.collect.runtime.init_pool", init_pool),
     ):
-        from src.cli.commands.collect import collect_impl
+        from tg_agent.cli.commands.collect import collect_impl
 
         asyncio.run(collect_impl("config.yaml", channel_id=5006, full=False))
 
@@ -312,10 +312,10 @@ def test_collect_channel_id_still_refuses_filtered_channel(collect_cli, capsys):
 
     init_pool = AsyncMock()
     with (
-        patch("src.cli.commands.collect.worker_handoff.serve_is_running", return_value=True),
-        patch("src.cli.commands.collect.runtime.init_pool", init_pool),
+        patch("tg_agent.cli.commands.collect.worker_handoff.serve_is_running", return_value=True),
+        patch("tg_agent.cli.commands.collect.runtime.init_pool", init_pool),
     ):
-        from src.cli.commands.collect import collect_impl
+        from tg_agent.cli.commands.collect import collect_impl
 
         asyncio.run(collect_impl("config.yaml", channel_id=5007, full=False))
 
@@ -327,10 +327,10 @@ def test_collect_channel_id_still_refuses_filtered_channel(collect_cli, capsys):
 
 def test_collect_channel_id_unknown_channel(collect_cli, capsys):
     with (
-        patch("src.cli.commands.collect.worker_handoff.serve_is_running", return_value=True),
-        patch("src.cli.commands.collect.runtime.init_pool", AsyncMock()),
+        patch("tg_agent.cli.commands.collect.worker_handoff.serve_is_running", return_value=True),
+        patch("tg_agent.cli.commands.collect.runtime.init_pool", AsyncMock()),
     ):
-        from src.cli.commands.collect import collect_impl
+        from tg_agent.cli.commands.collect import collect_impl
 
         asyncio.run(collect_impl("config.yaml", channel_id=999999, full=False))
 
@@ -347,18 +347,18 @@ def test_collect_channel_id_tgcf_cli_direct_forces_pool(collect_cli, capsys, mon
     pool.disconnect_all = AsyncMock()
 
     async def fake_init_pool(config, db_arg):
-        from src.telegram.auth import TelegramAuth
+        from tg_agent.telegram.auth import TelegramAuth
 
         return TelegramAuth(0, ""), pool
 
     monkeypatch.setenv(worker_handoff.DIRECT_ENV_VAR, "1")
     with (
-        patch("src.cli.commands.collect.worker_handoff.serve_is_running", return_value=True),
-        patch("src.cli.commands.collect.runtime.init_pool", side_effect=fake_init_pool),
-        patch("src.cli.commands.collect.Collector") as collector_cls,
+        patch("tg_agent.cli.commands.collect.worker_handoff.serve_is_running", return_value=True),
+        patch("tg_agent.cli.commands.collect.runtime.init_pool", side_effect=fake_init_pool),
+        patch("tg_agent.cli.commands.collect.Collector") as collector_cls,
     ):
         collector_cls.return_value.collect_single_channel = AsyncMock(return_value=5)
-        from src.cli.commands.collect import collect_impl
+        from tg_agent.cli.commands.collect import collect_impl
 
         asyncio.run(collect_impl("config.yaml", channel_id=5008, full=False))
 
@@ -378,10 +378,10 @@ def test_collect_enqueue_all_hands_off_when_serve_is_running(collect_cli, capsys
 
     init_pool = AsyncMock()
     with (
-        patch("src.cli.commands.collect.worker_handoff.serve_is_running", return_value=True),
-        patch("src.cli.commands.collect.runtime.init_pool", init_pool),
+        patch("tg_agent.cli.commands.collect.worker_handoff.serve_is_running", return_value=True),
+        patch("tg_agent.cli.commands.collect.runtime.init_pool", init_pool),
     ):
-        from src.cli.commands.collect import collect_impl
+        from tg_agent.cli.commands.collect import collect_impl
 
         asyncio.run(collect_impl("config.yaml", channel_id=None, full=False))
 
@@ -401,8 +401,8 @@ def test_scheduler_start_enqueues_reconcile(scheduler_cli, capsys):
     """
     db = scheduler_cli
     init_pool = AsyncMock()
-    with patch("src.cli.commands.scheduler.runtime.init_pool", init_pool):
-        from src.cli.commands.scheduler import start_impl
+    with patch("tg_agent.cli.commands.scheduler.runtime.init_pool", init_pool):
+        from tg_agent.cli.commands.scheduler import start_impl
 
         asyncio.run(start_impl("config.yaml"))
 

@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.models import DialogMessage, MessagesResult, PingMonitor
-from src.services.ping_monitor_service import (
+from tg_agent.models import DialogMessage, MessagesResult, PingMonitor
+from tg_agent.services.ping_monitor_service import (
     PingMonitorService,
     _next_threshold_days,
 )
@@ -23,7 +23,7 @@ NOW = datetime(2026, 10, 17, 12, 0, tzinfo=timezone.utc)
 @pytest.fixture(autouse=True)
 def _frozen_now():
     """run_due() берёт datetime.now() из своего модуля — замораживаем на NOW."""
-    with patch("src.services.ping_monitor_service.datetime") as fake_dt:
+    with patch("tg_agent.services.ping_monitor_service.datetime") as fake_dt:
         fake_dt.now.return_value = NOW
         yield
 

@@ -6,12 +6,12 @@ docstring для не-FastAPI поверхностей (сервисы, agent-to
 
   1. mkdocs.yml включает handler mkdocstrings и nav-секцию «API Reference»;
   2. reference-страницы существуют и ссылаются на ожидаемые модули через
-     `::: src.<module>` синтаксис;
+     `::: tg_agent.<module>` синтаксис;
   3. `mkdocs build` проходит без ошибок и реально рендерит ожидаемые символы
      (классы/функции) в собранный site/ — то есть autodoc-pipeline жив.
 
 Сборку (шаг 3) гоняем один раз в самом тяжёлом тесте: он помечен медленным и
-изолированным, потому что поднимает griffe-обход всего пакета src/.
+изолированным, потому что поднимает griffe-обход всего пакета tg_agent/.
 """
 
 from __future__ import annotations
@@ -154,7 +154,7 @@ def test_mkdocs_build_renders_api_symbols(tmp_path: Path) -> None:
 
     --strict — критерий приёмки #1071: сборка обязана быть чистой от warning
     (битые ссылки, нерезолвленные autoref'ы). Дорогой тест: griffe обходит весь
-    пакет src/. Гоняем в изолированный site-dir внутри tmp_path, чтобы не трогать
+    пакет tg_agent/. Гоняем в изолированный site-dir внутри tmp_path, чтобы не трогать
     рабочую site/.
     """
     pytest.importorskip("mkdocstrings")

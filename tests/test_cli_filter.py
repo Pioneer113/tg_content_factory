@@ -555,7 +555,7 @@ def test_filter_flag_set_and_unset(tmp_path, cli_init_patch, capsys):
         )
 
         with cli_init_patch(seed, _FILTER_INIT_DB_TARGET, fresh_database=True):
-            from src.cli.commands.filter import run
+            from tg_agent.cli.commands.filter import run
 
             run(_ns(filter_action="flag", pk=pk, set_flag="manual", unset_flag=None))
 
@@ -563,7 +563,7 @@ def test_filter_flag_set_and_unset(tmp_path, cli_init_patch, capsys):
         assert "sticky flag 'manual' set" in capsys.readouterr().out
 
         with cli_init_patch(seed, _FILTER_INIT_DB_TARGET, fresh_database=True):
-            from src.cli.commands.filter import run
+            from tg_agent.cli.commands.filter import run
 
             run(_ns(filter_action="flag", pk=pk, set_flag=None, unset_flag="manual"))
 
@@ -584,7 +584,7 @@ def test_filter_flag_unset_without_flag_is_noop(tmp_path, cli_init_patch, capsys
         )
 
         with cli_init_patch(seed, _FILTER_INIT_DB_TARGET, fresh_database=True):
-            from src.cli.commands.filter import run
+            from tg_agent.cli.commands.filter import run
 
             run(_ns(filter_action="flag", pk=pk, set_flag=None, unset_flag="manual"))
 
@@ -606,7 +606,7 @@ def test_filter_flag_invalid_flag_rejected(tmp_path, cli_init_patch, capsys):
         )
 
         with cli_init_patch(seed, _FILTER_INIT_DB_TARGET, fresh_database=True):
-            from src.cli.commands.filter import run
+            from tg_agent.cli.commands.filter import run
 
             run(_ns(filter_action="flag", pk=pk, set_flag="low_uniqueness", unset_flag=None))
 
@@ -623,7 +623,7 @@ def test_filter_flag_requires_exactly_one_action(tmp_path, cli_init_patch, capsy
     asyncio.run(seed.initialize())
     try:
         with cli_init_patch(seed, _FILTER_INIT_DB_TARGET, fresh_database=True):
-            from src.cli.commands.filter import run
+            from tg_agent.cli.commands.filter import run
 
             run(_ns(filter_action="flag", pk=1, set_flag=None, unset_flag=None))
             run(_ns(filter_action="flag", pk=1, set_flag="manual", unset_flag="manual"))
@@ -640,7 +640,7 @@ def test_filter_flag_not_found(tmp_path, cli_init_patch, capsys):
     asyncio.run(seed.initialize())
     try:
         with cli_init_patch(seed, _FILTER_INIT_DB_TARGET, fresh_database=True):
-            from src.cli.commands.filter import run
+            from tg_agent.cli.commands.filter import run
 
             run(_ns(filter_action="flag", pk=424242, set_flag="manual", unset_flag=None))
     finally:
@@ -656,9 +656,9 @@ def test_filter_apply_whitelist_mode(tmp_path, cli_init_patch, capsys):
     asyncio.run(db.initialize())
     try:
         with cli_init_patch(db, _FILTER_INIT_DB_TARGET, fresh_database=True):
-            from src.cli.commands.filter import run
+            from tg_agent.cli.commands.filter import run
 
-            with patch("src.cli.commands.filter.ChannelAnalyzer") as mock_analyzer:
+            with patch("tg_agent.cli.commands.filter.ChannelAnalyzer") as mock_analyzer:
                 mock_instance = MagicMock()
                 mock_instance.apply_whitelist = AsyncMock(return_value=3)
                 mock_analyzer.return_value = mock_instance
