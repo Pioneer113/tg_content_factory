@@ -26,7 +26,7 @@ async def db(base_app):
 
 
 # ============================================================================
-# src/web/routes/agent.py -- edge-case lines
+# tg_agent/web/routes/agent.py -- edge-case lines
 # ============================================================================
 
 
@@ -76,7 +76,7 @@ async def test_agent_chat_invalid_model(client, db):
 
 
 # ============================================================================
-# src/web/routes/channels.py -- tag + command endpoints
+# tg_agent/web/routes/channels.py -- tag + command endpoints
 # ============================================================================
 
 

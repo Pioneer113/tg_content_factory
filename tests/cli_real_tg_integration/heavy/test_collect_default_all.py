@@ -3,7 +3,7 @@
 The bare `collect` invocation (no `--channel-id`, no `sample` sub) calls
 `TaskEnqueuer.enqueue_all_channels()` which writes pending rows into the
 `collection_tasks` table for every non-filtered channel (see
-src/cli/commands/collect.py:48-58). The actual TG-iter_messages work is
+tg_agent/cli/commands/collect.py:48-58). The actual TG-iter_messages work is
 deferred until a worker drains the queue, so this test does NOT itself
 fetch messages. Still placed in heavy/ because the queue write touches
 every channel in the live DB.

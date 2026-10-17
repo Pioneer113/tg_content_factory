@@ -486,7 +486,7 @@ def cli_real_cli_env() -> CliRealCliEnv:
         pytest.skip(f"live CLI database at {db_path} is empty")
 
     # api_id/api_hash may live in config.yaml/env OR the settings table — mirror
-    # production's fallback (src/cli/runtime.py:init_pool), hence the DB check first.
+    # production's fallback (tg_agent/cli/runtime.py:init_pool), hence the DB check first.
     api_id, api_hash = _resolve_api_credentials(config, db_path)
     if not api_id or not api_hash:
         pytest.skip("live CLI config/DB has no Telegram api_id/api_hash")
@@ -649,7 +649,7 @@ _FLOOD_OR_READ_ERROR_RE = re.compile(
 )
 # `messages read --live` prints one header line per message as
 # `print(f"[{date}] #{msg.id}{sender}...")` where `sender` is `" name last".strip()`
-# (src/cli/commands/messages.py:84). So the sender is concatenated DIRECTLY after
+# (tg_agent/cli/commands/messages.py:84). So the sender is concatenated DIRECTLY after
 # the id with NO separating space (e.g. `[2026-06-03 02:42:48] #611404Alexey`), and
 # is empty when there is no sender. The id is therefore terminated by a non-digit
 # (a letter, reactions suffix, or end of line), NOT by whitespace — matching on a
@@ -704,7 +704,7 @@ def _parse_live_message_blocks(stdout: str) -> dict[int, str]:
     """Map message_id -> joined text body from `messages read --live` output.
 
     The live format is a header line ``[<date>] #<id> <sender>`` followed by the
-    message body. `_print_live_messages` (src/cli/commands/messages.py) prints the
+    message body. `_print_live_messages` (tg_agent/cli/commands/messages.py) prints the
     whole body with a single ``print(f"  {text[:500]}")``, so ONLY the first
     physical line of a multi-line body carries the two-space indent — continuation
     lines (after embedded newlines) are unindented, and blank lines may appear

@@ -73,7 +73,7 @@ async def test_import_session_existing_phone_not_overwritten(route_client, base_
 async def test_import_session_not_logged(route_client, base_app, caplog):
     """Application loggers must not record the session value.
 
-    Scoped to project loggers (``src.*``): the third-party ``aiosqlite`` driver
+    Scoped to project loggers (``tg_agent.*``): the third-party ``aiosqlite`` driver
     emits every SQL statement (with bound params) at DEBUG regardless of the
     column — that's driver diagnostics, off in production, and it logs all
     INSERTs identically, not a session-specific leak. We assert OUR code path

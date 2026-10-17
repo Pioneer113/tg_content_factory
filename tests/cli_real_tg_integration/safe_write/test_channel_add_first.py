@@ -10,7 +10,7 @@ def test_channel_add_already_existing(run_cli, assert_cli_ok, live_channel_usern
     `channel add` идемпотентна на уровне строк — повторное добавление
     существующего канала не плодит дубликаты, а делает ON CONFLICT DO UPDATE
     с обновлением title/username/channel_type/is_active (см.
-    src/database/repositories/channels.py:29-37). DB-эффект benign, цель теста —
+    tg_agent/database/repositories/channels.py:29-37). DB-эффект benign, цель теста —
     реальный TG API call (resolve_channel + fetch_channel_meta).
     """
     result = run_cli("channel", "add", live_channel_username, timeout=120)

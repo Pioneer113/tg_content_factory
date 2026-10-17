@@ -7,7 +7,7 @@ row — exactly the idempotency we need for a tier-safe_write smoke.
 
 We reuse channel_id (numeric) from live_channel: the add-bulk handler's
 `info_map` is keyed by channel_id (see
-src/cli/commands/channel.py:391), not by Telethon dialog.id, so this is
+tg_agent/cli/commands/channel.py:391), not by Telethon dialog.id, so this is
 the correct value to pass.
 """
 import pytest

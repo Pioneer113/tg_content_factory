@@ -1,7 +1,7 @@
 """`worker` — standalone worker, polls for worker_heartbeat snapshot.
 
 The worker publishes a `worker_heartbeat` row in runtime_snapshots on
-startup and at a fixed interval afterwards (see src/runtime/worker.py:36).
+startup and at a fixed interval afterwards (see tg_agent/runtime/worker.py:36).
 We poll for that row, then SIGTERM the process.
 """
 import pytest

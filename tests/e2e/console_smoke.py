@@ -93,7 +93,7 @@ PANEL_PATHS: tuple[str, ...] = (
 )
 
 LOGIN_PATH = "/login"
-# CSS selector for the panel's login form field (src/web/templates/web_login.html).
+# CSS selector for the panel's login form field (tg_agent/web/templates/web_login.html).
 _PASSWORD_FIELD = "#password"
 _REDACTED = "***"
 # Per-action navigation/console timeout (ms). A hung navigation against a wedged

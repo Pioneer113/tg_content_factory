@@ -1,7 +1,7 @@
 """`python -m tg_agent.main test benchmark` — runs pytest 3 times back-to-back.
 
 Compares serial vs parallel-safe vs aiosqlite-serial elapsed times. Each
-sub-run is a real `pytest` subprocess (see src/cli/commands/test.py:122,
+sub-run is a real `pytest` subprocess (see tg_agent/cli/commands/test.py:122,
 `_run_pytest_benchmark`). Total wall time depends on the test suite size;
 keep the timeout generous (10 min) for a populated repo.
 """

@@ -52,8 +52,7 @@ my_digest = "tg_plugin_digest:PLUGIN"
 ```
 
 `PLUGIN` — объект с тремя вещами: кто я, с чем совместим, что регистрирую.
-Публичный модуль — `src.plugin_api` (пакет ставится как `src*`, отдельного
-`tg_agent` пространства имён нет). Он реэкспортирует `text_response` из
+Публичный модуль — `tg_agent.plugin_api`. Он реэкспортирует `text_response` из
 `tg_agent/agent/tools/_registry.py` и даёт **свой** декоратор `tool`: у
 `claude_agent_sdk.tool` нет параметров `category`/`phone_bound`, поэтому
 обёртка принимает их, создаёт `ToolMeta` (`tg_agent/agent/tools/_categories.py`)

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # pyright: reportMissingImports=false
-"""PostToolUse (Bash) hook entry: restart the daemon when src/ is newer.
+"""PostToolUse (Bash) hook entry: restart the daemon when tg_agent/ is newer.
 
 Wiring lives in .claude/settings.local.json; decision logic and gates are in
-src/cli/daemon_autorestart.py. Silent no-op unless every gate holds.
+tg_agent/cli/daemon_autorestart.py. Silent no-op unless every gate holds.
 """
 
 import sys

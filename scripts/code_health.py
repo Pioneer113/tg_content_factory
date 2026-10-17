@@ -190,7 +190,7 @@ def section_trash(sources: dict[Path, str], top: int) -> None:
         label = f"  {name}:"
         print(f"{label:<42} {value}")
 
-    print(f"  {'print() в src/cli/ (легитимный вывод):':<42} {print_in_cli}")
+    print(f"  {'print() в tg_agent/cli/ (легитимный вывод):':<42} {print_in_cli}")
     suspicious = red(str(print_outside_cli)) if print_outside_cli else str(print_outside_cli)
     print(f"  {'print() вне cli/ (подозрительно):':<42} {suspicious}")
 
