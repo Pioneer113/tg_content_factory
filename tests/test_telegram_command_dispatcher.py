@@ -373,6 +373,108 @@ async def test_scheduler_trigger_warm():
     assert r["started"] is True
 
 
+async def test_scheduler_trigger_collection():
+    s = MagicMock()
+    s.trigger_background = AsyncMock(return_value=True)
+    d = _dispatcher(scheduler=s)
+    r = await d._handle_scheduler_trigger_collection({})
+    assert r["started"] is True
+    s.trigger_background.assert_awaited_once()
+
+
+async def test_scheduler_trigger_collection_already_running_reports_false():
+    # Review #1578: trigger_background no-ops while a run is in flight — the
+    # command must report that, not claim success.
+    s = MagicMock()
+    s.trigger_background = AsyncMock(return_value=False)
+    d = _dispatcher(scheduler=s)
+    r = await d._handle_scheduler_trigger_collection({})
+    assert r["started"] is False
+
+
+async def test_scheduler_trigger_collection_no_scheduler():
+    d = _dispatcher()
+    with pytest.raises(RuntimeError, match="scheduler_unavailable"):
+        await d._handle_scheduler_trigger_collection({})
+
+
+async def test_collection_cancel_task_interrupts_live_queue():
+    q = MagicMock()
+    q.cancel_task = AsyncMock(return_value=True)
+    d = _dispatcher(collection_queue=q)
+    r = await d._handle_collection_cancel_task({"task_id": 7})
+    assert r == {"cancelled": True}
+    q.cancel_task.assert_awaited_once_with(7)
+
+
+async def test_collection_cancel_task_sets_cancel_event_of_running_task():
+    # Acceptance #1568: cancelling a RUNNING task must raise the in-flight
+    # cancel event at command time, not retro-tag the row after the channel
+    # finishes — the same mechanic the web cancel route relies on.
+    import asyncio
+
+    from src.collection_queue import CollectionQueue
+
+    channels = MagicMock()
+    channels.cancel_collection_task = AsyncMock(return_value=True)
+    q = CollectionQueue(MagicMock(), channels)
+    cancel_event = asyncio.Event()
+    q._active_task_ids[7] = cancel_event
+    d = _dispatcher(collection_queue=q)
+    r = await d._handle_collection_cancel_task({"task_id": 7})
+    assert r == {"cancelled": True}
+    assert cancel_event.is_set()
+    channels.cancel_collection_task.assert_awaited_once_with(7, note=None)
+
+
+async def test_collection_cancel_task_without_queue_flips_db():
+    db = _mock_db()
+    db.repos.tasks = MagicMock()
+    db.repos.tasks.cancel_collection_task = AsyncMock(return_value=False)
+    d = _dispatcher(db=db)
+    r = await d._handle_collection_cancel_task({"task_id": 7})
+    assert r == {"cancelled": False}
+    db.repos.tasks.cancel_collection_task.assert_awaited_once_with(7)
+
+
+async def test_collection_clear_pending_drains_live_queue():
+    q = MagicMock()
+    q.clear_pending_tasks = AsyncMock(return_value=5)
+    d = _dispatcher(collection_queue=q)
+    r = await d._handle_collection_clear_pending({})
+    assert r == {"deleted": 5}
+    q.clear_pending_tasks.assert_awaited_once()
+
+
+async def test_collection_clear_pending_drains_real_queue_memory():
+    # Acceptance #1568: clear-pending must empty the worker's in-memory queue
+    # (and flood-wait requeues / known ids), not just delete DB rows.
+    from src.collection_queue import CollectionQueue
+    from src.models import Channel
+
+    channels = MagicMock()
+    channels.delete_pending_channel_tasks = AsyncMock(return_value=2)
+    q = CollectionQueue(MagicMock(), channels)
+    q._queue.put_nowait((1, Channel(channel_id=-8001, title="queued"), False, False))
+    q._known_task_ids.add(1)
+    d = _dispatcher(collection_queue=q)
+    r = await d._handle_collection_clear_pending({})
+    assert r == {"deleted": 2}
+    assert q._queue.empty()
+    assert not q._known_task_ids
+    channels.delete_pending_channel_tasks.assert_awaited_once()
+
+
+async def test_collection_clear_pending_without_queue_deletes_rows():
+    db = _mock_db()
+    db.repos.tasks = MagicMock()
+    db.repos.tasks.delete_pending_channel_tasks = AsyncMock(return_value=3)
+    d = _dispatcher(db=db)
+    r = await d._handle_collection_clear_pending({})
+    assert r == {"deleted": 3}
+    db.repos.tasks.delete_pending_channel_tasks.assert_awaited_once()
+
+
 async def test_dialogs_refresh():
     db = _mock_db()
     pool = _mock_pool()

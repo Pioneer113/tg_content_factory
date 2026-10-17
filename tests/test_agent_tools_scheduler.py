@@ -61,10 +61,27 @@ class TestGetSchedulerStatusTool:
 
 class TestStartSchedulerTool:
     @pytest.mark.anyio
-    async def test_no_pool_returns_pool_gate(self, mock_db):
-        handlers = _get_tool_handlers(mock_db, client_pool=None)
+    async def test_no_pool_with_live_manager_returns_pool_gate(self, mock_db):
+        """Live-manager path still needs the local Telegram pool."""
+        handlers = _get_tool_handlers(
+            mock_db, client_pool=None, scheduler_manager=_make_scheduler_mgr()
+        )
         result = await handlers["start_scheduler"]({"confirm": True})
         assert "Telegram-клиент" in _text(result)
+
+    @pytest.mark.anyio
+    async def test_no_pool_no_manager_falls_back_to_command(self, mock_db):
+        """#1568: without a live manager the op is handed to the worker — no pool needed."""
+        mock_db.repos = MagicMock()
+        mock_db.set_setting = AsyncMock()
+        mock_db.repos.telegram_commands.find_active_by_type = AsyncMock(return_value=None)
+        mock_db.repos.telegram_commands.create_command = AsyncMock(return_value=11)
+        handlers = _get_tool_handlers(mock_db, client_pool=None)
+        result = await handlers["start_scheduler"]({"confirm": True})
+        text = _text(result)
+        assert "запущен" in text
+        assert "#11" in text
+        mock_db.set_setting.assert_awaited_once_with("scheduler_autostart", "1")
 
     @pytest.mark.anyio
     async def test_no_confirm_returns_gate(self, mock_db):
@@ -118,10 +135,27 @@ class TestStopSchedulerTool:
 
 class TestTriggerCollectionTool:
     @pytest.mark.anyio
-    async def test_no_pool_returns_pool_gate(self, mock_db):
-        handlers = _get_tool_handlers(mock_db, client_pool=None)
+    async def test_no_pool_with_live_manager_returns_pool_gate(self, mock_db):
+        """Live-manager path still needs the local Telegram pool."""
+        handlers = _get_tool_handlers(
+            mock_db, client_pool=None, scheduler_manager=_make_scheduler_mgr()
+        )
         result = await handlers["trigger_collection"]({"confirm": True})
         assert "Telegram-клиент" in _text(result)
+
+    @pytest.mark.anyio
+    async def test_no_pool_no_manager_falls_back_to_command(self, mock_db):
+        """#1568: without a live manager the op is handed to the worker — no pool needed."""
+        mock_db.repos = MagicMock()
+        mock_db.repos.telegram_commands.find_active_by_type = AsyncMock(return_value=None)
+        mock_db.repos.telegram_commands.create_command = AsyncMock(return_value=12)
+        handlers = _get_tool_handlers(mock_db, client_pool=None)
+        result = await handlers["trigger_collection"]({"confirm": True})
+        text = _text(result)
+        assert "Сбор запущен" in text
+        assert "#12" in text
+        cmd = mock_db.repos.telegram_commands.create_command.await_args.args[0]
+        assert cmd.command_type == "scheduler.trigger_collection"
 
     @pytest.mark.anyio
     async def test_no_confirm_returns_gate(self, mock_db):
@@ -180,10 +214,21 @@ class TestToggleSchedulerJobTool:
         mgr.sync_job_state.assert_awaited_once_with("notify", True)
 
     @pytest.mark.anyio
-    async def test_no_manager_returns_error(self, mock_db):
+    async def test_no_manager_falls_back_to_disabled_key(self, mock_db):
+        """#1568: without a live manager the toggle writes the settings key + reconcile."""
+        mock_db.repos = MagicMock()
+        mock_db.repos.settings.get_setting = AsyncMock(return_value=None)
+        mock_db.repos.settings.set_setting = AsyncMock()
+        mock_db.repos.telegram_commands.find_active_by_type = AsyncMock(return_value=None)
+        mock_db.repos.telegram_commands.create_command = AsyncMock(return_value=13)
         handlers = _get_tool_handlers(mock_db)
         result = await handlers["toggle_scheduler_job"]({"job_id": "collect"})
-        assert "Ошибка переключения задачи" in _text(result)
+        text = _text(result)
+        assert "выключена" in text
+        assert "#13" in text
+        mock_db.repos.settings.set_setting.assert_awaited_once_with(
+            "scheduler_job_disabled:collect", "1"
+        )
 
     @pytest.mark.anyio
     async def test_error_returns_text(self, mock_db):

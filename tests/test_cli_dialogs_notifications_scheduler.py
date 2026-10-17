@@ -564,27 +564,32 @@ class TestSchedulerCommand:
         out = capsys.readouterr().out
         assert "autostart enabled" in out.lower()
 
-    def test_trigger_no_clients(self, cli_env_with_pool, capsys, caplog):
-        """Test scheduler trigger when no accounts connected."""
-        cli_env, fake_pool = cli_env_with_pool
-        fake_pool.clients = {}
+def _sched_count_trigger_commands(db_path: str) -> list[int]:
+    import sqlite3
 
-        from src.cli.commands.scheduler import run
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT id FROM telegram_commands WHERE command_type = ? AND status = ?",
+            ("scheduler.trigger_collection", "pending"),
+        ).fetchall()
+        return [int(r[0]) for r in rows]
+    finally:
+        conn.close()
 
-        run(_ns(scheduler_action="trigger"))
-        assert "No connected accounts" in caplog.text
 
-    def test_trigger_success(self, cli_env_with_pool, capsys):
-        """Test scheduler trigger enqueues channels."""
-        cli_env, fake_pool = cli_env_with_pool
-        fake_pool.clients = {"+70001112233": AsyncMock()}
+def test_trigger_hands_off_to_worker(tmp_path, cli_init_patch, capsys):
+    """Test scheduler trigger enqueues the worker command instead of a pool run (#1568)."""
+    db_path = _sched_init_empty_db(tmp_path, "sched_trigger.db")
 
-        from src.cli.commands.scheduler import run
+    _sched_run_with_db(db_path, cli_init_patch, _ns(scheduler_action="trigger"))
 
-        run(_ns(scheduler_action="trigger"))
-
-        out = capsys.readouterr().out
-        assert "enqueued" in out.lower()
+    out = capsys.readouterr().out
+    assert "scheduler.trigger_collection" in out
+    command_ids = _sched_count_trigger_commands(db_path)
+    assert len(command_ids) == 1
+    assert f"#{command_ids[0]}" in out
+    assert "Enqueued" not in out and "serve" not in out
 
 
 def _sched_read_setting(db_path: str, key: str) -> str | None:

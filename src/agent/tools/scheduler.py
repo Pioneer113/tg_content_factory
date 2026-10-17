@@ -8,6 +8,7 @@ from claude_agent_sdk import tool
 
 from src.agent.tools._categories import ToolCategory, ToolMeta
 from src.agent.tools._registry import _text_response, require_confirmation, require_pool
+from src.services.telegram_command_service import TelegramCommandService
 
 # Permission metadata for this module's tools (#245). Single source of
 # truth: permissions.py derives TOOL_CATEGORIES / MODULE_GROUPS /
@@ -32,13 +33,27 @@ def register(db, client_pool, embedding_service, **kwargs):
     tools = []
 
     def _get_mgr():
-        """Return the live scheduler manager or raise."""
+        """Return the live scheduler manager or raise (status introspection only)."""
         if scheduler_manager is not None:
             return scheduler_manager
         raise RuntimeError(
             "Планировщик недоступен — live SchedulerManager не передан. "
-            "Эта операция доступна только через web-интерфейс."
+            "Мутации уходят воркеру telegram-командами; статус — только через web."
         )
+
+    async def _enqueue(command_type: str, payload: dict, requested_by: str) -> str:
+        """Hand the op to the live worker when no in-process manager exists (#1568).
+
+        The CLI AgentManager is built without ``scheduler_manager`` — the live
+        object lives in the worker process. Same telegram-command channel the
+        web routes use (see save_scheduler_settings in tools/settings.py).
+        """
+        command_id = await TelegramCommandService(db).enqueue(
+            command_type,
+            payload=payload,
+            requested_by=requested_by,
+        )
+        return f"команда #{command_id} отправлена воркеру"
 
     @tool("get_scheduler_status", "Get current scheduler status, jobs, and next run times", {})
     async def get_scheduler_status(args):
@@ -69,16 +84,22 @@ def register(db, client_pool, embedding_service, **kwargs):
         {"confirm": Annotated[bool, "Установите true для подтверждения действия"]},
     )
     async def start_scheduler(args):
-        pool_gate = require_pool(client_pool, "Запуск планировщика")
-        if pool_gate:
-            return pool_gate
+        if scheduler_manager is not None:
+            pool_gate = require_pool(client_pool, "Запуск планировщика")
+            if pool_gate:
+                return pool_gate
         gate = require_confirmation("запустит планировщик периодического сбора сообщений", args)
         if gate:
             return gate
         try:
-            mgr = _get_mgr()
-            await mgr.start()
-            return _text_response("Планировщик запущен.")
+            if scheduler_manager is not None:
+                await scheduler_manager.start()
+                return _text_response("Планировщик запущен.")
+            await db.set_setting("scheduler_autostart", "1")
+            return _text_response(
+                "Планировщик запущен: "
+                + await _enqueue("scheduler.reconcile", {}, "agent:start_scheduler")
+            )
         except Exception as e:
             return _text_response(f"Ошибка запуска планировщика: {e}")
 
@@ -94,9 +115,14 @@ def register(db, client_pool, embedding_service, **kwargs):
         if gate:
             return gate
         try:
-            mgr = _get_mgr()
-            await mgr.stop()
-            return _text_response("Планировщик остановлен.")
+            if scheduler_manager is not None:
+                await scheduler_manager.stop()
+                return _text_response("Планировщик остановлен.")
+            await db.set_setting("scheduler_autostart", "0")
+            return _text_response(
+                "Планировщик остановлен: "
+                + await _enqueue("scheduler.reconcile", {}, "agent:stop_scheduler")
+            )
         except Exception as e:
             return _text_response(f"Ошибка остановки планировщика: {e}")
 
@@ -108,16 +134,23 @@ def register(db, client_pool, embedding_service, **kwargs):
         {"confirm": Annotated[bool, "Установите true для подтверждения действия"]},
     )
     async def trigger_collection(args):
-        pool_gate = require_pool(client_pool, "Запуск сбора")
-        if pool_gate:
-            return pool_gate
+        if scheduler_manager is not None:
+            pool_gate = require_pool(client_pool, "Запуск сбора")
+            if pool_gate:
+                return pool_gate
         gate = require_confirmation("немедленно запустит сбор сообщений из всех активных каналов", args)
         if gate:
             return gate
         try:
-            mgr = _get_mgr()
-            result = await mgr.trigger_now()
-            return _text_response(f"Сбор запущен: {result}")
+            if scheduler_manager is not None:
+                result = await scheduler_manager.trigger_now()
+                return _text_response(f"Сбор запущен: {result}")
+            return _text_response(
+                "Сбор запущен: "
+                + await _enqueue(
+                    "scheduler.trigger_collection", {}, "agent:trigger_collection"
+                )
+            )
         except Exception as e:
             return _text_response(f"Ошибка запуска сбора: {e}")
 
@@ -133,12 +166,25 @@ def register(db, client_pool, embedding_service, **kwargs):
         if not job_id:
             return _text_response("Ошибка: job_id обязателен.")
         try:
-            mgr = _get_mgr()
-            current = await mgr.is_job_enabled(job_id)
-            new_state = not current
-            await mgr.sync_job_state(job_id, new_state)
-            status = "включена" if new_state else "выключена"
-            return _text_response(f"Задача '{job_id}' {status}.")
+            if scheduler_manager is not None:
+                current = await scheduler_manager.is_job_enabled(job_id)
+                new_state = not current
+                await scheduler_manager.sync_job_state(job_id, new_state)
+                status = "включена" if new_state else "выключена"
+                return _text_response(f"Задача '{job_id}' {status}.")
+            # Same canonicalization as the web route / CLI job-toggle: pipeline_run_ is
+            # no longer a registered job — toggling it must flip content_generate_<id>.
+            if job_id.startswith("pipeline_run_"):
+                job_id = "content_generate_" + job_id.removeprefix("pipeline_run_")
+            key = f"scheduler_job_disabled:{job_id}"
+            current = await db.repos.settings.get_setting(key)
+            new_disabled = current != "1"
+            await db.repos.settings.set_setting(key, "1" if new_disabled else "0")
+            status = "выключена" if new_disabled else "включена"
+            return _text_response(
+                f"Задача '{job_id}' {status}: "
+                + await _enqueue("scheduler.reconcile", {}, "agent:toggle_scheduler_job")
+            )
         except Exception as e:
             return _text_response(f"Ошибка переключения задачи: {e}")
 
@@ -188,8 +234,9 @@ def register(db, client_pool, embedding_service, **kwargs):
     @tool(
         "cancel_scheduler_task",
         "Cancel a collection task by task_id (from get_scheduler_status or DB). "
-        "Pending tasks are cancelled immediately; running tasks are marked cancelled "
-        "but may continue until the current channel finishes. Requires confirmation.",
+        "Pending tasks are cancelled immediately; a RUNNING task is interrupted by the "
+        "worker at the collector's next check (cancel event), not after the channel finishes. "
+        "Requires confirmation.",
         {
             "task_id": Annotated[int, "ID задачи сбора"],
             "confirm": Annotated[bool, "Установите true для подтверждения действия"],
@@ -205,7 +252,12 @@ def register(db, client_pool, embedding_service, **kwargs):
         try:
             ok = await db.repos.tasks.cancel_collection_task(int(task_id))
             if ok:
-                return _text_response(f"Задача {task_id} отменена.")
+                note = await _enqueue(
+                    "collection.cancel_task",
+                    {"task_id": int(task_id)},
+                    "agent:cancel_scheduler_task",
+                )
+                return _text_response(f"Задача {task_id} отменена ({note}).")
             return _text_response(f"Задача {task_id} не найдена или уже завершена.")
         except Exception as e:
             return _text_response(f"Ошибка отмены задачи: {e}")
@@ -218,7 +270,8 @@ def register(db, client_pool, embedding_service, **kwargs):
 
     @tool(
         "clear_pending_tasks",
-        "Clear all pending collection tasks from the queue. Requires confirmation.",
+        "Clear all pending collection tasks from the queue and drain the live "
+        "worker's in-memory queue. Requires confirmation.",
         {"confirm": Annotated[bool, "Установите true для подтверждения действия"]},
     )
     async def clear_pending_tasks(args):
@@ -227,7 +280,8 @@ def register(db, client_pool, embedding_service, **kwargs):
             return gate
         try:
             deleted = await db.repos.tasks.delete_pending_channel_tasks()
-            return _text_response(f"Удалено ожидающих задач: {deleted}.")
+            note = await _enqueue("collection.clear_pending", {}, "agent:clear_pending_tasks")
+            return _text_response(f"Удалено ожидающих задач: {deleted} ({note}).")
         except Exception as e:
             return _text_response(f"Ошибка очистки очереди: {e}")
 

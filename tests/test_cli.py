@@ -879,11 +879,16 @@ class TestCLICollect:
 
 
 class TestCLIScheduler:
-    def test_no_clients(self, cli_env_with_pool, capsys, caplog):
+    def test_trigger_hands_off_without_clients(self, cli_env_with_pool, capsys):
+        """trigger enqueues the worker command; no connected accounts is fine (#1568)."""
         from src.cli.commands.scheduler import run
 
         run(_ns(scheduler_action="trigger"))
-        assert "No connected accounts" in caplog.text
+
+        out = capsys.readouterr().out
+        assert "scheduler.trigger_collection" in out
+        assert "Command #" in out
+        assert "No connected accounts" not in out
 
 
 # ---------------------------------------------------------------------------
