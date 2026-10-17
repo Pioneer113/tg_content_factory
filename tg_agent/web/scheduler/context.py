@@ -43,9 +43,9 @@ JOB_LABELS = {
     "warm_all_dialogs": "Прогрев кэша диалогов",
 }
 
-# Worker publishes `worker_heartbeat` every ~5s (src/runtime/worker.py:_publish_snapshots).
+# Worker publishes `worker_heartbeat` every ~5s (tg_agent/runtime/worker.py:_publish_snapshots).
 # 60s gives us 12 missed publishes before we conclude the worker is down. The
-# staleness window + classification now live in src.services.runtime_diagnostics
+# staleness window + classification now live in tg_agent.services.runtime_diagnostics
 # so the agent's get_runtime_diagnostics tool stays in lock-step with this banner.
 WORKER_HEARTBEAT_STALE_AFTER_SEC = WORKER_HEARTBEAT_STALE_AFTER_SEC_SVC
 

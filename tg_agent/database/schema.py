@@ -582,7 +582,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_media_type ON messages(media_type, chann
 -- `source_channel_ids`/`targets` columns) was superseded by the normalized
 -- `content_pipelines` + `pipeline_sources` + `pipeline_targets` tables above and
 -- is no longer created here. `run_migrations()` drops the empty leftover table
--- from older databases (see src/database/migrations.py).
+-- from older databases (see tg_agent/database/migrations.py).
 
 CREATE TABLE IF NOT EXISTS message_embeddings (
     message_id INTEGER PRIMARY KEY,

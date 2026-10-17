@@ -96,7 +96,7 @@ class NotificationService:
         """Send a one-off notification via the configured bot (or direct message fallback).
 
         Mirrors the worker's ``notifications.test`` command handler: routes through
-        :class:`~src.telegram.notifier.Notifier`, which prefers the personal bot
+        :class:`~tg_agent.telegram.notifier.Notifier`, which prefers the personal bot
         (delivers push notifications) and falls back to a self-message otherwise.
         Always returns ``True`` on success; raises
         ``RuntimeError('notification_test_failed')`` if delivery fails (it never
@@ -116,7 +116,7 @@ class NotificationService:
 
         Idempotent after a remote delete (issue #1085): if the bot is already
         gone from Telegram, ``botfather.delete_bot`` raises
-        :class:`~src.telegram.botfather.BotNotFoundError`. That is treated as
+        :class:`~tg_agent.telegram.botfather.BotNotFoundError`. That is treated as
         "the Telegram delete already happened" — we skip the TG step and proceed
         straight to the DB-row cleanup, so a repeat teardown can finally remove
         an orphan row left behind when a prior DB-delete failed (#1041). Any

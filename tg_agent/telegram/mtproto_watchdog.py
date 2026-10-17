@@ -11,7 +11,7 @@ affected client:
 
 - every pool client gets a per-phone Telethon ``base_logger``
   (``telethon.tgcf.<sha-slug>``; the slug comes from
-  :func:`src.utils.safe_logging.text_hash` so phone numbers never leak into
+  :func:`tg_agent.utils.safe_logging.text_hash` so phone numbers never leak into
   logger names);
 - one :class:`MTProtoSecurityWatchdog` handler sits on the
   ``telethon.tgcf`` root and receives the per-phone children via propagation;

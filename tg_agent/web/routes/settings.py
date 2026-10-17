@@ -288,4 +288,4 @@ async def translation_run_batch(request: Request, form: TranslationRunFormDep):
     return settings_flash_response(await handle_translation_run_batch(request, form))
 
 
-# Account toggle/delete endpoints live in src/web/routes/accounts.py.
+# Account toggle/delete endpoints live in tg_agent/web/routes/accounts.py.

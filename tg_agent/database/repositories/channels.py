@@ -936,7 +936,7 @@ class ChannelsRepository:
         """
         # Atomic delete via the connection-wide write lock + BEGIN
         # IMMEDIATE (issue #569). The only RESTRICT FK on `channels` is
-        # `pipeline_sources.channel_id` (src/database/schema.py:326);
+        # `pipeline_sources.channel_id` (tg_agent/database/schema.py:326);
         # the preflight check and the child/parent deletes run inside
         # Database.transaction(), which holds Database._write_lock for
         # the whole block — no other coroutine on this aiosqlite

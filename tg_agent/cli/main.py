@@ -7,7 +7,7 @@ import click
 
 # Typer is the single CLI entry point (epic #959, Final — issue #1125). Every
 # command is declared on ``tg_agent/cli/typer_app.py::app`` and registered by importing
-# ``src.cli.typer_commands`` (its module body attaches the command groups to
+# ``tg_agent.cli.typer_commands`` (its module body attaches the command groups to
 # ``app``). The previous argparse framework — ``build_parser()`` + the dict
 # dispatcher + the ``dispatch_via_typer`` bridge — was removed in #1125; ``app``
 # now owns global option parsing (``--config`` / ``--version`` via

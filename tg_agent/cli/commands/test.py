@@ -52,7 +52,7 @@ _TG_CHECKS_AFTER_POOL = [
     "tg_search_premium",
     "tg_search_quota",
 ]
-# src/cli/commands/test.py → src/cli/commands → src/cli → src → repo root
+# tg_agent/cli/commands/test.py → tg_agent/cli/commands → tg_agent/cli → src → repo root
 REPO_ROOT = Path(__file__).resolve().parents[3]
 NON_LIVE_PYTEST_MARKER_EXPR = (
     "not real_tg_safe and not real_tg_mutation_safe and not real_tg_manual and not real_provider_smoke"

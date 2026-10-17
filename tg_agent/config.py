@@ -1,6 +1,6 @@
 """Конфигурация приложения: Pydantic-модели секций + загрузчик из YAML.
 
-[`AppConfig`][src.config.AppConfig] — корень дерева настроек; каждая вложенная
+[`AppConfig`][tg_agent.config.AppConfig] — корень дерева настроек; каждая вложенная
 секция — отдельная `*Config`-модель с дефолтами, так что приложение запускается
 и без `config.yaml`. `load_config` читает YAML, подставляет `${ENV_VAR}` и
 добирает критичные значения (Telegram-креды, agent-модель) прямо из окружения.
@@ -147,7 +147,7 @@ class SecurityConfig(BaseModel):
     """Параметры безопасности: ключ шифрования StringSession аккаунтов.
 
     Непустой `session_encryption_key` включает хранение сессий как `enc:v2:*`;
-    см. [`resolve_session_encryption_secret`][src.config.resolve_session_encryption_secret].
+    см. [`resolve_session_encryption_secret`][tg_agent.config.resolve_session_encryption_secret].
     """
 
     session_encryption_key: str = ""
@@ -219,7 +219,7 @@ class AppConfig(BaseModel):
 
     Каждая секция со своими дефолтами, поэтому валидный `AppConfig()` собирается
     без файла. Загружается и валидируется через
-    [`load_config`][src.config.load_config].
+    [`load_config`][tg_agent.config.load_config].
     """
 
     telegram: TelegramConfig = TelegramConfig()

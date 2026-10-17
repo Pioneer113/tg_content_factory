@@ -662,7 +662,7 @@ async def resolve_phone(db: Database, raw_phone: object) -> tuple[str, dict | No
 
     Returns ``(phone, None)`` on success or ``("", error_response)`` on failure.
     Selection rule shared with the CLI via
-    :func:`src.services.account_service.pick_default_account_phone` (#1480).
+    :func:`tg_agent.services.account_service.pick_default_account_phone` (#1480).
     """
     phone = normalize_phone(raw_phone)
     if phone:

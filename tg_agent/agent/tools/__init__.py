@@ -104,7 +104,7 @@ def build_agent_tool_registry(
     package = sys.modules[__name__]
     for module_name in TOOL_MODULE_ORDER:
         # Prefer the package attribute so tests can patch
-        # ``src.agent.tools.<name>``; fall back to a real import on first use.
+        # ``tg_agent.agent.tools.<name>``; fall back to a real import on first use.
         module = getattr(package, module_name, None)
         if module is None:
             module = importlib.import_module(f"tg_agent.agent.tools.{module_name}")

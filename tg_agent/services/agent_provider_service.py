@@ -47,7 +47,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _PYPROJECT_PATH = _PROJECT_ROOT / "pyproject.toml"
 _PROVIDER_SECRET_ACTION = "restore_key_or_reenter_secret"
 
-# Re-exported so importers keep using src.services.agent_provider_service.* (the dataclasses
+# Re-exported so importers keep using tg_agent.services.agent_provider_service.* (the dataclasses
 # and constants moved into the mixin modules in #689). __all__ marks these intentional.
 __all__ = [
     "PROVIDER_SETTINGS_KEY",

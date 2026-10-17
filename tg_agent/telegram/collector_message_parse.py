@@ -1,4 +1,4 @@
-"""Pure Telethon ``msg`` → :class:`~src.models.Message` conversion.
+"""Pure Telethon ``msg`` → :class:`~tg_agent.models.Message` conversion.
 
 Extracted from ``Collector._stream_channel_messages`` and the ``Collector._get_*``
 helper methods (#1045). Everything here is **stateless** — it depends only on the

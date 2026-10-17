@@ -44,7 +44,7 @@ class Account(BaseModel):
 
     `session_string` — секрет (хранится зашифрованным как `enc:v2:*`, если задан
     `SESSION_ENCRYPTION_KEY`); никогда не отдаётся наружу — для UI/agent есть
-    усечённая [`AccountSummary`][src.models.AccountSummary]. `is_primary`
+    усечённая [`AccountSummary`][tg_agent.models.AccountSummary]. `is_primary`
     выбирает аккаунт по умолчанию; `flood_wait_until` — момент, до которого
     `ClientPool` пропускает аккаунт из-за Telegram FLOOD_WAIT.
     """
@@ -76,10 +76,10 @@ class AccountSessionStatus(StrEnum):
 
 
 class AccountSummary(BaseModel):
-    """Безопасная для UI/agent проекция [`Account`][src.models.Account] без `session_string`.
+    """Безопасная для UI/agent проекция [`Account`][tg_agent.models.Account] без `session_string`.
 
     Несёт те же метаданные (телефон, флаги, flood-wait) плюс
-    [`session_status`][src.models.AccountSessionStatus], но без секрета сессии —
+    [`session_status`][tg_agent.models.AccountSessionStatus], но без секрета сессии —
     это форма, которую отдают наружу списки аккаунтов.
     """
 
@@ -100,7 +100,7 @@ class TelegramUserInfo(BaseModel):
     Возвращается при запросе «кто этот аккаунт»: имя/username, флаги
     primary/premium и аватар в виде data-URI (`avatar_base64`) для прямого показа
     в UI без отдельного запроса картинки. В отличие от
-    [`Account`][src.models.Account] — описательная карточка, а не носитель сессии.
+    [`Account`][tg_agent.models.Account] — описательная карточка, а не носитель сессии.
     """
 
     phone: str
@@ -118,7 +118,7 @@ class Channel(BaseModel):
     `channel_id` — Telegram-идентификатор (на него ссылаются все сайдкар-таблицы);
     `id` — первичный ключ БД (используется только в pk-операциях). Сбор —
     инкрементальный: `last_collected_id` хранит максимальный собранный message_id.
-    `is_filtered` + `filter_flags` ставит [`ChannelAnalyzer`][src.filters.analyzer]
+    `is_filtered` + `filter_flags` ставит [`ChannelAnalyzer`][tg_agent.filters.analyzer]
     (низкая уникальность, спам и т.п.) — отфильтрованные каналы пропускаются при
     сборе. `needs_review`/`review_reason` помечают канал для ручной проверки.
     `created_at` — дата создания канала в Telegram, `added_at` — когда добавлен в
@@ -243,7 +243,7 @@ class MessagesResult(BaseModel):
 
 
 class CollectionTaskStatus(StrEnum):
-    """Жизненный цикл фоновой задачи [`CollectionTask`][src.models.CollectionTask]:
+    """Жизненный цикл фоновой задачи [`CollectionTask`][tg_agent.models.CollectionTask]:
     от `PENDING` (в очереди) через `RUNNING` к терминальным
     `COMPLETED`/`FAILED`/`CANCELLED`."""
 
@@ -262,7 +262,7 @@ class CollectionTaskType(StrEnum):
     CollectionQueue). Interop-типы (`DM_REPLY`, `CHAT_ANSWER`, `FETCH_DIALOGS`,
     `FETCH_HISTORY`) фабрика только создаёт — их забирает внешний воркер
     tg_messenger через REST-claim API (см.
-    [`EXTERNAL_INTEROP_TASK_TYPES`][src.models.EXTERNAL_INTEROP_TASK_TYPES]).
+    [`EXTERNAL_INTEROP_TASK_TYPES`][tg_agent.models.EXTERNAL_INTEROP_TASK_TYPES]).
     """
 
     CHANNEL_COLLECT = "channel_collect"
@@ -301,7 +301,7 @@ EXTERNAL_INTEROP_TASK_TYPES: frozenset[CollectionTaskType] = frozenset(
 
 
 class TelegramCommandStatus(StrEnum):
-    """Жизненный цикл [`TelegramCommand`][src.models.TelegramCommand]: `PENDING`
+    """Жизненный цикл [`TelegramCommand`][tg_agent.models.TelegramCommand]: `PENDING`
     → `RUNNING` → терминальные `SUCCEEDED`/`FAILED`/`CANCELLED`."""
 
     PENDING = "pending"
@@ -351,8 +351,8 @@ class RuntimeSnapshot(BaseModel):
 # dialogs_history snapshots carry DM/private-group message text (unlike other
 # runtime_snapshots payloads, which only cache names/statuses/counters), so they
 # get a TTL other snapshot types don't need. Shared by the web-layer cache-hit
-# check (src/web/dialogs/handlers.py) and the worker-layer prune-on-write
-# (src/services/dispatcher/dialogs_mixin.py) so the two stay in lockstep
+# check (tg_agent/web/dialogs/handlers.py) and the worker-layer prune-on-write
+# (tg_agent/services/dispatcher/dialogs_mixin.py) so the two stay in lockstep
 # (cycle-review #1299 round 2/3).
 DIALOGS_HISTORY_SNAPSHOT_TTL_SECONDS = 300
 
@@ -524,7 +524,7 @@ class ChannelRating(BaseModel):
 # ---------------------------------------------------------------------------
 class JobSource(StrEnum):
     """Источник, из которого собрана строка единого jobs-вью
-    [`JobView`][src.models.JobView]: одна из четырёх разнородных таблиц
+    [`JobView`][tg_agent.models.JobView]: одна из четырёх разнородных таблиц
     фоновой работы (collection_tasks, telegram_commands, photo_*, APScheduler)."""
 
     COLLECTION_TASK = "collection_task"
@@ -552,9 +552,9 @@ class JobView(BaseModel):
     """Одна строка унифицированного read-model «работ» (#963).
 
     Приводит четыре разнородных источника
-    ([`JobSource`][src.models.JobSource]) к общей форме, чтобы панель показывала
+    ([`JobSource`][tg_agent.models.JobSource]) к общей форме, чтобы панель показывала
     всё в одной таблице: нормализованный `runtime_state`
-    ([`JobRuntimeState`][src.models.JobRuntimeState]) поверх сырого `status`,
+    ([`JobRuntimeState`][tg_agent.models.JobRuntimeState]) поверх сырого `status`,
     стабильный кросс-источниковый `id` с префиксом и человекочитаемый `summary`.
     Только для чтения — записи в исходные таблицы через эту модель не идут.
     """
@@ -720,8 +720,8 @@ class FetchHistoryTaskPayload(BaseModel):
 class CollectionTask(BaseModel):
     """Строка таблицы `collection_tasks` — единица фоновой работы.
 
-    Несёт тип ([`CollectionTaskType`][src.models.CollectionTaskType]) и статус
-    ([`CollectionTaskStatus`][src.models.CollectionTaskStatus]) плюс
+    Несёт тип ([`CollectionTaskType`][tg_agent.models.CollectionTaskType]) и статус
+    ([`CollectionTaskStatus`][tg_agent.models.CollectionTaskStatus]) плюс
     типизированный `payload` (union нагрузок под конкретный тип задачи, обычный
     dict — для interop-типов). `last_progress_at` отличает реально застрявший
     сбор от упавшего воркера; `result_payload` пишет внешний interop-воркер.
@@ -817,7 +817,7 @@ class PipelineNodeType(StrEnum):
 
 
 class PipelineNode(BaseModel):
-    """Узел графа пайплайна: тип ([`PipelineNodeType`][src.models.PipelineNodeType]),
+    """Узел графа пайплайна: тип ([`PipelineNodeType`][tg_agent.models.PipelineNodeType]),
     имя, произвольный `config` под конкретный тип и `position` для отрисовки в
     редакторе графа."""
 
@@ -882,7 +882,7 @@ class PipelineGraph(BaseModel):
 
 class PipelineTemplate(BaseModel):
     """Шаблон графа пайплайна для быстрого старта: готовый
-    [`PipelineGraph`][src.models.PipelineGraph] с именем/описанием/категорией.
+    [`PipelineGraph`][tg_agent.models.PipelineGraph] с именем/описанием/категорией.
     `is_builtin` помечает встроенные шаблоны (поставляются с приложением)."""
 
     id: int | None = None
@@ -899,8 +899,8 @@ class ContentPipeline(BaseModel):
     публикация.
 
     Задаёт модели (`llm_model`/`image_model`), режим публикации
-    ([`PipelinePublishMode`][src.models.PipelinePublishMode]) и движок
-    ([`PipelineGenerationBackend`][src.models.PipelineGenerationBackend]).
+    ([`PipelinePublishMode`][tg_agent.models.PipelinePublishMode]) и движок
+    ([`PipelineGenerationBackend`][tg_agent.models.PipelineGenerationBackend]).
     `prompt_template`/`refinement_steps` описывают LLM-цепочку, а
     `pipeline_json` — альтернативный узловой DAG (#343). `publish_times` —
     JSON-массив времён публикации; `last_generated_id` — курсор инкрементальной
@@ -971,7 +971,7 @@ class NotificationBot(BaseModel):
     """Персональный бот уведомлений, созданный через BotFather под аккаунтом.
 
     Связывает Telegram-пользователя (`tg_user_id`) с ботом (`bot_username`/
-    `bot_token`), через которого [`Notifier`][src.telegram.notifier] шлёт алерты.
+    `bot_token`), через которого [`Notifier`][tg_agent.telegram.notifier] шлёт алерты.
     """
 
     id: int = 0
@@ -1137,9 +1137,9 @@ class PhotoBatch(BaseModel):
     `phone`.
 
     Группирующая запись с режимом отправки
-    ([`PhotoSendMode`][src.models.PhotoSendMode]) и статусом
-    ([`PhotoBatchStatus`][src.models.PhotoBatchStatus]); конкретные файлы несут
-    элементы [`PhotoBatchItem`][src.models.PhotoBatchItem].
+    ([`PhotoSendMode`][tg_agent.models.PhotoSendMode]) и статусом
+    ([`PhotoBatchStatus`][tg_agent.models.PhotoBatchStatus]); конкретные файлы несут
+    элементы [`PhotoBatchItem`][tg_agent.models.PhotoBatchItem].
     """
 
     id: int | None = None
@@ -1167,7 +1167,7 @@ class PhotoBatchItem(BaseModel):
 
     Может выполняться отложенно (`schedule_at`); по факту отправки заполняется
     `telegram_message_ids`. `batch_id` связывает с
-    [`PhotoBatch`][src.models.PhotoBatch] (может быть пуст для одиночной отправки).
+    [`PhotoBatch`][tg_agent.models.PhotoBatch] (может быть пуст для одиночной отправки).
     """
 
     id: int | None = None

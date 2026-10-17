@@ -4,13 +4,13 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from tg_agent.web import deps  # noqa: F401  (re-export: tests patch src.web.routes.scheduler.deps.*)
+from tg_agent.web import deps  # noqa: F401  (re-export: tests patch tg_agent.web.routes.scheduler.deps.*)
 from tg_agent.web.routes.channel_collection import bulk_enqueue_msg  # noqa: F401  (test monkeypatch target)
 from tg_agent.web.scheduler import forms, handlers  # noqa: F401  (forms re-exported for back-compat)
 
-# Heavy context construction lives in src/web/scheduler/context.py and the
-# endpoint orchestration in src/web/scheduler/handlers.py (#654). The helpers
-# below are re-exported here for backward compatibility: src/web/search imports
+# Heavy context construction lives in tg_agent/web/scheduler/context.py and the
+# endpoint orchestration in tg_agent/web/scheduler/handlers.py (#654). The helpers
+# below are re-exported here for backward compatibility: tg_agent/web/search imports
 # `_is_worker_alive` from this module (function-level), and several test modules
 # import the pure presentation helpers + monkeypatch `_is_worker_alive` via this
 # path.
@@ -56,7 +56,7 @@ def _legacy_tasks_redirect(request: Request) -> Response:
     return RedirectResponse(url=target, status_code=303)
 
 # Re-exported for backward compatibility (importers/tests reach these via
-# src.web.routes.scheduler). Listed here so the imports above are not flagged
+# tg_agent.web.routes.scheduler). Listed here so the imports above are not flagged
 # as unused.
 __all__ = [
     "router",

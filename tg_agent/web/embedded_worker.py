@@ -10,7 +10,7 @@ forever.
 
 Normal `python -m tg_agent.main serve` attaches the worker runtime to the same
 process: the lifespan hook spawns an asyncio task that is the exact moral
-equivalent of `src.runtime.worker._run_worker_async`, just running inside the
+equivalent of `tg_agent.runtime.worker._run_worker_async`, just running inside the
 web loop instead of its own `asyncio.run()`. Production split deployments can
 use `python -m tg_agent.main serve --no-worker` plus a separately launched worker.
 Both modes keep sharing the SQLite file and `runtime_snapshots` rows as before.

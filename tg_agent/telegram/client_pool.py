@@ -5,17 +5,17 @@
 Issue #1046 split its responsibilities into three composition mixins, each owning
 one cohesive cluster of the old class:
 
-* :class:`~src.telegram.pool_dialogs.DialogsMixin` — dialog cache, entity
+* :class:`~tg_agent.telegram.pool_dialogs.DialogsMixin` — dialog cache, entity
   resolution, channel↔phone routing, dialog fetch (``resolve_channel`` /
   ``fetch_channel_meta`` / ``get_dialogs_for_phone`` / ``warm_all_dialogs`` …).
-* :class:`~src.telegram.pool_lifecycle.ClientLifecycleMixin` — connection
+* :class:`~tg_agent.telegram.pool_lifecycle.ClientLifecycleMixin` — connection
   lifecycle, lease acquisition/release, auth/StringSession wiring, primary
   selection (``initialize`` / ``add_client`` / ``get_available_client`` …).
-* :class:`~src.telegram.pool_flood.FloodRotationMixin` — generic + premium
+* :class:`~tg_agent.telegram.pool_flood.FloodRotationMixin` — generic + premium
   flood-wait reporting and availability queries (``report_flood`` /
   ``get_premium_client`` / ``next_resolve_capable_at`` …).
 
-plus the pre-existing :class:`~src.telegram.resolve_guard.ResolveGuardMixin`
+plus the pre-existing :class:`~tg_agent.telegram.resolve_guard.ResolveGuardMixin`
 (live-username-resolve FloodWait guard, #785/#790).
 
 The decomposition is behaviour-preserving: every method runs on the same single

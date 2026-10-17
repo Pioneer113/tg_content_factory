@@ -329,7 +329,7 @@ class AccountsRepository:
             raise AccountSessionDecryptError(phone=phone, status=status) from exc
 
     async def get_account_summaries(self, active_only: bool = False) -> list[AccountSummary]:
-        """Список аккаунтов как безопасные [`AccountSummary`][src.models.AccountSummary] (без секрета сессии).
+        """Список аккаунтов как безопасные [`AccountSummary`][tg_agent.models.AccountSummary] (без секрета сессии).
 
         Сессия не расшифровывается — вместо этого классифицируется её статус
         (`session_status`), так что нечитаемый аккаунт всё равно отображается.
@@ -353,7 +353,7 @@ class AccountsRepository:
         ]
 
     def _account_from_row(self, row, session_string: str) -> Account:
-        """Build an [`Account`][src.models.Account] from a row + pre-resolved session.
+        """Build an [`Account`][tg_agent.models.Account] from a row + pre-resolved session.
 
         Shared by the listing paths that decrypt every row's session up front
         (`get_accounts`, `get_live_usable_accounts`); the caller decides whether
@@ -373,11 +373,11 @@ class AccountsRepository:
         )
 
     async def get_accounts(self, active_only: bool = False) -> list[Account]:
-        """Полные [`Account`][src.models.Account] с расшифрованными сессиями для живого использования.
+        """Полные [`Account`][tg_agent.models.Account] с расшифрованными сессиями для живого использования.
 
         В отличие от :meth:`get_account_summaries`, расшифровывает каждую сессию —
         нечитаемая сессия поднимает
-        [`AccountSessionDecryptError`][src.database.repositories.accounts.AccountSessionDecryptError]
+        [`AccountSessionDecryptError`][tg_agent.database.repositories.accounts.AccountSessionDecryptError]
         (если нужен отказоустойчивый вариант, фильтрующий битые аккаунты, см.
         :meth:`get_live_usable_accounts`). Порядок: primary первым, затем по id.
         """

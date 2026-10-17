@@ -1,7 +1,7 @@
 """Mini-DSL parser for pipeline node specs.
 
 Parses ``type:key=value,key=value`` strings into :class:`NodeSpec` objects
-used by :mod:`src.cli.graph_builder` to assemble DAG pipelines on the CLI.
+used by :mod:`tg_agent.cli.graph_builder` to assemble DAG pipelines on the CLI.
 
 Grammar (informal)::
 

@@ -1,7 +1,7 @@
 """Shared constants for the Telegram command dispatcher and its mixins (#1047).
 
 These live in their own module so both the facade
-(``src.services.telegram_command_dispatcher``) and the per-domain mixins can
+(``tg_agent.services.telegram_command_dispatcher``) and the per-domain mixins can
 import them without a circular dependency. The facade re-exports them at module
 level so historical patch points like ``mod.REACTION_MIN_INTERVAL_FLOOR_SEC``
 keep resolving.

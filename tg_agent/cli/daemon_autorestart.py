@@ -1,6 +1,6 @@
 """Auto-restart the managed worker daemon when the checked-out code is newer.
 
-The CLI works on src/ but the running daemon keeps the old build until someone
+The CLI works on tg_agent/ but the running daemon keeps the old build until someone
 remembers ``python -m tg_agent.main restart``. This module holds the restart-decision
 logic; ``scripts/restart_daemon_if_stale.py`` is the entry point wired as a
 PostToolUse (Bash) hook in the project ``.claude/settings.local.json``:

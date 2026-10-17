@@ -19,7 +19,7 @@ class PipelineTemplatesRepository:
 
     Шаблоны бывают встроенные (`is_builtin`, поставляются с приложением и
     досеиваются через `ensure_builtins`) и пользовательские; из шаблона
-    создаётся готовый [`ContentPipeline`][src.models.ContentPipeline].
+    создаётся готовый [`ContentPipeline`][tg_agent.models.ContentPipeline].
     """
 
     def __init__(

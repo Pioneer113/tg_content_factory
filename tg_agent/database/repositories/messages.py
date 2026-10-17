@@ -8,7 +8,7 @@ RRF) и агрегаты для аналитики по нормализован
 
 Замечания по производительности: поиск отдаёт страницу с нижней оценкой total
 вместо точного ``COUNT(*)`` (см.
-[`MessageSearchPage`][src.database.repositories.messages.MessageSearchPage], #766);
+[`MessageSearchPage`][tg_agent.database.repositories.messages.MessageSearchPage], #766);
 фильтр отсекает отфильтрованные каналы JOIN-ом на ``channels`` по ``channel_id``
 (конвенция ключей, CLAUDE.md).
 """
@@ -728,9 +728,10 @@ class MessagesRepository:
         return [int(row["id"]) for row in rows]
 
     async def search_messages(self, params: SearchParams) -> MessageSearchPage:
-        """Полнотекстовый поиск (FTS5, при недоступности — LIKE) по фильтрам [`SearchParams`][src.models.SearchParams].
+        """Полнотекстовый поиск (FTS5, при недоступности — LIKE) по фильтрам
+        [`SearchParams`][tg_agent.models.SearchParams].
 
-        Возвращает [`MessageSearchPage`][src.database.repositories.messages.MessageSearchPage]
+        Возвращает [`MessageSearchPage`][tg_agent.database.repositories.messages.MessageSearchPage]
         с нижней оценкой total (limit+1-проба вместо точного COUNT, #766), новые
         первыми. Отфильтрованные каналы исключаются, если не задан ``include_filtered``.
         """

@@ -57,7 +57,7 @@ def serve_web(config_path: str, *, web_pass: str | None = None, no_worker: bool 
         )
 
     app = create_app(config)
-    # The lifespan hook in src/web/app.py spawns an embedded Telegram worker
+    # The lifespan hook in tg_agent/web/app.py spawns an embedded Telegram worker
     # unless this flag is set. By default `serve` owns the worker too;
     # `--no-worker` is for split deployments where `python -m tg_agent.main worker`
     # runs in its own process / container.

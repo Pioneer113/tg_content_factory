@@ -32,7 +32,7 @@ class _ImageResultLike(Protocol):
 
 # Default directory where binary / base64 image results are persisted.
 # Must match where the web app serves generated images from — ``DATA_IMAGE_DIR``
-# (``data/image``) mounted at ``/data/image`` in src/web/assembly.py. Writing
+# (``data/image``) mounted at ``/data/image`` in tg_agent/web/assembly.py. Writing
 # elsewhere (the old ``data/images``) made saved files unreachable over HTTP, so
 # gpt-image-1 / HuggingFace results rendered as broken images in a no-S3 deploy.
 DEFAULT_IMAGE_OUTPUT_DIR = "data/image"

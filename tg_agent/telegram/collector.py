@@ -2,7 +2,7 @@
 
 The public import path stays stable: ``from tg_agent.telegram.collector import Collector``.
 The hot collection, stream, stats, and cancellation behaviours live in
-``src.telegram.collector_mixins`` and continue to operate on this single
+``tg_agent.telegram.collector_mixins`` and continue to operate on this single
 ``Collector`` instance/state.
 """
 

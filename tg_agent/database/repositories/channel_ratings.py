@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class ChannelRatingsRepository:
     """Двухосевые вердикты о каналах (полезность × жанр), один на канал (#966).
 
-    Хранит результат [`ChannelRating`][src.models.ChannelRating]: машинная
+    Хранит результат [`ChannelRating`][tg_agent.models.ChannelRating]: машинная
     классификация (useful/genre/confidence/reason + emoji-trash) плюс
     человеческий сигнал `flag_count`. Запись — upsert по `channel_id`, при этом
     `flag_count` намеренно НЕ затирается машинной переклассификацией (она строит

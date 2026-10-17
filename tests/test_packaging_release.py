@@ -6,6 +6,8 @@ import tomllib
 from pathlib import Path
 from zipfile import ZipFile
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -41,6 +43,8 @@ def _build_wheel(tmp_path: Path) -> Path:
     return wheels[0]
 
 
+@pytest.mark.integration
+@pytest.mark.mutmut_skip
 def test_wheel_ships_tg_agent_package_not_src(tmp_path: Path) -> None:
     """#1448 regression guard: the wheel ships the tg_agent package, not src.
 
@@ -48,6 +52,10 @@ def test_wheel_ships_tg_agent_package_not_src(tmp_path: Path) -> None:
     the import name collide with any other project's ``src`` and produced the
     ``tg-agent --version`` -> ``src 0.2.3`` confusion. Fails if the packaged
     import name ever drifts back to something generic.
+
+    Explicit level/mutation markers: this spawns ``pip wheel`` out-of-process
+    with build isolation (PyPI network, tens of seconds) — outside the unit
+    contract and excluded from mutation runs (mutmut_skip semantics).
     """
     wheel = _build_wheel(tmp_path)
 

@@ -43,7 +43,7 @@ def _build_deletion_service(db):
     hard_delete_channels needs a ChannelService to delete channels; purge does
     not (it only touches messages via db). ChannelService.delete() works with a
     null pool/queue (pure DB op), matching the CLI's _build_deletion_service
-    (src/cli/commands/filter.py). Without channel_service the tool always
+    (tg_agent/cli/commands/filter.py). Without channel_service the tool always
     raised RuntimeError (#1290).
     """
     from typing import cast

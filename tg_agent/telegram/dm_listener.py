@@ -87,7 +87,7 @@ class DmListener:
     """Long-lived worker task: listen for incoming DMs on pool clients.
 
     Follows the ``start()``/``stop()``/``_stop_event`` pattern of
-    :class:`~src.services.telegram_command_dispatcher.TelegramCommandDispatcher`.
+    :class:`~tg_agent.services.telegram_command_dispatcher.TelegramCommandDispatcher`.
     ``stop()`` must run before ``pool.disconnect_all()`` so handlers are removed
     from live clients (``stop_container`` guarantees this order).
     """

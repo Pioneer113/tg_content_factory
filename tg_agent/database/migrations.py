@@ -635,7 +635,7 @@ async def _ensure_initial_analyze(db: aiosqlite.Connection) -> None:
 
     try:
         logger.info("Running one-off ANALYZE to seed planner statistics (sampled)")
-        # 400 mirrors ConnectionTuning.analysis_limit (src/database/connection.py) —
+        # 400 mirrors ConnectionTuning.analysis_limit (tg_agent/database/connection.py) —
         # the same sampling bound used by PRAGMA optimize on connection close.
         await db.execute("PRAGMA analysis_limit=400")
         await db.execute("ANALYZE")

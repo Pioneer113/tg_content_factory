@@ -808,7 +808,7 @@ class TelegramActionService:
     ) -> dict:
         """Transcribe a voice note / video note (#1545).
 
-        Thin orchestration around :mod:`src.telegram.transcription`: resolve the
+        Thin orchestration around :mod:`tg_agent.telegram.transcription`: resolve the
         chat + message, guard the media type, then run the cache-first engine
         call (cache lives in the project ``transcripts`` table). ``engine=
         'telegram'`` needs a Premium account, so without an explicit phone the

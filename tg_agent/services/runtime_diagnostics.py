@@ -19,7 +19,7 @@ from datetime import datetime, timezone
 HEARTBEAT_INTERVAL_SEC = 5.0
 
 # The worker publishes `worker_heartbeat` every ~5s
-# (src/runtime/worker.py:_publish_snapshots). Anything older than this means the
+# (tg_agent/runtime/worker.py:_publish_snapshots). Anything older than this means the
 # worker process is effectively down. 60s = 12 missed beats of slack.
 WORKER_HEARTBEAT_STALE_AFTER_SEC = 60.0
 

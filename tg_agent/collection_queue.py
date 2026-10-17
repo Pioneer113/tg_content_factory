@@ -32,7 +32,7 @@ from tg_agent.telegram.collector_types import unknown_tl_type_note
 logger = logging.getLogger(__name__)
 
 # Read-path lock errors reach us as a RAW sqlite3.OperationalError, not
-# DatabaseBusyError: repositories read through ReadPoolProxy.execute (src/database/
+# DatabaseBusyError: repositories read through ReadPoolProxy.execute (tg_agent/database/
 # pool.py), which calls conn.execute() directly and never runs _with_busy_retry —
 # the only place that normalises a busy lock into DatabaseBusyError. So a busy read
 # must be matched by BOTH type and message. Messages mirror facade._SQLITE_BUSY_MESSAGES.

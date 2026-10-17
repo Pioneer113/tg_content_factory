@@ -4,7 +4,7 @@ Extracted from the ``ClientPool`` monolith as a composition mixin. Owns the two
 flood-wait surfaces the pool exposes:
 
 * **generic account flood-wait** — persisted in ``accounts.flood_wait_until`` and
-  honoured by :class:`~src.telegram.account_lease_pool.AccountLeasePool` during
+  honoured by :class:`~tg_agent.telegram.account_lease_pool.AccountLeasePool` during
   account selection; reported via :meth:`FloodRotationMixin.report_flood`.
 * **premium-only flood-wait** — kept in-memory (``_premium_flood_wait_until``)
   so a premium-search flood on one account does not freeze its generic use.

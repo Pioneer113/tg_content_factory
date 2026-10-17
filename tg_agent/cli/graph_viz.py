@@ -1,4 +1,4 @@
-"""ASCII visualisation for :class:`~src.models.PipelineGraph`.
+"""ASCII visualisation for :class:`~tg_agent.models.PipelineGraph`.
 
 Renders a pipeline DAG as a vertical text diagram suitable for terminal output.
 """

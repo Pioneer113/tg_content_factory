@@ -1,7 +1,7 @@
 """Pipeline graph builder with auto-wiring.
 
-Assembles a :class:`~src.models.PipelineGraph` from a list of
-:class:`~src.cli.node_dsl.NodeSpec` objects plus optional source/target/edge
+Assembles a :class:`~tg_agent.models.PipelineGraph` from a list of
+:class:`~tg_agent.cli.node_dsl.NodeSpec` objects plus optional source/target/edge
 hints, applying auto-wiring rules:
 
 1. ``set_sources()`` auto-creates a *source* node (or injects into existing).
