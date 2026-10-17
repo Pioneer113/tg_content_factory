@@ -317,11 +317,12 @@ class SchedulerManager:
     async def trigger_now(self) -> dict:
         return await self._run_collection(background=False)
 
-    async def trigger_background(self) -> None:
-        """Fire-and-forget collection run."""
+    async def trigger_background(self) -> bool:
+        """Fire-and-forget collection run; False when one is already in flight."""
         if self._bg_task and not self._bg_task.done():
-            return
+            return False
         self._bg_task = asyncio.create_task(self._run_collection(background=False))
+        return True
 
     async def trigger_warm_background(self) -> None:
         """Fire-and-forget dialog cache warm run."""

@@ -78,14 +78,16 @@ required, managed via a PID file (`tg-agent stop` halts it). Check scheduler sta
 `tg-agent scheduler status`.
 
 While the daemon runs, most `dialogs` actions (`send`, `forward`, `react`, `refresh`, …),
-`channel collect`, `collect --channel-id`, `channel stats` and `scheduler start` are handed
+`channel collect`, `collect --channel-id`, `channel stats` and the scheduler mutations
+(`scheduler start`, `trigger`, `task-cancel`, `clear-pending`) are handed
 off to the worker automatically — the CLI queues them (or writes the scheduler setting and
-pokes the worker) instead of connecting directly; the command returns "queued", the worker
+pokes the worker) instead of connecting directly; the command returns "queued" with the
+command id, the worker
 does the Telegram work. Commands that must open their own connection and have no
 queue equivalent (`messages read --live`, `dialogs read`, `dialogs download-media`)
 are **refused** after a short wait (`SessionLockError ... held by PID N`): Telegram
 kills sessions seen from two connections at once. Stop the daemon (`tg-agent stop`) for
-those. Details: [reference.md](reference.md) → "Session lock".
+those. Details: [reference.md](reference.md) → "Session lock" and "scheduling & background".
 
 ## Legacy surfaces — do not use for integration
 

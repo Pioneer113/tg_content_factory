@@ -42,11 +42,15 @@ class SchedulerCommandsMixin(_Base):
         return {"started": True}
 
     async def _handle_scheduler_trigger_collection(self, payload: dict[str, Any]) -> dict[str, Any]:
-        """One-shot enqueue of all channels on the live worker (#1568)."""
+        """One-shot enqueue of all channels on the live worker (#1568).
+
+        ``started=False`` means a background run was already in flight — the
+        command reports that instead of claiming success.
+        """
         if self._scheduler is None:
             raise RuntimeError("scheduler_unavailable")
-        await self._scheduler.trigger_background()
-        return {"started": True}
+        started = await self._scheduler.trigger_background()
+        return {"started": started}
 
     async def _handle_collection_cancel_task(self, payload: dict[str, Any]) -> dict[str, Any]:
         """Interrupt a live collection task, not just flip its DB status (#1568).

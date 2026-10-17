@@ -375,11 +375,21 @@ async def test_scheduler_trigger_warm():
 
 async def test_scheduler_trigger_collection():
     s = MagicMock()
-    s.trigger_background = AsyncMock()
+    s.trigger_background = AsyncMock(return_value=True)
     d = _dispatcher(scheduler=s)
     r = await d._handle_scheduler_trigger_collection({})
     assert r["started"] is True
     s.trigger_background.assert_awaited_once()
+
+
+async def test_scheduler_trigger_collection_already_running_reports_false():
+    # Review #1578: trigger_background no-ops while a run is in flight — the
+    # command must report that, not claim success.
+    s = MagicMock()
+    s.trigger_background = AsyncMock(return_value=False)
+    d = _dispatcher(scheduler=s)
+    r = await d._handle_scheduler_trigger_collection({})
+    assert r["started"] is False
 
 
 async def test_scheduler_trigger_collection_no_scheduler():
