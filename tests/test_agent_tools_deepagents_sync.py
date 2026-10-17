@@ -408,6 +408,7 @@ class TestDeepagentsSyncSearchMessages:
             channel_username="readable_user",
             text="Labeled message",
             date="2025-01-01",
+            topic_id=None,
         )
         mock_db.search_messages = AsyncMock(return_value=MessageSearchPage(messages=[msg], total=1))
         tools = build_deepagents_tools(mock_db)
@@ -428,6 +429,7 @@ class TestDeepagentsSyncSearchMessages:
             channel_username=None,
             text="Fallback message",
             date="2025-01-01",
+            topic_id=None,
         )
         mock_db.search_messages = AsyncMock(return_value=MessageSearchPage(messages=[msg], total=1))
         tools = build_deepagents_tools(mock_db)
