@@ -9,9 +9,31 @@ import pytest
 from src.services.quality_scoring_service import QualityScore, QualityScoringService
 
 # mutmut_skip is applied PER TEST below: only the tests that drive score_content
-# through the real default provider (env-key LLM calls, slow/flaky offline) are
-# excluded — the pure-logic tests stay in mutation runs because they hold the
-# only killers for threshold-boundary mutants.
+# through the provider plumbing are excluded from mutation runs — the pure-logic
+# tests stay in mutation runs because they hold the only killers for
+# threshold-boundary mutants. Network-wise the module is pinned offline by the
+# autouse offline_default_provider fixture (#1445): score_content can never reach
+# a live provider, marker or not.
+
+
+@pytest.fixture(autouse=True)
+def offline_default_provider(monkeypatch):
+    """Pin build_provider_service to env={} so the registry holds only the offline stub.
+
+    A ``QualityScoringService`` built without provider_service/config snapshots the
+    process environment on every ``score_content`` call; any ambient LLM key
+    (OPENAI_API_KEY, ZAI_API_KEY, …) then registers a live provider and the call
+    leaves the process (#1445 — 429/connection flakes in the full suite). ``env={}``
+    is the deterministic keyless path these assertions were written against.
+    """
+    import src.services.provider_service as provider_service_module
+
+    real_build = provider_service_module.build_provider_service
+
+    async def build_without_env(db=None, config=None, env=None):
+        return await real_build(db, config, env={})
+
+    monkeypatch.setattr(provider_service_module, "build_provider_service", build_without_env)
 
 
 @pytest.fixture
