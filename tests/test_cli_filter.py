@@ -573,6 +573,28 @@ def test_filter_flag_set_and_unset(tmp_path, cli_init_patch, capsys):
         asyncio.run(seed.close())
 
 
+def test_filter_flag_unset_without_flag_is_noop(tmp_path, cli_init_patch, capsys):
+    """Холостой unset (#1573): флага не было — CLI не рапортует изменение."""
+    db_path = str(tmp_path / "filter_flag_noop.db")
+    seed = Database(db_path, session_encryption_secret="test-session-encryption-key")
+    asyncio.run(seed.initialize())
+    try:
+        pk = asyncio.run(
+            seed.add_channel(Channel(channel_id=900_102, title="FlagCh3", is_filtered=False))
+        )
+
+        with cli_init_patch(seed, _FILTER_INIT_DB_TARGET, fresh_database=True):
+            from src.cli.commands.filter import run
+
+            run(_ns(filter_action="flag", pk=pk, set_flag=None, unset_flag="manual"))
+
+        out = capsys.readouterr().out
+        assert "was not set; nothing changed" in out
+        assert "back under auto verdicts" not in out
+    finally:
+        asyncio.run(seed.close())
+
+
 def test_filter_flag_invalid_flag_rejected(tmp_path, cli_init_patch, capsys):
     """Чужие флаги анализатора руками не ставятся (#1499)."""
     db_path = str(tmp_path / "filter_flag_invalid.db")

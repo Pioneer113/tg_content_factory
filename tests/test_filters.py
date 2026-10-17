@@ -1668,6 +1668,24 @@ class TestApplyWhitelist:
         assert rows[5042][0] == 0
         assert WHITELIST_FLAG not in (rows[5042][1] or "")
 
+    async def test_stale_whitelist_flag_removed_after_tagging(self, db, raw_db):
+        # Сценарий ревью #1573: первый прогон фильтрует (no_author_content),
+        # затем канал тегируют — второй прогон снимает фильтр И stale-метку
+        # «канал без тега», иначе она лжёт куратору навсегда.
+        await _insert_channel(raw_db, 5061)
+        analyzer = ChannelAnalyzer(db)
+        await analyzer.apply_whitelist()
+
+        await _tag_channel(raw_db, 5061, AUTHOR_CONTENT_TAG)
+        await analyzer.apply_whitelist()
+
+        cur = await raw_db.execute(
+            "SELECT is_filtered, filter_flags FROM channels WHERE channel_id = 5061"
+        )
+        is_filtered, flags = await cur.fetchone()
+        assert is_filtered == 0
+        assert WHITELIST_FLAG not in (flags or "")
+
     async def test_regular_apply_clears_whitelist_flag(self, db, raw_db):
         # Whitelist — явный режим: обычный blacklist-цикл (reset→apply) сносит
         # no_author_content и возвращает канал под авто-вердикты (семантика
@@ -1732,7 +1750,8 @@ class TestMergeFilterFlag:
         assert (is_filtered, origin, flags) == (1, "auto", "title_changed")
 
     async def test_unset_absent_flag_is_noop(self, db, raw_db):
-        # Холостой unset не должен снимать чужое human-решение «не фильтровать».
+        # Холостой unset не должен снимать чужое human-решение «не фильтровать»;
+        # caller'у сообщается no-op (None), чтобы CLI не рапортовал ложное изменение.
         await _insert_channel(raw_db, 6003)
         await raw_db.execute(
             "UPDATE channels SET is_filtered = 0, filtered_origin = 'human', "
@@ -1743,7 +1762,7 @@ class TestMergeFilterFlag:
 
         applied = await db.repos.channels.merge_filter_flag(pk, "manual", add=False)
 
-        assert applied is True
+        assert applied is None
         cur = await raw_db.execute(
             "SELECT is_filtered, filtered_origin, filter_flags FROM channels WHERE id = ?",
             (pk,),

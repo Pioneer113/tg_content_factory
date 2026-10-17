@@ -545,11 +545,14 @@ class ChannelAnalyzer:
             for ch in channels:
                 old_flags = {f.strip() for f in (ch.filter_flags or "").split(",") if f.strip()}
                 if ch.id in trusted_pks:
-                    # Доверие: снять авто-фильтр; human-вердикт «фильтровать» не трогаем.
+                    # Доверие: снять авто-фильтр; human-вердикт «фильтровать» не
+                    # трогаем. Stale WHITELIST_FLAG снимается: иначе после
+                    # «фильтр → тегирование → повторный whitelist» метка
+                    # «канал без тега» остаётся навсегда и лжёт куратору (#1573).
                     await conn.execute(
                         "UPDATE channels SET is_filtered = 0, filter_flags = ? "
                         "WHERE id = ? AND is_filtered = 1 AND filtered_origin != 'human'",
-                        (",".join(sorted(old_flags)) or None, ch.id),
+                        (",".join(sorted(old_flags - {WHITELIST_FLAG})) or None, ch.id),
                     )
                 elif ch.filtered_origin == "human":
                     continue

@@ -402,16 +402,17 @@ class ChannelsRepository:
         )
         await write_conn.execute(sql, (flags, pk))
 
-    async def merge_filter_flag(self, pk: int, flag: str, *, add: bool) -> bool:
+    async def merge_filter_flag(self, pk: int, flag: str, *, add: bool) -> bool | None:
         """Добавить/снять операторский sticky-флаг (#1499), не трогая остальные.
 
         add — вердикт «фильтровать вручную»: is_filtered=1 + filtered_origin='human'
         (авто-reset/apply его не сносят, sticky-скан apply_filters подхватывает).
-        unset — снять только flag; если флага не было — no-op без смены origin
-        (чтобы не разблокировать чужое human-решение «не фильтровать»), иначе
-        filtered_origin='auto' — канал возвращается под авто-вердикты, is_filtered
-        пересчитает следующий apply. Read-modify-write внутри Database.transaction()
-        (#569). False — канал не найден.
+        unset — снять только flag; если флага не было — холостой no-op без смены
+        origin (чтобы не разблокировать чужое human-решение «не фильтровать»),
+        иначе filtered_origin='auto' — канал возвращается под авто-вердикты,
+        is_filtered пересчитает следующий apply. Read-modify-write внутри
+        Database.transaction() (#569). Результат: True — изменение применено,
+        False — канал не найден, None — холостой unset (менять нечего).
         """
         assert self._database is not None, (
             "ChannelsRepository.merge_filter_flag requires a Database reference"
@@ -431,7 +432,7 @@ class ChannelsRepository:
                 )
             else:
                 if flag not in flags:
-                    return True
+                    return None
                 flags.discard(flag)
                 await conn.execute(
                     "UPDATE channels SET filtered_origin = 'auto', filter_flags = ? "

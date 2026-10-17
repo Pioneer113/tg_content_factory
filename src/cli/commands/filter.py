@@ -254,8 +254,10 @@ async def flag_impl(
     _, db = await runtime.init_db(config_path)
     try:
         applied = await db.repos.channels.merge_filter_flag(pk, flag, add=action == "set")
-        if not applied:
+        if applied is False:
             print(f"Channel pk={pk} not found.")
+        elif applied is None:
+            print(f"Channel pk={pk}: flag '{flag}' was not set; nothing changed.")
         elif action == "set":
             print(f"Channel pk={pk}: sticky flag '{flag}' set (is_filtered=1, origin=human).")
         else:
