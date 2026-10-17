@@ -470,7 +470,7 @@ def register(db, client_pool, embedding_service, **kwargs):
                 return _text_response(f"Топики для канала {channel_id} не найдены.")
             lines = [f"Топики канала {channel_id} ({len(topics)}):"]
             for t in topics:
-                lines.append(f"- id={t['topic_id']}: {t['title']}")
+                lines.append(f"- id={t['id']}: {t['title']}")
             return _text_response("\n".join(lines))
         except Exception as e:
             return _text_response(f"Ошибка получения топиков: {e}")

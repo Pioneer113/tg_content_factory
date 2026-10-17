@@ -176,7 +176,9 @@ class Message(BaseModel):
     хранит спаны форматирования (`MessageEntity*`, JSON) поверх
     гарантированно-plain `text` (#1547). `detected_lang`
     и `translation_*` заполняет слой перевода. `channel_title`/`channel_username`
-    — денормализованные поля для вывода без JOIN (заполняются при чтении).
+    — денормализованные поля для вывода без JOIN (заполняются при чтении);
+    `topic_title` — то же для заголовков форум-топиков из кэша `forum_topics`
+    (#1552), ``None`` для не-форумных сообщений и неизвестных топиков.
     """
 
     id: int | None = None
@@ -195,6 +197,7 @@ class Message(BaseModel):
     service_action_payload_json: str | None = None
     sender_kind: str | None = None
     topic_id: int | None = None
+    topic_title: str | None = None
     reactions_json: str | None = None
     entities_json: str | None = None
     views: int | None = None

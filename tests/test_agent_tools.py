@@ -74,12 +74,14 @@ class TestSearchMessagesTool:
                 sender_first_name="John",
                 sender_last_name="Doe",
                 sender_username="jdoe",
+                topic_id=None,
             ),
             SimpleNamespace(
                 channel_id=200,
                 message_id=2,
                 text="Another test message",
                 date="2025-01-02",
+                topic_id=None,
             ),
         ]
         mock_db.search_messages = AsyncMock(return_value=MessageSearchPage(messages=mock_messages, total=2))
@@ -104,6 +106,7 @@ class TestSearchMessagesTool:
                 message_id=1,
                 text="Labeled message",
                 date="2025-01-01",
+                topic_id=None,
             ),
         ]
         mock_db.search_messages = AsyncMock(return_value=MessageSearchPage(messages=mock_messages, total=1))
@@ -126,6 +129,7 @@ class TestSearchMessagesTool:
                 message_id=1,
                 text="Fallback message",
                 date="2025-01-01",
+                topic_id=None,
             ),
         ]
         mock_db.search_messages = AsyncMock(return_value=MessageSearchPage(messages=mock_messages, total=1))
@@ -142,7 +146,7 @@ class TestSearchMessagesTool:
         """Tool truncates message text to 300 chars."""
         long_text = "x" * 500
         mock_messages = [
-            SimpleNamespace(channel_id=100, message_id=1, text=long_text, date="2025-01-01"),
+            SimpleNamespace(channel_id=100, message_id=1, text=long_text, date="2025-01-01", topic_id=None),
         ]
         mock_db.search_messages = AsyncMock(return_value=MessageSearchPage(messages=mock_messages, total=1))
         handlers = _get_tool_handlers(mock_db)
@@ -158,7 +162,7 @@ class TestSearchMessagesTool:
     async def test_none_text_handled(self, mock_db):
         """Tool handles messages with None text without crashing."""
         mock_messages = [
-            SimpleNamespace(channel_id=100, message_id=1, text=None, date="2025-01-01"),
+            SimpleNamespace(channel_id=100, message_id=1, text=None, date="2025-01-01", topic_id=None),
         ]
         mock_db.search_messages = AsyncMock(return_value=MessageSearchPage(messages=mock_messages, total=1))
         handlers = _get_tool_handlers(mock_db)
@@ -212,6 +216,7 @@ class TestSemanticSearchTool:
                 message_id=1,
                 text="Semantic result",
                 date="2025-01-01",
+                topic_id=None,
             ),
         ]
         mock_db.search_semantic_messages = AsyncMock(return_value=(mock_messages, 1))

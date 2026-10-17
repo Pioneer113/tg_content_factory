@@ -62,7 +62,7 @@ class TestDeepagentsSyncSearchMessages:
         assert "Ничего не найдено" in result
 
     def test_with_results(self, mock_db):
-        msg = SimpleNamespace(date="2026-01-01", channel_id=10, text="hello world")
+        msg = SimpleNamespace(date="2026-01-01", channel_id=10, text="hello world", topic_id=None)
         mock_db.search_messages = AsyncMock(return_value=MessageSearchPage(messages=[msg], total=1))
         tool_map = _build_sync_tools(mock_db)
         result = tool_map["search_messages"]("hello")
@@ -77,7 +77,7 @@ class TestDeepagentsSyncSearchMessages:
 
     def test_long_message_truncated(self, mock_db):
         long_text = "x" * 500
-        msg = SimpleNamespace(date="2026-01-01", channel_id=5, text=long_text)
+        msg = SimpleNamespace(date="2026-01-01", channel_id=5, text=long_text, topic_id=None)
         mock_db.search_messages = AsyncMock(return_value=MessageSearchPage(messages=[msg], total=1))
         tool_map = _build_sync_tools(mock_db)
         result = tool_map["search_messages"]("x")
@@ -113,7 +113,7 @@ class TestDeepagentsSyncSemanticSearch:
     def test_with_results(self, mock_db):
         svc_mock = MagicMock()
         svc_mock.embed_query = AsyncMock(return_value=[0.1, 0.2])
-        msg = SimpleNamespace(date="2026-01-01", channel_id=3, text="semantic content")
+        msg = SimpleNamespace(date="2026-01-01", channel_id=3, text="semantic content", topic_id=None)
         mock_db.search_semantic_messages = AsyncMock(return_value=([msg], 1))
         with patch("src.services.embedding_service.EmbeddingService", return_value=svc_mock):
             tool_map = _build_sync_tools(mock_db)

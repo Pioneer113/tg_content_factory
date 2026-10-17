@@ -79,7 +79,7 @@ class TestSearchTelegramTool:
         fake_result = SimpleNamespace(
             query="cats",
             messages=[
-                SimpleNamespace(channel_id=100, message_id=1, text="Cats are great", date="2025-01-01")
+                SimpleNamespace(channel_id=100, message_id=1, text="Cats are great", date="2025-01-01", topic_id=None)
             ],
             total=1,
             error=None,
@@ -177,7 +177,7 @@ class TestSearchMyChatsTool:
         fake_result = SimpleNamespace(
             query="hello",
             messages=[
-                SimpleNamespace(channel_id=0, message_id=5, text="Hello world", date="2025-03-01")
+                SimpleNamespace(channel_id=0, message_id=5, text="Hello world", date="2025-03-01", topic_id=None)
             ],
             total=1,
             error=None,
@@ -258,7 +258,7 @@ class TestSearchInChannelTool:
         fake_result = SimpleNamespace(
             query="news",
             messages=[
-                SimpleNamespace(channel_id=100, message_id=10, text="Breaking news", date="2025-06-01")
+                SimpleNamespace(channel_id=100, message_id=10, text="Breaking news", date="2025-06-01", topic_id=None)
             ],
             total=1,
             error=None,
@@ -332,7 +332,7 @@ class TestSearchHybridTool:
         fake_result = SimpleNamespace(
             query="ai",
             messages=[
-                SimpleNamespace(channel_id=100, message_id=1, text="AI is future", date="2025-01-01")
+                SimpleNamespace(channel_id=100, message_id=1, text="AI is future", date="2025-01-01", topic_id=None)
             ],
             total=1,
             error=None,

@@ -641,7 +641,33 @@ class MessagesRepository:
             """,
             (*message_ids, *message_ids),
         )
-        return self._rows_to_messages(await cur.fetchall())
+        messages = self._rows_to_messages(await cur.fetchall())
+        await self._attach_topic_titles(messages)
+        return messages
+
+    async def _attach_topic_titles(self, messages: list[Message]) -> None:
+        """Дозаполнить ``topic_title`` из кэша ``forum_topics`` (#1552).
+
+        Один батч-SELECT на выдачу для всех (channel_id, topic_id) пар страницы;
+        без топиков среди сообщений — ни одного запроса. Неизвестный/удалённый
+        топик остаётся ``None``: заголовок — имя, выдача не ходит в сеть,
+        кэш заполняет коллектор после сбора.
+        """
+        topic_ids = sorted({m.topic_id for m in messages if m.topic_id is not None})
+        if not topic_ids:
+            return
+        channel_ids = sorted({m.channel_id for m in messages})
+        ch_ph = ", ".join("?" for _ in channel_ids)
+        tp_ph = ", ".join("?" for _ in topic_ids)
+        cur = await self._db.execute(
+            f"SELECT channel_id, topic_id, title FROM forum_topics"
+            f" WHERE channel_id IN ({ch_ph}) AND topic_id IN ({tp_ph})",
+            (*channel_ids, *topic_ids),
+        )
+        titles = {(r["channel_id"], r["topic_id"]): r["title"] for r in await cur.fetchall()}
+        for m in messages:
+            if m.topic_id is not None:
+                m.topic_title = titles.get((m.channel_id, m.topic_id))
 
     async def _search_text_candidate_ids(
         self,
@@ -756,6 +782,7 @@ class MessagesRepository:
         rows = await cur.fetchall()
         has_more = len(rows) > limit
         messages = self._rows_to_messages(rows[:limit])
+        await self._attach_topic_titles(messages)
         total = offset + len(messages)
         # `offset + len(messages)` is exact for any non-empty page and for has_more
         # pages, but undershoots/overshoots when offset is past the end (empty page):

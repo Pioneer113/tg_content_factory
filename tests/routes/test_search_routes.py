@@ -774,6 +774,30 @@ async def test_read_messages_json_includes_has_more(route_client):
 
 
 @pytest.mark.anyio
+async def test_read_messages_route_includes_topic_title(route_client):
+    """GET /messages/{identifier} отдаёт topic_title рядом с topic_id (#1552)."""
+    db = route_client._transport_app.state.db
+    await db.add_channel(Channel(channel_id=780, title="ForumChan", username="forumchan"))
+    await db.upsert_forum_topics(780, [{"id": 5, "title": "Новости"}])
+    await db.insert_messages_batch([
+        Message(
+            channel_id=780,
+            message_id=i,
+            text=f"msg {i}",
+            topic_id=5,
+            date=datetime(2024, 6, 1, tzinfo=timezone.utc),
+        )
+        for i in (1, 2)
+    ])
+
+    resp = await route_client.get("/messages/forumchan")
+
+    assert resp.status_code == 200
+    topics = {(m["topic_id"], m["topic_title"]) for m in resp.json()["messages"]}
+    assert topics == {(5, "Новости")}
+
+
+@pytest.mark.anyio
 async def test_search_page_next_link_for_exact_total_modes(route_client, monkeypatch):
     """Semantic/hybrid modes return an exact total without has_more — «Далее»
     must still appear when total exceeds the current page (review on #824)."""
