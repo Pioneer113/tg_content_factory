@@ -5,8 +5,8 @@ Migrated off the argparse dispatcher onto the Typer ``app`` (see
 *_impl`` here — no local ``asyncio.run`` and no ``argparse.Namespace``. A thin
 ``run(args)`` adapter is kept for the argparse leaf audit and existing tests.
 
-Only ``trigger`` talks to Telegram; every other action is a pure DB
-operation and must not pay (or risk) a full multi-account pool connect.
+No action opens a Telegram pool: each is a pure DB operation or a
+telegram-command hand-off to the running worker (#1568, #1569).
 """
 
 from __future__ import annotations
@@ -72,29 +72,26 @@ async def start_impl(config_path: str) -> None:
 
 
 async def trigger_impl(config_path: str) -> None:
-    """Trigger a one-shot enqueue of all channels (needs a connected account)."""
-    config, db = await runtime.init_db(config_path)
-    pool = None
+    """Hand a one-shot collection run to the live worker (no local pool, #1568).
+
+    The worker's ``scheduler.trigger_collection`` handler runs
+    ``SchedulerManager.trigger_background()`` — the same enqueue-all path as the
+    periodic job, with its own throttle/backoff handling. The CLI previously
+    wrote the PENDING rows itself and stayed silent when the live worker's
+    ingest was throttled or the in-memory queue was full.
+    """
+    _, db = await runtime.init_db(config_path)
     try:
-        _, pool = await runtime.init_pool(config, db)
-        if not pool.clients:
-            logging.error("No connected accounts.")
-            return
-        collector = Collector(pool, db, config.scheduler)
-        channel_bundle = ChannelBundle.from_database(db)
-        collection_service = CollectionService(channel_bundle, collector, collection_queue=None)
-        result = await collection_service.enqueue_all_channels(
-            resolve_backoff_remaining_sec=pool.get_resolve_username_backoff_remaining_sec(),
+        command_id = await TelegramCommandService(db).enqueue(
+            "scheduler.trigger_collection",
+            payload={},
+            requested_by="cli:scheduler.trigger",
         )
         print(
-            f"Enqueued {result.queued_count} channels "
-            f"(skipped {result.skipped_existing_count}, "
-            f"total {result.total_candidates}). "
-            f"Run 'serve' to execute tasks."
+            f"Command #{command_id} enqueued: scheduler.trigger_collection. "
+            "A running worker starts the collection; check 'scheduler queue-status'."
         )
     finally:
-        if pool is not None:
-            await pool.disconnect_all()
         await db.close()
 
 
@@ -234,24 +231,49 @@ async def set_interval_impl(config_path: str, *, job_id: str, minutes: int) -> N
 
 
 async def task_cancel_impl(config_path: str, *, task_id: int) -> None:
-    """Cancel a pending collection task by id."""
+    """Cancel a collection task and interrupt a live run of it (#1568).
+
+    The DB flip covers the PENDING case; the ``collection.cancel_task`` command
+    makes the worker set the in-flight cancel event, so a RUNNING task stops at
+    the collector's next check instead of finishing the whole channel.
+    """
     _, db = await runtime.init_db(config_path)
     try:
         ok = await db.repos.tasks.cancel_collection_task(task_id)
-        if ok:
-            print(f"Task {task_id} cancelled.")
-        else:
+        if not ok:
             print(f"Task {task_id} not found or already completed.")
+            return
+        command_id = await TelegramCommandService(db).enqueue(
+            "collection.cancel_task",
+            payload={"task_id": task_id},
+            requested_by="cli:scheduler.task-cancel",
+        )
+        print(
+            f"Task {task_id} cancelled (command #{command_id} interrupts a live run)."
+        )
     finally:
         await db.close()
 
 
 async def clear_pending_impl(config_path: str) -> None:
-    """Clear all pending collection tasks."""
+    """Clear pending collection tasks and drain the live worker queue (#1568).
+
+    The DB delete covers PENDING rows immediately; the ``collection.clear_pending``
+    command makes the worker drop its in-memory queue, flood-wait requeue timers
+    and known-task ids — previously those survived until a worker restart.
+    """
     _, db = await runtime.init_db(config_path)
     try:
         deleted = await db.repos.tasks.delete_pending_channel_tasks()
-        print(f"Cleared {deleted} pending collection tasks.")
+        command_id = await TelegramCommandService(db).enqueue(
+            "collection.clear_pending",
+            payload={},
+            requested_by="cli:scheduler.clear-pending",
+        )
+        print(
+            f"Cleared {deleted} pending collection tasks "
+            f"(command #{command_id} drains the live worker queue)."
+        )
     finally:
         await db.close()
 

@@ -19,7 +19,7 @@ connecting directly, so they keep working unchanged (`--direct` forces the in-pr
 path instead).
 
 Commands without a queue equivalent (`messages read --live`,
-`dialogs read`, `dialogs download-media`, `scheduler trigger`, …) wait for the daemon to
+`dialogs read`, `dialogs download-media`, …) wait for the daemon to
 release the session (up to `TGCF_SESSION_LOCK_GRACE_SECONDS`, default 20) and then fail:
 
 ```
@@ -186,6 +186,13 @@ scheduler queue-status [--format json]    # live collection queue: remaining, th
 # next-run per job, queue paused/running) when a worker publishes; config-only otherwise.
 worker    # long-lived process: collection queue, scheduler, dispatchers — run in background
 ```
+
+`trigger`, `task-cancel <id>` and `clear-pending` are live RPC when the daemon runs:
+each enqueues a telegram_command and acks with its id, and the worker acts on the
+live objects (`trigger` runs the enqueue-all collection; `task-cancel` interrupts a
+RUNNING collection at the collector's next check; `clear-pending` also drains the
+worker's in-memory queue and flood-wait timers). Without a daemon the DB effect is
+immediate; the command executes on the next worker start.
 
 ## analytics
 

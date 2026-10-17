@@ -47,7 +47,6 @@ RUNS_ANYWAY = {
     ("channel.py", "add_bulk_impl"),
     ("channel.py", "list_for_import_impl"),
     ("collect.py", "collect_sample_impl"),
-    ("scheduler.py", "trigger_impl"),
     ("notification.py", "_build"),
     ("pipeline.py", "_pipeline_run"),
     ("pipeline.py", "_pipeline_publish"),

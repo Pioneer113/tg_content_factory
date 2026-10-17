@@ -22,7 +22,7 @@ def mock_db():
     return MagicMock(spec=Database)
 
 
-def _get_tool_handlers(mock_db, client_pool=None, config=None):
+def _get_tool_handlers(mock_db, client_pool=None, config=None, scheduler_manager=None):
     """Build MCP tools and return their handlers keyed by name."""
     captured_tools = []
 
@@ -32,9 +32,20 @@ def _get_tool_handlers(mock_db, client_pool=None, config=None):
     ):
         from src.agent.tools import make_mcp_server
 
-        make_mcp_server(mock_db, client_pool=client_pool, config=config)
+        make_mcp_server(
+            mock_db,
+            client_pool=client_pool,
+            config=config,
+            scheduler_manager=scheduler_manager,
+        )
 
     return {t.name: t.handler for t in captured_tools}
+
+
+def _enable_command_queue(mock_db, command_id=77):
+    """Configure ``db.repos`` for ``TelegramCommandService.enqueue`` (dedupe + create)."""
+    mock_db.repos.telegram_commands.find_active_by_type = AsyncMock(return_value=None)
+    mock_db.repos.telegram_commands.create_command = AsyncMock(return_value=command_id)
 
 
 def _text(result: dict) -> str:
@@ -1040,20 +1051,27 @@ class TestCancelSchedulerTaskTool:
         assert "confirm=true" in _text(result)
 
     @pytest.mark.anyio
-    async def test_cancels_task(self, mock_db):
+    async def test_cancels_task_and_enqueues_live_interrupt(self, mock_db):
         mock_db.repos = MagicMock()
         mock_db.repos.tasks.cancel_collection_task = AsyncMock(return_value=True)
+        _enable_command_queue(mock_db, command_id=77)
         handlers = _get_tool_handlers(mock_db)
         result = await handlers["cancel_scheduler_task"]({"task_id": 42, "confirm": True})
         assert "отменена" in _text(result)
+        assert "77" in _text(result)
+        cmd = mock_db.repos.telegram_commands.create_command.await_args.args[0]
+        assert cmd.command_type == "collection.cancel_task"
+        assert cmd.payload == {"task_id": 42}
 
     @pytest.mark.anyio
-    async def test_task_not_found(self, mock_db):
+    async def test_task_not_found_skips_command(self, mock_db):
         mock_db.repos = MagicMock()
         mock_db.repos.tasks.cancel_collection_task = AsyncMock(return_value=False)
+        _enable_command_queue(mock_db)
         handlers = _get_tool_handlers(mock_db)
         result = await handlers["cancel_scheduler_task"]({"task_id": 999, "confirm": True})
         assert "не найдена" in _text(result)
+        mock_db.repos.telegram_commands.create_command.assert_not_awaited()
 
 
 class TestClearPendingTasksTool:
@@ -1064,12 +1082,91 @@ class TestClearPendingTasksTool:
         assert "confirm=true" in _text(result)
 
     @pytest.mark.anyio
-    async def test_clears_tasks(self, mock_db):
+    async def test_clears_tasks_and_enqueues_worker_drain(self, mock_db):
         mock_db.repos = MagicMock()
         mock_db.repos.tasks.delete_pending_channel_tasks = AsyncMock(return_value=5)
+        _enable_command_queue(mock_db, command_id=78)
         handlers = _get_tool_handlers(mock_db)
         result = await handlers["clear_pending_tasks"]({"confirm": True})
         assert "5" in _text(result)
+        assert "78" in _text(result)
+        cmd = mock_db.repos.telegram_commands.create_command.await_args.args[0]
+        assert cmd.command_type == "collection.clear_pending"
+
+
+# ---------------------------------------------------------------------------
+# Scheduler tools without a live manager — worker command fallback (#1568)
+# ---------------------------------------------------------------------------
+
+
+class TestSchedulerToolsWorkerFallback:
+    @pytest.mark.anyio
+    async def test_trigger_collection_enqueues_worker_command(self, mock_db):
+        mock_db.repos = MagicMock()
+        _enable_command_queue(mock_db, command_id=91)
+        handlers = _get_tool_handlers(mock_db)
+        result = await handlers["trigger_collection"]({"confirm": True})
+        assert "Сбор запущен" in _text(result)
+        assert "91" in _text(result)
+        cmd = mock_db.repos.telegram_commands.create_command.await_args.args[0]
+        assert cmd.command_type == "scheduler.trigger_collection"
+
+    @pytest.mark.anyio
+    async def test_trigger_collection_with_live_manager_skips_command(self, mock_db):
+        mgr = MagicMock()
+        mgr.trigger_now = AsyncMock(return_value={"enqueued": 3})
+        handlers = _get_tool_handlers(
+            mock_db, client_pool=MagicMock(), scheduler_manager=mgr
+        )
+        result = await handlers["trigger_collection"]({"confirm": True})
+        assert "Сбор запущен" in _text(result)
+        mgr.trigger_now.assert_awaited_once()
+
+    @pytest.mark.anyio
+    async def test_start_scheduler_sets_autostart_and_enqueues_reconcile(self, mock_db):
+        mock_db.set_setting = AsyncMock()
+        _enable_command_queue(mock_db, command_id=92)
+        handlers = _get_tool_handlers(mock_db)
+        result = await handlers["start_scheduler"]({"confirm": True})
+        assert "запущен" in _text(result)
+        mock_db.set_setting.assert_awaited_once_with("scheduler_autostart", "1")
+        cmd = mock_db.repos.telegram_commands.create_command.await_args.args[0]
+        assert cmd.command_type == "scheduler.reconcile"
+
+    @pytest.mark.anyio
+    async def test_stop_scheduler_clears_autostart_and_enqueues_reconcile(self, mock_db):
+        mock_db.set_setting = AsyncMock()
+        _enable_command_queue(mock_db)
+        handlers = _get_tool_handlers(mock_db)
+        result = await handlers["stop_scheduler"]({"confirm": True})
+        assert "остановлен" in _text(result)
+        mock_db.set_setting.assert_awaited_once_with("scheduler_autostart", "0")
+
+    @pytest.mark.anyio
+    async def test_toggle_scheduler_job_writes_disabled_key(self, mock_db):
+        mock_db.repos = MagicMock()
+        mock_db.repos.settings.get_setting = AsyncMock(return_value=None)
+        mock_db.repos.settings.set_setting = AsyncMock()
+        _enable_command_queue(mock_db)
+        handlers = _get_tool_handlers(mock_db)
+        result = await handlers["toggle_scheduler_job"]({"job_id": "sq_3"})
+        assert "выключена" in _text(result)
+        mock_db.repos.settings.set_setting.assert_awaited_once_with(
+            "scheduler_job_disabled:sq_3", "1"
+        )
+
+    @pytest.mark.anyio
+    async def test_toggle_canonicalizes_legacy_pipeline_run_id(self, mock_db):
+        mock_db.repos = MagicMock()
+        mock_db.repos.settings.get_setting = AsyncMock(return_value="1")
+        mock_db.repos.settings.set_setting = AsyncMock()
+        _enable_command_queue(mock_db)
+        handlers = _get_tool_handlers(mock_db)
+        result = await handlers["toggle_scheduler_job"]({"job_id": "pipeline_run_5"})
+        assert "включена" in _text(result)
+        mock_db.repos.settings.set_setting.assert_awaited_once_with(
+            "scheduler_job_disabled:content_generate_5", "0"
+        )
 
 
 # ---------------------------------------------------------------------------
