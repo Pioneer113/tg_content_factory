@@ -76,9 +76,11 @@ stops any previous daemon and starts the worker runtime — no web panel, no WEB
 required, managed via a PID file (`tg-agent stop` halts it). Check scheduler state with
 `tg-agent scheduler status`.
 
-While the daemon runs, most `dialogs` actions (`send`, `forward`, `react`, `refresh`, …)
-and `channel collect` are handed off to the worker automatically — the CLI queues them
-instead of connecting directly. Commands that must open their own connection and have no
+While the daemon runs, most `dialogs` actions (`send`, `forward`, `react`, `refresh`, …),
+`channel collect`, `collect --channel-id`, `channel stats` and `scheduler start` are handed
+off to the worker automatically — the CLI queues them (or writes the scheduler setting and
+pokes the worker) instead of connecting directly; the command returns "queued", the worker
+does the Telegram work. Commands that must open their own connection and have no
 queue equivalent (`messages read --live`, `dialogs read`, `dialogs download-media`)
 are **refused** after a short wait (`SessionLockError ... held by PID N`): Telegram
 kills sessions seen from two connections at once. Stop the daemon (`tg-agent stop`) for

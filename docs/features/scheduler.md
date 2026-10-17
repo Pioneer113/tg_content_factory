@@ -6,7 +6,7 @@
 
 === "CLI"
     ```bash
-    python -m src.main scheduler start          # запустить (foreground)
+    python -m src.main scheduler start          # включить автостарт (+ reconcile живого воркера)
     python -m src.main scheduler stop           # отключить автостарт
     python -m src.main scheduler trigger        # разовый запуск коллекции
     python -m src.main scheduler status         # статус и конфигурация

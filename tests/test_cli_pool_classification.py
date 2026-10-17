@@ -22,6 +22,7 @@ COMMANDS_DIR = Path(__file__).resolve().parent.parent / "src" / "cli" / "command
 # Hands work to the running worker through a queue instead of connecting itself.
 HANDS_OFF = {
     ("channel.py", "collect_impl"),
+    ("collect.py", "collect_impl"),
     ("dialogs.py", "_dispatch"),
 }
 
@@ -35,16 +36,13 @@ RUNS_ANYWAY = {
     ("messages.py", "messages_read_impl"),
     ("photo_loader.py", "_run_with_services"),
     ("test.py", "_run_tg_pool_init_step"),
-    ("channel.py", "stats_impl"),
     ("channel.py", "refresh_types_impl"),
     ("channel.py", "refresh_meta_impl"),
     ("channel.py", "add_impl"),
     ("channel.py", "import_impl"),
     ("channel.py", "add_bulk_impl"),
     ("channel.py", "list_for_import_impl"),
-    ("collect.py", "collect_impl"),
     ("collect.py", "collect_sample_impl"),
-    ("scheduler.py", "start_impl"),
     ("scheduler.py", "trigger_impl"),
     ("notification.py", "_build"),
     ("pipeline.py", "_pipeline_run"),

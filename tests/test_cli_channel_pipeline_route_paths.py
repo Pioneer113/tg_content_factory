@@ -94,13 +94,15 @@ class TestCLIChannelDeleteNotFound:
 
 class TestCLIChannelStats:
     @pytest.mark.aiosqlite_serial
-    def test_stats_no_clients(self, cli_env, capsys, caplog):
-        """stats action with no connected accounts logs error."""
-        with patch("src.cli.runtime.init_pool", side_effect=_fake_init_pool_no_clients()):
+    def test_stats_no_clients(self, cli_env, capsys):
+        """stats no longer opens a pool at all (#1569) — no-args asks for a target."""
+        init_pool = AsyncMock()
+        with patch("src.cli.runtime.init_pool", init_pool):
             from src.cli.commands.channel import run
 
             run(_ns(channel_action="stats", identifier=None, all=False))
-        assert "No connected accounts" in caplog.text
+        init_pool.assert_not_awaited()
+        assert "Specify" in capsys.readouterr().out
 
     @pytest.mark.aiosqlite_serial
     def test_stats_no_identifier_and_no_all(self, cli_env, capsys):
@@ -122,25 +124,23 @@ class TestCLIChannelStats:
 
     @pytest.mark.aiosqlite_serial
     def test_stats_all(self, cli_env, capsys):
-        """stats --all calls collect_all_stats."""
-        fake_pool = AsyncMock()
-        fake_pool.clients = {"+1": MagicMock()}
-        fake_pool.disconnect_all = AsyncMock()
-        fake_collector = AsyncMock()
-        fake_collector.collect_all_stats = AsyncMock(return_value=5)
+        """stats --all queues a STATS_ALL task for the worker (#1569)."""
+        _add_channel(cli_env, channel_id=305, title="AllStatsCh")
+        init_pool = AsyncMock()
 
-        async def _init_pool(config, db):
-            from src.telegram.auth import TelegramAuth
-
-            return TelegramAuth(0, ""), fake_pool
-
-        with patch("src.cli.runtime.init_pool", side_effect=_init_pool), patch(
-            "src.cli.commands.channel.Collector", return_value=fake_collector
-        ):
+        with patch("src.cli.runtime.init_pool", init_pool):
             from src.cli.commands.channel import run
 
             run(_ns(channel_action="stats", identifier=None, all=True))
-        assert "Stats collected: 5" in capsys.readouterr().out
+        init_pool.assert_not_awaited()
+        assert "Queued stats task" in capsys.readouterr().out
+
+        # run() closed the DB in its finally; reopen to inspect the row.
+        if cli_env._connection.db is None:
+            asyncio.run(cli_env.initialize())
+        task = asyncio.run(cli_env.get_active_stats_task())
+        assert task is not None
+        assert task.payload.channel_ids == [305]
 
     @pytest.mark.aiosqlite_serial
     def test_stats_single_channel_not_found(self, cli_env, capsys):
@@ -165,59 +165,38 @@ class TestCLIChannelStats:
 
     @pytest.mark.aiosqlite_serial
     def test_stats_single_channel_found(self, cli_env, capsys):
-        """stats for existing channel calls collect_channel_stats and prints result."""
+        """stats for an existing channel queues channels.collect_stats (#1569)."""
         pk = _add_channel(cli_env, channel_id=310, title="StatsCh")
-        fake_pool = AsyncMock()
-        fake_pool.clients = {"+1": MagicMock()}
-        fake_pool.disconnect_all = AsyncMock()
-        from src.models import ChannelStats
+        init_pool = AsyncMock()
 
-        fake_stats = ChannelStats(
-            channel_id=310,
-            subscriber_count=1000,
-            avg_views=50.0,
-            avg_reactions=5.0,
-            avg_forwards=2.0,
-        )
-        fake_collector = AsyncMock()
-        fake_collector.collect_channel_stats = AsyncMock(return_value=fake_stats)
-
-        async def _init_pool(config, db):
-            from src.telegram.auth import TelegramAuth
-
-            return TelegramAuth(0, ""), fake_pool
-
-        with patch("src.cli.runtime.init_pool", side_effect=_init_pool), patch(
-            "src.cli.commands.channel.Collector", return_value=fake_collector
-        ):
+        with patch("src.cli.runtime.init_pool", init_pool):
             from src.cli.commands.channel import run
 
             run(_ns(channel_action="stats", identifier=str(pk), all=False))
+        init_pool.assert_not_awaited()
         out = capsys.readouterr().out
-        assert "Subscribers:" in out
+        assert "Queued stats collection" in out
+        assert "StatsCh" in out
+
+        # run() closed the DB in its finally; reopen to inspect the row.
+        if cli_env._connection.db is None:
+            asyncio.run(cli_env.initialize())
+        commands = asyncio.run(cli_env.repos.telegram_commands.list_commands(limit=5))
+        assert [c.command_type for c in commands] == ["channels.collect_stats"]
+        assert commands[0].payload == {"channel_pk": pk}
 
     @pytest.mark.aiosqlite_serial
     def test_stats_single_channel_no_stats(self, cli_env, capsys):
-        """stats returns None → prints 'No client available'."""
+        """Enqueue path does not depend on existing stats — same queued reply."""
         pk = _add_channel(cli_env, channel_id=311, title="StatsCh2")
-        fake_pool = AsyncMock()
-        fake_pool.clients = {"+1": MagicMock()}
-        fake_pool.disconnect_all = AsyncMock()
-        fake_collector = AsyncMock()
-        fake_collector.collect_channel_stats = AsyncMock(return_value=None)
+        init_pool = AsyncMock()
 
-        async def _init_pool(config, db):
-            from src.telegram.auth import TelegramAuth
-
-            return TelegramAuth(0, ""), fake_pool
-
-        with patch("src.cli.runtime.init_pool", side_effect=_init_pool), patch(
-            "src.cli.commands.channel.Collector", return_value=fake_collector
-        ):
+        with patch("src.cli.runtime.init_pool", init_pool):
             from src.cli.commands.channel import run
 
             run(_ns(channel_action="stats", identifier=str(pk), all=False))
-        assert "No client available" in capsys.readouterr().out
+        init_pool.assert_not_awaited()
+        assert "Queued stats collection" in capsys.readouterr().out
 
 
 class TestCLIChannelRefreshTypes:
