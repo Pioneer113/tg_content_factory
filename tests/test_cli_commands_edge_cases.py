@@ -796,6 +796,8 @@ class TestSchedulerTaskCancel:
         db = MagicMock()
         db.repos = MagicMock()
         db.repos.tasks.cancel_collection_task = AsyncMock(return_value=True)
+        db.repos.telegram_commands.find_active_by_type = AsyncMock(return_value=None)
+        db.repos.telegram_commands.create_command = AsyncMock(return_value=7)
         db.close = AsyncMock()
 
         config = MagicMock()
@@ -809,6 +811,7 @@ class TestSchedulerTaskCancel:
 
         out = capsys.readouterr().out
         assert "cancelled" in out
+        assert "#7" in out
 
     def test_cancel_not_found(self, capsys):
         from src.cli.commands.scheduler import run
@@ -838,6 +841,8 @@ class TestSchedulerClearPending:
         db = MagicMock()
         db.repos = MagicMock()
         db.repos.tasks.delete_pending_channel_tasks = AsyncMock(return_value=5)
+        db.repos.telegram_commands.find_active_by_type = AsyncMock(return_value=None)
+        db.repos.telegram_commands.create_command = AsyncMock(return_value=8)
         db.close = AsyncMock()
 
         config = MagicMock()
@@ -851,6 +856,7 @@ class TestSchedulerClearPending:
 
         out = capsys.readouterr().out
         assert "Cleared 5" in out
+        assert "#8" in out
 
 
 class TestSchedulerNoAccounts:
