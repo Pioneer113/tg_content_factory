@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-SRC_DIR = Path(__file__).resolve().parent.parent / "src"
+SRC_DIR = Path(__file__).resolve().parent.parent / "tg_agent"
 FACADE = SRC_DIR / "database" / "facade.py"
 BUNDLES = SRC_DIR / "database" / "bundles.py"
 

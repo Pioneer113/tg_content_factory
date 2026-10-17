@@ -14,40 +14,40 @@
 
 ## Каналы
 
-::: src.agent.tools.channels
+::: tg_agent.agent.tools.channels
 
 ## Поиск
 
-::: src.agent.tools.search
+::: tg_agent.agent.tools.search
 
 ## Контент-пайплайны
 
-::: src.agent.tools.pipelines
+::: tg_agent.agent.tools.pipelines
 
 ## Изображения
 
-::: src.agent.tools.images
+::: tg_agent.agent.tools.images
 
 ## Сообщения
 
-::: src.agent.tools.messaging
+::: tg_agent.agent.tools.messaging
 
 ## Коллекция
 
-::: src.agent.tools.collection
+::: tg_agent.agent.tools.collection
 
 ## Аналитика
 
-::: src.agent.tools.analytics
+::: tg_agent.agent.tools.analytics
 
 ## Модерация
 
-::: src.agent.tools.moderation
+::: tg_agent.agent.tools.moderation
 
 ## Фильтры
 
-::: src.agent.tools.filters
+::: tg_agent.agent.tools.filters
 
 ## Права доступа
 
-::: src.agent.tools.permissions
+::: tg_agent.agent.tools.permissions

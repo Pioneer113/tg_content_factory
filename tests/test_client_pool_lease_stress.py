@@ -22,7 +22,7 @@ _LEASE_OWNERSHIP_ALLOWLIST = {
 @pytest.mark.mutmut_skip
 def test_pool_acquisition_call_sites_have_an_explicit_release_owner():
     """New acquisition call sites must show their lease ownership in source."""
-    root = Path(__file__).parents[1] / "src"
+    root = Path(__file__).parents[1] / "tg_agent"
     violations: list[str] = []
     for path in root.rglob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))

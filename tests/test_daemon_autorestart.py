@@ -33,42 +33,42 @@ def _write_pid_file(tmp_path: Path) -> Path:
 
 def test_is_stale_when_src_newer_than_pid_file(tmp_path):
     pid_file = _write_pid_file(tmp_path)
-    _touch(tmp_path / "src" / "cli" / "commands" / "scheduler.py")
+    _touch(tmp_path / "tg_agent" / "cli" / "commands" / "scheduler.py")
 
-    assert is_stale(pid_file, tmp_path / "src") is True
+    assert is_stale(pid_file, tmp_path / "tg_agent") is True
 
 
 def test_not_stale_when_daemon_fresh(tmp_path):
     pid_file = _write_pid_file(tmp_path)
-    _touch(tmp_path / "src" / "main.py")
+    _touch(tmp_path / "tg_agent" / "main.py")
     # Daemon started after the last src edit.
     st = os.stat(pid_file)
     os.utime(pid_file, (st.st_atime, st.st_mtime + 10))
 
-    assert is_stale(pid_file, tmp_path / "src") is False
+    assert is_stale(pid_file, tmp_path / "tg_agent") is False
 
 
 def test_not_stale_without_pid_file(tmp_path):
-    _touch(tmp_path / "src" / "main.py")
+    _touch(tmp_path / "tg_agent" / "main.py")
 
-    assert is_stale(tmp_path / "data" / "tg_search.pid", tmp_path / "src") is False
+    assert is_stale(tmp_path / "data" / "tg_search.pid", tmp_path / "tg_agent") is False
 
 
 def test_not_stale_when_mtime_equal(tmp_path):
     pid_file = _write_pid_file(tmp_path)
-    src_file = tmp_path / "src" / "main.py"
+    src_file = tmp_path / "tg_agent" / "main.py"
     _touch(src_file)
     src_st = os.stat(src_file)
     os.utime(pid_file, (src_st.st_atime, src_st.st_mtime))
 
-    assert is_stale(pid_file, tmp_path / "src") is False
+    assert is_stale(pid_file, tmp_path / "tg_agent") is False
 
 
 def test_is_stale_ignores_non_python_files(tmp_path):
     pid_file = _write_pid_file(tmp_path)
-    _touch(tmp_path / "src" / "web" / "templates" / "index.html")
+    _touch(tmp_path / "tg_agent" / "web" / "templates" / "index.html")
 
-    assert is_stale(pid_file, tmp_path / "src") is False
+    assert is_stale(pid_file, tmp_path / "tg_agent") is False
 
 
 def test_pid_file_mtime_is_the_daemon_start_proxy(tmp_path):

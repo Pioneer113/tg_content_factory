@@ -961,11 +961,11 @@ class TestEndToEndPermissionFlow:
 
 
 def _collect_phone_binded_tool_names() -> set[str]:
-    """Scan src/agent/tools for tool names passed to phone-binded gates."""
+    """Scan tg_agent/agent/tools for tool names passed to phone-binded gates."""
     import re as _re
     from pathlib import Path as _Path
 
-    root = _Path(__file__).resolve().parent.parent / "src" / "agent" / "tools"
+    root = _Path(__file__).resolve().parent.parent / "tg_agent" / "agent" / "tools"
     patterns = [
         _re.compile(r'require_phone_permission\([^)]*?["\']([a-zA-Z_]+)["\']', _re.DOTALL),
         _re.compile(r'prepare_telegram_tool\([^)]*?tool_name=["\']([a-zA-Z_]+)["\']', _re.DOTALL),
@@ -996,7 +996,7 @@ def test_every_phone_binded_tool_is_registered_in_tool_categories():
 def test_phone_binded_tools_constant_matches_static_scan():
     """The PHONE_BINDED_TOOLS constant in permissions.py drives the access
     policy and session-gate bypass and MUST match what the static scan finds in
-    src/agent/tools.  If they drift, the agent will either advertise tools
+    tg_agent/agent/tools.  If they drift, the agent will either advertise tools
     that the runtime phone-gate denies (Codex round 5 finding) or hide
     callable ones from the agent.
     """
@@ -1019,7 +1019,7 @@ def test_phone_binded_tools_constant_matches_static_scan():
 def test_agent_backends_do_not_use_boolean_union_for_visibility():
     from pathlib import Path
 
-    root = Path(__file__).resolve().parent.parent / "src" / "agent"
+    root = Path(__file__).resolve().parent.parent / "tg_agent" / "agent"
     offenders: list[str] = []
     for path in root.rglob("*.py"):
         if path.name == "permissions.py":

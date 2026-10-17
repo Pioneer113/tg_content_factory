@@ -51,7 +51,7 @@ def test_app_js_renders_hard_delete_partial_breakdown():
     """app.js must surface purged/skipped/expected counts next to the
     hard_delete_partial message — otherwise the count breakdown set by the
     route gets dropped on the way to the user."""
-    app_js = Path(__file__).resolve().parent.parent / "src" / "web" / "static" / "js" / "app.js"
+    app_js = Path(__file__).resolve().parent.parent / "tg_agent" / "web" / "static" / "js" / "app.js"
     src = app_js.read_text(encoding="utf-8")
     assert "hard_delete_partial" in src, "app.js must special-case hard_delete_partial"
     # Pulls all three counts from the URL.

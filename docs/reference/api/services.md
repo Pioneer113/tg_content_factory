@@ -6,54 +6,54 @@
 
 ## Сбор сообщений
 
-::: src.services.collection_service
+::: tg_agent.services.collection_service
 
 ## Контент-пайплайны
 
-::: src.services.pipeline_service
+::: tg_agent.services.pipeline_service
 
-::: src.services.pipeline_executor
+::: tg_agent.services.pipeline_executor
 
 ## Генерация контента
 
-::: src.services.content_generation_service
+::: tg_agent.services.content_generation_service
 
-::: src.services.generation_service
+::: tg_agent.services.generation_service
 
 ## Генерация изображений
 
-::: src.services.image_generation_service
+::: tg_agent.services.image_generation_service
 
 ## Провайдеры
 
-::: src.services.provider_service
+::: tg_agent.services.provider_service
 
 ## Каналы
 
-::: src.services.channel_service
+::: tg_agent.services.channel_service
 
 ## Уведомления
 
-::: src.services.notification_service
+::: tg_agent.services.notification_service
 
 ## Поиск
 
-::: src.services.search_service
+::: tg_agent.services.search_service
 
 ## Эмбеддинги
 
-::: src.services.embedding_service
+::: tg_agent.services.embedding_service
 
 ## Экспорт
 
-::: src.services.export_service
+::: tg_agent.services.export_service
 
 ## Публикация фото
 
-::: src.services.photo_publish_service
+::: tg_agent.services.photo_publish_service
 
-::: src.services.photo_auto_upload_service
+::: tg_agent.services.photo_auto_upload_service
 
 ## Диспетчеризация задач
 
-::: src.services.unified_dispatcher
+::: tg_agent.services.unified_dispatcher

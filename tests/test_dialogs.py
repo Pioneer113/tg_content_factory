@@ -241,7 +241,7 @@ def test_submit_confirm_reads_submitter_data_confirm():
     from pathlib import Path
 
     app_js = (
-        Path(__file__).resolve().parent.parent / "src" / "web" / "static" / "js" / "app.js"
+        Path(__file__).resolve().parent.parent / "tg_agent" / "web" / "static" / "js" / "app.js"
     ).read_text(encoding="utf-8")
     assert "submitter.dataset.confirm" in app_js
 

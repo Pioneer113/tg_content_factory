@@ -20,7 +20,7 @@ def test_templates_dir_exists():
 
 def test_project_root():
     assert PROJECT_ROOT == WEB_DIR.parent.parent
-    assert (PROJECT_ROOT / "src").is_dir()
+    assert (PROJECT_ROOT / "tg_agent").is_dir()
 
 
 def test_data_image_dir_path():

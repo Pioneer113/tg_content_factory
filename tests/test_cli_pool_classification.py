@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-COMMANDS_DIR = Path(__file__).resolve().parent.parent / "src" / "cli" / "commands"
+COMMANDS_DIR = Path(__file__).resolve().parent.parent / "tg_agent" / "cli" / "commands"
 
 # Hands work to the running worker through a queue instead of connecting itself.
 HANDS_OFF = {
@@ -31,7 +31,7 @@ HANDS_OFF = {
 }
 
 # Runs anyway: read-only diagnostics that survive the contention. The native
-# backend falls back to a fileless StringSession (src/telegram/backends.py), which
+# backend falls back to a fileless StringSession (tg_agent/telegram/backends.py), which
 # is why `account info` completed in production even while three of four sessions
 # hit the lock. Blocking these would remove working functionality for no gain.
 RUNS_ANYWAY = {

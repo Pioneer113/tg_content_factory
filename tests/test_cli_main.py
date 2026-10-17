@@ -1,4 +1,4 @@
-"""Tests for src/cli/main.py — the thin Typer entry point (#1125 Final).
+"""Tests for tg_agent/cli/main.py — the thin Typer entry point (#1125 Final).
 
 The argparse framework (``build_parser`` + dict dispatcher + ``dispatch_via_typer``
 bridge) was removed in #1125. ``main()`` now runs the Typer ``app`` in
@@ -67,7 +67,7 @@ class TestMainEntryPoint:
         code = _run_main(["--version"])
         assert code == 0
         out = capsys.readouterr()
-        assert "src" in (out.out + out.err)
+        assert "tg-agent" in (out.out + out.err)
 
     def test_root_no_args_shows_help_and_exits_one(self, capsys):
         """No command at all → root help, exit **1** (argparse parity, #1162).

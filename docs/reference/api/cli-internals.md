@@ -12,7 +12,7 @@
 
 Логирование и PII-редакция вывода CLI.
 
-::: src.cli.runtime
+::: tg_agent.cli.runtime
 
 ## Команды (Typer)
 
@@ -20,28 +20,28 @@
 объявляет свои флаги/аргументы как параметры Typer и зовёт общее тело
 `*_impl` из `tg_agent/cli/commands/`. argparse-каркас удалён в #1125.
 
-::: src.cli.typer_app
+::: tg_agent.cli.typer_app
 
-::: src.cli.typer_commands
+::: tg_agent.cli.typer_commands
 
 ## Точка входа
 
-::: src.cli.main
+::: tg_agent.cli.main
 
 ## Обработчики команд
 
 ### Каналы
 
-::: src.cli.commands.channel
+::: tg_agent.cli.commands.channel
 
 ### Сбор
 
-::: src.cli.commands.collect
+::: tg_agent.cli.commands.collect
 
 ### Пайплайны
 
-::: src.cli.commands.pipeline
+::: tg_agent.cli.commands.pipeline
 
 ### Поиск
 
-::: src.cli.commands.search
+::: tg_agent.cli.commands.search
