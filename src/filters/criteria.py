@@ -46,10 +46,31 @@ CHAT_NOISE_THRESHOLD = 70.0
 AUTO_FEED_MIN_MESSAGES = 30
 AUTO_FEED_THRESHOLD = 85.0
 
+# «Мёртвое вовлечение» (low_engagement): средние просмотры последних постов ниже
+# порога от числа подписчиков. Откалибровано на живой БД 15.10.26; окно — последние
+# LOW_ENGAGEMENT_WINDOW постов по messages.views (НЕ channel_stats.avg_views —
+# разрежён и протухает; НЕ полная история — у фермы ai_for_dev она давала 15.7%
+# за счёт накопленных просмотров старых постов, окно-100 даёт реальные 7.8%):
+# ферма ai_for_dev 7.8% → флаг; зомби-каналы с живым ratio 1.4–4.4 — 0.1% → флаг;
+# живые каналы 23–76% → чисты. Решение владельца: конъюнкции с subs/посты НЕТ —
+# брошенный «Да придет ИИ» (9.5%) сознательно попадает под флаг, зато один порог
+# ловит и ферму, и зомби-когорту. Минимум просмотренных постов — ниже нет статистики.
+LOW_ENGAGEMENT_THRESHOLD = 10.0
+LOW_ENGAGEMENT_WINDOW = 100
+LOW_ENGAGEMENT_MIN_VIEWED_MESSAGES = 30
+
+# «Пересылочный канал» (forwarder): доля форвардов в окне последних постов.
+# Label-only (решение владельца 16.10.26): форвард — атрибуция, не спам; метка
+# для кураторства, сбор не блокирует. Окно и guard — как у low_engagement.
+FORWARD_SHARE_THRESHOLD = 50.0
+FORWARD_SHARE_WINDOW = 100
+FORWARD_SHARE_MIN_MESSAGES = 30
+
 # Флаги-метки (решение владельца 06.10.26): флаг ОСТАЁТСЯ в filter_flags как сигнал
 # для LLM-кураторства, но не ставит is_filtered — нерусскоязычные ИИ-каналы
 # (TestingCatalog, AI_News_CN и т.п.) собираются, язык виден куратору.
-LABEL_ONLY_FLAGS = frozenset({"non_cyrillic"})
+# forwarder — там же (16.10.26): пересылочный канал — не спам.
+LABEL_ONLY_FLAGS = frozenset({"non_cyrillic", "forwarder"})
 
 # Тег-эскроу: канал с тегом KEEP_TAG исключается из авто-фильтрации целиком —
 # apply_filters сбрасывает всем is_filtered, но keep-каналу возвращает is_filtered=0
@@ -86,6 +107,8 @@ VALID_FLAGS = frozenset(
         "title_changed",
         "suspicious_username",
         "auto_feed",
+        "low_engagement",
+        "forwarder",
     }
 )
 

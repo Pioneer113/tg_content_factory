@@ -50,6 +50,7 @@ _SQL_UNIQUENESS = """
         COUNT(DISTINCT substr(text, 1,100)) AS uniq
     FROM messages
     WHERE text IS NOT NULL AND text != ''
+        AND forward_from_channel_id IS NULL
 """
 
 _SQL_SUBSCRIBER_BASE = """
@@ -75,24 +76,34 @@ _SQL_SHORT_MESSAGE = """
     FROM messages
 """
 
+# Кросс-канальные дубли, асимметрично (фидбек владельца 15.10.26, @prog_ai):
+# дупликат — это префикс, опубликованный каналом СТРОГО ПОЗЖЕ, чем он появился
+# где-либо ещё (копипастер флагается, первоисточник — нет; равные даты никому
+# не считаются). Репосты с атрибуцией (forward_from_channel_id) исключены
+# целиком: честная пересылка — не спам. Порог флага — CROSS_DUPE_THRESHOLD в
+# criteria.py (анализатор).
 _SQL_CROSS_DUPE = """
     WITH channel_prefixes AS (
-        SELECT channel_id, substr(text, 1, 100) AS prefix
+        SELECT
+            channel_id,
+            substr(text, 1, 100) AS prefix,
+            MIN(date) AS first_date
         FROM messages
         WHERE text IS NOT NULL AND length(text) > 10
-        GROUP BY channel_id, prefix
+            AND forward_from_channel_id IS NULL
+        GROUP BY channel_id, substr(text, 1, 100)
     ),
-    prefix_channel_counts AS (
-        SELECT prefix, COUNT(*) AS channel_count
+    first_seen AS (
+        SELECT prefix, MIN(first_date) AS global_first
         FROM channel_prefixes
         GROUP BY prefix
     )
     SELECT
         cp.channel_id,
         COUNT(*) AS uniq_total,
-        SUM(CASE WHEN pcc.channel_count > 1 THEN 1 ELSE 0 END) AS duped
+        SUM(CASE WHEN cp.first_date > fs.global_first THEN 1 ELSE 0 END) AS duped
     FROM channel_prefixes cp
-    JOIN prefix_channel_counts pcc ON pcc.prefix = cp.prefix
+    JOIN first_seen fs ON fs.prefix = cp.prefix
 """
 
 _SQL_CYRILLIC = """
@@ -142,11 +153,13 @@ _SQL_UNIQUENESS_SAMPLED = """
         (SELECT COUNT(*) FROM (
             SELECT text FROM messages m
             WHERE m.channel_id = ch.channel_id
+                AND m.forward_from_channel_id IS NULL
             ORDER BY m.message_id DESC LIMIT ?
          ) s WHERE s.text IS NOT NULL AND s.text != '') AS total,
         (SELECT COUNT(DISTINCT substr(text, 1, 100)) FROM (
             SELECT text FROM messages m
             WHERE m.channel_id = ch.channel_id
+                AND m.forward_from_channel_id IS NULL
             ORDER BY m.message_id DESC LIMIT ?
          ) s WHERE s.text IS NOT NULL AND s.text != '') AS uniq
     FROM channels ch
@@ -201,6 +214,46 @@ _SQL_AUTO_FEED_SAMPLED = """
             WHERE m.channel_id = ch.channel_id
             ORDER BY m.message_id DESC LIMIT ?
          ) s WHERE s.text IS NOT NULL AND s.text != '') AS short_link
+    FROM channels ch
+"""
+
+# «Мёртвое вовлечение»: (просмотрено, сумма views) в окне последних N постов.
+# Окно применяется ВСЕГДА (и в full, и в quick) — метрика «мёртвое сейчас», не
+# «среднее за жизнь» (см. LOW_ENGAGEMENT_* в criteria.py). NULL-views исключаются
+# из обоих агрегатов; порог и guard'ы — в анализаторе.
+_SQL_ENGAGEMENT_SAMPLED = """
+    SELECT
+        ch.channel_id AS channel_id,
+        (SELECT COUNT(views) FROM (
+            SELECT views FROM messages m
+            WHERE m.channel_id = ch.channel_id
+            ORDER BY m.message_id DESC LIMIT ?
+         ) s WHERE s.views IS NOT NULL) AS viewed,
+        (SELECT SUM(views) FROM (
+            SELECT views FROM messages m
+            WHERE m.channel_id = ch.channel_id
+            ORDER BY m.message_id DESC LIMIT ?
+         ) s WHERE s.views IS NOT NULL) AS views_sum
+    FROM channels ch
+"""
+
+# «Пересылочный канал»: (всего сообщений, из них форвардов) в окне последних N.
+# Окно применяется всегда; порог и guard — в criteria.py (FORWARD_SHARE_*).
+# Форварды без текста считаются (медиа-пересылка — тоже пересылка).
+_SQL_FORWARD_SHARE_SAMPLED = """
+    SELECT
+        ch.channel_id AS channel_id,
+        (SELECT COUNT(*) FROM (
+            SELECT forward_from_channel_id FROM messages m
+            WHERE m.channel_id = ch.channel_id
+            ORDER BY m.message_id DESC LIMIT ?
+         ) s) AS total,
+        (SELECT SUM(CASE WHEN forward_from_channel_id IS NOT NULL
+                    THEN 1 ELSE 0 END) FROM (
+            SELECT forward_from_channel_id FROM messages m
+            WHERE m.channel_id = ch.channel_id
+            ORDER BY m.message_id DESC LIMIT ?
+         ) s) AS fwd
     FROM channels ch
 """
 
@@ -317,7 +370,11 @@ class FilterRepository:
     async def count_matching_prefixes_in_other_channels(
         self, channel_id: int, prefixes: list[str]
     ) -> int:
-        """Сколько из переданных prefixes уже есть в сообщениях других каналов."""
+        """Сколько из переданных prefixes уже есть в сообщениях других каналов.
+
+        Форварды (forward_from_channel_id) не считаются: атрибуция — не кочевание
+        текста (решение владельца 16.10.26).
+        """
         if not prefixes:
             return 0
         placeholders = ",".join("?" * len(prefixes))
@@ -326,6 +383,7 @@ class FilterRepository:
             FROM messages
             WHERE channel_id != ?
               AND text IS NOT NULL
+              AND forward_from_channel_id IS NULL
               AND substr(text, 1, 100) IN ({placeholders})
         """
         cur = await self._db.execute(sql, (channel_id, *prefixes))
@@ -335,10 +393,12 @@ class FilterRepository:
     async def fetch_cross_dupe_map(
         self, channel_id: int | None = None
     ) -> dict[int, tuple[int, int]]:
-        """Карта `channel_id → (уникальных префиксов, из них встречаются в других каналах)`.
+        """Карта `channel_id → (уникальных префиксов, из них опубликованы позже чужих)`.
 
-        Доля кросс-канальных дублей выявляет агрегаторы/сетки, перепечатывающие
-        чужой контент. Это самый тяжёлый запрос (self-join по префиксам).
+        Асимметричная метрика: дупликат — текст, появившийся в канале позже,
+        чем в любом другом (копипастер/агрегатор); первоисточник и равные даты
+        не считаются. Репосты с forward_from_channel_id исключены. Это самый
+        тяжёлый запрос (self-join по префиксам).
         """
         sql = _SQL_CROSS_DUPE
         params: tuple = ()
@@ -402,6 +462,37 @@ class FilterRepository:
         rows = await cur.fetchall()
         return {row["channel_id"]: (row["total"], row["short_link"] or 0) for row in rows}
 
+    async def fetch_engagement_map(
+        self, channel_id: int | None = None, *, window: int = 100
+    ) -> dict[int, tuple[int, int]]:
+        """Карта `channel_id → (просмотрено постов, сумма views)` в окне последних N.
+
+        Доля просмотров от подписчиков ниже порога — «мёртвое вовлечение»
+        (нейрослоп-фермы с автопостингом, зомби-каналы); порог и guard'ы в
+        criteria.py (LOW_ENGAGEMENT_*). Окно применяется всегда: метрика
+        «мёртвое сейчас», полная история завышает среднее накопленными
+        просмотрами старых постов. Литерал 100 — дубль LOW_ENGAGEMENT_WINDOW:
+        SQL-слой не импортирует пакет filters (см. комментарий к UDF выше).
+        """
+        sql, params = self._windowed_sql(_SQL_ENGAGEMENT_SAMPLED, channel_id=channel_id, window=window)
+        cur = await self._db.execute(sql, params)
+        rows = await cur.fetchall()
+        return {row["channel_id"]: (row["viewed"], row["views_sum"] or 0) for row in rows}
+
+    async def fetch_forward_share_map(
+        self, channel_id: int | None = None, *, window: int = 100
+    ) -> dict[int, tuple[int, int]]:
+        """Карта `channel_id → (всего сообщений, из них форвардов)` в окне последних N.
+
+        Метка `forwarder` (label-only): доля форвардов >= порога — пересылочный
+        канал. Окно применяется всегда; литерал 100 — дубль
+        FORWARD_SHARE_WINDOW: SQL-слой не импортирует пакет filters.
+        """
+        sql, params = self._windowed_sql(_SQL_FORWARD_SHARE_SAMPLED, channel_id=channel_id, window=window)
+        cur = await self._db.execute(sql, params)
+        rows = await cur.fetchall()
+        return {row["channel_id"]: (row["total"], row["fwd"] or 0) for row in rows}
+
     # ── Parallel fetch: separate read-only connections ─────────────────────
 
     def _can_parallel(self) -> bool:
@@ -436,6 +527,39 @@ class FilterRepository:
         # aiosqlite stubs declare fetchall() as Iterable[Row]; at runtime it is a list.
         return cast("list[aiosqlite.Row]", await cur.fetchall())
 
+    @staticmethod
+    def _text_map_sql(
+        template_full: str,
+        template_sampled: str,
+        *,
+        channel_id: int | None,
+        sample_size: int | None,
+        full_where_join: str,
+    ) -> tuple[str, tuple]:
+        """(sql, params) для text-карты: sampled-окно последних N или полный скан.
+
+        Sampled-шаблон channels-driven и берёт размер окна дважды; полный
+        группируется по channel_id (full_where_join — " AND " или " WHERE ",
+        смотря есть ли WHERE в шаблоне).
+        """
+        if sample_size is not None:
+            sql = template_sampled + (" WHERE ch.channel_id = ?" if channel_id is not None else "")
+            params: tuple = (
+                (sample_size, sample_size, channel_id) if channel_id is not None else (sample_size, sample_size)
+            )
+            return sql, params
+        sql = template_full + (
+            (full_where_join + "channel_id = ?" if channel_id is not None else "") + " GROUP BY channel_id"
+        )
+        return sql, ((channel_id,) if channel_id is not None else ())
+
+    @staticmethod
+    def _windowed_sql(template: str, *, channel_id: int | None, window: int) -> tuple[str, tuple]:
+        """(sql, params) для всегда-оконной channels-driven карты."""
+        sql = template + (" WHERE ch.channel_id = ?" if channel_id is not None else "")
+        params = (window, window, channel_id) if channel_id is not None else (window, window)
+        return sql, params
+
     async def fetch_maps_parallel(
         self,
         channel_id: int | None = None,
@@ -449,6 +573,8 @@ class FilterRepository:
         dict[int, tuple[int, int]],  # cross_dupe_map
         dict[int, tuple[int, int]],  # cyrillic_map
         dict[int, tuple[int, int]],  # auto_feed_map
+        dict[int, tuple[int, int]],  # engagement_map
+        dict[int, tuple[int, int]],  # forward_map
     ]:
         """Run the map queries in parallel on separate read-only connections.
 
@@ -459,51 +585,28 @@ class FilterRepository:
         SQL (#1138); subscriber stays full (it is count/stats-based, not
         text-based).
         """
-        sampled = sample_size is not None
         # Build parameterised SQL for each query. The text maps switch to the
         # channels-driven sampled templates when sample_size is given.
-        if sampled:
-            u_sql = _SQL_UNIQUENESS_SAMPLED + (" WHERE ch.channel_id = ?" if channel_id is not None else "")
-            u_params: tuple = (
-                (sample_size, sample_size, channel_id) if channel_id is not None else (sample_size, sample_size)
-            )
-            sm_sql = _SQL_SHORT_MESSAGE_SAMPLED + (" WHERE ch.channel_id = ?" if channel_id is not None else "")
-            sm_params: tuple = (
-                (sample_size, sample_size, channel_id) if channel_id is not None else (sample_size, sample_size)
-            )
-            cy_sql = _SQL_CYRILLIC_SAMPLED + (" WHERE ch.channel_id = ?" if channel_id is not None else "")
-            cy_params: tuple = (
-                (sample_size, sample_size, channel_id) if channel_id is not None else (sample_size, sample_size)
-            )
-        else:
-            u_sql = (
-                _SQL_UNIQUENESS + (" AND channel_id = ?" if channel_id is not None else "") + " GROUP BY channel_id"
-            )
-            u_params = (channel_id,) if channel_id is not None else ()
-            sm_sql = (
-                _SQL_SHORT_MESSAGE
-                + (" WHERE channel_id = ?" if channel_id is not None else "")
-                + " GROUP BY channel_id"
-            )
-            sm_params = (channel_id,) if channel_id is not None else ()
-            cy_sql = (
-                _SQL_CYRILLIC
-                + (" AND channel_id = ?" if channel_id is not None else "")
-                + " GROUP BY channel_id"
-            )
-            cy_params = (channel_id,) if channel_id is not None else ()
-        if sampled:
-            af_sql = _SQL_AUTO_FEED_SAMPLED + (" WHERE ch.channel_id = ?" if channel_id is not None else "")
-            af_params: tuple = (
-                (sample_size, sample_size, channel_id) if channel_id is not None else (sample_size, sample_size)
-            )
-        else:
-            af_sql = (
-                _SQL_AUTO_FEED
-                + (" AND channel_id = ?" if channel_id is not None else "")
-                + " GROUP BY channel_id"
-            )
-            af_params = (channel_id,) if channel_id is not None else ()
+        u_sql, u_params = self._text_map_sql(
+            _SQL_UNIQUENESS, _SQL_UNIQUENESS_SAMPLED,
+            channel_id=channel_id, sample_size=sample_size, full_where_join=" AND ",
+        )
+        sm_sql, sm_params = self._text_map_sql(
+            _SQL_SHORT_MESSAGE, _SQL_SHORT_MESSAGE_SAMPLED,
+            channel_id=channel_id, sample_size=sample_size, full_where_join=" WHERE ",
+        )
+        cy_sql, cy_params = self._text_map_sql(
+            _SQL_CYRILLIC, _SQL_CYRILLIC_SAMPLED,
+            channel_id=channel_id, sample_size=sample_size, full_where_join=" AND ",
+        )
+        af_sql, af_params = self._text_map_sql(
+            _SQL_AUTO_FEED, _SQL_AUTO_FEED_SAMPLED,
+            channel_id=channel_id, sample_size=sample_size, full_where_join=" AND ",
+        )
+        # engagement/forward: окно всегда (метрики «сейчас», не «за жизнь»);
+        # литерал 100 — дубль *_WINDOW, SQL-слой не импортирует пакет filters.
+        e_sql, e_params = self._windowed_sql(_SQL_ENGAGEMENT_SAMPLED, channel_id=channel_id, window=100)
+        f_sql, f_params = self._windowed_sql(_SQL_FORWARD_SHARE_SAMPLED, channel_id=channel_id, window=100)
 
         s_sql = (
             _SQL_SUBSCRIBER_BASE
@@ -522,15 +625,17 @@ class FilterRepository:
         async def _no_rows() -> list[aiosqlite.Row]:
             return []
 
-        conns = [await self._open_readonly_conn() for _ in range(5 + int(include_cross_dupe))]
+        conns = [await self._open_readonly_conn() for _ in range(7 + int(include_cross_dupe))]
         try:
-            rows_u, rows_s, rows_sm, rows_cy, rows_af, rows_cd = await asyncio.gather(
+            rows_u, rows_s, rows_sm, rows_cy, rows_af, rows_e, rows_f, rows_cd = await asyncio.gather(
                 self._run_on_conn(conns[0], u_sql, u_params),
                 self._run_on_conn(conns[1], s_sql, s_params),
                 self._run_on_conn(conns[2], sm_sql, sm_params),
                 self._run_on_conn(conns[3], cy_sql, cy_params),
                 self._run_on_conn(conns[4], af_sql, af_params),
-                self._run_on_conn(conns[5], cd_sql, cd_params) if include_cross_dupe else _no_rows(),
+                self._run_on_conn(conns[5], e_sql, e_params),
+                self._run_on_conn(conns[6], f_sql, f_params),
+                self._run_on_conn(conns[7], cd_sql, cd_params) if include_cross_dupe else _no_rows(),
             )
         finally:
             for conn in conns:
@@ -543,4 +648,6 @@ class FilterRepository:
             {r["channel_id"]: (r["uniq_total"], r["duped"] or 0) for r in rows_cd},
             {r["channel_id"]: (r["total"], r["cyr"] or 0) for r in rows_cy},
             {r["channel_id"]: (r["total"], r["short_link"] or 0) for r in rows_af},
+            {r["channel_id"]: (r["viewed"], r["views_sum"] or 0) for r in rows_e},
+            {r["channel_id"]: (r["total"], r["fwd"] or 0) for r in rows_f},
         )

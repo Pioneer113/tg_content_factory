@@ -7,7 +7,9 @@ from src.filters.criteria import VALID_FLAGS, contains_cyrillic
 from src.filters.models import ChannelFilterResult, FilterReport
 
 
-async def _insert_channel(db, channel_id, title="Test", channel_type="channel", username=None):
+async def _insert_channel(
+    db, channel_id, title="Test", channel_type: str | None = "channel", username=None
+):
     await db.execute(
         "INSERT INTO channels (channel_id, title, username, channel_type, is_active) "
         "VALUES (?, ?, ?, ?, 1)",
@@ -31,6 +33,41 @@ async def _insert_stats(db, channel_id, subscriber_count):
         "INSERT INTO channel_stats (channel_id, subscriber_count) VALUES (?, ?)",
         (channel_id, subscriber_count),
     )
+    await db.commit()
+
+
+async def _insert_messages_with_views(db, channel_id, views):
+    """Уникальные длинные посты без ссылок с заданными views (None допустим)."""
+    for i, views_count in enumerate(views, 1):
+        text = f"уникальный авторский пост номер {i} " + "подробный разбор без ссылок " * 5
+        await db.execute(
+            "INSERT INTO messages (channel_id, message_id, text, views, date) "
+            "VALUES (?, ?, ?, ?, '2025-01-01')",
+            (channel_id, i, text, views_count),
+        )
+    await db.commit()
+
+
+async def _insert_forward_mix(db, channel_id, forwards, plains, *, base=1000, textless_forwards=False):
+    """forwards постов-форвардов (fwd=999) + plains обычных; id не пересекаются."""
+    for i in range(forwards):
+        if textless_forwards:
+            await db.execute(
+                "INSERT INTO messages (channel_id, message_id, forward_from_channel_id, date) "
+                "VALUES (?, ?, 999, '2025-01-01')",
+                (channel_id, base + i),
+            )
+        else:
+            await db.execute(
+                "INSERT INTO messages (channel_id, message_id, text, forward_from_channel_id, date) "
+                "VALUES (?, ?, ?, 999, '2025-01-01')",
+                (channel_id, base + i, f"пересланный чужой пост номер {i}, длинный текст целиком"),
+            )
+    for i in range(plains):
+        await db.execute(
+            "INSERT INTO messages (channel_id, message_id, text, date) VALUES (?, ?, ?, '2025-01-01')",
+            (channel_id, base + 500 + i, f"уникальный авторский пост номер {i}, длинный и цельный"),
+        )
     await db.commit()
 
 
@@ -74,7 +111,9 @@ class TestValidFlags:
         assert "title_changed" in VALID_FLAGS
         assert "suspicious_username" in VALID_FLAGS
         assert "auto_feed" in VALID_FLAGS
-        assert len(VALID_FLAGS) == 11
+        assert "low_engagement" in VALID_FLAGS
+        assert "forwarder" in VALID_FLAGS
+        assert len(VALID_FLAGS) == 13
 
 
 class TestAnalyzerLowUniqueness:
@@ -111,6 +150,24 @@ class TestAnalyzerLowUniqueness:
         result = await analyzer.analyze_channel(103)
         assert "low_uniqueness" not in result.flags
 
+    async def test_forwards_not_counted_in_uniqueness(self, db, raw_db):
+        # «20 уникальных постов + 80 форвардов одного текста»: форварды —
+        # атрибуция, в метрику оригинальности не входят (решение владельца
+        # 16.10.26). Старый код считал их: 21/100 = 21% < 30% → флаг.
+        await _insert_channel(raw_db, 104)
+        await _insert_messages(raw_db, 104, [f"уникальный авторский пост {i}" for i in range(20)])
+        for i in range(80):
+            await raw_db.execute(
+                "INSERT INTO messages (channel_id, message_id, text, forward_from_channel_id, date) "
+                "VALUES (104, ?, ?, 999, '2025-01-01')",
+                (100 + i, "пересланный чужой пост, один и тот же текст"),
+            )
+        await raw_db.commit()
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(104)
+        assert result.uniqueness_pct == 100.0
+        assert "low_uniqueness" not in result.flags
+
 
 class TestAnalyzerSubscriberRatio:
     async def test_healthy_ratio(self, db, raw_db):
@@ -139,6 +196,17 @@ class TestAnalyzerSubscriberRatio:
         assert result.subscriber_ratio is None
         assert "low_subscriber_ratio" not in result.flags
 
+    async def test_null_type_broadcast_threshold(self, db, raw_db):
+        # NULL-тип судится по broadcast-порогу (0.1 < 1.0 → флаг), а не по
+        # chat-порогу 0.02. Реальный кейс: ферма ai_for_dev, ratio 0.30 —
+        # со старым whitelist-гейтом она молча проходила.
+        await _insert_channel(raw_db, 203, channel_type=None)
+        await _insert_messages(raw_db, 203, [f"msg{i}" for i in range(100)])
+        await _insert_stats(raw_db, 203, 10)
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(203)
+        assert "low_subscriber_ratio" in result.flags
+
 
 class TestAnalyzerCrossChannelDupes:
     async def test_no_dupes(self, db, raw_db):
@@ -150,7 +218,34 @@ class TestAnalyzerCrossChannelDupes:
         result = await analyzer.analyze_channel(300)
         assert "cross_channel_spam" not in result.flags
 
-    async def test_high_dupes(self, db, raw_db):
+    async def test_copy_later_flagged_source_clean(self, db, raw_db):
+        # Асимметричная семантика (фидбек владельца 15.10.26): дупликат — это
+        # текст, опубликованный каналом ПОЗЖЕ, чем он появился в другом канале.
+        # 302 — источник, 306 — скопировал без атрибуции: флаг у копии, у
+        # источника чисто.
+        await _insert_channel(raw_db, 302, title="Source")
+        await _insert_channel(raw_db, 306, title="Copier")
+        shared = "this is a duplicated message across channels"
+        await raw_db.execute(
+            "INSERT INTO messages (channel_id, message_id, text, date) VALUES (302, 1, ?, '2025-01-01')",
+            (shared,),
+        )
+        await raw_db.execute(
+            "INSERT INTO messages (channel_id, message_id, text, date) VALUES (306, 1, ?, '2025-01-05')",
+            (shared,),
+        )
+        await raw_db.commit()
+        analyzer = ChannelAnalyzer(db)
+        source = await analyzer.analyze_channel(302)
+        assert source.cross_dupe_pct == 0.0
+        assert "cross_channel_spam" not in source.flags
+        copier = await analyzer.analyze_channel(306)
+        assert copier.cross_dupe_pct == 100.0
+        assert "cross_channel_spam" in copier.flags
+
+    async def test_same_moment_not_flagged(self, db, raw_db):
+        # Равные даты (одновременная публикация) никому не считаются дупликатом:
+        # дупликат — строго «позже чужого».
         await _insert_channel(raw_db, 302)
         await _insert_channel(raw_db, 303, title="Mirror")
         shared = ["this is a duplicated message across channels"]
@@ -158,8 +253,26 @@ class TestAnalyzerCrossChannelDupes:
         await _insert_messages(raw_db, 303, shared)
         analyzer = ChannelAnalyzer(db)
         result = await analyzer.analyze_channel(302)
-        assert result.cross_dupe_pct == 100.0
-        assert "cross_channel_spam" in result.flags
+        assert result.cross_dupe_pct == 0.0
+        assert "cross_channel_spam" not in result.flags
+
+    async def test_forward_repost_not_flagged(self, db, raw_db):
+        # Репост с атрибуцией (forward_from_channel_id) не считается дупликатом:
+        # честная пересылка — не кросс-канальный спам.
+        await _insert_channel(raw_db, 307, title="Reposter")
+        await _insert_channel(raw_db, 308, title="Origin")
+        await raw_db.execute(
+            "INSERT INTO messages (channel_id, message_id, text, date) "
+            "VALUES (308, 1, 'оригинальный пост чужого канала целиком', '2025-01-01')"
+        )
+        await raw_db.execute(
+            "INSERT INTO messages (channel_id, message_id, text, forward_from_channel_id, date) "
+            "VALUES (307, 1, 'оригинальный пост чужого канала целиком', 999, '2025-01-03')"
+        )
+        await raw_db.commit()
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(307)
+        assert "cross_channel_spam" not in result.flags
 
 
 class TestAnalyzerAutoFeed:
@@ -208,7 +321,13 @@ class TestAnalyzeAllQuickMode:
         await _insert_channel(raw_db, 501, title="Mirror")
         shared = ["this is a duplicated message across channels"]
         await _insert_messages(raw_db, 500, shared)
-        await _insert_messages(raw_db, 501, shared)
+        # 501 скопировал позже: при равных датах дупликата нет (см. ту же
+        # семантику в TestAnalyzerCrossChannelDupes).
+        await raw_db.execute(
+            "INSERT INTO messages (channel_id, message_id, text, date) VALUES (501, 1, ?, '2025-01-05')",
+            shared,
+        )
+        await raw_db.commit()
         analyzer = ChannelAnalyzer(db)
 
         full = await analyzer.analyze_all()
@@ -236,10 +355,10 @@ class TestAnalyzeAllQuickMode:
             repo = file_db.filter_repo
             assert repo._can_parallel()
 
-            _, _, _, full_cross_map, _, _ = await repo.fetch_maps_parallel(None)
+            _, _, _, full_cross_map, _, _, _, _ = await repo.fetch_maps_parallel(None)
             assert full_cross_map
 
-            _, _, _, quick_cross_map, _, _ = await repo.fetch_maps_parallel(None, include_cross_dupe=False)
+            _, _, _, quick_cross_map, _, _, _, _ = await repo.fetch_maps_parallel(None, include_cross_dupe=False)
             assert quick_cross_map == {}
 
             quick = await ChannelAnalyzer(file_db).analyze_all(quick=True)
@@ -959,21 +1078,28 @@ class TestChannelAnalyzer:
                 "unique channel 900 payload long enough",
             ],
         )
-        await _insert_messages(
-            raw_db,
-            901,
+        # 901 скопировал оба текста позже — флаг у копии, источник чист.
+        for i, text in enumerate(
             [
                 "shared duplicated content alpha beta gamma",
                 "shared duplicated content delta epsilon zeta",
             ],
-        )
+            1,
+        ):
+            await raw_db.execute(
+                "INSERT INTO messages (channel_id, message_id, text, date) VALUES (901, ?, ?, '2025-01-05')",
+                (i, text),
+            )
+        await raw_db.commit()
         await _insert_messages(raw_db, 902, ["independent long content for channel 902 only"])
 
         analyzer = ChannelAnalyzer(db)
         report = await analyzer.analyze_all()
+        ch901 = next(r for r in report.results if r.channel_id == 901)
+        assert ch901.cross_dupe_pct == 100.0
+        assert "cross_channel_spam" in ch901.flags
         ch900 = next(r for r in report.results if r.channel_id == 900)
-        assert ch900.cross_dupe_pct == 66.7
-        assert "cross_channel_spam" in ch900.flags
+        assert "cross_channel_spam" not in ch900.flags
 
 
 class TestApplyFiltersKeepTag:
@@ -1082,7 +1208,12 @@ class TestApplyFiltersLabelOnly:
         )
         is_filtered, filter_flags = await cur.fetchone()
         assert is_filtered == 0
-        assert set((filter_flags or "").split(",")) - {""} == set(LABEL_ONLY_FLAGS)
+        # forwarder — label-only, но каналу без форвардов не проставляется:
+        # ассерт по фактически заработанным меткам + контракт #1517 (метки
+        # выживают, блокирующих флагов нет).
+        flags = set((filter_flags or "").split(",")) - {""}
+        assert flags == {"non_cyrillic"}
+        assert flags <= set(LABEL_ONLY_FLAGS)
 
     async def test_label_only_apply_idempotent(self, db, raw_db):
         from src.filters.criteria import LABEL_ONLY_FLAGS
@@ -1100,7 +1231,10 @@ class TestApplyFiltersLabelOnly:
         )
         is_filtered, filter_flags = await cur.fetchone()
         assert is_filtered == 0
-        assert set((filter_flags or "").split(",")) - {""} == set(LABEL_ONLY_FLAGS)
+        # См. тест выше: forwarder в фикстуре не зарабатывается.
+        flags = set((filter_flags or "").split(",")) - {""}
+        assert flags == {"non_cyrillic"}
+        assert flags <= set(LABEL_ONLY_FLAGS)
 
     async def test_label_only_with_blocking_flag_filters(self, db, raw_db):
         # non_cyrillic + блокирующий suspicious_username → блокировка и оба флага.
@@ -1196,3 +1330,193 @@ class TestPrecheckKeepTag:
         assert rows[932] == (0, "")
         assert rows[933][0] == 1
         assert "low_subscriber_manual" in rows[933][1]
+
+
+class TestAnalyzerLowEngagement:
+    """«Мёртвое вовлечение»: views/подписчик < 10% в окне последних 100 постов.
+
+    Калибровка 15.10.26 на живой БД: ферма ai_for_dev — 7.8% (flag), зомби с
+    живым ratio — 0.1% (flag), живые каналы — 23–76% (чист). Порог и окно — в
+    criteria.py (LOW_ENGAGEMENT_*). Решение владельца: конъюнкции с
+    subs/посты НЕТ — одиночная views-метрика ловит и ферму, и зомби-когорту.
+    """
+
+    async def test_farm_profile_flagged(self, db, raw_db):
+        # 941 подписчик, 40 постов по 70 просмотров: 70/941 = 7.4% < 10%.
+        # subs/посты = 23.5 — «живой»: флаг ставит только views-метрика.
+        await _insert_channel(raw_db, 4200)
+        await _insert_messages_with_views(raw_db, 4200, [70] * 40)
+        await _insert_stats(raw_db, 4200, 941)
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(4200)
+        assert result.views_ratio_pct == 7.4
+        assert "low_engagement" in result.flags
+        assert result.is_filtered is True
+
+    async def test_engaged_channel_not_flagged(self, db, raw_db):
+        await _insert_channel(raw_db, 4201)
+        await _insert_messages_with_views(raw_db, 4201, [500] * 40)
+        await _insert_stats(raw_db, 4201, 1000)
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(4201)
+        assert result.views_ratio_pct == 50.0
+        assert "low_engagement" not in result.flags
+
+    async def test_high_ratio_dead_views_still_flagged(self, db, raw_db):
+        # Зомби-канал: живой subs/посты (5000/40 = 125), мёртвые просмотры.
+        # Пин решения владельца: без конъюнкции — флаг по одной views-метрике.
+        await _insert_channel(raw_db, 4202)
+        await _insert_messages_with_views(raw_db, 4202, [10] * 40)
+        await _insert_stats(raw_db, 4202, 5000)
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(4202)
+        assert result.views_ratio_pct == 0.2
+        assert "low_engagement" in result.flags
+
+    async def test_boundary_views_ratio_not_flagged(self, db, raw_db):
+        # Ровно 10.0% — порог строгий (<).
+        await _insert_channel(raw_db, 4203)
+        await _insert_messages_with_views(raw_db, 4203, [10] * 40)
+        await _insert_stats(raw_db, 4203, 100)
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(4203)
+        assert result.views_ratio_pct == 10.0
+        assert "low_engagement" not in result.flags
+
+    async def test_no_views_skip(self, db, raw_db):
+        # Ни у одного поста в окне нет views — статистики нет, метки нет.
+        await _insert_channel(raw_db, 4204)
+        await _insert_messages_with_views(raw_db, 4204, [None] * 40)
+        await _insert_stats(raw_db, 4204, 100)
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(4204)
+        assert result.views_ratio_pct is None
+        assert "low_engagement" not in result.flags
+
+    async def test_few_viewed_messages_skip(self, db, raw_db):
+        # Просмотренных < LOW_ENGAGEMENT_MIN_VIEWED_MESSAGES — данных мало.
+        await _insert_channel(raw_db, 4205)
+        await _insert_messages_with_views(raw_db, 4205, [1] * 10)
+        await _insert_stats(raw_db, 4205, 100)
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(4205)
+        assert result.views_ratio_pct is None
+        assert "low_engagement" not in result.flags
+
+    async def test_no_stats_skip(self, db, raw_db):
+        await _insert_channel(raw_db, 4206)
+        await _insert_messages_with_views(raw_db, 4206, [1] * 40)
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(4206)
+        assert result.views_ratio_pct is None
+        assert "low_engagement" not in result.flags
+
+    async def test_chat_excluded(self, db, raw_db):
+        # Чаты (group/supergroup/...) не проверяются — только broadcast.
+        await _insert_channel(raw_db, 4207, channel_type="supergroup")
+        await _insert_messages_with_views(raw_db, 4207, [1] * 40)
+        await _insert_stats(raw_db, 4207, 100)
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(4207)
+        assert result.views_ratio_pct is None
+        assert "low_engagement" not in result.flags
+
+    async def test_apply_sets_flag_and_filters(self, db, raw_db):
+        await _insert_channel(raw_db, 4208)
+        await _insert_messages_with_views(raw_db, 4208, [70] * 40)
+        await _insert_stats(raw_db, 4208, 941)
+        analyzer = ChannelAnalyzer(db)
+        report = await analyzer.analyze_all()
+        await analyzer.apply_filters(report)
+        cur = await raw_db.execute(
+            "SELECT is_filtered, filter_flags FROM channels WHERE channel_id = 4208"
+        )
+        row = await cur.fetchone()
+        assert row["is_filtered"] == 1
+        assert "low_engagement" in row["filter_flags"]
+
+    async def test_quick_mode_computes_engagement(self, db, raw_db):
+        # Окно engagement-метрики — всегда последние 100 постов, независимо от
+        # quick sample_size (метрика «мёртвое сейчас», не «среднее за жизнь»).
+        await _insert_channel(raw_db, 4209)
+        await _insert_messages_with_views(raw_db, 4209, [70] * 40)
+        await _insert_stats(raw_db, 4209, 941)
+        analyzer = ChannelAnalyzer(db)
+        quick = await analyzer.analyze_all(quick=True, sample_size=50)
+        result = next(r for r in quick.results if r.channel_id == 4209)
+        assert "low_engagement" in result.flags
+
+    async def test_null_channel_type_still_checked(self, db, raw_db):
+        # NULL channel_type (legacy-импорт, 354 канала на живой БД 15.10.26):
+        # судим по данным, а не по типу — гейт «не чат», а не «в broadcast».
+        # Реальный кейс: ферма ai_for_dev имеет channel_type IS NULL.
+        await _insert_channel(raw_db, 4210, channel_type=None)
+        await _insert_messages_with_views(raw_db, 4210, [70] * 40)
+        await _insert_stats(raw_db, 4210, 941)
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(4210)
+        assert result.views_ratio_pct == 7.4
+        assert "low_engagement" in result.flags
+
+
+class TestAnalyzerForwardShare:
+    """Метка `forwarder`: ≥50% форвардов в окне последних 100 постов.
+
+    Label-only (решение владельца 16.10.26): пересылочный канал — не спам,
+    метка для кураторства, сбор не блокирует.
+    """
+
+    async def test_majority_forwards_labeled(self, db, raw_db):
+        await _insert_channel(raw_db, 4300)
+        await _insert_forward_mix(raw_db, 4300, forwards=40, plains=10)
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(4300)
+        assert result.forward_pct == 80.0
+        assert "forwarder" in result.flags
+        # Label-only: метка не блокирует сбор.
+        assert result.is_filtered is False
+
+    async def test_minority_forwards_not_labeled(self, db, raw_db):
+        await _insert_channel(raw_db, 4301)
+        await _insert_forward_mix(raw_db, 4301, forwards=10, plains=40)
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(4301)
+        assert result.forward_pct == 20.0
+        assert "forwarder" not in result.flags
+
+    async def test_boundary_forward_share_labeled(self, db, raw_db):
+        # Ровно 50.0% — порог нестрогий (>=): «наполовину пересылочный» метится.
+        await _insert_channel(raw_db, 4305)
+        await _insert_forward_mix(raw_db, 4305, forwards=20, plains=20)
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(4305)
+        assert result.forward_pct == 50.0
+        assert "forwarder" in result.flags
+
+    async def test_few_messages_skip(self, db, raw_db):
+        # Меньше FORWARD_SHARE_MIN_MESSAGES — статистики нет.
+        await _insert_channel(raw_db, 4302)
+        await _insert_forward_mix(raw_db, 4302, forwards=10, plains=5)
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(4302)
+        assert result.forward_pct is None
+        assert "forwarder" not in result.flags
+
+    async def test_textless_forwards_counted(self, db, raw_db):
+        # Форвард-медиа без текста тоже форвард.
+        await _insert_channel(raw_db, 4303)
+        await _insert_forward_mix(raw_db, 4303, forwards=40, plains=10, textless_forwards=True)
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(4303)
+        assert result.forward_pct == 80.0
+        assert "forwarder" in result.flags
+
+    async def test_quick_mode_computes_forward_share(self, db, raw_db):
+        # Окно метки — всегда последние 100 постов, независимо от quick
+        # sample_size.
+        await _insert_channel(raw_db, 4304)
+        await _insert_forward_mix(raw_db, 4304, forwards=40, plains=10)
+        analyzer = ChannelAnalyzer(db)
+        quick = await analyzer.analyze_all(quick=True, sample_size=50)
+        result = next(r for r in quick.results if r.channel_id == 4304)
+        assert "forwarder" in result.flags

@@ -18,6 +18,10 @@ _INSERT_MSG_ENTITIES = (
 _INSERT_MSG_NO_TEXT = (
     "INSERT INTO messages (channel_id, message_id, date)" " VALUES (?, ?, datetime('now'))"
 )
+_INSERT_MSG_VIEWS = (
+    "INSERT INTO messages (channel_id, message_id, text, views, date)"
+    " VALUES (?, ?, ?, ?, datetime('now'))"
+)
 _INSERT_STATS = (
     "INSERT INTO channel_stats (channel_id, subscriber_count, collected_at)"
     " VALUES (?, ?, datetime('now'))"
@@ -399,6 +403,30 @@ async def test_count_matching_prefixes_multiple(filters_repo, channels_repo):
     assert result == 2
 
 
+async def test_count_matching_prefixes_ignores_forwards(filters_repo, channels_repo):
+    """Форвард-копия в чужом канале не считается совпадением (атрибуция); копипаст — да."""
+    await channels_repo.add_channel(Channel(channel_id=1, title="Test"))
+    await channels_repo.add_channel(Channel(channel_id=2, title="Other"))
+
+    prefix = "Same prefix message"
+    await filters_repo._db.executemany(
+        "INSERT INTO messages (channel_id, message_id, text, forward_from_channel_id, date)"
+        " VALUES (?, ?, ?, ?, datetime('now'))",
+        [
+            (1, 100, prefix, None),
+            (2, 100, prefix, 999),  # чужая копия — оформленный форвард
+            (1, 101, "Plain prefix copy here", None),
+            (2, 101, "Plain prefix copy here", None),  # чужая копия — копипаст
+        ],
+    )
+    await filters_repo._db.commit()
+
+    result = await filters_repo.count_matching_prefixes_in_other_channels(
+        1, [prefix, "Plain prefix copy here"]
+    )
+    assert result == 1
+
+
 # fetch_cross_dupe_map tests
 
 
@@ -428,18 +456,17 @@ async def test_fetch_cross_dupe_map_no_dupes(filters_repo, channels_repo):
 
 
 async def test_fetch_cross_dupe_map_with_dupes(filters_repo, channels_repo):
-    """Test with cross-channel duplicates."""
+    """Асимметричная семантика: дупликат — публикация ПОЗЖЕ чужой."""
     await channels_repo.add_channel(Channel(channel_id=1, title="Test"))
     await channels_repo.add_channel(Channel(channel_id=2, title="Test 2"))
 
-    # Same message in both channels (longer than 10 chars)
     shared_text = "This is a shared message between channels"
     await filters_repo._db.executemany(
-        _INSERT_MSG,
+        "INSERT INTO messages (channel_id, message_id, text, date) VALUES (?, ?, ?, ?)",
         [
-            (1, 100, shared_text),
-            (2, 100, shared_text),
-            (1, 101, "Unique to channel 1"),
+            (1, 100, shared_text, "2026-01-01"),
+            (1, 101, "Unique to channel 1", "2026-01-01"),
+            (2, 100, shared_text, "2026-02-01"),  # копия — позже источника
         ],
     )
     await filters_repo._db.commit()
@@ -447,7 +474,9 @@ async def test_fetch_cross_dupe_map_with_dupes(filters_repo, channels_repo):
     result = await filters_repo.fetch_cross_dupe_map()
     total, duped = result[1]
     assert total == 2  # 2 unique prefixes in channel 1
-    assert duped == 1  # 1 is duplicated in another channel
+    assert duped == 0  # канал 1 — источник: не считается дупликатом
+    total2, duped2 = result[2]
+    assert (total2, duped2) == (1, 1)  # канал 2 скопировал позже — дупликат
 
 
 async def test_fetch_cross_dupe_map_excludes_short(filters_repo, channels_repo):
@@ -688,3 +717,74 @@ async def test_fetch_auto_feed_map_masked_link_entities(filters_repo, channels_r
     # ветку OR entities_json LIKE или колонку из проекции подзапроса.
     sampled = await filters_repo.fetch_auto_feed_map(sample_size=3)
     assert sampled[1] == (3, 1)
+
+
+# fetch_engagement_map tests
+
+
+async def test_fetch_engagement_map_empty(filters_repo):
+    """Test engagement map with no messages."""
+    result = await filters_repo.fetch_engagement_map()
+    assert result == {}
+
+
+async def test_fetch_engagement_map_basic(filters_repo, channels_repo):
+    """Views aggregate over the window; NULL views excluded from count and sum."""
+    await channels_repo.add_channel(Channel(channel_id=1, title="Test"))
+
+    await filters_repo._db.executemany(
+        _INSERT_MSG_VIEWS,
+        [
+            (1, 100, "post one", 100),
+            (1, 101, "post two", None),
+            (1, 102, "post three", 50),
+            (1, 103, "post four", 70),
+        ],
+    )
+    await filters_repo._db.commit()
+
+    result = await filters_repo.fetch_engagement_map()
+    viewed, views_sum = result[1]
+    assert viewed == 3
+    assert views_sum == 220
+
+
+async def test_fetch_engagement_map_window_last_n(filters_repo, channels_repo):
+    """window=N aggregates only the last N messages by message_id DESC."""
+    await channels_repo.add_channel(Channel(channel_id=1, title="Test"))
+
+    await filters_repo._db.executemany(
+        _INSERT_MSG_VIEWS,
+        [
+            (1, 100, "old post one", 10000),
+            (1, 101, "old post two", 10000),
+            (1, 102, "old post three", 10000),
+            (1, 103, "recent post", 1),
+        ],
+    )
+    await filters_repo._db.commit()
+
+    last_one = await filters_repo.fetch_engagement_map(window=1)
+    assert last_one[1] == (1, 1)  # только id=103
+
+    full = await filters_repo.fetch_engagement_map()
+    assert full[1] == (4, 30001)
+
+
+async def test_fetch_engagement_map_by_channel(filters_repo, channels_repo):
+    """Test filtering by channel_id."""
+    await channels_repo.add_channel(Channel(channel_id=1, title="Test"))
+    await channels_repo.add_channel(Channel(channel_id=2, title="Test 2"))
+
+    await filters_repo._db.executemany(
+        _INSERT_MSG_VIEWS,
+        [
+            (1, 100, "post one", 50),
+            (2, 100, "post two", 999),
+        ],
+    )
+    await filters_repo._db.commit()
+
+    result = await filters_repo.fetch_engagement_map(channel_id=1)
+    assert 1 in result
+    assert 2 not in result
