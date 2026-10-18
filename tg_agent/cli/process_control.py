@@ -90,7 +90,28 @@ def _process_command(pid: int) -> str:
 
     if result.returncode != 0:
         return ""
-    return result.stdout.strip()
+    command = result.stdout.strip()
+    # ps renders argv without quoting. Recover the executable boundary from
+    # comm rather than splitting a venv path containing spaces into words.
+    try:
+        executable_result = subprocess.run(
+            ["ps", "-o", "comm=", "-p", str(pid)],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+    except OSError:
+        return command
+    executable = executable_result.stdout.strip()
+    if executable_result.returncode == 0 and executable and command.startswith(executable + " "):
+        arguments = command[len(executable) + 1:]
+        # A pip-installed console script normally shares the interpreter's bin
+        # directory. Its path also needs quoting when that directory has spaces.
+        console_script = str(Path(executable).with_name("tg-agent"))
+        if arguments.startswith(console_script + " "):
+            arguments = shlex.quote(console_script) + arguments[len(console_script):]
+        return shlex.quote(executable) + " " + arguments
+    return command
 
 
 def is_expected_server_process(pid: int) -> bool:
@@ -122,7 +143,9 @@ def is_expected_server_process(pid: int) -> bool:
                 if not tokens:
                     return False
                 tokens.pop(0)
-            elif option not in {"-u", "-B", "-O", "-OO", "-E", "-I", "-s", "-S", "-P", "-q", "-b", "-bb"}:
+            elif option.startswith(("-W", "-X")):
+                continue
+            elif len(option) < 2 or any(flag not in "uBOEIsSPqb" for flag in option[1:]):
                 return False
         else:
             if not tokens or Path(tokens.pop(0)).name != "tg-agent":
