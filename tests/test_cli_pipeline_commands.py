@@ -639,7 +639,7 @@ class TestPipelineEditRW:
         pid = _seed_minimal_pipeline(db_path, name="OldName")
 
         _pipeline_cli_run(
-            db_path, cli_init_patch, _pipeline_ns("edit", id=pid, name="NewName")
+            db_path, cli_init_patch, _pipeline_ns("edit", id=pid, name="NewName", source=None, target=None)
         )
 
         row = _read_pipeline_row(db_path, pid)
