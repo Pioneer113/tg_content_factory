@@ -1,0 +1,85 @@
+# AI news digest — structured workflow
+
+Digest over the collected DB with a fixed data schema: the agent fills the
+schema, the requester formats the final post from that JSON. The schema is the
+contract; rendering follows the requester's channel voice (the operator keeps
+the voice spec locally).
+
+## 1. Collect the window
+
+Default window: the last **7 days** (weekly digest). Pull candidates per keyword;
+`--date-from` / `--date-to` work on the DB modes (`local`/`semantic`/`hybrid`):
+
+```bash
+tg-agent search "нейросети" --mode local --date-from 2026-10-10 --date-to 2026-10-17 --format json --limit 50
+tg-agent search "LLM"        --mode local --date-from 2026-10-10 --date-to 2026-10-17 --format json --limit 50
+# …one call per keyword
+```
+
+Starter keyword set (extend per request): `ИИ`, `нейросети`, `LLM`, `модель`,
+`релиз`, `OpenAI`, `Anthropic`, `Google DeepMind`, `benchmark`. If the sweep is
+thin, `--mode hybrid` or `--mode semantic` improve recall.
+
+The JSON envelope carries `total`, `has_more` and `error`. Before building the
+digest: `error` non-null = the keyword was NOT searched (do not pretend it
+was); `has_more=true` = the window is truncated — raise `--limit` (or split
+the window) and re-run, otherwise the digest is silently incomplete.
+
+Results come back date-descending, so a week-sized window overflows any
+`--limit` fast and the OLDEST days drop out first. Split the sweep into
+sub-windows of 3-4 days and merge (measured 18.10: a 7-day sweep at
+`--limit 50` silently lost days 1-4 of the window).
+
+## 2. Build the structured digest
+
+Merge all hits into ONE JSON object — the schema every consumer can rely on:
+
+```json
+{
+  "date": "2026-10-17",
+  "items": [
+    {
+      "title": "Claude 5.5 released",
+      "summary": "One or two sentences: what happened and why it matters.",
+      "sources": ["@channel1", "@channel2"],
+      "date": "2026-10-17"
+    }
+  ]
+}
+```
+
+- `date` (top level) — the window the digest covers.
+- `items[].date` — the EVENT date, from the message text, not the repost time.
+- `sources` — `@username` (or channel title) per hit, from the search JSON.
+
+## 3. Selection and editorial rules
+
+- **Ranking is mechanical, not editorial**: order and cut stories by
+  DISTINCT-CHANNEL COVERAGE — how many independent channels wrote about the
+  story. Default digest = **top-20**. A story covered by 2 channels loses to
+  one covered by 15, however good it is.
+- **≥2 independent channels** is the inclusion floor — a single-channel post
+  is a rumor; leave it out.
+- **Event date ≠ repost date**: a fresh repost of an old announcement is not
+  news for this window.
+- **Only verified items.** If the collected texts do not confirm the facts,
+  the item does not exist. No speculation, no filler.
+- **One story = one item**: duplicates across channels merge, sources
+  accumulate. Brand-token channel counts are cluster noise (jobs posts,
+  coupon spam) — count the story, not the brand.
+
+## 4. Output and publish
+
+- Build the JSON first, then render the user-facing text in the requester's
+  channel voice (their local spec), not your own taste.
+- Telegram caps one message at 4096 chars: send long digests in parts.
+- Show the draft before sending. Publish to a channel only after the user
+  explicitly approved target + text:
+
+```bash
+tg-agent dialogs send <chat-id-or-username> "<final text>" --yes
+```
+
+A published post is corrected in place (`dialogs edit-message`), not deleted.
+This is a real send from the user's account — Safety rules in SKILL.md apply
+(confirm target + content before the first send in a task).
