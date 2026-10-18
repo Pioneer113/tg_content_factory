@@ -43,6 +43,15 @@ def _pending_key(phone: str) -> str:
     return f"auth_pending:{phone}"
 
 
+def _require_session_encryption_key(db: Database) -> None:
+    """Report a configuration error before requesting or consuming an auth code."""
+    try:
+        db.repos.accounts.require_session_encryption_key()
+    except RuntimeError as exc:
+        print(f"ERROR: {exc} Set SESSION_ENCRYPTION_KEY in .env or config.yaml.", file=sys.stderr)
+        raise typer.Exit(1) from None
+
+
 async def _load_resolve_backoffs(db, *, now: datetime) -> dict[str, datetime]:
     """Read active per-phone resolve_username backoff deadlines from settings (#790)."""
     from tg_agent.telegram.resolve_guard import (
@@ -128,6 +137,7 @@ async def _run_import(args: argparse.Namespace, db: Database) -> None:
     entry point is :func:`import_impl`. Business logic unchanged from pre-Typer (#1123).
     """
     phone = getattr(args, "phone", None)
+    _require_session_encryption_key(db)
     session_string = _read_session_arg(args)
     if not phone or not session_string:
         print("ERROR: provide --phone and a session string (--session-string or --session-string-stdin)")
@@ -212,6 +222,7 @@ async def send_code_impl(
     """Send a Telegram auth code to *phone* and stash the pending-auth state."""
     config, db = await runtime.init_db(config_path)
     try:
+        _require_session_encryption_key(db)
         api_id, api_hash = await _resolve_credentials(config, db, api_id=api_id, api_hash=api_hash)
         if api_id == 0 or not api_hash:
             print("ERROR: API credentials not configured.")
@@ -259,7 +270,7 @@ async def verify_code_impl(
 
         # Fail before sign-in consumes the one-time code when the session could
         # not be persisted safely.
-        db.repos.accounts.require_session_encryption_key()
+        _require_session_encryption_key(db)
 
         api_id, api_hash = await _resolve_credentials(config, db, api_id=api_id, api_hash=api_hash)
         if api_id == 0 or not api_hash:
@@ -801,3 +812,4 @@ def account_import(
             force=force,
         )
     )
+

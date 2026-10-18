@@ -49,7 +49,7 @@ Create `.env` in your working directory (auto-loaded by every command):
 ```
 TG_API_ID=your_api_id
 TG_API_HASH=your_api_hash
-SESSION_ENCRYPTION_KEY=    # optional: encrypt session strings in the DB
+SESSION_ENCRYPTION_KEY=your_random_secret    # required before adding/importing accounts
 ```
 
 ### 3. Authorize an account (interactive, once)
@@ -136,7 +136,7 @@ note, migration story, and rationale for de-emphasizing mandatory `sqlite-vec`.
 |---|---|---|
 | `TG_API_ID` | Yes | Telegram API ID |
 | `TG_API_HASH` | Yes | Telegram API Hash |
-| `SESSION_ENCRYPTION_KEY` | No* | Key for encrypting Telegram session strings in DB |
+| `SESSION_ENCRYPTION_KEY` | Yes* | Key for encrypting Telegram session strings in DB |
 | `WEB_PASS` | —† | Web panel password (legacy web dashboard only) |
 | `LLM_API_KEY` | No | API key for AI-powered search |
 | `ANTHROPIC_API_KEY` | —† | `claude-agent-sdk` only (legacy embedded agent chat) |
@@ -145,7 +145,7 @@ note, migration story, and rationale for de-emphasizing mandatory `sqlite-vec`.
 | `AGENT_FALLBACK_MODEL` | —† | `provider:model` for `deepagents` fallback (legacy) |
 | `AGENT_FALLBACK_API_KEY` | —† | Explicit API key for the legacy fallback provider |
 
-\* If not set, sessions are stored in plaintext. If the DB already contains encrypted sessions (`enc:v*`), startup fails until this key is provided.
+\* Required to add or import accounts and decrypt stored sessions. New sessions are always encrypted (`enc:v2:`); plaintext writes are refused. Generate a secret with `python -c "import secrets; print(secrets.token_urlsafe(32))"`, keep it private, and retain it to read existing sessions. No `config.yaml` is needed: the key is read directly from `.env`.
 
 \† Legacy-only: needed solely by the legacy web panel and embedded agent chat (see Legacy surfaces).
 
@@ -260,3 +260,4 @@ telethon-cli users get-me --output json
   introduced a lint/test failure that is pulled into the PR merge ref.
 - Before rerunning PR checks, fetch and sync with `origin/main` so local
   verification matches CI.
+

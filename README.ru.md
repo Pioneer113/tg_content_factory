@@ -47,7 +47,7 @@ pip install tg-agent
 ```
 TG_API_ID=ваш_api_id
 TG_API_HASH=ваш_api_hash
-SESSION_ENCRYPTION_KEY=    # опционально: шифрование session string в БД
+SESSION_ENCRYPTION_KEY=your_random_secret    # обязателен для добавления/импорта аккаунтов
 ```
 
 ### 3. Авторизуйте аккаунт (интерактивно, один раз)
@@ -135,7 +135,7 @@ search остаются целевым контрактом.
 |---|---|---|
 | `TG_API_ID` | Да | Telegram API ID |
 | `TG_API_HASH` | Да | Telegram API Hash |
-| `SESSION_ENCRYPTION_KEY` | Нет* | Ключ шифрования Telegram session string в БД |
+| `SESSION_ENCRYPTION_KEY` | Да* | Ключ шифрования Telegram session string в БД |
 | `WEB_PASS` | —† | Пароль веб-панели (только легаси-дашборд) |
 | `LLM_API_KEY` | Нет | API-ключ для AI-поиска |
 | `ANTHROPIC_API_KEY` | —† | Только `claude-agent-sdk` (легаси встроенный агент-чат) |
@@ -144,7 +144,7 @@ search остаются целевым контрактом.
 | `AGENT_FALLBACK_MODEL` | —† | `provider:model` для `deepagents` fallback (легаси) |
 | `AGENT_FALLBACK_API_KEY` | —† | Явный API key для легаси fallback-провайдера |
 
-\* Если не задан, сессии хранятся в plaintext. Если в БД уже есть зашифрованные сессии (`enc:v*`), приложение не запустится пока ключ не будет указан.
+\* Обязателен для добавления/импорта аккаунтов и расшифровки сессий. Новые сессии всегда шифруются (`enc:v2:`); запись plaintext запрещена. Создайте секрет командой `python -c "import secrets; print(secrets.token_urlsafe(32))"` и сохраните его для чтения сессий. `config.yaml` не нужен: ключ читается напрямую из `.env`.
 
 \† Только для легаси-поверхностей (веб-панель, встроенный агент-чат) — см. «Легаси-поверхности».
 
@@ -258,3 +258,4 @@ telethon-cli users get-me --output json
 - обычный `pytest` остаётся fake/harness-first;
 - real Telegram допускается только через opt-in policy markers и sandbox-аккаунт;
 - mutating сценарии вроде BotFather, photo send и `leave_channels` не переводятся на generic live pytest.
+

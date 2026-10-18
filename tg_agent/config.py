@@ -294,6 +294,8 @@ def load_config(path: str | Path = "config.yaml") -> AppConfig:
             config.telegram.api_id = int(env_api_id)
     if not config.telegram.api_hash:
         config.telegram.api_hash = os.environ.get("TG_API_HASH", "").strip()
+    if not config.security.session_encryption_key:
+        config.security.session_encryption_key = os.environ.get("SESSION_ENCRYPTION_KEY", "").strip()
     env_backend_mode = os.environ.get("TG_BACKEND_MODE", "").strip()
     if env_backend_mode:
         config.telegram_runtime.backend_mode = env_backend_mode
@@ -324,14 +326,15 @@ def load_config(path: str | Path = "config.yaml") -> AppConfig:
 def resolve_session_encryption_secret(config: AppConfig) -> str | None:
     """Resolve a stable secret for account session encryption.
 
-    Returns ``None`` when no suitable secret is available — the caller should
-    skip encryption rather than use a well-known default.
+    Returns ``None`` when no suitable secret is available. Account writes must
+    refuse to persist sessions without a key; never use a well-known default.
     """
     if config.security.session_encryption_key:
         return config.security.session_encryption_key
     logger.warning(
         "No SESSION_ENCRYPTION_KEY configured. "
-        "New account sessions will be stored in plaintext, and an encrypted DB will fail to start. "
+        "Adding or importing Telegram accounts requires a key; encrypted sessions cannot be read without it. "
         "Set SESSION_ENCRYPTION_KEY."
     )
     return None
+
