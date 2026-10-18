@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 import typer
+from click import unstyle
 from typer.testing import CliRunner
 
 from tg_agent.cli.commands import dialogs
@@ -59,8 +60,9 @@ def test_invalid_cli_permission_never_dispatches(monkeypatch, option, raw):
     app.add_typer(dialogs.dialogs_app, name="dialogs")
     result = CliRunner().invoke(app, ["dialogs", "edit-permissions", "123", "777", option, raw, "--yes"])
     assert result.exit_code == 2
-    assert option in result.output
-    assert "expected true/false" in result.output
+    output = unstyle(result.output)
+    assert option in output
+    assert "expected true/false" in output
     dispatch.assert_not_called()
 
 
