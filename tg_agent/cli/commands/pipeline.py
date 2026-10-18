@@ -115,15 +115,20 @@ async def _upsert_filter_node(svc: PipelineService, pipeline_id: int, config: di
         replacement = existing.model_copy(update={"config": config})
         return await svc.replace_node(pipeline_id, existing.id, replacement)
 
-    # Sources only declare channel ids; fetch/retrieve nodes populate messages.
+    # Sources only declare channel ids; fetch/retrieve/search triggers write messages.
     # Never guess from node names or list order, especially for imported DAGs.
     loaders = [
         node for node in graph.nodes
-        if node.type in (PipelineNodeType.FETCH_MESSAGES, PipelineNodeType.RETRIEVE_CONTEXT)
+        if node.type in (
+            PipelineNodeType.FETCH_MESSAGES,
+            PipelineNodeType.RETRIEVE_CONTEXT,
+            PipelineNodeType.SEARCH_QUERY_TRIGGER,
+        )
     ]
     if len(loaders) != 1:
         raise PipelineValidationError(
-            "Automatic filter placement requires exactly one fetch_messages or retrieve_context node; "
+            "Automatic filter placement requires exactly one message-writing node "
+            "(fetch_messages, retrieve_context, search_query_trigger); "
             "add and connect a filter explicitly for this graph."
         )
     upstream_id = loaders[0].id

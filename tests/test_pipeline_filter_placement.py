@@ -9,7 +9,12 @@ from tg_agent.cli.graph_builder import GraphBuilder
 from tg_agent.cli.node_dsl import parse_node_spec
 from tg_agent.models import PipelineEdge, PipelineGraph, PipelineNode, PipelineNodeType
 from tg_agent.services.pipeline_nodes.base import NodeContext
-from tg_agent.services.pipeline_nodes.handlers import FetchMessagesHandler, FilterHandler, SourceHandler
+from tg_agent.services.pipeline_nodes.handlers import (
+    FetchMessagesHandler,
+    FilterHandler,
+    SearchQueryTriggerHandler,
+    SourceHandler,
+)
 from tg_agent.services.pipeline_service import PipelineValidationError
 
 
@@ -75,7 +80,9 @@ async def test_cli_filter_runs_after_fetch_and_filters_loaded_messages():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("loader_type", [PipelineNodeType.FETCH_MESSAGES, PipelineNodeType.RETRIEVE_CONTEXT])
+@pytest.mark.parametrize("loader_type", [
+    PipelineNodeType.FETCH_MESSAGES, PipelineNodeType.RETRIEVE_CONTEXT, PipelineNodeType.SEARCH_QUERY_TRIGGER,
+])
 async def test_filter_uses_loader_type_and_rewires_all_consumers(loader_type):
     graph = PipelineGraph(nodes=[
         PipelineNode(id="consumer", name="consumer", type=PipelineNodeType.LLM_GENERATE),
@@ -115,3 +122,40 @@ async def test_existing_filter_updates_without_changing_edges():
     filters = [n for n in graph.nodes if n.type == PipelineNodeType.FILTER]
     assert len(filters) == 1
     assert filters[0].config == {"keywords": ["second"]}
+
+
+@pytest.mark.asyncio
+async def test_search_trigger_filter_applies_to_search_messages():
+    builder = GraphBuilder()
+    builder.add_node_spec(parse_node_spec("search_query_trigger:query=news"))
+    builder.add_node_spec(parse_node_spec("forward"))
+    graph = builder.build()
+    assert await _upsert_filter_node(GraphService(graph), 1, {"keywords": ["keep"]})
+    assert {(e.from_node, e.to_node) for e in graph.edges} == {
+        ("search_query_trigger_0", "filter_1"), ("filter_1", "forward_0"),
+    }
+    messages = [
+        SimpleNamespace(text="keep this", channel_title="News"),
+        SimpleNamespace(text="discard this", channel_title="News"),
+    ]
+    search = SimpleNamespace(search_local=AsyncMock(return_value=SimpleNamespace(messages=messages)))
+    context = NodeContext()
+    await SearchQueryTriggerHandler().execute({"query": "news"}, context, {"search_engine": search})
+    node = next(n for n in graph.nodes if n.type == PipelineNodeType.FILTER)
+    await FilterHandler().execute(node.config, context, {})
+    assert context.get_global("context_messages") == [messages[0]]
+
+
+@pytest.mark.asyncio
+async def test_cli_fetch_then_search_trigger_rejects_filter_before_mutation():
+    builder = GraphBuilder()
+    builder.add_node_spec(parse_node_spec("source"))
+    builder.add_node_spec(parse_node_spec("search_query_trigger:query=news"))
+    builder.add_node_spec(parse_node_spec("llm_generate"))
+    builder.set_sources([1001])
+    graph = builder.build()
+    assert sum(n.type == PipelineNodeType.FETCH_MESSAGES for n in graph.nodes) == 1
+    before = graph.model_dump()
+    with pytest.raises(PipelineValidationError, match="exactly one message-writing node"):
+        await _upsert_filter_node(GraphService(graph), 1, {"keywords": ["keep"]})
+    assert graph.model_dump() == before
