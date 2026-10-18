@@ -1668,6 +1668,87 @@ async def test_update_single_react_emoji_clears_random_emojis(svc, db):
 
 
 @pytest.mark.anyio
+async def test_dag_rename_preserves_graph_relations_and_publish_eligibility(svc, db):
+    from tg_agent.models import GenerationRun
+    from tg_agent.services.publish_service import PublishService
+
+    pid = await svc.add(
+        name="DAG", prompt_template="Test", source_channel_ids=[1001],
+        target_refs=[PipelineTargetRef(phone="+100", dialog_id=77)],
+    )
+    graph = PipelineGraph(nodes=[
+        PipelineNode(id="src", name="Source", type=PipelineNodeType.SOURCE, config={"channel_ids": [1002]}),
+        PipelineNode(id="fwd", name="Forward", type=PipelineNodeType.FORWARD,
+                     config={"targets": [{"phone": "+100", "dialog_id": 77}]}),
+        PipelineNode(id="pub", name="Publish", type=PipelineNodeType.PUBLISH,
+                     config={"targets": [{"phone": "+100", "dialog_id": 78}]}),
+    ], edges=[PipelineEdge(from_node="src", to_node="fwd"), PipelineEdge(from_node="fwd", to_node="pub")])
+    await db.repos.content_pipelines.set_pipeline_json(pid, graph)
+
+    # A metadata-only edit does not require refreshing Telegram dialog cache.
+    await db.repos.dialog_cache.replace_dialogs("+100", [])
+
+    assert await svc.update(
+        pid, name="Renamed", prompt_template="Test", source_channel_ids=[1001],
+        target_refs=[PipelineTargetRef(phone="+100", dialog_id=77)],
+    )
+    assert [s.channel_id for s in await svc.get_sources(pid)] == [1002]
+    assert [t.dialog_id for t in await svc.get_targets(pid)] == [78]
+    assert (await svc.get_graph(pid)).model_dump() == graph.model_dump()
+
+    # Stop at the claim boundary: prove publication passes the target lookup
+    # without acquiring a Telegram client or sending anything.
+    publisher = PublishService(db, MagicMock())
+    run = GenerationRun(id=999, pipeline_id=pid, status="completed",
+                        generated_text="Draft", moderation_status="approved")
+    with patch.object(db.repos.generation_runs, "claim_for_publish", new=AsyncMock(return_value=False)) as claim:
+        results = await publisher.publish_run(run, await svc.get(pid))
+    claim.assert_awaited_once_with(999, "approved")
+    assert results[0].error == "Run is already being published"
+
+
+@pytest.mark.anyio
+async def test_dag_target_edit_without_destination_node_is_rejected(svc, db):
+    pid = await svc.add(
+        name="Reaction DAG", prompt_template="Test", source_channel_ids=[1001],
+        target_refs=[PipelineTargetRef(phone="+100", dialog_id=77)],
+    )
+    graph = _injection_graph()
+    await db.repos.content_pipelines.set_pipeline_json(pid, graph)
+    with pytest.raises(PipelineValidationError, match="no publish/forward node"):
+        await svc.update(
+            pid, name="Changed", prompt_template="Test", source_channel_ids=[1001],
+            target_refs=[], dag_target_refs=[PipelineTargetRef(phone="+100", dialog_id=78)],
+        )
+    assert (await svc.get(pid)).name == "Reaction DAG"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("destination", [PipelineNodeType.PUBLISH, PipelineNodeType.FORWARD])
+async def test_dag_explicit_source_target_edits_sync_graph_and_relations(svc, db, destination):
+    pid = await svc.add(
+        name="DAG", prompt_template="Test", source_channel_ids=[1001],
+        target_refs=[PipelineTargetRef(phone="+100", dialog_id=77)],
+    )
+    graph = PipelineGraph(nodes=[
+        PipelineNode(id="src", name="Source", type=PipelineNodeType.SOURCE),
+        PipelineNode(id="pub", name="Destination", type=destination),
+    ], edges=[PipelineEdge(from_node="src", to_node="pub")])
+    await db.repos.content_pipelines.set_pipeline_json(pid, graph)
+    assert await svc.update(
+        pid, name="DAG", prompt_template="Test", source_channel_ids=[1001],
+        target_refs=[PipelineTargetRef(phone="+100", dialog_id=77)],
+        dag_source_channel_ids=[1002], dag_target_refs=[PipelineTargetRef(phone="+100", dialog_id=78)],
+    )
+    updated = await svc.get_graph(pid)
+    assert updated.nodes[0].config["channel_ids"] == [1002]
+    assert updated.nodes[1].config["targets"] == [{"phone": "+100", "dialog_id": 78}]
+    assert [s.channel_id for s in await svc.get_sources(pid)] == [1002]
+    expected_publication_targets = [78] if destination == PipelineNodeType.PUBLISH else []
+    assert [t.dialog_id for t in await svc.get_targets(pid)] == expected_publication_targets
+
+
+@pytest.mark.anyio
 async def test_add_accepts_interval_of_exactly_one_minute(svc, db):
     """generate_interval_minutes == 1 is valid — the < 1 boundary, not <= 1
     (#mutation slice 4)."""

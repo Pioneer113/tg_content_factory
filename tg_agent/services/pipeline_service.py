@@ -243,6 +243,7 @@ class PipelineService:
         react_emoji: str | None = None,
         filter_config: dict | None = None,
         dag_source_channel_ids: list[int] | None = None,
+        dag_target_refs: list[PipelineTargetRef] | None = None,
         account_phone: str | None = None,
         ab_num_variants: int = 1,
         ab_auto_select: bool = False,
@@ -280,12 +281,28 @@ class PipelineService:
         )
 
         # Preserve existing pipeline_json and apply node-level config updates
-        updated_graph = existing_pipeline_json
+        updated_graph = existing_pipeline_json.model_copy(deep=True) if is_dag else None
+        edited_targets: list[PipelineTarget] = []
         if updated_graph is not None:
             if dag_source_channel_ids is not None:
+                dag_source_channel_ids = await self._normalize_sources(dag_source_channel_ids)
+                if not any(node.type == PipelineNodeType.SOURCE for node in updated_graph.nodes):
+                    raise PipelineValidationError("DAG has no source node to update.")
                 for node in updated_graph.nodes:
                     if node.type == PipelineNodeType.SOURCE:
                         node.config["channel_ids"] = dag_source_channel_ids
+            if dag_target_refs is not None:
+                edited_targets = await self._normalize_targets(dag_target_refs)
+                target_nodes = [
+                    node for node in updated_graph.nodes
+                    if node.type in (PipelineNodeType.PUBLISH, PipelineNodeType.FORWARD)
+                ]
+                if not target_nodes:
+                    raise PipelineValidationError("DAG has no publish/forward node to update.")
+                for node in target_nodes:
+                    node.config["targets"] = [
+                        {"phone": target.phone, "dialog_id": target.dialog_id} for target in edited_targets
+                    ]
             if react_emoji is not None:
                 emojis = [e for e in re.split(r"[,\s]+", react_emoji.strip()) if e]
                 for node in updated_graph.nodes:
@@ -303,10 +320,36 @@ class PipelineService:
                         node.config = normalized_filter
         pipeline = pipeline.model_copy(update={"pipeline_json": updated_graph})
 
-        # For DAG pipelines, source/target are managed via pipeline_json nodes, not DB tables
+        # The graph is authoritative for DAGs. Keep the sidecar relations used
+        # by moderation/publication and list/show in sync with its runtime refs.
         if is_dag:
-            sources: list[int] = []
-            targets: list[PipelineTarget] = []
+            sources = sorted({
+                int(channel_id)
+                for node in updated_graph.nodes if node.type == PipelineNodeType.SOURCE
+                for channel_id in node.config.get("channel_ids", [])
+            })
+            # Moderated generated text must not also go to an intermediate
+            # FORWARD node's recipients in a mixed forward/publish graph.
+            destination_nodes = [node for node in updated_graph.nodes if node.type == PipelineNodeType.PUBLISH]
+            graph_targets = [
+                ref
+                for node in destination_nodes
+                for raw_ref in node.config.get("targets", [])
+                if (ref := _coerce_target_ref(raw_ref)) is not None
+            ]
+            existing_targets = {
+                (target.phone, target.dialog_id): target
+                for target in await self._bundle.list_targets(pipeline_id)
+            }
+            existing_targets.update({(target.phone, target.dialog_id): target for target in edited_targets})
+            # Unchanged graph refs remain usable even after dialog cache expiry.
+            # Explicit edits were validated above; persisting the graph projection
+            # must not make an unrelated rename depend on a fresh dialog cache.
+            targets = [
+                existing_targets.get((ref.phone, ref.dialog_id))
+                or PipelineTarget(pipeline_id=0, phone=ref.phone, dialog_id=ref.dialog_id)
+                for ref in dict.fromkeys(graph_targets)
+            ]
         else:
             sources = await self._normalize_sources(source_channel_ids)
             targets = await self._normalize_targets(target_refs)
