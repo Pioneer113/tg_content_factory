@@ -441,6 +441,8 @@ async def _pipeline_edit(args: argparse.Namespace, db, config, svc: PipelineServ
             name=args.name or existing.name,
             prompt_template=args.prompt_template or existing.prompt_template,
             source_channel_ids=args.source if args.source else current_sources,
+            dag_source_channel_ids=args.source if args.source else None,
+            dag_target_refs=_parse_target_refs(args.target) if args.target else None,
             target_refs=(
                 _parse_target_refs(args.target) if args.target else current_targets
             ),

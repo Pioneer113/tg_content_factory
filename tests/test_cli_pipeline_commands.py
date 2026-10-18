@@ -17,6 +17,27 @@ from tg_agent.services.pipeline_service import PipelineTargetRef, PipelineValida
 _PIPELINE_INIT_DB_TARGET = "tg_agent.cli.commands.pipeline.runtime.init_db"
 
 
+@pytest.mark.anyio
+async def test_pipeline_edit_passes_explicit_dag_refs():
+    from tg_agent.cli.commands.pipeline import _pipeline_edit
+    from tg_agent.models import ContentPipeline
+
+    svc = MagicMock()
+    svc.get = AsyncMock(return_value=ContentPipeline(name="DAG"))
+    svc.get_sources = AsyncMock(return_value=[])
+    svc.get_targets = AsyncMock(return_value=[])
+    svc.update = AsyncMock(return_value=True)
+    args = _ns(
+        id=1, name=None, prompt_template=None, source=[1002], target=["+100|78"],
+        llm_model=None, image_model=None, publish_mode=None,
+        generation_backend=None, interval=None, active=None,
+    )
+    await _pipeline_edit(args, None, None, svc)
+    kwargs = svc.update.call_args.kwargs
+    assert kwargs["dag_source_channel_ids"] == [1002]
+    assert kwargs["dag_target_refs"] == [PipelineTargetRef(phone="+100", dialog_id=78)]
+
+
 def _read_pipeline_row(db_path: str, pipeline_id: int) -> dict | None:
     """Read pipeline row using a fresh sqlite3 connection (handler closes aiosqlite)."""
     conn = sqlite3.connect(db_path)
@@ -541,8 +562,8 @@ def _pipeline_ns(action, **overrides):
         "json_file": None,
         "node_specs": None,
         "prompt_template": "do a thing",
-        "source": [100_001],
-        "target": ["+70000000001|1"],
+        "source": None if action == "edit" else [100_001],
+        "target": None if action == "edit" else ["+70000000001|1"],
         "llm_model": None,
         "image_model": None,
         "interval": 60,
