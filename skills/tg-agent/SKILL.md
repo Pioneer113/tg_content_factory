@@ -19,6 +19,9 @@ tg-agent --version
 
 - If missing: `pip install tg-agent`, then the user must provide Telegram API credentials
   (`TG_API_ID`, `TG_API_HASH` from my.telegram.org) in `.env` in the working directory.
+  Set a private `SESSION_ENCRYPTION_KEY` there before adding/importing accounts; retain it
+  to decrypt stored sessions. Generate one with `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
+  The key is required for account writes; sessions are never stored in plaintext.
 - Check an account is authorized: `tg-agent account list`. If none, first authorization is
   **interactive** — the user must run `tg-agent account add` themselves (they receive a
   Telegram login code). Never try to automate the code entry.
@@ -95,3 +98,4 @@ those. Details: [reference.md](reference.md) → "Session lock" and "scheduling 
 The web panel, TUI, embedded agent chat (`tg-agent agent chat`) and MCP server still work,
 but their development is paused indefinitely (bug fixes only). For coding agents the CLI
 above is the only supported interface.
+
