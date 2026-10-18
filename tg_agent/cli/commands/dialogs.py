@@ -753,7 +753,21 @@ async def _dialogs_edit_admin(args, db, pool) -> None:
         print(f"Error editing admin: {exc}")
 
 
+def _parse_permission_bool(value: str | bool | None, option: str) -> bool | None:
+    """Reject ambiguous permission values instead of silently denying rights."""
+    if value is None or isinstance(value, bool):
+        return value
+    normalized = value.lower()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise typer.BadParameter("expected true/false, yes/no, 1/0 or on/off", param_hint=option)
+
+
 async def _dialogs_edit_permissions(args, db, pool) -> None:
+    send_messages = _parse_permission_bool(args.send_messages, "--send-messages")
+    send_media = _parse_permission_bool(args.send_media, "--send-media")
     phone = await _resolve_phone(db, pool, args)
     if phone is None:
         return
@@ -771,16 +785,8 @@ async def _dialogs_edit_permissions(args, db, pool) -> None:
             chat_id=args.chat_id,
             user_id=args.user_id,
             until_date=until_date,
-            send_messages=(
-                args.send_messages.lower() in ("1", "true", "on")
-                if args.send_messages is not None
-                else None
-            ),
-            send_media=(
-                args.send_media.lower() in ("1", "true", "on")
-                if args.send_media is not None
-                else None
-            ),
+            send_messages=send_messages,
+            send_media=send_media,
         )
         print(f"Permissions updated for {args.user_id}.")
     except TelegramActionClientUnavailableError:
@@ -1216,7 +1222,7 @@ async def _handoff_dialog_action(args: argparse.Namespace, db) -> bool:
         if value is None:
             continue
         if field in _HANDOFF_STRING_BOOL_FIELDS and isinstance(value, str):
-            value = value.lower() in ("1", "true", "on")
+            value = _parse_permission_bool(value, "--" + field.replace("_", "-"))
         payload[field] = value
 
     # Confirmation normally lives inside each in-process handler, which the
@@ -1293,6 +1299,9 @@ async def _dispatch(
     via ``run_async``, by the Typer command bodies in ``typer_commands.py`` —
     so the two entry points execute byte-identical logic.
     """
+    if args.dialogs_action == "edit-permissions":
+        for field in _HANDOFF_STRING_BOOL_FIELDS:
+            _parse_permission_bool(getattr(args, field, None), "--" + field.replace("_", "-"))
     config, db = await runtime_mod.init_db(args.config)
 
     # A live `serve` owns the Telegram session files; opening a second pool here
@@ -1689,11 +1698,17 @@ def dialogs_edit_permissions(
     until_date: str | None = typer.Option(
         None, "--until-date", help="Restriction end date (ISO format, e.g. 2025-12-31)"
     ),
-    send_messages: str | None = typer.Option(None, "--send-messages", help="Allow sending messages (true/false)"),
-    send_media: str | None = typer.Option(None, "--send-media", help="Allow sending media (true/false)"),
+    send_messages: str | None = typer.Option(
+        None, "--send-messages", help="Allow sending messages (true/false, yes/no, 1/0, on/off; case-insensitive)"
+    ),
+    send_media: str | None = typer.Option(
+        None, "--send-media", help="Allow sending media (true/false, yes/no, 1/0, on/off; case-insensitive)"
+    ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
 ) -> None:
     """Restrict or unrestrict a user in a group."""
+    send_messages = _parse_permission_bool(send_messages, "--send-messages")
+    send_media = _parse_permission_bool(send_media, "--send-media")
     _run_dialogs(
         ctx, "edit-permissions", chat_id=chat_id, user_id=user_id, phone=phone,
         until_date=until_date, send_messages=send_messages, send_media=send_media, yes=yes,
@@ -1796,3 +1811,4 @@ def dialogs_queue_clear_pending(
 ) -> None:
     """Bulk-cancel pending queue commands (optionally filtered)."""
     _run_dialogs_queue(ctx, "clear-pending", command_type=command_type, phone=phone, yes=yes)
+
