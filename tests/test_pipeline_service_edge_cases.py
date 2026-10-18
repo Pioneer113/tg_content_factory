@@ -1724,6 +1724,49 @@ async def test_dag_target_edit_without_destination_node_is_rejected(svc, db):
 
 
 @pytest.mark.anyio
+async def test_mixed_dag_target_edit_preserves_actual_forward_recipient(svc, db):
+    from types import SimpleNamespace
+
+    from tg_agent.services.pipeline_nodes.base import NodeContext
+    from tg_agent.services.pipeline_nodes.handlers import ForwardHandler
+
+    pid = await svc.add(
+        name="Mixed DAG", prompt_template="Test", source_channel_ids=[1001],
+        target_refs=[PipelineTargetRef(phone="+100", dialog_id=78)],
+    )
+    graph = PipelineGraph(nodes=[
+        PipelineNode(id="src", name="Source", type=PipelineNodeType.SOURCE, config={"channel_ids": [1001]}),
+        PipelineNode(id="fwd", name="Archive", type=PipelineNodeType.FORWARD,
+                     config={"targets": [{"phone": "+100", "dialog_id": 77}]}),
+        PipelineNode(id="pub", name="Publish", type=PipelineNodeType.PUBLISH,
+                     config={"targets": [{"phone": "+100", "dialog_id": 78}]}),
+    ], edges=[PipelineEdge(from_node="src", to_node="fwd"), PipelineEdge(from_node="fwd", to_node="pub")])
+    await db.repos.content_pipelines.set_pipeline_json(pid, graph)
+    await db.repos.dialog_cache.replace_dialogs("+100", [
+        {"channel_id": 79, "title": "New publication target", "channel_type": "channel"},
+    ])
+    assert await svc.update(
+        pid, name="Mixed DAG", prompt_template="Test", source_channel_ids=[1001], target_refs=[],
+        dag_target_refs=[PipelineTargetRef(phone="+100", dialog_id=79)],
+    )
+    updated = await svc.get_graph(pid)
+    assert updated.nodes[1].config["targets"] == [{"phone": "+100", "dialog_id": 77}]
+    assert updated.nodes[2].config["targets"] == [{"phone": "+100", "dialog_id": 79}]
+    assert [target.dialog_id for target in await svc.get_targets(pid)] == [79]
+
+    context = NodeContext()
+    context.set_global("context_messages", [SimpleNamespace(channel_id=1001, message_id=42)])
+    actions = SimpleNamespace(forward_messages=AsyncMock())
+    await ForwardHandler().execute(
+        updated.nodes[1].config, context, {"client_pool": object(), "telegram_actions": actions},
+    )
+    actions.forward_messages.assert_awaited_once_with(
+        phone="+100", from_chat=1001, to_chat=77, message_ids=[42], native=False,
+        resolve_entities=False, collapse_single_message_id=True,
+    )
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize("destination", [PipelineNodeType.PUBLISH, PipelineNodeType.FORWARD])
 async def test_dag_explicit_source_target_edits_sync_graph_and_relations(svc, db, destination):
     pid = await svc.add(

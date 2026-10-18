@@ -295,8 +295,12 @@ class PipelineService:
                 edited_targets = await self._normalize_targets(dag_target_refs)
                 target_nodes = [
                     node for node in updated_graph.nodes
-                    if node.type in (PipelineNodeType.PUBLISH, PipelineNodeType.FORWARD)
+                    if node.type == PipelineNodeType.PUBLISH
                 ]
+                # --target edits publication destinations when present. Archive
+                # forwarding in a mixed graph must keep its independent scope.
+                if not target_nodes:
+                    target_nodes = [node for node in updated_graph.nodes if node.type == PipelineNodeType.FORWARD]
                 if not target_nodes:
                     raise PipelineValidationError("DAG has no publish/forward node to update.")
                 for node in target_nodes:
