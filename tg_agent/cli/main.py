@@ -57,7 +57,8 @@ def main() -> None:
       (the help error's context is the root app) and exit 1, not 0.
     * Any other usage error (unknown option, bad value) renders normally and exits
       with its own (non-zero) code, matching argparse's exit-2 on misuse.
-    * A clean run / ``Exit(0)`` returns normally (exit 0).
+    * A clean run / ``Exit(0)`` returns normally (exit 0); a non-zero exit
+      returned by Typer is propagated to the process, including Ctrl-C (130).
 
     Negative-number positionals (Telegram channel/chat ids: ``search -100500``)
     are handled at the *command* level via ``ignore_unknown_options`` (see
@@ -66,7 +67,11 @@ def main() -> None:
     insertion could not (#1125 / #1162 review).
     """
     try:
-        app(standalone_mode=False)
+        exit_code = app(standalone_mode=False)
+        # Non-standalone Typer returns Exit codes instead of raising SystemExit.
+        # Both console-script and module entrypoints must preserve those codes.
+        if isinstance(exit_code, int) and exit_code != 0:
+            raise SystemExit(exit_code)
     except _NO_ARGS_HELP_EXCEPTIONS as exc:
         # Bare group → show help and exit cleanly (argparse parity: exit 0). The
         # bare *root* (no command at all) is the exception: argparse exited 1 there,
