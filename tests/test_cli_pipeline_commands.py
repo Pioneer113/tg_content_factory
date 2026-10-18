@@ -86,15 +86,6 @@ def _seed_minimal_pipeline(db_path: str, *, name: str = "P1") -> int:
     """
     from tg_agent.services.pipeline_service import PipelineService
 
-    if with_fetch:
-        graph_dict["nodes"].append({
-            "id": "fetch_messages_0", "type": "fetch_messages", "name": "fetch", "config": {},
-        })
-        graph_dict["edges"] = [
-            {"from": "source_0", "to": "fetch_messages_0"},
-            {"from": "fetch_messages_0", "to": "llm_generate_0"},
-            {"from": "llm_generate_0", "to": "publish_0"},
-        ]
     db = _open_db(db_path)
     try:
         svc = PipelineService(db)
@@ -140,6 +131,15 @@ def _seed_pipeline_with_graph(db_path: str, *, name: str = "DAG1", with_fetch: b
             {"from": "llm_generate_0", "to": "publish_0"},
         ],
     }
+    if with_fetch:
+        graph_dict["nodes"].append({
+            "id": "fetch_messages_0", "type": "fetch_messages", "name": "fetch", "config": {},
+        })
+        graph_dict["edges"] = [
+            {"from": "source_0", "to": "fetch_messages_0"},
+            {"from": "fetch_messages_0", "to": "llm_generate_0"},
+            {"from": "llm_generate_0", "to": "publish_0"},
+        ]
     db = _open_db(db_path)
     try:
         svc = PipelineService(db)
