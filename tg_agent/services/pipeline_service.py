@@ -327,37 +327,48 @@ class PipelineService:
         # The graph is authoritative for DAGs. Keep the sidecar relations used
         # by moderation/publication and list/show in sync with its runtime refs.
         if is_dag:
-            sources = sorted({
-                int(channel_id)
-                for node in updated_graph.nodes if node.type == PipelineNodeType.SOURCE
-                for channel_id in node.config.get("channel_ids", [])
-            })
-            # Moderated generated text must not also go to an intermediate
-            # FORWARD node's recipients in a mixed forward/publish graph.
-            destination_nodes = [node for node in updated_graph.nodes if node.type == PipelineNodeType.PUBLISH]
-            graph_targets = [
-                ref
-                for node in destination_nodes
-                for raw_ref in node.config.get("targets", [])
-                if (ref := _coerce_target_ref(raw_ref)) is not None
-            ]
-            existing_targets = {
-                (target.phone, target.dialog_id): target
-                for target in await self._bundle.list_targets(pipeline_id)
-            }
-            existing_targets.update({(target.phone, target.dialog_id): target for target in edited_targets})
-            # Unchanged graph refs remain usable even after dialog cache expiry.
-            # Explicit edits were validated above; persisting the graph projection
-            # must not make an unrelated rename depend on a fresh dialog cache.
-            targets = [
-                existing_targets.get((ref.phone, ref.dialog_id))
-                or PipelineTarget(pipeline_id=0, phone=ref.phone, dialog_id=ref.dialog_id)
-                for ref in dict.fromkeys(graph_targets)
-            ]
+            sources, targets = await self._dag_relations(pipeline_id, updated_graph, edited_targets)
         else:
             sources = await self._normalize_sources(source_channel_ids)
             targets = await self._normalize_targets(target_refs)
         return await self._bundle.update(pipeline_id, pipeline, sources, targets)
+
+
+    async def _dag_relations(
+        self,
+        pipeline_id: int,
+        graph: PipelineGraph,
+        edited_targets: list[PipelineTarget],
+    ) -> tuple[list[int], list[PipelineTarget]]:
+        """Project runtime graph refs into publication and source sidecars."""
+        sources = sorted({
+            int(channel_id)
+            for node in graph.nodes if node.type == PipelineNodeType.SOURCE
+            for channel_id in node.config.get("channel_ids", [])
+        })
+        # Moderated generated text must not also go to an intermediate
+        # FORWARD node's recipients in a mixed forward/publish graph.
+        destination_nodes = [node for node in graph.nodes if node.type == PipelineNodeType.PUBLISH]
+        graph_targets = [
+            ref
+            for node in destination_nodes
+            for raw_ref in node.config.get("targets", [])
+            if (ref := _coerce_target_ref(raw_ref)) is not None
+        ]
+        existing_targets = {
+            (target.phone, target.dialog_id): target
+            for target in await self._bundle.list_targets(pipeline_id)
+        }
+        existing_targets.update({(target.phone, target.dialog_id): target for target in edited_targets})
+        # Unchanged graph refs remain usable even after dialog cache expiry.
+        # Explicit edits were validated above; persisting the graph projection
+        # must not make an unrelated rename depend on a fresh dialog cache.
+        targets = [
+            existing_targets.get((ref.phone, ref.dialog_id))
+            or PipelineTarget(pipeline_id=0, phone=ref.phone, dialog_id=ref.dialog_id)
+            for ref in dict.fromkeys(graph_targets)
+        ]
+        return sources, targets
 
     async def list_pipelines(self, active_only: bool = False) -> list[ContentPipeline]:
         pipelines = await self._bundle.get_all(active_only)
