@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import re
+import shlex
 import signal
 import subprocess
 import sys
@@ -24,7 +26,7 @@ class StopResult(Enum):
     TIMEOUT = "timeout"
 
 
-# `python -m tg_agent.main <name>` invocations that own the sessions and are managed
+# Module and console-script invocations that own the sessions and are managed
 # via the PID file. `restart` is itself a daemon: after stopping the previous
 # process it runs the worker in-process, so its cmdline stays `... restart`
 # (#automation-first default — the managed daemon has no web panel).
@@ -74,7 +76,7 @@ def _process_command(pid: int) -> str:
             raw = cmdline_path.read_bytes()
         except FileNotFoundError:
             return ""
-        return raw.replace(b"\x00", b" ").decode("utf-8", errors="ignore").strip()
+        return shlex.join(part.decode("utf-8", errors="replace") for part in raw.split(b"\x00") if part)
 
     try:
         result = subprocess.run(
@@ -99,10 +101,49 @@ def is_expected_server_process(pid: int) -> bool:
     if not command:
         return False
 
-    tokens = command.split()
-    for index, token in enumerate(tokens[:-2]):
-        if token == "-m" and tokens[index + 1] == "tg_agent.main" and tokens[index + 2] in _DAEMON_COMMANDS:
-            return True
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        return False
+    if not tokens:
+        return False
+
+    executable = Path(tokens.pop(0)).name
+    if re.fullmatch(r"(?:python|pypy)(?:\d+(?:\.\d+)*)?", executable):
+        # Only inspect Python's actual module/script, never arguments to -c or
+        # another program (e.g. a test mentioning "tg-agent worker").
+        while tokens and tokens[0].startswith("-"):
+            option = tokens.pop(0)
+            if option == "-m":
+                if not tokens or tokens.pop(0) != "tg_agent.main":
+                    return False
+                break
+            if option in {"-W", "-X"}:
+                if not tokens:
+                    return False
+                tokens.pop(0)
+            elif option not in {"-u", "-B", "-O", "-OO", "-E", "-I", "-s", "-S", "-P", "-q", "-b", "-bb"}:
+                return False
+        else:
+            if not tokens or Path(tokens.pop(0)).name != "tg-agent":
+                return False
+    elif executable != "tg-agent":
+        return False
+
+    # --config consumes its value even if that value happens to be "worker".
+    # Fail closed on unknown root options; eager help/version never run a daemon.
+    while tokens:
+        option = tokens.pop(0)
+        if option == "--config":
+            if not tokens:
+                return False
+            tokens.pop(0)
+        elif option.startswith("--config="):
+            continue
+        elif option == "--":
+            return bool(tokens) and tokens[0] in _DAEMON_COMMANDS
+        else:
+            return option in _DAEMON_COMMANDS
     return False
 
 
@@ -166,7 +207,7 @@ def stop_server(
     if not is_expected_server_process(pid):
         return StopOutcome(
             StopResult.UNMANAGED,
-            f"PID {pid} is not a managed tg_agent.main serve process.",
+            f"PID {pid} is not a managed tg-agent daemon process.",
         )
 
     try:
