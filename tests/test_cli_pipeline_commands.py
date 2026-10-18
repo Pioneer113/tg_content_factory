@@ -105,7 +105,7 @@ def _seed_minimal_pipeline(db_path: str, *, name: str = "P1") -> int:
         _close_db(db)
 
 
-def _seed_pipeline_with_graph(db_path: str, *, name: str = "DAG1") -> int:
+def _seed_pipeline_with_graph(db_path: str, *, name: str = "DAG1", with_fetch: bool = False) -> int:
     """Seed a pipeline with a minimal DAG: source → llm_generate → publish.
 
     Uses the canonical PipelineNodeType values; node ids match the
@@ -131,6 +131,15 @@ def _seed_pipeline_with_graph(db_path: str, *, name: str = "DAG1") -> int:
             {"from": "llm_generate_0", "to": "publish_0"},
         ],
     }
+    if with_fetch:
+        graph_dict["nodes"].append({
+            "id": "fetch_messages_0", "type": "fetch_messages", "name": "fetch", "config": {},
+        })
+        graph_dict["edges"] = [
+            {"from": "source_0", "to": "fetch_messages_0"},
+            {"from": "fetch_messages_0", "to": "llm_generate_0"},
+            {"from": "llm_generate_0", "to": "publish_0"},
+        ]
     db = _open_db(db_path)
     try:
         svc = PipelineService(db)
@@ -740,7 +749,7 @@ class TestPipelineFromTemplateRW:
 class TestPipelineFilterRW:
     def test_filter_set_adds_filter_node(self, tmp_path, cli_init_patch, capsys):
         db_path = _empty_db_path(tmp_path, "pipeline_filter_set.db")
-        pid = _seed_pipeline_with_graph(db_path)
+        pid = _seed_pipeline_with_graph(db_path, with_fetch=True)
 
         _pipeline_cli_run(
             db_path,
@@ -758,7 +767,7 @@ class TestPipelineFilterRW:
 
     def test_filter_clear_removes_filter_node(self, tmp_path, cli_init_patch, capsys):
         db_path = _empty_db_path(tmp_path, "pipeline_filter_clear.db")
-        pid = _seed_pipeline_with_graph(db_path)
+        pid = _seed_pipeline_with_graph(db_path, with_fetch=True)
 
         _pipeline_cli_run(
             db_path,

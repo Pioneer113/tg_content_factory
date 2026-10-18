@@ -115,8 +115,31 @@ async def _upsert_filter_node(svc: PipelineService, pipeline_id: int, config: di
         replacement = existing.model_copy(update={"config": config})
         return await svc.replace_node(pipeline_id, existing.id, replacement)
 
+    # Sources only declare channel ids; fetch/retrieve/search triggers write messages.
+    # Never guess from node names or list order, especially for imported DAGs.
+    loaders = [
+        node for node in graph.nodes
+        if node.type in (
+            PipelineNodeType.FETCH_MESSAGES,
+            PipelineNodeType.RETRIEVE_CONTEXT,
+            PipelineNodeType.SEARCH_QUERY_TRIGGER,
+        )
+    ]
+    if len(loaders) != 1:
+        raise PipelineValidationError(
+            "Automatic filter placement requires exactly one message-writing node "
+            "(fetch_messages, retrieve_context, search_query_trigger); "
+            "add and connect a filter explicitly for this graph."
+        )
+    upstream_id = loaders[0].id
+    downstream_ids = [edge.to_node for edge in graph.edges if edge.from_node == upstream_id]
+    used_ids = {node.id for node in graph.nodes}
+    index = 1
+    while f"filter_{index}" in used_ids:
+        index += 1
+    filter_id = f"filter_{index}"
     new_node = PipelineNode(
-        id="filter_1",
+        id=filter_id,
         type=PipelineNodeType.FILTER,
         name="Фильтр",
         config=config,
@@ -125,26 +148,11 @@ async def _upsert_filter_node(svc: PipelineService, pipeline_id: int, config: di
     if not await svc.add_node(pipeline_id, new_node):
         return False
 
-    graph = await svc.get_graph(pipeline_id)
-    if graph is None:
-        return False
-
-    upstream_id = None
-    for candidate in ("fetch_1", "source_1"):
-        if any(node.id == candidate for node in graph.nodes):
-            upstream_id = candidate
-            break
-    if upstream_id is None and graph.nodes:
-        upstream_id = graph.nodes[0].id
-
-    downstream_ids = [edge.to_node for edge in graph.edges if edge.from_node == upstream_id] if upstream_id else []
-    if upstream_id:
-        for downstream_id in downstream_ids:
-            await svc.remove_edge(pipeline_id, upstream_id, downstream_id)
-        await _safe_add_edge(svc, pipeline_id, upstream_id, "filter_1")
     for downstream_id in downstream_ids:
-        if downstream_id != "filter_1":
-            await _safe_add_edge(svc, pipeline_id, "filter_1", downstream_id)
+        await svc.remove_edge(pipeline_id, upstream_id, downstream_id)
+    await _safe_add_edge(svc, pipeline_id, upstream_id, filter_id)
+    for downstream_id in downstream_ids:
+        await _safe_add_edge(svc, pipeline_id, filter_id, downstream_id)
     return True
 
 
@@ -1113,7 +1121,11 @@ async def _pipeline_filter(args: argparse.Namespace, db, config, svc: PipelineSe
 
     if args.filter_action == "set":
         config = _build_message_filter_config(args)
-        ok = await _upsert_filter_node(svc, args.id, config)
+        try:
+            ok = await _upsert_filter_node(svc, args.id, config)
+        except PipelineValidationError as exc:
+            print(f"Error: {exc}")
+            return
         if not ok:
             print(f"Failed to update filter for pipeline id={args.id}")
             return
@@ -1772,3 +1784,4 @@ def pipeline_edge_remove(
 ) -> None:
     """Remove an edge from a pipeline graph."""
     _run_pipeline(ctx, "edge", edge_action="remove", pipeline_id=pipeline_id, from_node=from_node, to_node=to_node)
+
