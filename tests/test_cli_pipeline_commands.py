@@ -553,8 +553,8 @@ def _pipeline_ns(action, **overrides):
         "json_file": None,
         "node_specs": None,
         "prompt_template": "do a thing",
-        "source": [100_001],
-        "target": ["+70000000001|1"],
+        "source": None if action == "edit" else [100_001],
+        "target": None if action == "edit" else ["+70000000001|1"],
         "llm_model": None,
         "image_model": None,
         "interval": 60,
@@ -639,7 +639,7 @@ class TestPipelineEditRW:
         pid = _seed_minimal_pipeline(db_path, name="OldName")
 
         _pipeline_cli_run(
-            db_path, cli_init_patch, _pipeline_ns("edit", id=pid, name="NewName", source=None, target=None)
+            db_path, cli_init_patch, _pipeline_ns("edit", id=pid, name="NewName")
         )
 
         row = _read_pipeline_row(db_path, pid)
