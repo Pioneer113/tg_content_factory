@@ -36,11 +36,16 @@ disturbs the live session; when the holder exits, the lock clears on its own.
 ## channels / collection
 
 ```
-channel list | add | delete | toggle | collect | stats | refresh-types | refresh-meta
+channel list | add | delete | toggle | collect | stats | refresh-types | refresh-meta | probe
 channel import | add-bulk | list-for-import | candidates | tag (list|add|delete|set|get)
 filter analyze | apply | reset | precheck | suspects | toggle | flag | purge | purge-messages | hard-delete
 ```
 
+- `channel probe <id|@username> [--limit 300] [--json]` — quality card from a LIVE
+  sample of the last N posts, WITHOUT adding the channel: flags use the analyzer's own
+  thresholds (engagement vs subscribers, forwards share, auto-feed, uniqueness,
+  language, suspicious username). DB-history metrics (cross-channel spam) are listed
+  as not checked. Read-only live read.
 - `channel collect [--channel-id ID]` — incremental collection for one channel; without flags
   interactive selection. One-off; exit when done. With a live daemon the channel is queued
   to the worker (no second MTProto client); `TGCF_CLI_DIRECT=1` forces the in-process path.
