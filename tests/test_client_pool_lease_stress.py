@@ -16,6 +16,10 @@ _LEASE_OWNERSHIP_ALLOWLIST = {
     "tg_agent/services/telegram_actions.py:_client",
     "tg_agent/agent/tools/_registry.py:resolve_entity",
     "tg_agent/cli/commands/messages.py:messages_read_impl",
+    # probe_impl (#1622): one-shot CLI card; `pool.disconnect_all()` in its
+    # finally tears the client and lease state down before the process exits
+    # (same shape as messages_read_impl).
+    "tg_agent/cli/commands/channel.py:probe_impl",
 }
 
 

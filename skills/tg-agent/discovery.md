@@ -45,6 +45,22 @@ username, message count, query tags, last_seen. Pre-filter before showing:
 Show 5-15 candidates as a short-list: title, @username, msgs, queries, one
 line on why it might be worth collecting. The user picks.
 
+## 3.5 Probe before approval (no DB write)
+
+For each short-list candidate, sample its recent posts LIVE and get a quality
+card — the channel is not added to the DB:
+
+```bash
+tg-agent channel probe <channel-id-or-username> --limit 300 --json
+```
+
+The card runs the analyzer's own thresholds (engagement vs subscribers,
+forwarder share, auto-feed, uniqueness, language, suspicious username) over
+the last 300 posts; 100 posts is the minimum for verdicts. Put the verdict
+in the short-list: channels with `forwarder`/`auto_feed`/`low_engagement`
+flags go to the bottom or into the discard pile. Cross-channel spam is only
+checkable after the first collection (`filter analyze --quick`).
+
 ## 4. Activate (only explicit approvals)
 
 For each user-approved candidate:

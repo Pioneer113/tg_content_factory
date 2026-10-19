@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import typer
+from telethon_floodgate import HandledFloodWaitError, run_with_flood_wait
 
 from tg_agent.cli import runtime, worker_handoff
 from tg_agent.cli.commands.common import (
@@ -16,8 +17,10 @@ from tg_agent.cli.commands.common import (
     run_async,
 )
 from tg_agent.database.bundles import ChannelBundle
+from tg_agent.filters.probe import ProbeMessage, probe_channel_snapshots
 from tg_agent.models import Channel, CollectionTaskStatus, StatsAllTaskPayload
 from tg_agent.parsers import deduplicate_identifiers, parse_file, parse_identifiers
+from tg_agent.services.account_service import resolve_default_phone
 from tg_agent.services.channel_onboarding import (
     channel_from_resolved_info,
     channel_with_meta,
@@ -854,6 +857,122 @@ async def candidates_impl(config_path: str, *, as_json: bool = False, limit: int
         await db.close()
 
 
+async def probe_impl(
+    config_path: str, *, identifier: str, limit: int = 300, as_json: bool = False
+) -> None:
+    """``channel probe`` — quality card from a LIVE sample, without adding the channel.
+
+    Reads the last ``limit`` posts straight from Telegram (no channels/messages
+    rows are written), fetches the subscriber count via GetFullChannelRequest,
+    and runs the analyzer's own thresholds over the sample
+    (``tg_agent/filters/probe.py``). Metrics that need collected history
+    (cross-channel spam, subscriber/message ratio) are reported as not checked.
+    """
+    config, db = await runtime.init_db(config_path)
+    pool = None
+    try:
+        _, pool = await runtime.init_pool(config, db)
+        if not pool.clients:
+            print("No connected accounts. Run 'serve' and add accounts via web UI.")
+            return
+        phone = await resolve_default_phone(db, connected=set(pool.clients))
+        if phone is None:
+            print("No connected accounts.")
+            return
+        result = await pool.get_native_client_by_phone(phone)
+        if result is None:
+            print(f"Client for {phone} unavailable (flood-wait or not connected).")
+            return
+        client, _ = result
+        peer = int(identifier) if identifier.lstrip("-").isdigit() else identifier
+        entity = await pool.resolve_entity_with_warm(
+            client, phone, peer, operation="channel_probe_resolve"
+        )
+        session = adapt_transport_session(
+            client, disconnect_on_close=False, phone=phone, pool=pool
+        )
+        full = await run_with_flood_wait(
+            session.fetch_full_channel(entity),
+            operation="channel_probe_full",
+            phone=phone,
+            pool=pool,
+            timeout=30.0,
+        )
+        participants = full.full_chat.participants_count if full and full.full_chat else None
+
+        collected: list = []
+
+        async def _read() -> None:
+            async for msg in client.iter_messages(entity, limit=limit):
+                collected.append(msg)
+
+        await run_with_flood_wait(
+            _read(), operation="channel_probe_read", phone=phone, pool=pool
+        )
+        snapshots = [
+            ProbeMessage(
+                text=msg.text,
+                views=msg.views,
+                is_forward=bool(msg.fwd_from),
+                urls=tuple(
+                    url
+                    for url in (getattr(e, "url", None) for e in (msg.entities or ()))
+                    if url
+                ),
+            )
+            for msg in collected
+        ]
+        username = getattr(entity, "username", None)
+        title = getattr(entity, "title", None) or identifier
+        raw_min_subs = await db.get_setting("min_subscribers_filter")
+        try:
+            min_subscribers = int(raw_min_subs) if raw_min_subs else None
+        except (TypeError, ValueError):
+            min_subscribers = None
+
+        card = probe_channel_snapshots(
+            snapshots,
+            participants_count=participants,
+            username=username,
+            min_subscribers=min_subscribers,
+        )
+        if as_json:
+            print(
+                safe_json_dumps(
+                    {
+                        "identifier": identifier,
+                        "title": title,
+                        "username": username,
+                        "participants_count": participants,
+                        "sample_limit": limit,
+                        **card,
+                    },
+                    indent=2,
+                )
+            )
+            return
+        print(
+            f"{title} (@{username or '—'}) — "
+            f"{participants if participants is not None else '?'} subscribers, "
+            f"last {card['total']} posts"
+        )
+        if card["insufficient"]:
+            print(f"  NOTE: sample below {card['min_sample']} posts — verdicts are weak.")
+        for name, flag in card["flags"].items():
+            mark = "FLAG" if flag["hit"] else ("—" if flag["hit"] is not None else "n/a")
+            print(f"  {name:<20} {mark:>4}  {flag['detail']}")
+        print(f"  not checked (needs collected history): {', '.join(card['not_checked'])}")
+        hits = [n for n, f in card["flags"].items() if f["hit"]]
+        if hits:
+            print(f"  flags: {', '.join(hits)}")
+    except HandledFloodWaitError as exc:
+        print(f"Flood wait: {exc.info.detail}")
+    finally:
+        if pool:
+            await pool.disconnect_all()
+        await db.close()
+
+
 _HANDOFF_POLL_INTERVAL_SEC = 2.0
 _HANDOFF_WAIT_TIMEOUT_SEC = 900.0
 _TERMINAL_TASK_STATUSES = (
@@ -1316,6 +1435,20 @@ def channel_candidates(
     """List search-discovered channels awaiting activation (see ``channel toggle``)."""
     apply_startup(ctx)
     run_async(candidates_impl(ctx.obj.config, as_json=as_json, limit=limit))
+
+
+@channel_app.command("probe", context_settings=_NEG_ID_POSITIONAL)
+def channel_probe(
+    ctx: typer.Context,
+    identifier: str = typer.Argument(..., help="Channel @username, t.me link, or numeric ID"),
+    limit: int = typer.Option(
+        300, "--limit", help="How many recent posts to sample (default: 300)"
+    ),
+    as_json: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Quality card from a LIVE sample — without adding the channel to the DB."""
+    apply_startup(ctx)
+    run_async(probe_impl(ctx.obj.config, identifier=identifier, limit=limit, as_json=as_json))
 
 
 # ---- nested: channel tag <action> ---------------------------------------- #
