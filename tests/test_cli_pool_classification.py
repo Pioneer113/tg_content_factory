@@ -54,6 +54,10 @@ RUNS_ANYWAY = {
     # ping create (#1415): --username resolve is a read-only RPC, one RPC per
     # operator-invoked create — same shape as the diagnostics above.
     ("ping.py", "create_impl"),
+    # probe (#1622): read-only live quality card for a channel that is not in
+    # the DB yet — the worker queue has no equivalent (it only touches
+    # collected channels).
+    ("channel.py", "probe_impl"),
 }
 
 # Intentionally untouched: interactive auth (a live phone_code_hash bound to the
