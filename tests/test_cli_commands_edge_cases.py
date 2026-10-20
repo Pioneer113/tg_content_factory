@@ -1521,6 +1521,7 @@ class TestSearchQueryToggle:
         db.close = AsyncMock()
 
         svc_instance = MagicMock()
+        svc_instance.get = AsyncMock(return_value=SearchQuery(id=10, query="q", interval_minutes=30))
         svc_instance.toggle = AsyncMock()
         bundle = MagicMock()
 
@@ -1541,11 +1542,11 @@ class TestSearchQueryToggle:
         from tg_agent.database.bundles import SearchQueryBundle
         from tg_agent.services.search_query_service import SearchQueryService
 
-        db.close = AsyncMock()
         svc_instance = SearchQueryService(SearchQueryBundle.from_database(db))
 
         with patch("tg_agent.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
-             patch("tg_agent.cli.commands.search_query.SearchQueryService", return_value=svc_instance):
+             patch("tg_agent.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
+             patch.object(db, "close", new=AsyncMock()):
             with pytest.raises(SystemExit) as excinfo:
                 run(cli_ns(search_query_action="toggle", id=999))
 
@@ -1563,6 +1564,7 @@ class TestSearchQueryRun:
         db.close = AsyncMock()
 
         svc_instance = MagicMock()
+        svc_instance.get = AsyncMock(return_value=SearchQuery(id=3, query="q", interval_minutes=30))
         svc_instance.run_once = AsyncMock(return_value=8)
         bundle = MagicMock()
 
@@ -1583,6 +1585,7 @@ class TestSearchQueryRun:
         db.close = AsyncMock()
 
         svc_instance = MagicMock()
+        svc_instance.get = AsyncMock(return_value=SearchQuery(id=3, query="q", interval_minutes=30))
         svc_instance.run_once = AsyncMock(return_value=None)
         bundle = MagicMock()
 
