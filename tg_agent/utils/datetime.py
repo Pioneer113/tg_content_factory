@@ -45,6 +45,21 @@ def parse_date_bound(value: str) -> date:
     raise ValueError(f"invalid date {value!r}: expected YYYY-MM-DD")
 
 
+def parse_datetime_bound(value: str) -> datetime:
+    """Parse a full ISO datetime bound (e.g. ``2025-03-06T12:00:00+00:00``).
+
+    Separated from :func:`parse_date_bound` so callers can keep the exact
+    precision datetime bounds carry while date-only bounds normalize to whole
+    days (#1593). Raises ValueError on anything that is neither.
+    """
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        raise ValueError(
+            f"invalid date {value!r}: expected YYYY-MM-DD or an ISO datetime"
+        ) from None
+
+
 def try_parse_datetime(value: str | datetime | None) -> datetime | None:
     try:
         return parse_datetime(value)

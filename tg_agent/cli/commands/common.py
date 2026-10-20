@@ -8,7 +8,7 @@ import typer
 
 from tg_agent.cli.typer_app import apply_startup as _apply_startup
 from tg_agent.cli.typer_app import run_async as _run_async
-from tg_agent.utils.datetime import parse_date_bound
+from tg_agent.utils.datetime import parse_date_bound, parse_datetime_bound
 
 _T = TypeVar("_T")
 
@@ -156,14 +156,19 @@ def resolve_date_bounds(
 ) -> tuple[str | None, str | None]:
     """Validate and normalize ``--date-from``/``--date-to`` for date-bounded commands.
 
-    Relaxed ``YYYY-M-D`` canonicalizes to ``YYYY-MM-DD``; anything else raises
-    ``typer.BadParameter`` (usage error, exit 2) instead of letting the raw
-    string reach a lexicographic SQL comparison and silently mis-window the
-    query (#1593).
+    Relaxed ``YYYY-M-D`` canonicalizes to ``YYYY-MM-DD``, full ISO datetimes
+    keep exact precision; anything else raises ``typer.BadParameter`` (usage
+    error, exit 2) instead of letting the raw string reach a lexicographic SQL
+    comparison and silently mis-window the query (#1593).
     """
 
     def bound(value: str | None) -> str | None:
-        return parse_date_bound(value).isoformat() if value else None
+        if not value:
+            return None
+        try:
+            return parse_date_bound(value).isoformat()
+        except ValueError:
+            return parse_datetime_bound(value).isoformat()
 
     try:
         first = bound(date_from)

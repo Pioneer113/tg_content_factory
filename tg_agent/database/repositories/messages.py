@@ -25,7 +25,12 @@ from typing import TYPE_CHECKING, AsyncIterator
 from tg_agent.database.pool import ReadConnection
 from tg_agent.models import Message, SearchParams, SearchQuery
 from tg_agent.telegram.reactions import parse_reactions_json
-from tg_agent.utils.datetime import parse_date_bound, parse_datetime, parse_required_datetime
+from tg_agent.utils.datetime import (
+    parse_date_bound,
+    parse_datetime,
+    parse_datetime_bound,
+    parse_required_datetime,
+)
 from tg_agent.utils.search_query_chat_filter import parse_chat_filter
 
 if TYPE_CHECKING:
@@ -61,12 +66,17 @@ def _parse_reactions_json(reactions_json: str) -> list[dict]:
 
 
 def _normalize_date_to(date_to: str) -> tuple[str, str]:
-    """Return SQL operator and upper bound for inclusive day filters.
+    """Return SQL operator and upper bound for inclusive date filters.
 
-    Raises ValueError on non-date input — a raw string reaching the SQL
-    comparison lexicographically mis-windows the query (#1593).
+    Date-only bounds normalize to an exclusive next-day bound; full ISO
+    datetimes keep exact precision. Raises ValueError on non-date input — a
+    raw string reaching the SQL comparison lexicographically mis-windows the
+    query (#1593).
     """
-    parsed = parse_date_bound(date_to)
+    try:
+        parsed = parse_date_bound(date_to)
+    except ValueError:
+        return "<=", parse_datetime_bound(date_to).isoformat()
     return "<", (parsed + timedelta(days=1)).isoformat()
 
 
@@ -93,17 +103,23 @@ class MessagesRepository:
 
     @staticmethod
     def _normalize_date_from(value: str | None) -> str | None:
-        """Canonicalize a lower date bound or None; ValueError on garbage (#1593)."""
+        """Canonicalize a lower date/datetime bound or None; ValueError on garbage (#1593)."""
         if not value:
             return None
-        return parse_date_bound(value).isoformat()
+        try:
+            return parse_date_bound(value).isoformat()
+        except ValueError:
+            return parse_datetime_bound(value).isoformat()
 
     @staticmethod
     def _normalize_date_to(value: str | None) -> tuple[str | None, str]:
-        """Canonicalize an upper date bound to an exclusive next-day bound (#1593)."""
+        """Canonicalize an upper bound: exclusive next-day for dates, exact instant for datetimes (#1593)."""
         if not value:
             return None, "<="
-        return (parse_date_bound(value) + timedelta(days=1)).isoformat(), "<"
+        try:
+            return (parse_date_bound(value) + timedelta(days=1)).isoformat(), "<"
+        except ValueError:
+            return parse_datetime_bound(value).isoformat(), "<="
 
     def _append_analytics_date_filter(
         self,

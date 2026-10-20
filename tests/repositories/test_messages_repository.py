@@ -310,11 +310,11 @@ def test_normalize_date_to_none():
     assert op == "<="
 
 
-def test_normalize_date_to_datetime_rejected():
-    """Datetime bounds are outside the date-only contract (#1593): the old
-    string pass-through compared 'T' against ' ' and mis-windowed the query."""
-    with pytest.raises(ValueError):
-        MessagesRepository._normalize_date_to("2026-03-16T12:00:00")
+def test_normalize_date_to_datetime_keeps_exact_precision():
+    """Full ISO datetime bounds are supported and compare exactly (#1593)."""
+    result, op = MessagesRepository._normalize_date_to("2026-03-16T12:00:00")
+    assert result == "2026-03-16T12:00:00"
+    assert op == "<="
 
 
 def test_normalize_date_to_date_only():
