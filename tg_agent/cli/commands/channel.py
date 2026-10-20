@@ -818,7 +818,7 @@ async def candidates_impl(config_path: str, *, as_json: bool = False, limit: int
                 AND m.premium_search_query IS NOT NULL
                WHERE c.approval_state = 'pending' AND c.is_filtered = 0
                GROUP BY c.channel_id
-               ORDER BY n_msgs DESC
+               ORDER BY n_msgs DESC, c.channel_id DESC
                LIMIT ?""",
             (limit,),
         )
