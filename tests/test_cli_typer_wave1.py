@@ -19,9 +19,9 @@ the wiring from CLI tokens to the body is what is under test.
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock, patch
 
+import pytest
 from typer.testing import CliRunner
 
 from tg_agent.cli.typer_app import app
@@ -165,7 +165,7 @@ def test_collect_sample_defaults_limit_to_ten():
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize("bad_date", ["2026-10-5", "yesterday", "2026-13-45"])
+@pytest.mark.parametrize("bad_date", ["yesterday", "2026-13-45", "2026-10-5X"])
 def test_search_rejects_non_canonical_dates(bad_date):
     """--date-from/--date-to validate before any DB work (#1593): garbage used
     to reach SQL as a raw string and silently mis-window the query."""

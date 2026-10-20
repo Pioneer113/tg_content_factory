@@ -16,6 +16,7 @@ from tg_agent.cli import runtime
 from tg_agent.cli.commands.common import (
     ExportFormat,
     apply_startup,
+    resolve_date_bounds,
     run_async,
 )
 from tg_agent.utils.text_safety import csv_safe_cell, escape_xml_text
@@ -378,6 +379,7 @@ def export_telegram(
 ) -> None:
     """Export as Telegram-Desktop JSON/HTML."""
     apply_startup(ctx)
+    date_from, date_to = resolve_date_bounds(date_from, date_to)
     run_async(
         telegram_impl(
             ctx.obj.config,

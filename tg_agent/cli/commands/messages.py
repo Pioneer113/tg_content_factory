@@ -15,6 +15,7 @@ from tg_agent.cli.commands.common import (
     OutputFormat,
     apply_startup,
     resolve_channel,
+    resolve_date_bounds,
     run_async,
 )
 from tg_agent.models import Message
@@ -329,6 +330,7 @@ def messages_read(
 ) -> None:
     """Read messages from a channel/dialog."""
     apply_startup(ctx)
+    date_from, date_to = resolve_date_bounds(date_from, date_to)
     run_async(
         messages_read_impl(
             ctx.obj.config,

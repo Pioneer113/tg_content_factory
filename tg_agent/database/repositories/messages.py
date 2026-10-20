@@ -17,23 +17,21 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import struct
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import timedelta
 from typing import TYPE_CHECKING, AsyncIterator
 
 from tg_agent.database.pool import ReadConnection
 from tg_agent.models import Message, SearchParams, SearchQuery
 from tg_agent.telegram.reactions import parse_reactions_json
-from tg_agent.utils.datetime import parse_datetime, parse_required_datetime
+from tg_agent.utils.datetime import parse_date_bound, parse_datetime, parse_required_datetime
 from tg_agent.utils.search_query_chat_filter import parse_chat_filter
 
 if TYPE_CHECKING:
     from tg_agent.database.facade import Database
 
 logger = logging.getLogger(__name__)
-_DATE_ONLY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _EMBEDDING_DIMENSIONS_SETTING = "semantic_embedding_dimensions"
 
 
@@ -63,11 +61,12 @@ def _parse_reactions_json(reactions_json: str) -> list[dict]:
 
 
 def _normalize_date_to(date_to: str) -> tuple[str, str]:
-    """Return SQL operator and upper bound for inclusive day filters."""
-    try:
-        parsed = date.fromisoformat(date_to)
-    except ValueError:
-        return "<=", date_to
+    """Return SQL operator and upper bound for inclusive day filters.
+
+    Raises ValueError on non-date input — a raw string reaching the SQL
+    comparison lexicographically mis-windows the query (#1593).
+    """
+    parsed = parse_date_bound(date_to)
     return "<", (parsed + timedelta(days=1)).isoformat()
 
 
@@ -94,18 +93,17 @@ class MessagesRepository:
 
     @staticmethod
     def _normalize_date_from(value: str | None) -> str | None:
+        """Canonicalize a lower date bound or None; ValueError on garbage (#1593)."""
         if not value:
             return None
-        return value
+        return parse_date_bound(value).isoformat()
 
     @staticmethod
     def _normalize_date_to(value: str | None) -> tuple[str | None, str]:
+        """Canonicalize an upper date bound to an exclusive next-day bound (#1593)."""
         if not value:
             return None, "<="
-        if _DATE_ONLY_RE.fullmatch(value):
-            next_day = date.fromisoformat(value) + timedelta(days=1)
-            return next_day.isoformat(), "<"
-        return value, "<="
+        return (parse_date_bound(value) + timedelta(days=1)).isoformat(), "<"
 
     def _append_analytics_date_filter(
         self,
