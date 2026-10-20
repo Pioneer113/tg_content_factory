@@ -210,6 +210,8 @@ async def status_impl(config_path: str) -> None:
 
 dm_app = typer.Typer(no_args_is_help=True, help="Incoming DM reply drafts")
 drafts_app = typer.Typer(no_args_is_help=True, help="Reply drafts: list, decide, queue send")
+
+
 @dm_app.command("status")
 def dm_status(ctx: typer.Context) -> None:
     """Show DM listener/catch-up status from the worker snapshot + settings."""
