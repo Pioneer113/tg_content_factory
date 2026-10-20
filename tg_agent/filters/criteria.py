@@ -74,11 +74,24 @@ FORWARD_SHARE_THRESHOLD = 50.0
 FORWARD_SHARE_WINDOW = 100
 FORWARD_SHARE_MIN_MESSAGES = 30
 
+# «Массовый постинг» (high_volume, #1571): канал льёт аномально много сообщений
+# за сутки. Метрика — count сообщений за последние 24ч (messages.date, окно
+# strftime как в get_err24_data); порог — P95 распределения объёма по всем
+# каналам отчёта, НО не ниже абсолютного пола MIN_24H: чистый P95 флагает ~5%
+# каналов по построению даже на плоской «тихой» выборке, пол отсекает это.
+# Пол 100 — от триггера issue (лента отдала 123 поста за один проход) и с
+# запасом выше честных дайджестов (пачка в день ≈ 10-30). Label-only до
+# калибровки на живой БД (прецедент — LOW_ENGAGEMENT_*, #1550): блокирующий
+# вердикт — за владельцем по замерам, интуицией не решаем.
+HIGH_VOLUME_PERCENTILE = 95.0
+HIGH_VOLUME_MIN_24H = 100
+
 # Флаги-метки (решение владельца 06.10.26): флаг ОСТАЁТСЯ в filter_flags как сигнал
 # для LLM-кураторства, но не ставит is_filtered — нерусскоязычные ИИ-каналы
 # (TestingCatalog, AI_News_CN и т.п.) собираются, язык виден куратору.
 # forwarder — там же (16.10.26): пересылочный канал — не спам.
-LABEL_ONLY_FLAGS = frozenset({"non_cyrillic", "forwarder"})
+# high_volume — там же (#1571): label-only до калибровки на живой БД.
+LABEL_ONLY_FLAGS = frozenset({"non_cyrillic", "forwarder", "high_volume"})
 
 # Тег-эскроу: канал с тегом KEEP_TAG исключается из авто-фильтрации целиком —
 # apply_filters сбрасывает всем is_filtered, но keep-каналу возвращает is_filtered=0
@@ -132,6 +145,7 @@ VALID_FLAGS = frozenset(
         "low_engagement",
         "forwarder",
         "no_author_content",
+        "high_volume",
     }
 )
 

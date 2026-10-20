@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from tg_agent.filters.analyzer import ChannelAnalyzer
-from tg_agent.filters.criteria import AUTHOR_CONTENT_TAG, VALID_FLAGS, WHITELIST_FLAG, contains_cyrillic
+from tg_agent.filters.criteria import (
+    AUTHOR_CONTENT_TAG,
+    LABEL_ONLY_FLAGS,
+    VALID_FLAGS,
+    WHITELIST_FLAG,
+    contains_cyrillic,
+)
 from tg_agent.filters.models import ChannelFilterResult, FilterReport
 
 
@@ -114,7 +122,8 @@ class TestValidFlags:
         assert "low_engagement" in VALID_FLAGS
         assert "forwarder" in VALID_FLAGS
         assert "no_author_content" in VALID_FLAGS
-        assert len(VALID_FLAGS) == 14
+        assert "high_volume" in VALID_FLAGS
+        assert len(VALID_FLAGS) == 15
 
 
 class TestAnalyzerLowUniqueness:
@@ -452,10 +461,10 @@ class TestAnalyzeAllQuickMode:
             repo = file_db.filter_repo
             assert repo._can_parallel()
 
-            _, _, _, full_cross_map, _, _, _, _ = await repo.fetch_maps_parallel(None)
+            _, _, _, full_cross_map, _, _, _, _, _ = await repo.fetch_maps_parallel(None)
             assert full_cross_map
 
-            _, _, _, quick_cross_map, _, _, _, _ = await repo.fetch_maps_parallel(None, include_cross_dupe=False)
+            _, _, _, quick_cross_map, _, _, _, _, _ = await repo.fetch_maps_parallel(None, include_cross_dupe=False)
             assert quick_cross_map == {}
 
             quick = await ChannelAnalyzer(file_db).analyze_all(quick=True)
@@ -1887,3 +1896,170 @@ class TestMergeFilterFlag:
         is_filtered, flags = await cur.fetchone()
         assert is_filtered == 1
         assert "manual" in flags
+
+
+def _recent_iso(minutes_ago: int = 0) -> str:
+    return (datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)).isoformat()
+
+
+async def _insert_window_messages(db, channel_id, count, *, minutes_ago=0, base=9000):
+    """count сообщений в окне 24ч (minutes_ago=0) или вне его (minutes_ago > 1440)."""
+    date = _recent_iso(minutes_ago)
+    for i in range(count):
+        await db.execute(
+            "INSERT INTO messages (channel_id, message_id, text, date) VALUES (?, ?, ?, ?)",
+            (channel_id, base + i, f"ленточный пост номер {i}", date),
+        )
+    await db.commit()
+
+
+class TestAnalyzerHighVolume:
+    """«Массовый постинг» (high_volume): count_24h >= max(P95, HIGH_VOLUME_MIN_24H).
+
+    Метрика — число сообщений канала за последние 24ч; порог — P95 распределения
+    объёма по всем каналам отчёта с абсолютным полом HIGH_VOLUME_MIN_24H (иначе
+    плоская выборка флагает ~5% каналов по построению). Label-only до калибровки
+    на живой БД: флаг — метка для кураторства, сбор не блокирует (#1571).
+    """
+
+    async def test_feed_channel_flagged(self, db, raw_db):
+        # Триггер из #1571: 123 сообщения за 24ч против 9 «тихих» по 5.
+        await _insert_channel(raw_db, 5200)
+        await _insert_window_messages(raw_db, 5200, 123)
+        for i in range(9):
+            await _insert_channel(raw_db, 5201 + i)
+            await _insert_window_messages(raw_db, 5201 + i, 5, base=9100 + i * 100)
+        analyzer = ChannelAnalyzer(db)
+        report = await analyzer.analyze_all()
+        by_id = {r.channel_id: r for r in report.results}
+        assert by_id[5200].volume_24h == 123
+        assert "high_volume" in by_id[5200].flags
+        for i in range(9):
+            assert by_id[5201 + i].volume_24h == 5
+            assert "high_volume" not in by_id[5201 + i].flags
+
+    async def test_relative_threshold_bites_above_floor(self, db, raw_db):
+        # P95 > пола: пять каналов по 110 и один 200 → p95=177.5, флагает
+        # только 200, хотя 110 выше абсолютного пола. Относительная часть
+        # порога работает, а не только пол.
+        for i in range(5):
+            await _insert_channel(raw_db, 5300 + i)
+            await _insert_window_messages(raw_db, 5300 + i, 110, base=9300 + i * 200)
+        await _insert_channel(raw_db, 5305)
+        await _insert_window_messages(raw_db, 5305, 200, base=9400)
+        analyzer = ChannelAnalyzer(db)
+        report = await analyzer.analyze_all()
+        by_id = {r.channel_id: r for r in report.results}
+        assert "high_volume" in by_id[5305].flags
+        for i in range(5):
+            assert "high_volume" not in by_id[5300 + i].flags
+
+    async def test_floor_on_flat_distribution(self, db, raw_db):
+        # Плоская выборка: у всех по 5 сообщений за 24ч, p95=5 — без пола
+        # флагался бы каждый пятый канал по построению. Пол защищает.
+        for i in range(20):
+            await _insert_channel(raw_db, 5400 + i)
+            await _insert_window_messages(raw_db, 5400 + i, 5, base=9500 + i * 100)
+        analyzer = ChannelAnalyzer(db)
+        report = await analyzer.analyze_all()
+        assert all("high_volume" not in r.flags for r in report.results)
+
+    async def test_boundary_exactly_at_threshold(self, db, raw_db):
+        # Ровно 100 (= HIGH_VOLUME_MIN_24H, p95≈57 ниже) → порог нестрогий (>=).
+        await _insert_channel(raw_db, 5500)
+        await _insert_window_messages(raw_db, 5500, 100)
+        for i in range(9):
+            await _insert_channel(raw_db, 5501 + i)
+            await _insert_window_messages(raw_db, 5501 + i, 5, base=9700 + i * 100)
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(5500)
+        assert result.volume_24h == 100
+        assert "high_volume" in result.flags
+
+    async def test_old_messages_outside_window(self, db, raw_db):
+        # 24ч-окно: старые сообщения не считаются, свежие — считаются.
+        await _insert_channel(raw_db, 5600)
+        await _insert_window_messages(raw_db, 5600, 123, minutes_ago=2 * 24 * 60)
+        await _insert_channel(raw_db, 5601)
+        await _insert_window_messages(raw_db, 5601, 123)
+        for i in range(9):
+            await _insert_channel(raw_db, 5602 + i)
+            await _insert_window_messages(raw_db, 5602 + i, 5, base=9800 + i * 100)
+        analyzer = ChannelAnalyzer(db)
+        report = await analyzer.analyze_all()
+        by_id = {r.channel_id: r for r in report.results}
+        assert by_id[5600].volume_24h == 0
+        assert "high_volume" not in by_id[5600].flags
+        assert by_id[5601].volume_24h == 123
+        assert "high_volume" in by_id[5601].flags
+
+    async def test_single_channel_analyze_applies_floor(self, db, raw_db):
+        # Одиночный analyze_channel: p95 вырождается в собственный count,
+        # решает пол — 50/24ч не флагается, 123/24ч флагается.
+        await _insert_channel(raw_db, 5700)
+        await _insert_window_messages(raw_db, 5700, 50, base=9950)
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(5700)
+        assert result.volume_24h == 50
+        assert "high_volume" not in result.flags
+
+        await _insert_channel(raw_db, 5701)
+        await _insert_window_messages(raw_db, 5701, 123, base=9999)
+        result = await analyzer.analyze_channel(5701)
+        assert result.volume_24h == 123
+        assert "high_volume" in result.flags
+
+    async def test_apply_is_label_only(self, db, raw_db):
+        # Label-only: флаг пишется в filter_flags, но is_filtered остаётся 0 —
+        # блокирующий вердикт только после калибровки на живой БД.
+        await _insert_channel(raw_db, 5800)
+        await _insert_window_messages(raw_db, 5800, 123)
+        for i in range(9):
+            await _insert_channel(raw_db, 5801 + i)
+            await _insert_window_messages(raw_db, 5801 + i, 5, base=10200 + i * 100)
+        analyzer = ChannelAnalyzer(db)
+        report = await analyzer.analyze_all()
+        await analyzer.apply_filters(report)
+        cur = await raw_db.execute(
+            "SELECT is_filtered, filter_flags FROM channels WHERE channel_id = 5800"
+        )
+        row = await cur.fetchone()
+        assert row["is_filtered"] == 0
+        assert "high_volume" in row["filter_flags"]
+        assert "high_volume" in LABEL_ONLY_FLAGS
+
+    async def test_quick_mode_computes_volume(self, db, raw_db):
+        # 24ч-окно не зависит от quick-семпла: sample_size=10 меньше объёма
+        # канала, метрика всё равно по календарным суткам.
+        await _insert_channel(raw_db, 5900)
+        await _insert_window_messages(raw_db, 5900, 123, base=10400)
+        for i in range(9):
+            await _insert_channel(raw_db, 5901 + i)
+            await _insert_window_messages(raw_db, 5901 + i, 5, base=10500 + i * 100)
+        analyzer = ChannelAnalyzer(db)
+        quick = await analyzer.analyze_all(quick=True, sample_size=10)
+        result = next(r for r in quick.results if r.channel_id == 5900)
+        assert result.volume_24h == 123
+        assert "high_volume" in result.flags
+
+    async def test_volume_map_counts_window_and_zero(self, db, raw_db):
+        # Репо-метод: каналы без свежих сообщений входят в карту с нулём —
+        # они участвуют в P95-распределении.
+        await _insert_channel(raw_db, 5950)
+        await _insert_window_messages(raw_db, 5950, 123, minutes_ago=2 * 24 * 60, base=10700)
+        await _insert_channel(raw_db, 5951)
+        await _insert_window_messages(raw_db, 5951, 2, base=10900)
+        volume_map = await db.filter_repo.fetch_volume_map()
+        assert volume_map[5950] == 0
+        assert volume_map[5951] == 2
+        single = await db.filter_repo.fetch_volume_map(channel_id=5951)
+        assert single == {5951: 2}
+
+    async def test_percentile_helper_linear_interpolation(self):
+        # Утилита перцентиля (линейная интерполяция, как numpy.percentile).
+        from tg_agent.filters.analyzer import _percentile
+
+        assert _percentile([], 95.0) is None
+        assert _percentile([7], 95.0) == 7.0
+        assert _percentile([5] * 9 + [123], 95.0) == pytest.approx(69.9)
+        assert _percentile([110] * 5 + [200], 95.0) == pytest.approx(177.5)

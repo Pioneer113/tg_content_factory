@@ -61,7 +61,8 @@ filter analyze | apply | reset | precheck | suspects | toggle | flag | purge | p
   (activates with human origin) + `channel collect <identifier>` for the first fetch.
 - `filter analyze|apply` — score channels for spam/quality (flags incl. `low_engagement` —
   dead engagement: avg views <10% of subscribers over the last 100 posts; `forwarder` —
-  forwarding channel: ≥50% of the last 100 posts are forwards, label-only); the uniqueness /
+  forwarding channel: ≥50% of the last 100 posts are forwards, label-only; `high_volume` —
+  mass poster: ≥100 messages/24h AND above the P95 of per-channel 24h volume, label-only); the uniqueness /
   subscriber-ratio / cross-dupe / cyrillic thresholds are overridable via
   `settings filter-criteria` (defaults built in, out-of-range values fall back to defaults);
   filtered channels are skipped unless `force=True`.
