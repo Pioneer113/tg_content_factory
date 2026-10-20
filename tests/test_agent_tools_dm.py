@@ -211,6 +211,17 @@ async def test_create_dm_draft_never_touches_decided_draft(db, handlers):
 
 
 @pytest.mark.anyio
+async def test_create_dm_draft_marks_journal_processed(db, handlers):
+    """Паритет с `dm drafts create` (#1581): черновик разбирает журнальную строку."""
+    dm_id = await _seed_journal(db)
+    assert await db.repos.incoming_dms.count_unprocessed() == 1
+
+    await handlers["create_dm_draft"]({"incoming_dm_id": dm_id, "text": "ответ агента"})
+
+    assert await db.repos.incoming_dms.count_unprocessed() == 0
+
+
+@pytest.mark.anyio
 async def test_create_dm_draft_without_journal_row_asks_for_phone_chat(db, handlers):
     text = _text(await handlers["create_dm_draft"]({"incoming_dm_id": 4242, "text": "ответ"}))
     assert "не найдена" in text and "phone" in text and "chat_id" in text

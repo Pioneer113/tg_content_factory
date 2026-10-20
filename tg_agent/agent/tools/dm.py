@@ -235,6 +235,14 @@ def register(db, client_pool, embedding_service, **kwargs):
                 chat_id=chat_id,
                 reply_text=text,
             )
+            # Семантика #1581 (паритет с `dm drafts create`): черновик разбирает
+            # журнальную строку — unprocessed в `dm status` считает только
+            # недоразобранное.
+            journal = await db.repos.incoming_dms.get(int(incoming_dm_id))
+            if journal is not None:
+                await db.repos.incoming_dms.mark_processed(
+                    journal.phone, journal.chat_id, [journal.message_id]
+                )
             draft = await db.repos.dm_reply_drafts.get(draft_id)
             if draft is not None and draft.status == "draft":
                 verb = "создан" if created else "обновлён"
