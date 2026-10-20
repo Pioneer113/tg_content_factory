@@ -11,6 +11,7 @@ Covers:
 from __future__ import annotations
 
 import asyncio
+import csv
 import logging
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -133,13 +134,14 @@ class TestPrintMessages:
         assert len(lines) == 2  # header + 1 row
         assert "2025-06-15" in lines[1]
 
-    def test_csv_long_text_truncated(self, capsys):
-        long_text = "B" * 600
+    def test_csv_long_text_not_truncated(self, capsys):
+        """`messages read --format csv` keeps text over 500 chars whole (#1617)."""
+        long_text = "START|" + "0123456789" * 55 + "|END: this part must survive CSV export"
         msgs = [self._make_msg(text=long_text)]
         _print_messages(msgs, "csv", total=1)
         out = capsys.readouterr().out
-        lines = out.strip().split("\n")
-        assert len(lines) == 2
+        row = next(csv.reader(out.splitlines()[1:]))
+        assert row[4] == long_text
 
     def test_text_format_no_text(self, capsys):
         msgs = [self._make_msg(text=None)]
