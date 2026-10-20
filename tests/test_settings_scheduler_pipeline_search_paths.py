@@ -457,7 +457,7 @@ class TestCLIAnalyticsTop:
         stat.total_published = 7
         stat.total_rejected = 1
         stat.pending_moderation = 2
-        stat.success_rate = 0.7
+        stat.success_rate = 70.0  # percent units, as the service returns it (#1616)
 
         with patch(
             "tg_agent.services.content_analytics_service.ContentAnalyticsService.get_pipeline_stats",

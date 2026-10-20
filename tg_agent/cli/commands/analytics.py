@@ -127,7 +127,7 @@ async def pipeline_stats_impl(config_path: str, *, pipeline_id: int | None) -> N
                 str(s.total_published),
                 str(s.total_rejected),
                 str(s.pending_moderation),
-                f"{s.success_rate:.0%}",
+                f"{s.success_rate:.0f}%",
             ))
     finally:
         await db.close()

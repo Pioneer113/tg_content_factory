@@ -49,6 +49,8 @@ class TestAnalyticsToolGetPipelineStats:
 
     @pytest.mark.anyio
     async def test_with_stats(self, mock_db):
+        # success_rate comes from the service in percent units (80.0 == 40/50);
+        # the tool must render it verbatim, not re-multiply it (#1616).
         stat = SimpleNamespace(
             pipeline_id=1,
             pipeline_name="Pipeline X",
@@ -56,7 +58,7 @@ class TestAnalyticsToolGetPipelineStats:
             total_published=40,
             total_rejected=5,
             pending_moderation=5,
-            success_rate=0.80,
+            success_rate=80.0,
         )
         with patch("tg_agent.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
             mock_svc.return_value.get_pipeline_stats = AsyncMock(return_value=[stat])
@@ -66,6 +68,7 @@ class TestAnalyticsToolGetPipelineStats:
         assert "Pipeline X" in text
         assert "генераций=50" in text
         assert "80%" in text
+        assert "8000%" not in text
 
     @pytest.mark.anyio
     async def test_error(self, mock_db):
