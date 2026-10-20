@@ -27,6 +27,7 @@ from tg_agent.agent.tools.accounts import get_live_account_info_text
 from tg_agent.cli import runtime
 from tg_agent.cli.commands.common import (
     apply_startup,
+    cli_error,
     run_async,
     sync_prompt,
 )
@@ -94,8 +95,7 @@ async def _run_export_session(args: argparse.Namespace, db: Database) -> None:
     account_id = getattr(args, "id", None)
     phone = getattr(args, "phone", None)
     if (account_id is None) == (phone is None):
-        print("ERROR: provide exactly one of --id or --phone")
-        return
+        cli_error("ERROR: provide exactly one of --id or --phone")
 
     # Resolve identity without decrypting the whole DB (a broken sibling session
     # must not crash export of a healthy account, #1143 review).
@@ -108,17 +108,14 @@ async def _run_export_session(args: argparse.Namespace, db: Database) -> None:
         match = next((s for s in summaries if s.phone == phone), None)
         target = phone
     if match is None:
-        print(f"Account {target} not found")
-        return
+        cli_error(f"Account {target} not found")
 
     try:
         session_string = await db.repos.accounts.get_decrypted_session(account_id=match.id, phone=None)
     except AccountSessionDecryptError as exc:
-        print(f"ERROR: cannot decrypt session for {match.phone} ({exc.status})")
-        return
+        cli_error(f"ERROR: cannot decrypt session for {match.phone} ({exc.status})")
     if not session_string:
-        print(f"ERROR: account {match.phone} has no session string to export")
-        return
+        cli_error(f"ERROR: account {match.phone} has no session string to export")
 
     print("WARNING: this session string grants full access to the account.", file=sys.stderr)
     if getattr(args, "json", False):
@@ -141,12 +138,12 @@ async def _run_import(args: argparse.Namespace, db: Database) -> None:
     _require_session_encryption_key(db)
     session_string = _read_session_arg(args)
     if not phone or not session_string:
-        print("ERROR: provide --phone and a session string (--session-string or --session-string-stdin)")
-        return
+        cli_error(
+            "ERROR: provide --phone and a session string (--session-string or --session-string-stdin)"
+        )
 
     if not validate_session_string(session_string):
-        print(f"ERROR: invalid Telegram session string for {phone}")
-        return
+        cli_error(f"ERROR: invalid Telegram session string for {phone}")
 
     existing = await db.get_account_summaries(active_only=False)
     # add_account is an ON CONFLICT(phone) UPSERT: importing onto an existing phone
@@ -226,17 +223,17 @@ async def send_code_impl(
         _require_session_encryption_key(db)
         api_id, api_hash = await _resolve_credentials(config, db, api_id=api_id, api_hash=api_hash)
         if api_id == 0 or not api_hash:
-            print("ERROR: API credentials not configured.")
-            print("Provide --api-id and --api-hash, or set them in config/DB.")
-            return
+            cli_error(
+                "ERROR: API credentials not configured.\n"
+                "Provide --api-id and --api-hash, or set them in config/DB."
+            )
 
         auth = TelegramAuth(api_id, api_hash, proxy=config.telegram_runtime.proxy)
         try:
             info = await auth.send_code(phone)
         except Exception as exc:
             await auth.cleanup()
-            print(f"Error sending auth code: {exc}")
-            return
+            cli_error(f"Error sending auth code: {exc}")
 
         await db.set_setting(_pending_key(phone), json.dumps(info))
         await auth.cleanup()
@@ -264,8 +261,7 @@ async def verify_code_impl(
 
         pending_raw = await db.get_setting(_pending_key(phone))
         if not pending_raw:
-            print(f"ERROR: No pending auth for {phone}. Run 'account send-code' first.")
-            return
+            cli_error(f"ERROR: No pending auth for {phone}. Run 'account send-code' first.")
         pending = json.loads(pending_raw)
         phone_code_hash = pending["phone_code_hash"]
 
@@ -275,8 +271,7 @@ async def verify_code_impl(
 
         api_id, api_hash = await _resolve_credentials(config, db, api_id=api_id, api_hash=api_hash)
         if api_id == 0 or not api_hash:
-            print("ERROR: API credentials not configured.")
-            return
+            cli_error("ERROR: API credentials not configured.")
 
         auth = TelegramAuth(api_id, api_hash, proxy=config.telegram_runtime.proxy)
         try:
@@ -292,11 +287,10 @@ async def verify_code_impl(
                 await db.set_setting(_pending_key(phone), json.dumps(pending))
                 print(f"2FA required. Re-run with --code {code} --password YOUR_2FA_PASSWORD")
             else:
-                print(f"Auth failed: {exc}")
+                cli_error(f"Auth failed: {exc}")
             return
         except Exception as exc:
-            print(f"Auth failed: {exc}")
-            return
+            cli_error(f"Auth failed: {exc}")
 
         existing = await db.get_account_summaries(active_only=False)
         is_primary = len(existing) == 0
@@ -460,9 +454,7 @@ async def delete_impl(config_path: str, *, account_id: int, notify_to: str | Non
                 acc.phone, replacement, accounts=accounts
             )
         except ValueError as exc:
-            print(f"ERROR: {exc}")
-            print("Аккаунт не удалён.")
-            return
+            cli_error(f"ERROR: {exc}\nАккаунт не удалён.")
         await db.delete_account(account_id)
         print(f"Deleted account id={account_id}")
         if reassignment.action == "reassigned":

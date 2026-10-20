@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import signal
+import sys
 from collections.abc import Coroutine
 from enum import Enum
-from typing import Any, TypeVar
+from typing import Any, NoReturn, TypeVar
 
 import typer
 
@@ -175,6 +176,23 @@ def run_async(coro: Coroutine[Any, Any, _T]) -> _T:
 
     active = getattr(typer_commands, "run_async", _run_async)
     return active(coro)
+
+
+def cli_error(message: str, *, code: int = 1) -> NoReturn:
+    """Report a failed command: *message* to stderr, non-zero exit (#1486).
+
+    The automation-first contract makes exit codes the primary machine-readable
+    outcome: consumers are programs, so a failed command must be distinguishable
+    from a successful one. Errors go to stderr, stdout stays for results, and
+    the process exits with *code*. Empty-but-valid results ("No messages
+    found.") are not failures — they keep printing to stdout with exit 0.
+
+    Usable from sync and ``async`` command bodies alike: ``typer.Exit`` raised
+    inside the coroutine propagates through ``run_async``/``asyncio.run`` to
+    the Typer runner, and ``main()`` turns it into ``SystemExit(code)``.
+    """
+    print(message, file=sys.stderr)
+    raise typer.Exit(code)
 
 
 def resolve_date_bounds(

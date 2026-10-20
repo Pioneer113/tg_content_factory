@@ -26,6 +26,7 @@ from tg_agent.cli import runtime
 from tg_agent.cli.commands.common import (
     PhotoMode,
     apply_startup,
+    cli_error,
     run_async,
 )
 from tg_agent.database.bundles import PhotoLoaderBundle
@@ -371,8 +372,7 @@ async def auto_toggle_impl(config_path: str, *, job_id: int) -> None:
     async def _body(s: _Services) -> None:
         job = await s.auto.get_job(job_id)
         if not job:
-            print("Auto job not found")
-            return
+            cli_error("Auto job not found")
         await s.auto.update_job(job_id, is_active=not job.is_active)
         print(f"Toggled auto job #{job_id} to {not job.is_active}")
     await _run_with_services(config_path, _body)

@@ -17,6 +17,7 @@ import typer
 from tg_agent.cli import runtime
 from tg_agent.cli.commands.common import (
     apply_startup,
+    cli_error,
     run_async,
     sync_prompt,
 )
@@ -247,13 +248,11 @@ async def flag_impl(
 ) -> None:
     """Set/unset an operator sticky filter flag (#1499) — durable across apply cycles."""
     if (set_flag is None) == (unset_flag is None):
-        print("Usage: filter flag <pk> --set manual | --unset manual (exactly one action).")
-        return
+        cli_error("Usage: filter flag <pk> --set manual | --unset manual (exactly one action).")
     action, flag = ("set", set_flag) if set_flag is not None else ("unset", unset_flag)
     if flag not in OPERATOR_STICKY_FLAGS:
         valid = ", ".join(sorted(OPERATOR_STICKY_FLAGS))
-        print(f"Unknown operator flag '{flag}'. Sticky flags settable by hand: {valid}.")
-        return
+        cli_error(f"Unknown operator flag '{flag}'. Sticky flags settable by hand: {valid}.")
     _, db = await runtime.init_db(config_path)
     try:
         applied = await db.repos.channels.merge_filter_flag(pk, flag, add=action == "set")

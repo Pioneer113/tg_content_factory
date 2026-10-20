@@ -16,6 +16,7 @@ from tg_agent.agent.provider_registry import PROVIDER_SPECS, ProviderRuntimeConf
 from tg_agent.cli import runtime
 from tg_agent.cli.commands.common import (
     apply_startup,
+    cli_error,
     run_async,
 )
 from tg_agent.services.agent_provider_service import ProviderConfigService
@@ -59,12 +60,9 @@ async def add_impl(config_path: str, *, name: str, api_key: str, base_url: str |
         name = name.lower()
         spec = provider_spec(name)
         if spec is None:
-            print(f"Unknown provider: {name}")
-            print(f"Available: {', '.join(PROVIDER_SPECS.keys())}")
-            return
+            cli_error(f"Unknown provider: {name}\nAvailable: {', '.join(PROVIDER_SPECS.keys())}")
         if not svc.writes_enabled:
-            print("ERROR: SESSION_ENCRYPTION_KEY is required to manage providers.")
-            return
+            cli_error("ERROR: SESSION_ENCRYPTION_KEY is required to manage providers.")
 
         configs = await svc.load_provider_configs()
         existing = next((c for c in configs if c.provider == name), None)
@@ -110,12 +108,11 @@ async def delete_impl(config_path: str, *, name: str) -> None:
     try:
         name = name.lower()
         if not svc.writes_enabled:
-            print("ERROR: SESSION_ENCRYPTION_KEY is required to manage providers.")
-            return
+            cli_error("ERROR: SESSION_ENCRYPTION_KEY is required to manage providers.")
         configs = await svc.load_provider_configs()
         new_configs = [c for c in configs if c.provider != name]
         if len(new_configs) == len(configs):
-            print(f"Provider '{name}' not found.")
+            cli_error(f"Provider '{name}' not found.")
             return
         await svc.save_provider_configs(new_configs)
         print(f"Deleted provider: {name}")
@@ -132,8 +129,7 @@ async def probe_impl(config_path: str, *, name: str) -> None:
         configs = await svc.load_provider_configs()
         cfg = next((c for c in configs if c.provider == name), None)
         if cfg is None:
-            print(f"Provider '{name}' not configured. Add it first.")
-            return
+            cli_error(f"Provider '{name}' not configured. Add it first.")
         print(f"Probing {name}...")
         try:
             entry = await svc.refresh_models_for_provider(name, cfg)
@@ -146,7 +142,7 @@ async def probe_impl(config_path: str, *, name: str) -> None:
                 if len(entry.models) > 10:
                     print(f"  ... and {len(entry.models) - 10} more")
         except Exception as exc:
-            print(f"FAIL: {exc}")
+            cli_error(f"FAIL: {exc}")
     finally:
         await db.close()
 
@@ -163,7 +159,7 @@ async def refresh_impl(config_path: str, *, name: str | None = None) -> None:
                 entry = await svc.refresh_models_for_provider(name)
                 print(f"OK: {len(entry.models)} models (source: {entry.source})")
             except Exception as exc:
-                print(f"FAIL: {exc}")
+                cli_error(f"FAIL: {exc}")
         else:
             print("Refreshing all providers...")
             results = await svc.refresh_all_models()
@@ -184,6 +180,7 @@ async def test_all_impl(config_path: str) -> None:
             print("No providers configured.")
             return
         print(f"Testing {len(configs)} provider(s)...\n")
+        failed = 0
         for cfg in configs:
             print(f"  {cfg.provider}...", end=" ", flush=True)
             try:
@@ -194,6 +191,10 @@ async def test_all_impl(config_path: str) -> None:
                     print(f"OK ({len(entry.models)} models)")
             except Exception as exc:
                 print(f"FAIL ({exc})")
+                failed += 1
+        if failed:
+            # Any provider failure fails the whole test run for scripts (#1486).
+            cli_error(f"{failed} of {len(configs)} provider(s) failed.")
     finally:
         await db.close()
 

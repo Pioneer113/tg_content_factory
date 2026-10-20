@@ -16,6 +16,7 @@ from tg_agent.cli import runtime
 from tg_agent.cli.commands.common import (
     ExportFormat,
     apply_startup,
+    cli_error,
     resolve_date_bounds,
     run_async,
 )
@@ -60,8 +61,7 @@ async def export_impl(
         elif fmt == "rss":
             content = _export_rss(messages)
         else:
-            print(f"Unknown format: {fmt}", file=sys.stderr)
-            return
+            cli_error(f"Unknown format: {fmt}")
 
         if output:
             with open(output, "w", encoding="utf-8") as f:
@@ -92,8 +92,7 @@ async def telegram_impl(
     _, db = await runtime.init_db(config_path)
     try:
         if not channel_id:
-            print("Error: --channel-id is required for telegram export.", file=sys.stderr)
-            return
+            cli_error("Error: --channel-id is required for telegram export.")
 
         if with_media:
             # Media download needs the live worker (owns the ClientPool); enqueue an
