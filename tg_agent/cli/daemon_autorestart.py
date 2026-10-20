@@ -16,7 +16,9 @@ PostToolUse (Bash) hook in the project ``.claude/settings.local.json``:
     ]
   }
 }
-```.claude/settings.local.json``` is gitignored, so installing the hook is a local
+```
+
+`.claude/settings.local.json` is gitignored, so installing the hook is a local
 operation per checkout: the mechanism is inert wherever the hook is not configured,
 and nothing restarts a daemon hosted by a different checkout.
 
