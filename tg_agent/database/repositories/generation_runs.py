@@ -415,22 +415,34 @@ class GenerationRunsRepository:
         pipeline_id: int | None = None,
         limit: int = 50,
         offset: int = 0,
+        order: str = "newest",
     ) -> list[GenerationRun]:
         """Очередь модерации: запуски со статусом ``pending`` или ``approved``.
 
         Это черновики и одобренные, но ещё не доставленные. Без ``pipeline_id`` —
         по всем пайплайнам; страница задаётся ``limit``/``offset``, новые первыми.
+
+        ``order``: ``"newest"`` — по ``id DESC`` (очередь модерации);
+        ``"created_at_asc"`` — по ``created_at ASC, id ASC`` (календарь
+        предстоящих, #1619: усечение страницы не должно менять начало
+        отсортированной очереди, поэтому порядок задаётся до LIMIT).
         """
+        if order == "newest":
+            order_sql = "ORDER BY id DESC"
+        elif order == "created_at_asc":
+            order_sql = "ORDER BY created_at ASC, id ASC"
+        else:
+            raise ValueError(f"Invalid order: {order!r}")
         if pipeline_id is None:
             cur = await self._db.execute(
                 "SELECT * FROM generation_runs WHERE moderation_status IN ('pending', 'approved')"
-                " ORDER BY id DESC LIMIT ? OFFSET ?",
+                f" {order_sql} LIMIT ? OFFSET ?",
                 (limit, offset),
             )
         else:
             cur = await self._db.execute(
                 "SELECT * FROM generation_runs WHERE moderation_status IN ('pending', 'approved')"
-                " AND pipeline_id = ? ORDER BY id DESC LIMIT ? OFFSET ?",
+                f" AND pipeline_id = ? {order_sql} LIMIT ? OFFSET ?",
                 (pipeline_id, limit, offset),
             )
         rows = await cur.fetchall()
