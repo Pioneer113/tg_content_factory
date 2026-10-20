@@ -4,6 +4,7 @@ import importlib
 from typing import Any, cast
 
 import click
+from typer.exceptions import Abort as TyperAbort
 
 # Typer is the single CLI entry point (epic #959, Final — issue #1125). Every
 # command is declared on ``tg_agent/cli/typer_app.py::app`` and registered by importing
@@ -86,9 +87,13 @@ def main() -> None:
         click_exc = cast("click.ClickException", exc)
         click_exc.show()
         raise SystemExit(click_exc.exit_code) from None
-    except click.exceptions.Abort:
+    except (click.exceptions.Abort, TyperAbort):
         # Ctrl-C / abort — Click prints "Aborted!" in standalone mode; match the
         # conventional non-zero exit so an interrupted CLI run is distinguishable.
+        # Typer's Abort is a separate class (RuntimeError, not a
+        # click.exceptions.Abort): EOF at a confirmation prompt (agent run with a
+        # closed stdin) surfaces as ``typer.exceptions.Abort`` in non-standalone
+        # mode and must refuse just as cleanly (#1590).
         click.echo("Aborted!", err=True)
         raise SystemExit(1) from None
 
