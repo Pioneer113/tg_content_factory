@@ -443,7 +443,6 @@ def test_cli_list_prints_drafts(cli_db, capsys):
 # #1581: черновик разбирает журнальную строку; статус слушателя/догона в CLI
 # --------------------------------------------------------------------------- #
 
-
 def test_cli_create_marks_journal_processed(cli_db, capsys):
     """dm drafts create — потребитель флага processed: черновик создан → строка
     журнала разобрана, счётчик unprocessed в статусе слушателя честен."""
@@ -539,3 +538,60 @@ def test_cli_status_invalid_settings_loud_error(cli_db, capsys):
     out = capsys.readouterr().out
     assert "INVALID" in out
     assert "dm_catchup" in out
+
+
+def test_cli_journal_list_prints_rows(cli_db, capsys):
+    asyncio.run(_make_draft(cli_db))
+
+    out = _run_dm_impl(
+        lambda: dm_cli.journal_list_impl("cfg", limit=100, offset=0), cli_db, capsys
+    )
+    assert "+10000000001" in out
+    assert "chat" in out
+
+
+def test_cli_journal_list_empty(cli_db, capsys):
+    out = _run_dm_impl(
+        lambda: dm_cli.journal_list_impl("cfg", limit=100, offset=0), cli_db, capsys
+    )
+    assert "empty" in out
+
+
+def test_cli_archive_list_prints_rows(cli_db, capsys):
+    async def _seed():
+        from tg_agent.models import DmMessage
+
+        await cli_db.repos.dm_messages.record(
+            DmMessage(phone="+10000000001", chat_id=42, message_id=1, out=False, text="архивное")
+        )
+
+    asyncio.run(_seed())
+
+    out = _run_dm_impl(
+        lambda: dm_cli.archive_list_impl("cfg", phone=None, chat_id=None, limit=100),
+        cli_db,
+        capsys,
+    )
+    assert "архивное" in out
+    assert "ID" in out and "Dir" in out
+
+
+def test_cli_archive_list_filters_by_chat(cli_db, capsys):
+    async def _seed():
+        from tg_agent.models import DmMessage
+
+        await cli_db.repos.dm_messages.record(
+            DmMessage(phone="+10000000001", chat_id=42, message_id=1, text="наш")
+        )
+        await cli_db.repos.dm_messages.record(
+            DmMessage(phone="+10000000001", chat_id=43, message_id=2, text="чужой")
+        )
+
+    asyncio.run(_seed())
+
+    out = _run_dm_impl(
+        lambda: dm_cli.archive_list_impl("cfg", phone=None, chat_id=42, limit=100),
+        cli_db,
+        capsys,
+    )
+    assert "наш" in out and "чужой" not in out
