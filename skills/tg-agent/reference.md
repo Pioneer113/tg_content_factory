@@ -137,6 +137,7 @@ is refused by the session lock (`tg-agent stop` first — see Session lock above
 ## dm — reply drafts for incoming private messages (#1429)
 
 ```
+dm status
 dm drafts list [--status draft|approved|rejected|sending|sent] [--limit N]
 dm drafts create <incoming-dm-id> --text TEXT [--phone P] [--chat-id ID]
 dm drafts approve <id>
@@ -144,14 +145,24 @@ dm drafts reject <id>
 dm drafts send <id>
 ```
 
+`dm status` shows the DM listener/catch-up state the worker publishes in the
+`dm_listener_status` snapshot (liveness, per-account update counts, unprocessed
+journal rows, last catch-up runs) plus the effective catch-up settings read
+from the `dm_catchup` setting; invalid settings JSON fails loudly with a
+`Catch-up settings INVALID` error (exit 1) instead of silently falling back to
+defaults (#1581). Without a live worker the snapshot section says so honestly;
+settings are still shown.
+
 Draft lifecycle: `draft → approved → sending → sent` (atomic DB claim makes a
 double send impossible); `reject` is terminal for sending — a rejected draft is
 never delivered. `dm drafts send` never sends in-process: it enqueues the
-`dm.send_reply` command and the worker delivers it (safe to run while the
-daemon is up; repeated `send` calls on the same approved draft dedupe into one
-queued command). `create` reads phone/chat from the 24h incoming-DM journal by
-id; pass `--phone`/`--chat-id` explicitly if the journal row was already
-pruned. Approve after send is a no-op — a delivered draft cannot be re-queued.
+`dm.send_reply` command (payload carries the account phone) and the worker
+delivers it (safe to run while the daemon is up; repeated `send` calls on the
+same approved draft dedupe into one queued command). `create` reads
+phone/chat from the 24h incoming-DM journal by id; pass `--phone`/`--chat-id`
+explicitly if the journal row was already pruned; creating a draft marks the
+journal row processed. Approve after send is a no-op — a delivered draft
+cannot be re-queued.
 
 ## ping — friendly pings for dormant DM chats (#1415)
 

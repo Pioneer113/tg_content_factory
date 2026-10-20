@@ -16,6 +16,10 @@ import typer
 from tg_agent.cli import runtime
 from tg_agent.cli.commands.common import apply_startup, run_async
 from tg_agent.services.telegram_command_service import TelegramCommandService
+from tg_agent.telegram.dm_catchup import (
+    DmCatchupSettingsError,
+    load_dm_catchup_settings,
+)
 
 
 async def list_impl(config_path: str, *, status: str | None, limit: int) -> None:
@@ -72,6 +76,13 @@ async def create_impl(
             chat_id=target_chat_id,
             reply_text=text,
         )
+        # Черновик разбирает журнальную строку: помечаем processed, чтобы
+        # unprocessed в `dm status` считал только недоразобранное (#1581).
+        journal = await db.repos.incoming_dms.get(incoming_dm_id)
+        if journal is not None:
+            await db.repos.incoming_dms.mark_processed(
+                journal.phone, journal.chat_id, [journal.message_id]
+            )
         if created:
             print(f"Черновик #{draft_id} создан (статус draft).")
         else:
@@ -128,7 +139,8 @@ async def send_impl(config_path: str, *, draft_id: int) -> None:
             raise typer.Exit(1)
         command_id = await TelegramCommandService(db).enqueue(
             "dm.send_reply",
-            payload={"draft_id": draft_id},
+            # phone в payload (#1581): generic queue log печатает аккаунт.
+            payload={"draft_id": draft_id, "phone": draft.phone},
             requested_by="cli:dm",
         )
         print(
@@ -139,8 +151,72 @@ async def send_impl(config_path: str, *, draft_id: int) -> None:
         await db.close()
 
 
+def _print_listener_status(payload: dict, updated_at) -> None:
+    """Снапшот `dm_listener_status` воркера: живость, аккаунты, догон."""
+    stamp = updated_at.isoformat() if updated_at is not None else "-"
+    print(f"DM listener (snapshot {stamp}):")
+    print(f"  Running: {'yes' if payload.get('running') else 'no'}")
+    print(f"  Unprocessed: {payload.get('unprocessed', 0)}")
+    accounts = payload.get("accounts") or {}
+    if isinstance(accounts, dict):
+        for phone, info in sorted(accounts.items()):
+            if not isinstance(info, dict):
+                continue
+            last = info.get("last_update_at") or "no updates yet"
+            since = info.get("seconds_since_update")
+            age = f" ({since:.1f}s ago)" if isinstance(since, (int, float)) else ""
+            print(f"    {phone}: updates={info.get('updates_received', 0)}, last={last}{age}")
+    catchup = payload.get("catchup")
+    if not isinstance(catchup, dict):
+        return
+    print(f"Catch-up: Running: {'yes' if catchup.get('running') else 'no'}")
+    for phone, run in sorted((catchup.get("last_runs") or {}).items()):
+        if not isinstance(run, dict):
+            continue
+        summary = ", ".join(
+            f"{key}={run[key]}"
+            for key in (
+                "dialogs", "stored", "already", "archived", "skipped", "deferred", "errors"
+            )
+            if key in run
+        )
+        print(f"    {phone}: {summary} (finished {run.get('finished_at', '-')})")
+
+
+async def status_impl(config_path: str) -> None:
+    """Статус слушателя DM/догона: снапшот воркера + эффективные настройки (#1581)."""
+    _, db = await runtime.init_db(config_path)
+    try:
+        snapshot = await db.repos.runtime_snapshots.get_snapshot("dm_listener_status")
+        if snapshot is None:
+            print(
+                "No dm_listener_status snapshot — worker down or DM listener never ran."
+            )
+        else:
+            _print_listener_status(snapshot.payload, snapshot.updated_at)
+        try:
+            settings = await load_dm_catchup_settings(db)
+        except DmCatchupSettingsError as exc:
+            print(f"Catch-up settings INVALID: {exc}")
+            raise typer.Exit(1) from exc
+        print(
+            f"Catch-up settings: Mode: {settings.mode}, "
+            f"staleness: {settings.staleness_sec}s, "
+            f"overrides: accounts={len(settings.accounts)}, dialogs={len(settings.dialogs)}"
+        )
+    finally:
+        await db.close()
+
+
 dm_app = typer.Typer(no_args_is_help=True, help="Incoming DM reply drafts")
 drafts_app = typer.Typer(no_args_is_help=True, help="Reply drafts: list, decide, queue send")
+@dm_app.command("status")
+def dm_status(ctx: typer.Context) -> None:
+    """Show DM listener/catch-up status from the worker snapshot + settings."""
+    apply_startup(ctx)
+    run_async(status_impl(ctx.obj.config))
+
+
 dm_app.add_typer(drafts_app, name="drafts")
 
 

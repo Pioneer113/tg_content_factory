@@ -525,7 +525,7 @@ def test_cli_status_reports_snapshot_and_settings(cli_db, capsys):
 
 def test_cli_status_without_snapshot_is_honest(cli_db, capsys):
     out = _run_dm_impl(lambda: dm_cli.status_impl("cfg"), cli_db, capsys)
-    assert "no dm_listener_status snapshot" in out
+    assert "No dm_listener_status snapshot" in out
     assert "Mode: journal_only" in out  # настройки читаются и без воркера
 
 

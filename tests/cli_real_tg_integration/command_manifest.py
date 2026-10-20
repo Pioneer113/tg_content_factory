@@ -160,6 +160,10 @@ CLI_REAL_TG_MANUAL_OR_EXCLUDED_COMMANDS: dict[tuple[str, ...], str] = {
         "enqueues the worker-only dm.send_reply command (DB-only mutation); the "
         "Telegram send itself is covered by dispatcher tests with a fake client (#1429)"
     ),
+    ("dm", "status"): (
+        "list-only local view of runtime_snapshots + settings (#1581); "
+        "no live Telegram, covered by offline CLI tests"
+    ),
     ("dialogs", "archive-history"): (
         "bulk history backfill into the local dm_messages archive (#1453); "
         "reads live Telegram for the whole account and requires the worker "
