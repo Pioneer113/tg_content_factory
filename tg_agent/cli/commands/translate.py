@@ -172,7 +172,7 @@ def translate_stats(ctx: typer.Context) -> None:
 @translate_app.command("detect")
 def translate_detect(
     ctx: typer.Context,
-    batch_size: int = typer.Option(5000, "--batch-size"),
+    batch_size: int = typer.Option(5000, "--batch-size", min=1),
 ) -> None:
     """Backfill language detection."""
     apply_startup(ctx)
