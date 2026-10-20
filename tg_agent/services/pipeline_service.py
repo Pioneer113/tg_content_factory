@@ -663,6 +663,8 @@ class PipelineService:
             # `pipeline add` without --inactive activates the pipeline (#1246).
             is_active=bool(payload.get("is_active", False)),
             account_phone=payload.get("account_phone"),
+            ab_num_variants=int(payload.get("ab_num_variants", 1) or 1),
+            ab_auto_select=bool(payload.get("ab_auto_select", False)),
         )
         self._inject_runtime_refs(pipeline_json, source_ids, target_refs)
         # Restore publish_times here (add() persists it) and refinement_steps after

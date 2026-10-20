@@ -344,6 +344,10 @@ async def _pipeline_add_from_nodes(
             "generate_interval_minutes": args.interval,
             "pipeline_json": _json.loads(graph.to_json()),
             "source_ids": args.source or [],
+            # A/B flags must persist on the DAG path like the legacy add (#1620);
+            # import_json reads them from the payload.
+            "ab_num_variants": getattr(args, "ab_variants", 1) or 1,
+            "ab_auto_select": bool(getattr(args, "ab_auto_select", False)),
             "target_refs": (
                 [f"{t.phone}|{t.dialog_id}" for t in _parse_target_refs(args.target)]
                 if args.target
