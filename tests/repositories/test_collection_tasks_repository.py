@@ -958,8 +958,9 @@ async def test_expired_lease_is_reclaimed(collection_tasks_repo):
     assert reclaimed.claimed_at > first.claimed_at
 
 
-async def test_lease_reclaim_prioritizes_pending_over_expired(collection_tasks_repo):
-    """Ordering stays COALESCE(run_after,''), id: an earlier pending task wins."""
+async def test_expired_lease_reclaim_keeps_id_ordering(collection_tasks_repo):
+    """Ordering stays COALESCE(run_after,''), id: the older stranded task is
+    re-claimed before newer pending work, both within one recovery flow."""
     first_id = await _create_interop_task(collection_tasks_repo)
     second_id = await _create_interop_task(collection_tasks_repo)
     t0 = datetime.now(tz=timezone.utc)
@@ -968,11 +969,14 @@ async def test_lease_reclaim_prioritizes_pending_over_expired(collection_tasks_r
         t0, ["dm_reply"], claimed_by="worker-a", lease_seconds=60
     )
     assert stranded is not None and stranded.id == first_id
-    next_claim = await collection_tasks_repo.claim_next_due_generic_task(
+    reclaim = await collection_tasks_repo.claim_next_due_generic_task(
         t0 + timedelta(seconds=61), ["dm_reply"], claimed_by="worker-b", lease_seconds=60
     )
-
-    assert next_claim is not None and next_claim.id == second_id
+    assert reclaim is not None and reclaim.id == first_id
+    assert reclaim.claimed_by == "worker-b"
+    # Only the stranded task was handed out; the pending one is next in line.
+    still_pending = await collection_tasks_repo.get_collection_task(second_id)
+    assert still_pending is not None and still_pending.status == CollectionTaskStatus.PENDING
 
 
 async def test_expired_lease_invisible_to_no_lease_claim(collection_tasks_repo):
