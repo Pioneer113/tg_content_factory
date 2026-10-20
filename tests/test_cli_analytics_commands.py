@@ -123,13 +123,33 @@ def test_pipeline_stats_empty(capsys):
 def test_pipeline_stats_with_data(capsys):
     db = make_cli_db()
     s = MagicMock(pipeline_name="TestPipe", total_generations=10, total_published=8,
-                  total_rejected=1, pending_moderation=1, success_rate=0.8)
+                  total_rejected=1, pending_moderation=1, success_rate=80.0)
     mock_svc = MagicMock()
     mock_svc.get_pipeline_stats = AsyncMock(return_value=[s])
     with _init_patches(db)[0], _init_patches(db)[1], \
          patch("tg_agent.services.content_analytics_service.ContentAnalyticsService", return_value=mock_svc):
         run(_args(analytics_action="pipeline-stats", pipeline_id=None))
     assert "TestPipe" in capsys.readouterr().out
+
+
+def test_pipeline_stats_rate_is_percent_not_remultiplied(capsys):
+    # Issue #1616: the service returns success_rate already in percent units
+    # (50.0 == 1 published out of 2, pinned by test_content_analytics_service).
+    # The CLI must render it verbatim, not re-multiply it via format spec `:.0%`.
+    cases = [(1, 2, 50.0, "50%", "5000%"), (0, 2, 0.0, "0%", None), (2, 2, 100.0, "100%", "10000%")]
+    for published, total, rate, expected, wrong in cases:
+        db = make_cli_db()
+        s = MagicMock(pipeline_name="P", total_generations=total, total_published=published,
+                      total_rejected=0, pending_moderation=0, success_rate=rate)
+        mock_svc = MagicMock()
+        mock_svc.get_pipeline_stats = AsyncMock(return_value=[s])
+        with _init_patches(db)[0], _init_patches(db)[1], \
+             patch("tg_agent.services.content_analytics_service.ContentAnalyticsService", return_value=mock_svc):
+            run(_args(analytics_action="pipeline-stats", pipeline_id=None))
+        out = capsys.readouterr().out
+        assert expected in out, f"expected {expected!r} in output: {out!r}"
+        if wrong is not None:
+            assert wrong not in out, f"inflated {wrong!r} leaked into output: {out!r}"
 
 
 # ---------------------------------------------------------------------------
