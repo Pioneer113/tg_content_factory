@@ -48,15 +48,19 @@ payload, consumed in wave B). No factory schema leaks.
 from tg_shared import JsonFileStore, SharedAccount, SharedAccountStore
 
 store: SharedAccountStore = JsonFileStore("messenger.json")   # single messenger
-store: SharedAccountStore = factory_db                        # factory Database conforms as-is
+store: SharedAccountStore = factory_db                        # runtime conformance; static at #1424
 ```
 
 Method names mirror the factory facade's existing methods
 (`get_accounts` / `update_account_flood` / `get_setting` / `set_setting`), so
-the factory `Database` satisfies the Protocol structurally — no adapter. The
-factory's richer `tg_agent.models.Account` maps onto the minimal
-`SharedAccount` when the factory becomes a consumer (#1424); the package never
-imports factory models (guarded by `tests/test_tg_shared_scaffold.py`).
+the factory `Database` satisfies the Protocol at **runtime** — the
+`isinstance` check in the scaffold tests passes, no adapter needed. Static
+conformance is deliberately not claimed yet: `Database.get_accounts()`
+returns `list[Account]` and `list` is invariant, so a type checker rejects it
+as `list[SharedAccount]`. At #1424 the factory closes that gap (returns
+`SharedAccount` or adapts through a typed wrapper); until then the factory
+line in the snippet is illustrative, not statically checked. The package
+never imports factory models (guarded by `tests/test_tg_shared_scaffold.py`).
 
 ## Versioning and pinning
 

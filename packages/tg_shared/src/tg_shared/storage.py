@@ -8,8 +8,11 @@ contract supports two configurations: the messenger with its own simple store
 (``JsonFileStore``) and the factory with its ``Database``.
 
 Method names mirror the factory facade's existing methods, so the factory
-Database satisfies this Protocol structurally, without an adapter — the #1420
-acceptance point of replacing ``db: Any`` with an explicit type.
+Database satisfies this Protocol at runtime (``isinstance``), without an
+adapter — the #1420 acceptance point of replacing ``db: Any`` with an
+explicit type. Static conformance is deliberately not claimed until #1424:
+``Database.get_accounts`` returns ``list[Account]`` and ``list`` is
+invariant, so a type checker will not accept it as ``list[SharedAccount]``.
 """
 
 from __future__ import annotations
