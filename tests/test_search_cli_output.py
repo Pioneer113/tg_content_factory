@@ -6,10 +6,13 @@ CLI printed only ``Channel <numeric_id>`` — channels absent from the accounts'
 dialogs could not be re-resolved and added to collection.
 """
 
+from __future__ import annotations
+
+import csv
 from datetime import datetime, timezone
 
-from tg_agent.cli.commands.search import _format_search_result_line
-from tg_agent.models import Message
+from tg_agent.cli.commands.search import _format_search_result_line, _print_search_result
+from tg_agent.models import Message, SearchResult
 
 
 def _msg(
@@ -43,3 +46,19 @@ def test_line_falls_back_to_title_when_no_username() -> None:
 def test_line_falls_back_to_numeric_id_when_no_meta() -> None:
     line = _format_search_result_line(_msg())
     assert "Channel 3928033429" in line
+
+
+# ---------------------------------------------------------------------------
+# #1617 — `search --format csv` must keep text over 500 chars whole
+# ---------------------------------------------------------------------------
+
+
+def test_csv_keeps_full_text_over_500_chars(capsys) -> None:
+    long_text = "START|" + "0123456789" * 55 + "|END: this part must survive CSV export"
+    msg = _msg()
+    msg.text = long_text
+    result = SearchResult(messages=[msg], total=1, query="START")
+    _print_search_result(result, "csv")
+    out = capsys.readouterr().out
+    row = next(csv.reader(out.splitlines()[1:]))
+    assert row[4] == long_text

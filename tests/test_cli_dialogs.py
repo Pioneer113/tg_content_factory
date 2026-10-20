@@ -333,3 +333,32 @@ def test_cli_dialogs_archive_history_incomplete_gate(cli_db, capsys):
     out = capsys.readouterr().out
     assert "НЕ ЗАВЕРШЁН" in out
     assert "продолжится с курсоров" in out
+
+
+# ---------------------------------------------------------------------------
+# #1617 — `dialogs read --format csv` must keep text over 500 chars whole
+# ---------------------------------------------------------------------------
+
+
+def test_print_dm_messages_csv_keeps_full_text(capsys):
+    import csv as csv_mod
+    from datetime import datetime, timezone
+
+    from tg_agent.cli.commands.dialogs import _print_dm_messages
+    from tg_agent.models import DialogMessage
+
+    long_text = "START|" + "0123456789" * 55 + "|END: this part must survive CSV export"
+    msgs = [
+        DialogMessage(
+            id=1,
+            dialog_id=100,
+            sender_id=42,
+            sender_name="tester",
+            date=datetime(2026, 10, 20, 12, 0, tzinfo=timezone.utc),
+            text=long_text,
+        )
+    ]
+    _print_dm_messages(msgs, "csv")
+    out = capsys.readouterr().out
+    row = next(csv_mod.reader(out.splitlines()[1:]))
+    assert row[5] == long_text
