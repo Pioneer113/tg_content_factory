@@ -68,16 +68,19 @@ class TestHandleTag:
     async def test_set_channel_tags(self, capsys):
         args = argparse.Namespace(tag_action="set", pk=5, tags="a, b, c")
         db = MagicMock()
+        db.get_channel_by_pk = AsyncMock(return_value=object())
         db.repos.channels.set_channel_tags = AsyncMock()
         await _handle_tag(args, db)
         out = capsys.readouterr().out
         assert "pk=5" in out
+        db.get_channel_by_pk.assert_awaited_once_with(5)
         db.repos.channels.set_channel_tags.assert_awaited_once_with(5, ["a", "b", "c"])
 
     @pytest.mark.anyio
     async def test_get_channel_tags_empty(self, capsys):
         args = argparse.Namespace(tag_action="get", pk=10)
         db = MagicMock()
+        db.get_channel_by_pk = AsyncMock(return_value=object())
         db.repos.channels.get_channel_tags = AsyncMock(return_value=[])
         await _handle_tag(args, db)
         assert "No tags for channel pk=10" in capsys.readouterr().out
@@ -86,6 +89,7 @@ class TestHandleTag:
     async def test_get_channel_tags(self, capsys):
         args = argparse.Namespace(tag_action="get", pk=10)
         db = MagicMock()
+        db.get_channel_by_pk = AsyncMock(return_value=object())
         db.repos.channels.get_channel_tags = AsyncMock(return_value=["x", "y"])
         await _handle_tag(args, db)
         out = capsys.readouterr().out
