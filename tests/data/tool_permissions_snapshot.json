@@ -163,6 +163,13 @@
     "archive_chat": "write",
     "unarchive_chat": "write",
     "mark_read": "write",
+    "list_incoming_dms": "read",
+    "get_incoming_dm": "read",
+    "list_dm_drafts": "read",
+    "read_dm_archive": "read",
+    "create_dm_draft": "write",
+    "approve_dm_draft": "write",
+    "reject_dm_draft": "write",
     "list_image_models": "read",
     "list_image_providers": "read",
     "generate_image": "write",
@@ -375,6 +382,15 @@
       "archive_chat",
       "unarchive_chat",
       "mark_read"
+    ],
+    "Личные сообщения (DM)": [
+      "list_incoming_dms",
+      "get_incoming_dm",
+      "list_dm_drafts",
+      "read_dm_archive",
+      "create_dm_draft",
+      "approve_dm_draft",
+      "reject_dm_draft"
     ],
     "Изображения": [
       "list_image_models",

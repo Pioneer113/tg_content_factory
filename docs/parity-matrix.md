@@ -29,13 +29,13 @@
 
 | Поверхность | Счётчик | Источник истины |
 |-------------|---------|-----------------|
-| **FastAPI REST** | 1 полноценный interop-контур (`/api/tasks`) + JSON parity-зеркала в ~14 роутерах | `tg_agent/web/routes/tasks.py` + `JSONResponse`-эндпоинты |
-| **Web** | 26 смонтированных роутеров, ~18 UI-страниц меню | `tg_agent/web/assembly.py` |
-| **CLI** | 26 top-level команд (`server_control` даёт `stop`+`restart`), ~212 leaf-команд | `tg_agent/cli/typer_commands.py` (приложение Typer `app`) |
-| **Agent-tools** | **173 tools**, **20 групп**, **75 read / 82 write / 16 delete** | `permissions.py` (`TOOL_CATEGORIES`, `MODULE_GROUPS`) |
+| **FastAPI REST** | 1 полноценный interop-контур (`/api/tasks`) + JSON parity-зеркала в ~15 роутерах | `tg_agent/web/routes/tasks.py` + `JSONResponse`-эндпоинты |
+| **Web** | 27 смонтированных роутеров, ~18 UI-страниц меню | `tg_agent/web/assembly.py` |
+| **CLI** | 26 top-level команд (`server_control` даёт `stop`+`restart`), ~214 leaf-команд | `tg_agent/cli/typer_commands.py` (приложение Typer `app`) |
+| **Agent-tools** | **188 tools**, **21 группа**, **80 read / 91 write / 17 delete** | `permissions.py` (`TOOL_CATEGORIES`, `MODULE_GROUPS`) |
 | **TUI** | 1 app (`AgentTuiApp`) — покрывает ровно 1 сервис («AI-агент») | `tg_agent/cli/commands/agent_tui.py` |
 
-> **20 групп agent-tools** (verbatim): Поиск (8), Каналы (18), Сбор (4), Пайплайны (20), Модерация (6), Поисковые запросы (8), Аккаунты (8), Фильтры (8), Аналитика (15), Планировщик (8), Уведомления (5), Фото (14), Диалоги (11), Сообщения (14), Управление чатом (8), Изображения (4), Экспорт (1), Настройки (6), Треды агента (5), Веб-поиск (2). **Нет групп** для Jobs, Providers-management, Calendar (одиночный `get_calendar` в Аналитике), Translation (одиночный `translate_message` в Сообщениях), Limits, A/B.
+> **21 группа agent-tools** (verbatim): Поиск (8), Каналы (18), Сбор (4), Пайплайны (20), Модерация (6), Поисковые запросы (8), Аккаунты (8), Фильтры (8), Аналитика (15), Планировщик (8), Уведомления (5), Фото (14), Диалоги (11), Сообщения (14), Управление чатом (8), Личные сообщения (DM) (7, #1580), Изображения (4), Экспорт (1), Настройки (6), Треды агента (5), Веб-поиск (2). **Нет групп** для Jobs, Providers-management, Calendar (одиночный `get_calendar` в Аналитике), Translation (одиночный `translate_message` в Сообщениях), Limits, A/B.
 
 ---
 
@@ -54,7 +54,7 @@
 
 ---
 
-## Матрица: 26 сервисов × 5 поверхностей
+## Матрица: 27 сервисов × 5 поверхностей
 
 | # | Сервис | FastAPI REST | Web | CLI | agent | TUI |
 |---|--------|:---:|:---:|:---:|:---:|:---:|
@@ -84,6 +84,7 @@
 | 24 | ⚙️ Settings & Debug | ✅ | ✅ | ✅ | ✅ | 🟦 |
 | 25 | 🛡 **Prod Limits & Quality** | — | **🟥** | **🟥** | **🟥** | 🟦 |
 | 26 | 🧪 **A/B Testing** | — | — | — | — | N/A |
+| 27 | ✉️ DM-цикл (#1580) | ✅ | ✅ | ✅ | ✅ | 🟦 |
 
 > **TUI-колонка:** ровно один сервис (#23 Agent) = ✅. Все остальные = 🟦 by design — `AgentTuiApp` (`tg_agent/cli/commands/agent_tui.py`) единственный Textual-app в проекте (подтверждено grep по `from textual`/`ComposeResult`/`.tcss`) и покрывает только AI-чат (треды + потоковый чат + диалог разрешений; модель жёстко `None`, выбора провайдера/настроек нет). Сервис #25 (Prod Limits) = 🟥 в Web/CLI/agent: нет выделенной поверхности нигде (config-only, off-by-default), FastAPI = «—» — это не parity-пробел, а вопрос «нужна ли поверхность» (Тир 3, D2). Сервис #26 = N/A: A/B не подключён ни к одной поверхности вообще.
 
@@ -172,7 +173,7 @@
 
 ## Сводка
 
-- **26 сервисов × 5 поверхностей** — матрица построена, ячейки верифицированы реальным кодом.
+- **27 сервисов × 5 поверхностей** — матрица построена, ячейки верифицированы реальным кодом (строка 27 «DM-цикл» закрыта #1580: web/REST #1579 + CLI + 7 agent-tools; пробел из инвентаря #1430).
 - **Настоящие пробелы parity: 3** (Jobs→CLI, Jobs→agent, Providers→agent) — нарушают инвариант `CLAUDE.md:160`, рекомендованы к закрытию (sub-issue 1–2).
 - **Спорные: 3** (server-control, test, messages-read) — склоняюсь к «by design».
 - **Не подключённые сервисы (не parity): ErrorRecovery + A/B** — владелец решил их **подключить** (#1044, эпик «подключить неиспользуемое»), не удалять; parity появится после подключения. Plus 1 config-only off-by-default (Prod Limits).

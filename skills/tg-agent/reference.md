@@ -147,10 +147,12 @@ command and the agent tool (which carry no directory by contract) land files in 
 data root (`./data/downloads`, overridable via `TG_AGENT_DATA_DIR`) — never inside the
 installed package (#1595).
 
-## dm — reply drafts for incoming private messages (#1429)
+## dm — incoming-DM journal, archive, reply drafts (#1429, #1580)
 
 ```
 dm status
+dm journal list [--limit N] [--offset N]
+dm archive list [--phone P] [--chat-id ID] [--limit N]
 dm drafts list [--status draft|approved|rejected|sending|sent] [--limit N]
 dm drafts create <incoming-dm-id> --text TEXT [--phone P] [--chat-id ID]
 dm drafts approve <id>
@@ -165,6 +167,10 @@ from the `dm_catchup` setting; invalid settings JSON fails loudly with a
 `Catch-up settings INVALID` error (exit 1) instead of silently falling back to
 defaults (#1581). Without a live worker the snapshot section says so honestly;
 settings are still shown.
+
+`dm journal list` shows the incoming-DM journal (24h TTL window, fresh first)
+with the ids the drafts flow needs; `dm archive list` reads the persistent
+dm_messages archive (both directions, no TTL, optional phone/chat filters).
 
 Draft lifecycle: `draft → approved → sending → sent` (atomic DB claim makes a
 double send impossible); `reject` is terminal for sending — a rejected draft is
