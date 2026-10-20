@@ -78,7 +78,7 @@ def _print_search_result(result, fmt: str) -> None:
             writer.writerow([
                 msg.id, msg.channel_id, msg.message_id,
                 str(msg.date) if msg.date else "",
-                csv_safe_cell((msg.text or "")[:500]),
+                csv_safe_cell(msg.text or ""),
                 csv_safe_cell(msg.channel_username or ""),
                 csv_safe_cell(msg.channel_title or ""),
                 msg.views, msg.forwards,

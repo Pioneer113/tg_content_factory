@@ -629,7 +629,7 @@ def _print_dm_messages(messages: list[DialogMessage], fmt: str) -> None:
             writer.writerow([
                 m.id, m.sender_id, csv_safe_cell(m.sender_name or ""), m.out,
                 m.date.isoformat() if m.date else "",
-                csv_safe_cell((m.text or "")[:500]),
+                csv_safe_cell(m.text or ""),
                 m.media_type or "", m.is_forward,
             ])
         print(buf.getvalue(), end="")

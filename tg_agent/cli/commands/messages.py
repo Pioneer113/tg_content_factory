@@ -65,7 +65,7 @@ def _print_messages(messages: list[Message], fmt: str, total: int, has_more: boo
             writer.writerow([
                 msg.id, msg.channel_id, msg.message_id,
                 str(msg.date) if msg.date else "",
-                csv_safe_cell((msg.text or "")[:500]),
+                csv_safe_cell(msg.text or ""),
                 msg.topic_id,
                 csv_safe_cell(msg.topic_title or ""),
                 msg.views, msg.forwards,
