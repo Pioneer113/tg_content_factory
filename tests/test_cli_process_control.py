@@ -115,6 +115,19 @@ class TestIsExpectedServerProcess:
     def test_accepts_matching_command(self, _mock_alive, _mock_cmd):
         assert is_expected_server_process(1234) is True
 
+    @patch(
+        "tg_agent.cli.process_control._process_command",
+        return_value=(
+            "/Library/Frameworks/Python.framework/Versions/3.13/Resources/"
+            "Python.app/Contents/MacOS/Python -m tg_agent.main restart"
+        ),
+    )
+    @patch("tg_agent.cli.process_control.is_process_alive", return_value=True)
+    def test_accepts_macos_framework_python(self, _mock_alive, _mock_cmd):
+        # macOS ps reports the python.org framework binary's comm as "Python"
+        # (capitalized .app bundle name) — the daemon must still be recognized.
+        assert is_expected_server_process(1234) is True
+
     @patch("tg_agent.cli.process_control._process_command", return_value="python -m other_app")
     @patch("tg_agent.cli.process_control.is_process_alive", return_value=True)
     def test_rejects_non_matching_command(self, _mock_alive, _mock_cmd):

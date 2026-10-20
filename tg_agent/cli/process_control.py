@@ -130,7 +130,9 @@ def is_expected_server_process(pid: int) -> bool:
         return False
 
     executable = Path(tokens.pop(0)).name
-    if re.fullmatch(r"(?:python|pypy)(?:\d+(?:\.\d+)*)?", executable):
+    # Case-insensitive: macOS reports the python.org framework binary's comm as
+    # "Python" (the .app bundle name), and the hand-off must recognize it too.
+    if re.fullmatch(r"(?:python|pypy)(?:\d+(?:\.\d+)*)?", executable, re.IGNORECASE):
         # Only inspect Python's actual module/script, never arguments to -c or
         # another program (e.g. a test mentioning "tg-agent worker").
         while tokens and tokens[0].startswith("-"):
