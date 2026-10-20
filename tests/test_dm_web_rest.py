@@ -129,6 +129,7 @@ async def test_api_approve_never_touches_sent_draft(client, db):
     """Апрув после отправки — no-op (двойная отправка исключена)."""
     await _record_dm(db)
     draft_id = await _make_draft(db, (await db.repos.incoming_dms.list())[0].id)
+    assert await db.repos.dm_reply_drafts.decide(draft_id, "approved")
     assert await db.repos.dm_reply_drafts.claim_for_send(draft_id)
     assert await db.repos.dm_reply_drafts.mark_sent(draft_id, 555)
 
