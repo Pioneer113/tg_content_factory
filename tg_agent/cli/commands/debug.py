@@ -23,7 +23,7 @@ from tg_agent.cli.commands.common import (
     apply_startup,
     run_async,
 )
-from tg_agent.cli.runtime import APP_LOG_PATH
+from tg_agent.cli.runtime import app_log_path
 
 
 def _db_file_size_mb(db_path: str) -> float | None:
@@ -36,13 +36,14 @@ async def logs_impl(config_path: str, *, limit: int = 50) -> None:
     """Print the last *limit* lines of the app log."""
     _, db = await runtime.init_db(config_path)
     try:
-        if APP_LOG_PATH.exists():
-            with open(APP_LOG_PATH, encoding="utf-8", errors="replace") as f:
+        log_path = app_log_path()
+        if log_path.exists():
+            with open(log_path, encoding="utf-8", errors="replace") as f:
                 tail = deque(f, maxlen=limit)
             for line in tail:
                 print(line, end="")
         else:
-            print(f"No log file found at {APP_LOG_PATH}")
+            print(f"No log file found at {log_path}")
             print("Tip: start the server first — logs are written to data/app.log.")
     finally:
         await db.close()

@@ -18,14 +18,14 @@ def data_root() -> Path:
     Must never resolve inside the package directory — for a wheel install that
     is site-packages, which may be read-only. Defaults to ``./data`` (cwd),
     the same working-directory convention as config.yaml and the default DB
-    path ``data/tg_search.db``; ``TG_AGENT_DATA_DIR`` overrides.
+    path ``data/tg_search.db``; ``TG_AGENT_DATA_DIR`` overrides. Read at call
+    time so the override works both from the process env and from ``.env``
+    (loaded after module import by CLI startup).
     """
     override = os.environ.get(DATA_DIR_ENV)
     return Path(override).expanduser() if override else Path("data")
 
 
-# Import-time snapshots. A CLI invocation or daemon imports the package once,
-# from the working directory it runs in, so the snapshot equals data_root()
-# for the process lifetime. Module-level so the existing patch points
-# (``runtime._DATA_ROOT``, ``...images.DATA_IMAGE_DIR``) keep working.
-DATA_IMAGE_DIR = data_root() / "image"
+def image_dir() -> Path:
+    """Generated images: written by the image tool, served at ``/data/image``."""
+    return data_root() / "image"

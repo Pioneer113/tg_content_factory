@@ -11,7 +11,7 @@ from claude_agent_sdk import tool
 
 from tg_agent.agent.tools._categories import ToolCategory, ToolMeta
 from tg_agent.agent.tools._registry import _text_response
-from tg_agent.web.paths import DATA_IMAGE_DIR
+from tg_agent.web.paths import image_dir
 
 logger = logging.getLogger(__name__)
 
@@ -148,7 +148,7 @@ def register(db, client_pool, embedding_service, **kwargs):
                 _, dot, suffix = url_path.rpartition(".")
                 ext = suffix[:4] if dot and suffix.isalnum() else "png"
                 filename = hashlib.md5(result.encode()).hexdigest()[:12] + "." + ext
-                local_path = str(DATA_IMAGE_DIR / filename)
+                local_path = str(image_dir() / filename)
                 max_image_bytes = 50 * 1024 * 1024  # 50 MB
                 async with httpx.AsyncClient() as http_client:
                     async with http_client.stream("GET", result, follow_redirects=True, timeout=30) as resp:

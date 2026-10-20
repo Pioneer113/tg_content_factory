@@ -32,10 +32,10 @@ from tg_agent.services.provider_model_cache import (
     ProviderModelCacheMixin,
 )
 from tg_agent.services.provider_model_compatibility import (
-    COMMUNITY_COMPATIBILITY_CATALOG_PATH,
     MODEL_COMPATIBILITY_FRESHNESS_HOURS,
     ProviderModelCompatibilityMixin,
     ProviderModelCompatibilityRecord,
+    community_compatibility_catalog_path,
 )
 from tg_agent.utils.json import safe_json_dumps
 
@@ -53,7 +53,7 @@ __all__ = [
     "PROVIDER_SETTINGS_KEY",
     "MODEL_CACHE_SETTINGS_KEY",
     "MODEL_COMPATIBILITY_FRESHNESS_HOURS",
-    "COMMUNITY_COMPATIBILITY_CATALOG_PATH",
+    "community_compatibility_catalog_path",
     "ProviderConfigService",
     "ProviderModelCacheEntry",
     "ProviderModelCompatibilityRecord",

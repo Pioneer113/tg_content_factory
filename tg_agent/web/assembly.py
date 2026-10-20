@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 
 from tg_agent.web.container import AppContainer
 from tg_agent.web.panel_auth import get_cookie_user, sanitize_next, set_session_cookie
-from tg_agent.web.paths import DATA_IMAGE_DIR, STATIC_DIR, TEMPLATES_DIR
+from tg_agent.web.paths import STATIC_DIR, TEMPLATES_DIR, image_dir
 from tg_agent.web.schemas.common import HealthResponse
 from tg_agent.web.session import COOKIE_NAME
 from tg_agent.web.template_globals import configure_template_globals
@@ -59,9 +59,9 @@ def configure_app(app: FastAPI, container: AppContainer | None) -> None:
         mount_names = {getattr(route, "name", None) for route in app.routes}
         if "static" not in mount_names:
             app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-    # Serve generated images from data/image/
-    if DATA_IMAGE_DIR.exists() and "data-image" not in {getattr(r, "name", None) for r in app.routes}:
-        app.mount("/data/image", StaticFiles(directory=str(DATA_IMAGE_DIR)), name="data-image")
+    # Serve generated images from <data root>/image/
+    if image_dir().exists() and "data-image" not in {getattr(r, "name", None) for r in app.routes}:
+        app.mount("/data/image", StaticFiles(directory=str(image_dir())), name="data-image")
 
 
 def register_builtin_endpoints(app: FastAPI) -> None:

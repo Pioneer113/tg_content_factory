@@ -13,13 +13,13 @@ from tg_agent.telegram.client_pool import ClientPool
 from tg_agent.utils.safe_logging import RedactingFormatter
 from tg_agent.web.paths import data_root
 
-# Snapshot of data_root() at import: cwd-relative "./data" (or TG_AGENT_DATA_DIR),
-# never inside the package dir — wheel installs may have read-only site-packages (#1595).
-_DATA_ROOT = data_root()
 _LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 _LOG_DATEFMT = "%Y-%m-%d %H:%M:%S"
-_TUI_LOG_PATH = _DATA_ROOT / "agent_tui.log"
-APP_LOG_PATH = _DATA_ROOT / "app.log"
+
+
+def app_log_path() -> Path:
+    """app.log under the runtime data root, resolved at call time (#1595)."""
+    return data_root() / "app.log"
 
 
 def install_log_redaction(handler: logging.Handler, *, fmt: str = _LOG_FORMAT) -> None:
@@ -39,7 +39,7 @@ def install_log_redaction(handler: logging.Handler, *, fmt: str = _LOG_FORMAT) -
 
 
 def setup_logging(log_path: Path | None = None) -> None:
-    log_path = log_path or APP_LOG_PATH
+    log_path = log_path or app_log_path()
     logging.basicConfig(
         level=logging.INFO,
         format=_LOG_FORMAT,
@@ -71,11 +71,12 @@ def setup_logging(log_path: Path | None = None) -> None:
 def ensure_data_dirs() -> None:
     """Create all data subdirectories once at startup."""
     for sub in ("image", "images", "downloads", "photo_uploads", "telegram_sessions"):
-        (_DATA_ROOT / sub).mkdir(parents=True, exist_ok=True)
+        (data_root() / sub).mkdir(parents=True, exist_ok=True)
 
 
-def redirect_logging_to_file(path: str | Path = _TUI_LOG_PATH) -> list[logging.Handler]:
+def redirect_logging_to_file(path: str | Path | None = None) -> list[logging.Handler]:
     """Replace console handlers with file handler for TUI mode. Returns removed handlers."""
+    path = path or data_root() / "agent_tui.log"
     root = logging.getLogger()
     removed: list[logging.Handler] = []
     for h in root.handlers[:]:

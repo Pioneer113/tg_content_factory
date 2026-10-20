@@ -63,9 +63,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 MODEL_COMPATIBILITY_FRESHNESS_HOURS = 24
-# Default export target lives under the runtime data root (cwd / TG_AGENT_DATA_DIR),
-# not inside the package dir — wheel installs may have read-only site-packages (#1595).
-COMMUNITY_COMPATIBILITY_CATALOG_PATH = data_root() / "deepagents_model_compatibility_catalog.json"
+
+
+def community_compatibility_catalog_path() -> Path:
+    """Default catalog export target, under the runtime data root (#1595)."""
+    return data_root() / "deepagents_model_compatibility_catalog.json"
 
 
 @dataclass(slots=True)
@@ -252,7 +254,7 @@ class ProviderModelCompatibilityMixin:
     ) -> Path:
         if cache is None:
             cache = await self.load_model_cache()
-        export_path = path or COMMUNITY_COMPATIBILITY_CATALOG_PATH
+        export_path = path or community_compatibility_catalog_path()
         providers_payload: list[dict[str, Any]] = []
 
         for cfg in sorted(configs, key=self._config_sort_key):

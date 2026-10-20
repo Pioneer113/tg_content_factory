@@ -4,12 +4,12 @@ from pathlib import Path
 
 from tg_agent.web.paths import (
     DATA_DIR_ENV,
-    DATA_IMAGE_DIR,
     PROJECT_ROOT,
     STATIC_DIR,
     TEMPLATES_DIR,
     WEB_DIR,
     data_root,
+    image_dir,
 )
 
 
@@ -49,16 +49,17 @@ def test_data_root_env_override(tmp_path, monkeypatch):
     assert data_root() == tmp_path / "custom-data"
 
 
-def test_data_image_dir_follows_data_root():
-    assert DATA_IMAGE_DIR == data_root() / "image"
+def test_data_image_dir_follows_data_root(tmp_path, monkeypatch):
+    monkeypatch.setenv(DATA_DIR_ENV, str(tmp_path / "custom-data"))
+    assert image_dir() == tmp_path / "custom-data" / "image"
 
 
-def test_cli_runtime_log_paths_follow_data_root():
+def test_cli_runtime_log_paths_follow_data_root(tmp_path, monkeypatch):
     """Wiring guard for #1595: app.log / TUI log hang off the runtime data root."""
     from tg_agent.cli import runtime as cli_runtime
 
-    assert cli_runtime.APP_LOG_PATH == data_root() / "app.log"
-    assert cli_runtime._DATA_ROOT == data_root()
+    monkeypatch.setenv(DATA_DIR_ENV, str(tmp_path / "custom-data"))
+    assert cli_runtime.app_log_path() == tmp_path / "custom-data" / "app.log"
 
 
 def test_downloads_dirs_follow_data_root_env(tmp_path, monkeypatch):
@@ -72,12 +73,13 @@ def test_downloads_dirs_follow_data_root_env(tmp_path, monkeypatch):
     assert messaging_media._downloads_dir() == expected
 
 
-def test_compatibility_catalog_export_follows_data_root():
+def test_compatibility_catalog_export_follows_data_root(tmp_path, monkeypatch):
     """Default catalog export target is under the data root, not the package (#1595)."""
     from tg_agent.services.provider_model_compatibility import (
-        COMMUNITY_COMPATIBILITY_CATALOG_PATH,
+        community_compatibility_catalog_path,
     )
 
-    assert COMMUNITY_COMPATIBILITY_CATALOG_PATH == (
-        data_root() / "deepagents_model_compatibility_catalog.json"
+    monkeypatch.setenv(DATA_DIR_ENV, str(tmp_path / "dl"))
+    assert community_compatibility_catalog_path() == (
+        tmp_path / "dl" / "deepagents_model_compatibility_catalog.json"
     )

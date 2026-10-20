@@ -2733,12 +2733,6 @@ async def test_download_media_message_not_found(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "test.db"), session_encryption_secret="test-session-encryption-key")
     await db.initialize()
     try:
-        root = tmp_path / "app"
-        fake_dispatcher_py = root / "tg_agent" / "services" / "telegram_command_dispatcher.py"
-        fake_dispatcher_py.parent.mkdir(parents=True)
-        fake_dispatcher_py.touch()
-        monkeypatch.setattr(mod, "__file__", str(fake_dispatcher_py))
-
         pool = MagicMock()
         pool.release_client = AsyncMock()
 
@@ -2769,12 +2763,6 @@ async def test_download_media_no_media(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "test.db"), session_encryption_secret="test-session-encryption-key")
     await db.initialize()
     try:
-        root = tmp_path / "app"
-        fake_dispatcher_py = root / "tg_agent" / "services" / "telegram_command_dispatcher.py"
-        fake_dispatcher_py.parent.mkdir(parents=True)
-        fake_dispatcher_py.touch()
-        monkeypatch.setattr(mod, "__file__", str(fake_dispatcher_py))
-
         pool = MagicMock()
         pool.release_client = AsyncMock()
 

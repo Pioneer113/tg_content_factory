@@ -33,7 +33,7 @@ def test_logs_file_exists(capsys, tmp_path):
     db = make_debug_db()
     config = make_cli_config()
     with patch("tg_agent.cli.commands.debug.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("tg_agent.cli.commands.debug.APP_LOG_PATH", log_file), \
+         patch("tg_agent.cli.commands.debug.app_log_path", return_value=log_file), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(debug_action="logs", limit=2))
     out = capsys.readouterr().out
@@ -46,7 +46,7 @@ def test_logs_file_missing(capsys, tmp_path):
     db = make_debug_db()
     config = make_cli_config()
     with patch("tg_agent.cli.commands.debug.runtime.init_db", AsyncMock(return_value=(config, db))), \
-         patch("tg_agent.cli.commands.debug.APP_LOG_PATH", missing), \
+         patch("tg_agent.cli.commands.debug.app_log_path", return_value=missing), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(debug_action="logs", limit=10))
     out = capsys.readouterr().out

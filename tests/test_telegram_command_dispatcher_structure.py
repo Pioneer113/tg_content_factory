@@ -139,8 +139,10 @@ def test_patch_sensitive_symbols_stay_on_facade_module():
 
 def test_patch_sensitive_handlers_are_defined_on_the_facade_class_body():
     """These handlers resolve a symbol patched via ``mod`` (TelegramActionService,
-    Notifier, NotificationTargetService) or read ``mod.__file__`` — they must be
-    defined in the facade class' own module so the patch reaches the call site."""
+    Notifier, NotificationTargetService) — they must be defined in the facade
+    class' own module so the patch reaches the call site. (``dialogs.download_media``
+    keeps its facade anchoring from #1047 even though its downloads dir resolves
+    from the runtime data root since #1595.)"""
     facade_module = TelegramCommandDispatcher.__module__
     for handler_name in (
         "_handle_dialogs_join",
