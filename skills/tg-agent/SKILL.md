@@ -65,10 +65,11 @@ Sending a wrong message or kicking a wrong member is not reversible by you.
 - **Visible actions** (`send`, `forward`, `edit-message`, `delete-message`, `react`,
   `pin-message`, `download-media`): only when the user explicitly asked for this action.
   Confirm target chat + content before first send in a task.
-- **Destructive / hard to undo** (`kick`, `leave`, `edit-admin`, `edit-permissions`,
+- **Destructive / hard to undo** (`delete`, `kick`, `leave`, `edit-admin`, `edit-permissions`,
   `create-channel`, `create-group`, `channel delete`, `filter purge*`/`hard-delete`): always ask
   an explicit yes/no confirmation naming the exact target before running, even if the user
-  described the intent.
+  described the intent. `dialogs delete` is permanent (DeleteChannel/DeleteChat): on an owned
+  channel it deletes the channel itself for all members, not just a local entry.
 - **No bulk messaging** (broadcast to many chats) unless the user spelled out the exact
   recipient list and content.
 - On `FloodWait` errors: stop and wait the reported seconds (or tell the user); do not retry
@@ -76,7 +77,7 @@ Sending a wrong message or kicking a wrong member is not reversible by you.
 
 ## Background collection
 
-One-off: `tg-agent channel collect --channel-id <id>` runs a collection synchronously and
+One-off: `tg-agent channel collect <id>` runs a collection synchronously and
 exits. Continuous/scheduled collection needs the long-lived daemon: `tg-agent restart`
 stops any previous daemon and starts the worker runtime — no web panel, no WEB_PASS
 required, managed via a PID file (`tg-agent stop` halts it). Check scheduler state with

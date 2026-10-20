@@ -786,7 +786,7 @@ async def list_for_import_impl(config_path: str, *, as_json: bool) -> None:
 async def candidates_impl(config_path: str, *, as_json: bool = False, limit: int = 50) -> None:
     """``channel candidates`` — search-discovered channels awaiting activation.
 
-    Premium search (``search --mode tg``) caches discovered channels as
+    Premium search (``search --mode telegram``) caches discovered channels as
     inactive rows and tags their cached messages with the query that found
     them; this read-only listing surfaces those candidates so a human can
     pick which ones to activate with ``channel toggle``. The INNER JOIN on
