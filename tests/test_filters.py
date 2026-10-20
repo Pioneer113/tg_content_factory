@@ -889,7 +889,7 @@ class TestAnalyzerStickyFlags:
         row = await cur.fetchone()
         assert "title_changed" in row["filter_flags"]
 
-    async def test_manual_preserved_after_apply(self, db, raw_db):
+    async def test_manual_flag_not_sticky_without_human_origin(self, db, raw_db):
         # Этап 4 #1312: sticky «manual» уволен. Человеческий вердикт выражается
         # filtered_origin='human' (protected writer-ы); auto-строка с флагом
         # manual больше не переживает цикл reset → apply — канал переоценивается.
@@ -1248,7 +1248,9 @@ class TestChannelAnalyzer:
 
         analyzer = ChannelAnalyzer(db)
         report = await analyzer.analyze_all()
-        assert any(r.channel_id == 1311 and r.is_filtered for r in report.results)
+        # Stage 4 (#1312): the human channel is not analyzed at all — no
+        # metrics, no report row (pinned by TestProvenanceHumanExclusion).
+        assert all(r.channel_id != 1311 for r in report.results)
         await analyzer.apply_filters(report)
 
         cur = await raw_db.execute(
