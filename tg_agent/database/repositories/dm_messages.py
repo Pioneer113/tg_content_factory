@@ -95,6 +95,36 @@ class DmMessagesRepository:
         row = await cur.fetchone()
         return int(row["n"]) if row else 0
 
+    async def list(
+        self,
+        *,
+        phone: str | None = None,
+        chat_id: int | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[DmMessage]:
+        """Архив, свежие первыми; фильтры по аккаунту и/или диалогу (#1580).
+
+        Читается agent-tool `read_dm_archive` и CLI `dm archive list` — тем же
+        способом, каким web/REST (#1579) читает журнал; у архива нет TTL,
+        поэтому окно ограничивает только LIMIT/OFFSET.
+        """
+        where: list[str] = []
+        params: list[object] = []
+        if phone is not None:
+            where.append("phone = ?")
+            params.append(phone)
+        if chat_id is not None:
+            where.append("chat_id = ?")
+            params.append(int(chat_id))
+        where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+        cur = await self._db.execute(
+            f"SELECT * FROM dm_messages {where_sql} ORDER BY id DESC LIMIT ? OFFSET ?",
+            (*params, int(limit), int(offset)),
+        )
+        rows = await cur.fetchall()
+        return [self._to_dm(row) for row in rows]
+
     async def count_by_direction(self, phone: str) -> tuple[int, int]:
         """(входящие, исходящие) по аккаунту — критерий приёмки #1453."""
         cur = await self._db.execute(

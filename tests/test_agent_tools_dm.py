@@ -91,7 +91,7 @@ async def test_list_incoming_dms_returns_seeded_journal(db, handlers):
 
     text = _text(await handlers["list_incoming_dms"]({}))
 
-    assert "Входящие DM (2 шт.)" in text
+    assert "Входящие DM (2 шт." in text
     # Идентификаторы, нужные потоку черновиков (#1579).
     assert "id=" in text and "chat_id=43" in text and "message_id=8" in text
     assert "phone=+10000000001" in text
@@ -142,9 +142,11 @@ async def test_get_incoming_dm_not_found(db, handlers):
 
 @pytest.mark.anyio
 async def test_list_dm_drafts_shows_statuses(db, handlers):
-    dm_id = await _seed_journal(db)
-    approved_id = await _seed_draft(db, dm_id, status="approved")
-    draft_id = await _seed_draft(db, dm_id, status="draft")
+    # Один черновик на входящее (UNIQUE(incoming_dm_id)) — два диалога.
+    dm_one = await _seed_journal(db, chat_id=42, message_id=1)
+    dm_two = await _seed_journal(db, chat_id=43, message_id=2)
+    approved_id = await _seed_draft(db, dm_one, status="approved")
+    draft_id = await _seed_draft(db, dm_two, status="draft")
 
     text = _text(await handlers["list_dm_drafts"]({}))
 
@@ -155,9 +157,11 @@ async def test_list_dm_drafts_shows_statuses(db, handlers):
 
 @pytest.mark.anyio
 async def test_list_dm_drafts_filters_by_status(db, handlers):
-    dm_id = await _seed_journal(db)
-    await _seed_draft(db, dm_id, status="approved")
-    await _seed_draft(db, dm_id, status="rejected")
+    # Один черновик на входящее (UNIQUE(incoming_dm_id)) — два диалога.
+    dm_one = await _seed_journal(db, chat_id=42, message_id=1)
+    dm_two = await _seed_journal(db, chat_id=43, message_id=2)
+    await _seed_draft(db, dm_one, status="approved")
+    await _seed_draft(db, dm_two, status="rejected")
 
     text = _text(await handlers["list_dm_drafts"]({"status": "rejected"}))
 
@@ -177,7 +181,7 @@ async def test_create_dm_draft_resolves_phone_chat_from_journal(db, handlers):
     text = _text(await handlers["create_dm_draft"]({"incoming_dm_id": dm_id, "text": "ответ агента"}))
 
     assert "создан" in text
-    draft = await db.repos.dm_reply_drafts.list_drafts()[0]
+    draft = (await db.repos.dm_reply_drafts.list_drafts())[0]
     assert (draft.phone, draft.chat_id, draft.status) == (_FAKE_PHONE, 42, "draft")
     assert draft.reply_text == "ответ агента"
 
@@ -270,7 +274,7 @@ async def test_read_dm_archive_shows_both_directions(db, handlers):
 
     text = _text(await handlers["read_dm_archive"]({"chat_id": 42}))
 
-    assert "Архив DM (2 шт.)" in text
+    assert "Архив DM (2 шт." in text
     assert "входящее" in text and "исходящее" in text
     assert "входящее в архиве" in text and "исходящее из архива" in text
     assert "чужой диалог" not in text

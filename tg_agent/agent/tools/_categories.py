@@ -64,6 +64,7 @@ TOOL_MODULE_ORDER: tuple[str, ...] = (
     "photo_loader",
     "dialogs",
     "messaging",
+    "dm",
     "images",
     "export",
     "settings",
