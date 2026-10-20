@@ -60,8 +60,10 @@ filter analyze | apply | reset | precheck | suspects | toggle | flag | purge | p
   (activates with human origin) + `channel collect --channel-id ID` for the first fetch.
 - `filter analyze|apply` — score channels for spam/quality (flags incl. `low_engagement` —
   dead engagement: avg views <10% of subscribers over the last 100 posts; `forwarder` —
-  forwarding channel: ≥50% of the last 100 posts are forwards, label-only); filtered channels are skipped
-  unless `force=True`.
+  forwarding channel: ≥50% of the last 100 posts are forwards, label-only); the uniqueness /
+  subscriber-ratio / cross-dupe / cyrillic thresholds are overridable via
+  `settings filter-criteria` (defaults built in, out-of-range values fall back to defaults);
+  filtered channels are skipped unless `force=True`.
 - `filter suspects` — read-only contradiction report (#1490): channels carrying the
   «авторский контент» trust tag together with filter flags — candidates for a wrong
   automatic filter decision. Changes nothing; review and decide manually.
