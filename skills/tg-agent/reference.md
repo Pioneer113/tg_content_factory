@@ -46,8 +46,9 @@ filter analyze | apply | reset | precheck | suspects | toggle | flag | purge | p
   thresholds (engagement vs subscribers, forwards share, auto-feed, uniqueness,
   language, suspicious username). DB-history metrics (cross-channel spam) are listed
   as not checked. Read-only live read.
-- `channel collect [--channel-id ID]` — incremental collection for one channel; without flags
-  interactive selection. One-off; exit when done. With a live daemon the channel is queued
+- `channel collect <channel-id-or-username>` — incremental collection for one channel; the
+  identifier argument is required (there is no interactive selection). One-off; exit when
+  done. With a live daemon the channel is queued
   to the worker (no second MTProto client); `TGCF_CLI_DIRECT=1` forces the in-process path.
 - `channel stats` — queue stats collection: one channel by identifier; `--all` refreshes
   channels whose stats are missing **or older than** `stats_all_skip_fresh_hours` (24h),
@@ -55,9 +56,9 @@ filter analyze | apply | reset | precheck | suspects | toggle | flag | purge | p
   overrides). The worker collects asynchronously; numbers land in DB — read them via
   `channel list` / `analytics channel`.
 - `channel candidates [--json] [--limit N]` — read-only list of channels discovered by
-  premium search (`search --mode tg`): inactive rows whose cached messages carry the
+  premium search (`search --mode telegram`): inactive rows whose cached messages carry the
   search-query tag. Pick ones worth collecting, then `channel toggle <identifier>`
-  (activates with human origin) + `channel collect --channel-id ID` for the first fetch.
+  (activates with human origin) + `channel collect <identifier>` for the first fetch.
 - `filter analyze|apply` — score channels for spam/quality (flags incl. `low_engagement` —
   dead engagement: avg views <10% of subscribers over the last 100 posts; `forwarder` —
   forwarding channel: ≥50% of the last 100 posts are forwards, label-only); the uniqueness /
@@ -117,15 +118,16 @@ dialogs list | refresh | resolve | topics
 dialogs read | send | forward | edit-message | delete-message | react | pin-message | unpin-message
 dialogs download-media | transcribe | mark-read | archive | unarchive
 dialogs participants | edit-admin | edit-permissions | kick
-dialogs create-channel | create-group | leave | join
-dialogs queue | status | cancel | clear-pending
+dialogs create-channel | create-group | leave | join | delete
+dialogs queue | queue status | queue cancel | queue clear-pending
 dialogs cache-clear | cache-status
 dialogs archive-history
 ```
 
 All of these touch the user's live Telegram account — see Safety in SKILL.md.
-`dialogs send` posts a message to a chat by identifier; `dialogs queue`/`status` manage the
-send queue. `dialogs read` supports history reads with limits.
+`dialogs send` posts a message to a chat by identifier; `dialogs queue` (with the
+`status`, `cancel`, `clear-pending` subcommands) manages the send queue.
+`dialogs read` supports history reads with limits.
 `dialogs transcribe <chat> <message-id> [--engine telegram|groq|openai|whisper]` returns the
 text of a voice note / video note, cached in the DB (a repeat call costs nothing). Engines:
 `groq` (default, needs GROQ_API_KEY — sends audio to a third party), `telegram` (native,
