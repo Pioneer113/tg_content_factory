@@ -16,6 +16,7 @@ from tg_agent.database import Database
 from tg_agent.models import Account, AccountSessionStatus, AccountSummary, TelegramCommand, TelegramCommandStatus
 from tg_agent.services import telegram_command_dispatcher as mod
 from tg_agent.services.telegram_command_dispatcher import TelegramCommandDispatcher, TelegramCommandRetryLaterError
+from tg_agent.web.paths import DATA_DIR_ENV
 
 
 def _download_media_path_checks(actual_path: str, expected_file: Path, expected_dir: Path) -> tuple[bool, bool]:
@@ -50,11 +51,8 @@ async def test_download_media_creates_output_dir(tmp_path, monkeypatch):
     await db.initialize()
     try:
         root = tmp_path / "app"
-        fake_dispatcher_py = root / "tg_agent" / "services" / "telegram_command_dispatcher.py"
-        fake_dispatcher_py.parent.mkdir(parents=True)
-        fake_dispatcher_py.touch()
-
-        monkeypatch.setattr(mod, "__file__", str(fake_dispatcher_py))
+        # _downloads_dir() hangs off the runtime data root (#1595), not __file__.
+        monkeypatch.setenv(DATA_DIR_ENV, str(root / "data"))
 
         expected_dir = root / "data" / "downloads"
         expected_file = expected_dir / "file.jpg"
@@ -90,10 +88,8 @@ async def test_download_media_rejects_path_escape(tmp_path, monkeypatch):
     await db.initialize()
     try:
         root = tmp_path / "app"
-        fake_dispatcher_py = root / "tg_agent" / "services" / "telegram_command_dispatcher.py"
-        fake_dispatcher_py.parent.mkdir(parents=True)
-        fake_dispatcher_py.touch()
-        monkeypatch.setattr(mod, "__file__", str(fake_dispatcher_py))
+        # _downloads_dir() hangs off the runtime data root (#1595), not __file__.
+        monkeypatch.setenv(DATA_DIR_ENV, str(root / "data"))
 
         # Returned path lives OUTSIDE root/data/downloads.
         escape_file = tmp_path / "evil.bin"
