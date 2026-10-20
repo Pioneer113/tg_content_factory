@@ -55,8 +55,8 @@ ruff check --fix tg_agent/ tests/ conftest.py
 # override via TGCF_PYTEST_XDIST_WORKERS; single-test runs with :: force 1 worker)
 pytest tests/ -v -m "not aiosqlite_serial" -n auto
 
-# Run aiosqlite-backed tests serially
-pytest tests/ -v -m aiosqlite_serial
+# Run aiosqlite-backed tests sequentially within each file, with independent files in parallel
+pytest tests/ -q -m aiosqlite_serial -n auto --dist=loadfile
 
 # Run a single test
 pytest tests/test_web.py::test_health_endpoint -v
@@ -191,7 +191,7 @@ Reads (`SELECT`) stay lock-free. Repositories accept `database: Database | None 
 - **JOIN on `channels`**: always `ON x.channel_id = c.channel_id`. `channels.id` is the DB primary key and is used only in dedicated pk-lookups (`get_by_pk`, `set_channel_type`, `delete_channel`). Every sidecar table (`messages`, `channel_stats`, `generated_images`, `forward_from_channel_id`, etc.) stores the Telegram channel_id, so joining on `c.id` silently returns zero rows for any channel whose pk differs from its Telegram id. Enforced by `tests/test_sql_conventions.py`.
 - **pytest-timeout**: global 120s timeout configured in `pyproject.toml` (`timeout = 120`) as a deadlock guard; dependency `pytest-timeout` in `[dev]`
 - **Warnings are errors**: `filterwarnings = ["error"]` in `pyproject.toml`; CI has a dedicated step that fails if this is ever relaxed — fix warnings, don't suppress them
-- **Test parallelism split**: root `conftest.py` auto-marks tests as `aiosqlite_serial` if they use the `cli_db` fixture or contain `import aiosqlite` (raw aiosqlite calls); everything else runs with `-n auto` (`--dist=loadfile`, worker count capped at 4 by default, `TGCF_PYTEST_XDIST_WORKERS` to override; `::`-style single-test invocations and real-TG gate envs force 1 worker). Locally `-n auto` reserves one core (`cpu - 1`, no load term — the #780 load-aware throttle was removed in #1463: load average is a queue signal, not free CPU, and it collapsed `-n auto` to 1 worker on busy machines); on CI (the `CI` env var is set) every runner core is used (#944), so `-n auto` reaches the full cap
+- **Test parallelism split**: root `conftest.py` auto-marks tests as `aiosqlite_serial` if they use the `cli_db` fixture or contain `import aiosqlite` (raw aiosqlite calls); the marked lane runs `-n auto --dist=loadfile` (sequential within each file, independent files in parallel), everything else runs with `-n auto` (`--dist=loadfile`, worker count capped at 4 by default, `TGCF_PYTEST_XDIST_WORKERS` to override; `::`-style single-test invocations and real-TG gate envs force 1 worker). Locally `-n auto` reserves one core (`cpu - 1`, no load term — the #780 load-aware throttle was removed in #1463: load average is a queue signal, not free CPU, and it collapsed `-n auto` to 1 worker on busy machines); on CI (the `CI` env var is set) every runner core is used (#944), so `-n auto` reaches the full cap
 - **`db` fixture is `:memory:`**: `tests/conftest.py` provides `db` as `Database(":memory:")`. The `real_pool_harness_factory` fixture depends on `db` and passes it to the harness. Any fixture/test that creates a web app and calls `real_pool_harness_factory()` **must** accept `db` as a parameter and use it for `app.state.db` — creating a separate `Database(tmp_path / "test.db")` would give the app and the harness different DB instances, breaking account lookups.
 
 ## Conventions
@@ -209,7 +209,7 @@ Reads (`SELECT`) stay lock-free. Repositories accept `database: Database | None 
 ## CI
 
 - GitHub Actions: `.github/workflows/ci.yml` — runs on push to `main` and on all PRs; branch names containing `+` are rejected. Split into **parallel jobs** (#1090, #1097 §5) that fan out for speed: `check-branch-name` (PR only), `lint` (ruff), `static-checks` (gates below), `tests`. This parallel split is the CI speedup that landed. Structure is regression-guarded by `tests/test_ci_workflow_structure.py`.
-- **Test gate (#1090)**: the `tests` job runs the **full** suite on both PR and main — smoke first, then parallel (`-n auto -m "not aiosqlite_serial"`), then serial (`-m aiosqlite_serial`), with coverage. (pytest-testmon selective runs were evaluated and dropped: testmon only deselects single-process and crashes under xdist+coverage, so a testmon PR gate would run single-process without coverage — often *slower* than the full `-n auto` sweep on this large suite, not faster. The parallel-job split is the real win.)
+- **Test gate (#1090)**: the `tests` job runs the **full** suite on both PR and main — smoke first, then parallel (`-n auto -m "not aiosqlite_serial"`), then the serial lane (`-m aiosqlite_serial -n auto --dist=loadfile`), with coverage. (pytest-testmon selective runs were evaluated and dropped: testmon only deselects single-process and crashes under xdist+coverage, so a testmon PR gate would run single-process without coverage — often *slower* than the full `-n auto` sweep on this large suite, not faster. The parallel-job split is the real win.)
 - Import architecture contracts: `lint-imports --config .importlinter` — CLI/web/agent-tools entrypoints must not import `telethon` directly (raw Telethon stays behind the telegram layer)
 - CI enforces `filterwarnings = ["error"]` in `pyproject.toml` (dedicated check step in `static-checks`)
 - Code-health tooling in `static-checks`: `scripts/code_health.py --fail-on F` (blocking cyclomatic-complexity gate, radon+vulture). Advisory scans (`continue-on-error`): jscpd duplication, `pip-audit` (dependency CVEs, #1053/#1097 §4), bandit. **Doc-coverage (interrogate, #1072) is NOT in CI** — it stays a local script (`scripts/doc_coverage.py`); "no docstring" ≠ "dead code (uncalled, vulture)" — independent signals, different PRs.
@@ -223,7 +223,7 @@ Reads (`SELECT`) stay lock-free. Repositories accept `database: Database | None 
 - Mutating flows such as BotFather, photo send, auth, and `leave_channels` must not be converted to generic live pytest cases
 
 ### pytest markers
-- `aiosqlite_serial` — auto-applied by conftest; runs serially (raw aiosqlite or `cli_db` fixture)
+- `aiosqlite_serial` — auto-applied by conftest; its lane runs `-n auto --dist=loadfile`, i.e. serially within each file (raw aiosqlite or `cli_db` fixture)
 - `native_backend_allowed` — explicitly exercises native Telethon allowlist flows
 - `real_tg_safe` — opt-in read-only sandbox; gate: `RUN_REAL_TELEGRAM_SAFE=1`
 - `real_tg_mutation_safe` — opt-in bounded operator-approved mutations; gate: `RUN_REAL_TELEGRAM_MUTATION_SAFE=1`
