@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 
 import pytest
+import typer
 from telethon.crypto import AuthKey
 from telethon.sessions import StringSession
 
@@ -123,12 +124,13 @@ async def test_cli_import_rejects_invalid_session(tmp_path, capsys):
             force=False,
             json=False,
         )
-        await account_cmd._run_import(args, db)
+        with pytest.raises(typer.Exit):
+            await account_cmd._run_import(args, db)
 
         accounts = await db.get_accounts(active_only=False)
         assert not any(a.phone == "+15551230001" for a in accounts)
-        out = capsys.readouterr().out.lower()
-        assert "invalid" in out or "недейств" in out or "не валид" in out
+        err = capsys.readouterr().err.lower()
+        assert "invalid" in err or "недейств" in err or "не валид" in err
     finally:
         await db.close()
 
@@ -174,9 +176,10 @@ async def test_cli_export_session_unknown_id(tmp_path, capsys):
             phone=None,
             json=False,
         )
-        await account_cmd._run_export_session(args, db)
-        out = capsys.readouterr().out.lower()
-        assert "not found" in out
+        with pytest.raises(typer.Exit):
+            await account_cmd._run_export_session(args, db)
+        err = capsys.readouterr().err.lower()
+        assert "not found" in err
     finally:
         await db.close()
 

@@ -5,6 +5,7 @@ import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
+import typer
 
 from tests.helpers import cli_ns as _ns
 from tg_agent.agent.provider_registry import (
@@ -105,18 +106,18 @@ class TestAdd:
         svc = mock_svc.return_value
         svc.writes_enabled = True
         from tg_agent.cli.commands.provider import run
-        run(_ns(provider_action="add", name="nonexistent_xyz"))
-        out = capsys.readouterr().out
-        assert "Unknown provider" in out
+        with pytest.raises(typer.Exit):
+            run(_ns(provider_action="add", name="nonexistent_xyz"))
+        assert "Unknown provider" in capsys.readouterr().err
 
     @patch("tg_agent.cli.commands.provider.ProviderConfigService")
     def test_add_requires_encryption(self, mock_svc, cli_env, capsys):
         svc = mock_svc.return_value
         svc.writes_enabled = False
         from tg_agent.cli.commands.provider import run
-        run(_ns(provider_action="add", name="openai", api_key="sk-test"))
-        out = capsys.readouterr().out
-        assert "SESSION_ENCRYPTION_KEY" in out
+        with pytest.raises(typer.Exit):
+            run(_ns(provider_action="add", name="openai", api_key="sk-test"))
+        assert "SESSION_ENCRYPTION_KEY" in capsys.readouterr().err
 
     @patch("tg_agent.cli.commands.provider.ProviderConfigService")
     def test_add_new_provider(self, mock_svc, cli_env, capsys):
@@ -160,9 +161,9 @@ class TestDelete:
         svc = mock_svc.return_value
         svc.writes_enabled = False
         from tg_agent.cli.commands.provider import run
-        run(_ns(provider_action="delete", name="openai"))
-        out = capsys.readouterr().out
-        assert "SESSION_ENCRYPTION_KEY" in out
+        with pytest.raises(typer.Exit):
+            run(_ns(provider_action="delete", name="openai"))
+        assert "SESSION_ENCRYPTION_KEY" in capsys.readouterr().err
 
     @patch("tg_agent.cli.commands.provider.ProviderConfigService")
     def test_delete_not_found(self, mock_svc, cli_env, capsys):
@@ -170,9 +171,9 @@ class TestDelete:
         svc.writes_enabled = True
         svc.load_provider_configs = AsyncMock(return_value=[])
         from tg_agent.cli.commands.provider import run
-        run(_ns(provider_action="delete", name="openai"))
-        out = capsys.readouterr().out
-        assert "not found" in out
+        with pytest.raises(typer.Exit):
+            run(_ns(provider_action="delete", name="openai"))
+        assert "not found" in capsys.readouterr().err
 
     @patch("tg_agent.cli.commands.provider.ProviderConfigService")
     def test_delete_existing(self, mock_svc, cli_env, capsys):
@@ -195,9 +196,9 @@ class TestProbe:
         svc = mock_svc.return_value
         svc.load_provider_configs = AsyncMock(return_value=[])
         from tg_agent.cli.commands.provider import run
-        run(_ns(provider_action="probe", name="openai"))
-        out = capsys.readouterr().out
-        assert "not configured" in out
+        with pytest.raises(typer.Exit):
+            run(_ns(provider_action="probe", name="openai"))
+        assert "not configured" in capsys.readouterr().err
 
     @patch("tg_agent.cli.commands.provider.ProviderConfigService")
     def test_probe_success(self, mock_svc, cli_env, capsys):
@@ -232,9 +233,9 @@ class TestProbe:
         svc.load_provider_configs = AsyncMock(return_value=[cfg])
         svc.refresh_models_for_provider = AsyncMock(side_effect=Exception("timeout"))
         from tg_agent.cli.commands.provider import run
-        run(_ns(provider_action="probe", name="openai"))
-        out = capsys.readouterr().out
-        assert "FAIL" in out
+        with pytest.raises(typer.Exit):
+            run(_ns(provider_action="probe", name="openai"))
+        assert "FAIL" in capsys.readouterr().err
 
     @patch("tg_agent.cli.commands.provider.ProviderConfigService")
     def test_probe_many_models_truncates(self, mock_svc, cli_env, capsys):
@@ -267,9 +268,9 @@ class TestRefresh:
         svc = mock_svc.return_value
         svc.refresh_models_for_provider = AsyncMock(side_effect=Exception("network"))
         from tg_agent.cli.commands.provider import run
-        run(_ns(provider_action="refresh", name="openai"))
-        out = capsys.readouterr().out
-        assert "FAIL" in out
+        with pytest.raises(typer.Exit):
+            run(_ns(provider_action="refresh", name="openai"))
+        assert "FAIL" in capsys.readouterr().err
 
     @patch("tg_agent.cli.commands.provider.ProviderConfigService")
     def test_refresh_all(self, mock_svc, cli_env, capsys):
@@ -319,9 +320,11 @@ class TestTestAll:
         svc.load_provider_configs = AsyncMock(return_value=[cfg])
         svc.refresh_models_for_provider = AsyncMock(side_effect=Exception("timeout"))
         from tg_agent.cli.commands.provider import run
-        run(_ns(provider_action="test-all"))
-        out = capsys.readouterr().out
-        assert "FAIL" in out
+        with pytest.raises(typer.Exit):
+            run(_ns(provider_action="test-all"))
+        captured = capsys.readouterr()
+        assert "FAIL" in captured.out
+        assert "failed." in captured.err
 
 
 def _save_real_cli_provider_config(cli_db, config: AppConfig, cfg: ProviderRuntimeConfig) -> None:

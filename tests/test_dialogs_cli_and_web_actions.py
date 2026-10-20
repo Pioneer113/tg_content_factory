@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import typer
 
 from tests.helpers import build_web_app, cli_ns, make_auth_client
 from tg_agent.config import AppConfig
@@ -106,13 +107,15 @@ class TestCliList:
 
     def test_list_no_accounts(self, cli_db, capsys):
         pool, _ = _mock_pool(clients={})
-        _run_cli("list", pool, cli_db)
-        assert "No connected accounts." in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("list", pool, cli_db)
+        assert "No connected accounts." in capsys.readouterr().err
 
     def test_list_phone_not_connected(self, cli_db, capsys):
         pool, _ = _mock_pool()
-        _run_cli("list", pool, cli_db, {"phone": "+000"})
-        assert "not connected" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("list", pool, cli_db, {"phone": "+000"})
+        assert "not connected" in capsys.readouterr().err
 
     def test_list_no_dialogs(self, cli_db, capsys):
         pool, _ = _mock_pool()
@@ -158,13 +161,15 @@ class TestCliRefresh:
 
     def test_refresh_no_accounts(self, cli_db, capsys):
         pool, _ = _mock_pool(clients={})
-        _run_cli("refresh", pool, cli_db, {"phone": None})
-        assert "No connected accounts." in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("refresh", pool, cli_db, {"phone": None})
+        assert "No connected accounts." in capsys.readouterr().err
 
     def test_refresh_phone_not_connected(self, cli_db, capsys):
         pool, _ = _mock_pool()
-        _run_cli("refresh", pool, cli_db, {"phone": "+000"})
-        assert "not connected" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("refresh", pool, cli_db, {"phone": "+000"})
+        assert "not connected" in capsys.readouterr().err
 
     def test_refresh_ok(self, cli_db, capsys):
         pool, _ = _mock_pool()
@@ -233,13 +238,15 @@ class TestCliSend:
 
     def test_send_no_accounts(self, cli_db, capsys):
         pool, _ = _mock_pool(clients={})
-        _run_cli("send", pool, cli_db, {"phone": None, "recipient": "@user", "text": "hi", "yes": True})
-        assert "No connected accounts." in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("send", pool, cli_db, {"phone": None, "recipient": "@user", "text": "hi", "yes": True})
+        assert "No connected accounts." in capsys.readouterr().err
 
     def test_send_not_connected(self, cli_db, capsys):
         pool, _ = _mock_pool()
-        _run_cli("send", pool, cli_db, {"phone": "+000", "recipient": "@user", "text": "hi", "yes": True})
-        assert "not connected" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("send", pool, cli_db, {"phone": "+000", "recipient": "@user", "text": "hi", "yes": True})
+        assert "not connected" in capsys.readouterr().err
 
     def test_send_confirmed(self, cli_db, capsys):
         pool, client = _mock_pool()
@@ -265,14 +272,16 @@ class TestCliSend:
     def test_send_client_unavailable(self, cli_db, capsys):
         pool, _ = _mock_pool(native_result=None)
         pool.get_native_client_by_phone = AsyncMock(return_value=None)
-        _run_cli("send", pool, cli_db, {"phone": _PHONE, "recipient": "@user", "text": "hi", "yes": True})
-        assert "unavailable" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("send", pool, cli_db, {"phone": _PHONE, "recipient": "@user", "text": "hi", "yes": True})
+        assert "unavailable" in capsys.readouterr().err
 
     def test_send_error(self, cli_db, capsys):
         pool, client = _mock_pool()
         client.get_entity = AsyncMock(side_effect=RuntimeError("entity error"))
-        _run_cli("send", pool, cli_db, {"phone": _PHONE, "recipient": "@user", "text": "hi", "yes": True})
-        assert "Error sending message" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("send", pool, cli_db, {"phone": _PHONE, "recipient": "@user", "text": "hi", "yes": True})
+        assert "Error sending message" in capsys.readouterr().err
 
     def test_send_long_text_preview(self, cli_db, capsys):
         pool, client = _mock_pool()
@@ -290,10 +299,11 @@ class TestCliForward:
 
     def test_forward_no_accounts(self, cli_db, capsys):
         pool, _ = _mock_pool(clients={})
-        _run_cli("forward", pool, cli_db, {
-            "phone": None, "from_chat": "A", "to_chat": "B", "message_ids": ["1,2"], "yes": True,
-        })
-        assert "No connected accounts." in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("forward", pool, cli_db, {
+                "phone": None, "from_chat": "A", "to_chat": "B", "message_ids": ["1,2"], "yes": True,
+            })
+        assert "No connected accounts." in capsys.readouterr().err
 
     def test_forward_no_valid_ids(self, cli_db, capsys):
         pool, _ = _mock_pool()
@@ -322,18 +332,20 @@ class TestCliForward:
     def test_forward_client_unavailable(self, cli_db, capsys):
         pool, _ = _mock_pool()
         pool.get_native_client_by_phone = AsyncMock(return_value=None)
-        _run_cli("forward", pool, cli_db, {
-            "phone": _PHONE, "from_chat": "A", "to_chat": "B", "message_ids": ["1"], "yes": True,
-        })
-        assert "unavailable" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("forward", pool, cli_db, {
+                "phone": _PHONE, "from_chat": "A", "to_chat": "B", "message_ids": ["1"], "yes": True,
+            })
+        assert "unavailable" in capsys.readouterr().err
 
     def test_forward_error(self, cli_db, capsys):
         pool, client = _mock_pool()
         client.get_entity = AsyncMock(side_effect=RuntimeError("err"))
-        _run_cli("forward", pool, cli_db, {
-            "phone": _PHONE, "from_chat": "A", "to_chat": "B", "message_ids": ["1"], "yes": True,
-        })
-        assert "Error forwarding" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("forward", pool, cli_db, {
+                "phone": _PHONE, "from_chat": "A", "to_chat": "B", "message_ids": ["1"], "yes": True,
+            })
+        assert "Error forwarding" in capsys.readouterr().err
 
 
 class TestCliEditMessage:
@@ -359,25 +371,28 @@ class TestCliEditMessage:
     def test_edit_message_client_unavailable(self, cli_db, capsys):
         pool, _ = _mock_pool()
         pool.get_native_client_by_phone = AsyncMock(return_value=None)
-        _run_cli("edit-message", pool, cli_db, {
-            "phone": _PHONE, "chat_id": "@ch", "message_id": 42, "text": "t", "yes": True,
-        })
-        assert "unavailable" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("edit-message", pool, cli_db, {
+                "phone": _PHONE, "chat_id": "@ch", "message_id": 42, "text": "t", "yes": True,
+            })
+        assert "unavailable" in capsys.readouterr().err
 
     def test_edit_message_error(self, cli_db, capsys):
         pool, client = _mock_pool()
         client.get_entity = AsyncMock(side_effect=RuntimeError("oops"))
-        _run_cli("edit-message", pool, cli_db, {
-            "phone": _PHONE, "chat_id": "@ch", "message_id": 42, "text": "t", "yes": True,
-        })
-        assert "Error editing" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("edit-message", pool, cli_db, {
+                "phone": _PHONE, "chat_id": "@ch", "message_id": 42, "text": "t", "yes": True,
+            })
+        assert "Error editing" in capsys.readouterr().err
 
     def test_edit_message_no_accounts(self, cli_db, capsys):
         pool, _ = _mock_pool(clients={})
-        _run_cli("edit-message", pool, cli_db, {
-            "phone": None, "chat_id": "@ch", "message_id": 42, "text": "t", "yes": True,
-        })
-        assert "No connected accounts." in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("edit-message", pool, cli_db, {
+                "phone": None, "chat_id": "@ch", "message_id": 42, "text": "t", "yes": True,
+            })
+        assert "No connected accounts." in capsys.readouterr().err
 
 
 class TestCliDeleteMessage:
@@ -410,10 +425,11 @@ class TestCliDeleteMessage:
     def test_delete_message_error(self, cli_db, capsys):
         pool, client = _mock_pool()
         client.get_entity = AsyncMock(side_effect=RuntimeError("err"))
-        _run_cli("delete-message", pool, cli_db, {
-            "phone": _PHONE, "chat_id": "@ch", "message_ids": ["1"], "yes": True,
-        })
-        assert "Error deleting" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("delete-message", pool, cli_db, {
+                "phone": _PHONE, "chat_id": "@ch", "message_ids": ["1"], "yes": True,
+            })
+        assert "Error deleting" in capsys.readouterr().err
 
 
 class TestCliPinUnpin:
@@ -439,18 +455,20 @@ class TestCliPinUnpin:
     def test_pin_client_unavailable(self, cli_db, capsys):
         pool, _ = _mock_pool()
         pool.get_native_client_by_phone = AsyncMock(return_value=None)
-        _run_cli("pin-message", pool, cli_db, {
-            "phone": _PHONE, "chat_id": "@ch", "message_id": 10, "notify": False, "yes": True,
-        })
-        assert "unavailable" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("pin-message", pool, cli_db, {
+                "phone": _PHONE, "chat_id": "@ch", "message_id": 10, "notify": False, "yes": True,
+            })
+        assert "unavailable" in capsys.readouterr().err
 
     def test_pin_error(self, cli_db, capsys):
         pool, client = _mock_pool()
         client.get_entity = AsyncMock(side_effect=RuntimeError("err"))
-        _run_cli("pin-message", pool, cli_db, {
-            "phone": _PHONE, "chat_id": "@ch", "message_id": 10, "notify": False, "yes": True,
-        })
-        assert "Error pinning" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("pin-message", pool, cli_db, {
+                "phone": _PHONE, "chat_id": "@ch", "message_id": 10, "notify": False, "yes": True,
+            })
+        assert "Error pinning" in capsys.readouterr().err
 
     def test_unpin_ok(self, cli_db, capsys):
         pool, client = _mock_pool()
@@ -481,10 +499,11 @@ class TestCliPinUnpin:
     def test_unpin_error(self, cli_db, capsys):
         pool, client = _mock_pool()
         client.get_entity = AsyncMock(side_effect=RuntimeError("err"))
-        _run_cli("unpin-message", pool, cli_db, {
-            "phone": _PHONE, "chat_id": "@ch", "message_id": None, "yes": True,
-        })
-        assert "Error unpinning" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("unpin-message", pool, cli_db, {
+                "phone": _PHONE, "chat_id": "@ch", "message_id": None, "yes": True,
+            })
+        assert "Error unpinning" in capsys.readouterr().err
 
 
 class TestCliParticipants:
@@ -516,17 +535,19 @@ class TestCliParticipants:
     def test_participants_error(self, cli_db, capsys):
         pool, client = _mock_pool()
         client.get_entity = AsyncMock(side_effect=RuntimeError("err"))
-        _run_cli("participants", pool, cli_db, {
-            "phone": _PHONE, "chat_id": "@ch", "limit": 200, "search": "",
-        })
-        assert "Error fetching participants" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("participants", pool, cli_db, {
+                "phone": _PHONE, "chat_id": "@ch", "limit": 200, "search": "",
+            })
+        assert "Error fetching participants" in capsys.readouterr().err
 
     def test_participants_no_accounts(self, cli_db, capsys):
         pool, _ = _mock_pool(clients={})
-        _run_cli("participants", pool, cli_db, {
-            "phone": None, "chat_id": "@ch", "limit": 200, "search": "",
-        })
-        assert "No connected accounts." in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("participants", pool, cli_db, {
+                "phone": None, "chat_id": "@ch", "limit": 200, "search": "",
+            })
+        assert "No connected accounts." in capsys.readouterr().err
 
 
 class TestCliRead:
@@ -589,10 +610,11 @@ class TestCliRead:
 
     def test_read_no_accounts(self, cli_db, capsys):
         pool, _ = _mock_pool(clients={})
-        _run_cli("read", pool, cli_db, {
-            "phone": None, "chat_id": "@ch", "limit": 50, "offset_id": 0, "format": "text",
-        })
-        assert "No connected accounts." in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("read", pool, cli_db, {
+                "phone": None, "chat_id": "@ch", "limit": 50, "offset_id": 0, "format": "text",
+            })
+        assert "No connected accounts." in capsys.readouterr().err
 
     def test_read_error(self, cli_db, capsys):
         from tg_agent.telegram.auth import TelegramAuth
@@ -600,10 +622,11 @@ class TestCliRead:
         pool, client = _mock_pool()
         pool._auth = TelegramAuth(12345, "fakehash")
         client.get_entity = AsyncMock(side_effect=RuntimeError("boom"))
-        _run_cli("read", pool, cli_db, {
-            "phone": _PHONE, "chat_id": "@ch", "limit": 50, "offset_id": 0, "format": "text",
-        })
-        assert "Error reading history" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("read", pool, cli_db, {
+                "phone": _PHONE, "chat_id": "@ch", "limit": 50, "offset_id": 0, "format": "text",
+            })
+        assert "Error reading history" in capsys.readouterr().err
 
 
 class TestCliEditAdmin:
@@ -629,10 +652,11 @@ class TestCliEditAdmin:
     def test_edit_admin_error(self, cli_db, capsys):
         pool, client = _mock_pool()
         client.get_entity = AsyncMock(side_effect=RuntimeError("err"))
-        _run_cli("edit-admin", pool, cli_db, {
-            "phone": _PHONE, "chat_id": "@ch", "user_id": "@u", "is_admin": True, "title": None, "yes": True,
-        })
-        assert "Error editing admin" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("edit-admin", pool, cli_db, {
+                "phone": _PHONE, "chat_id": "@ch", "user_id": "@u", "is_admin": True, "title": None, "yes": True,
+            })
+        assert "Error editing admin" in capsys.readouterr().err
 
 
 class TestCliEditPermissions:
@@ -650,11 +674,12 @@ class TestCliEditPermissions:
 
     def test_edit_permissions_no_flags(self, cli_db, capsys):
         pool, _ = _mock_pool()
-        _run_cli("edit-permissions", pool, cli_db, {
-            "phone": _PHONE, "chat_id": "@ch", "user_id": "@u",
-            "send_messages": None, "send_media": None, "until_date": None, "yes": True,
-        })
-        assert "specify at least one flag" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("edit-permissions", pool, cli_db, {
+                "phone": _PHONE, "chat_id": "@ch", "user_id": "@u",
+                "send_messages": None, "send_media": None, "until_date": None, "yes": True,
+            })
+        assert "specify at least one flag" in capsys.readouterr().err
 
     def test_edit_permissions_with_until_date(self, cli_db, capsys):
         pool, client = _mock_pool()
@@ -669,11 +694,12 @@ class TestCliEditPermissions:
     def test_edit_permissions_error(self, cli_db, capsys):
         pool, client = _mock_pool()
         client.get_entity = AsyncMock(side_effect=RuntimeError("err"))
-        _run_cli("edit-permissions", pool, cli_db, {
-            "phone": _PHONE, "chat_id": "@ch", "user_id": "@u",
-            "send_messages": "true", "send_media": None, "until_date": None, "yes": True,
-        })
-        assert "Error editing permissions" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("edit-permissions", pool, cli_db, {
+                "phone": _PHONE, "chat_id": "@ch", "user_id": "@u",
+                "send_messages": "true", "send_media": None, "until_date": None, "yes": True,
+            })
+        assert "Error editing permissions" in capsys.readouterr().err
 
 
 class TestCliKick:
@@ -699,10 +725,11 @@ class TestCliKick:
     def test_kick_error(self, cli_db, capsys):
         pool, client = _mock_pool()
         client.get_entity = AsyncMock(side_effect=RuntimeError("err"))
-        _run_cli("kick", pool, cli_db, {
-            "phone": _PHONE, "chat_id": "@ch", "user_id": "@u", "yes": True,
-        })
-        assert "Error kicking" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("kick", pool, cli_db, {
+                "phone": _PHONE, "chat_id": "@ch", "user_id": "@u", "yes": True,
+            })
+        assert "Error kicking" in capsys.readouterr().err
 
 
 class TestCliArchiveUnarchiveMarkRead:
@@ -718,19 +745,22 @@ class TestCliArchiveUnarchiveMarkRead:
     def test_archive_error(self, cli_db, capsys):
         pool, client = _mock_pool()
         client.get_entity = AsyncMock(side_effect=RuntimeError("err"))
-        _run_cli("archive", pool, cli_db, {"phone": _PHONE, "chat_id": "@ch"})
-        assert "Error archiving" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("archive", pool, cli_db, {"phone": _PHONE, "chat_id": "@ch"})
+        assert "Error archiving" in capsys.readouterr().err
 
     def test_archive_no_accounts(self, cli_db, capsys):
         pool, _ = _mock_pool(clients={})
-        _run_cli("archive", pool, cli_db, {"phone": None, "chat_id": "@ch"})
-        assert "No connected accounts." in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("archive", pool, cli_db, {"phone": None, "chat_id": "@ch"})
+        assert "No connected accounts." in capsys.readouterr().err
 
     def test_archive_client_unavailable(self, cli_db, capsys):
         pool, _ = _mock_pool()
         pool.get_native_client_by_phone = AsyncMock(return_value=None)
-        _run_cli("archive", pool, cli_db, {"phone": _PHONE, "chat_id": "@ch"})
-        assert "unavailable" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("archive", pool, cli_db, {"phone": _PHONE, "chat_id": "@ch"})
+        assert "unavailable" in capsys.readouterr().err
 
     def test_unarchive_ok(self, cli_db, capsys):
         pool, client = _mock_pool()
@@ -742,8 +772,9 @@ class TestCliArchiveUnarchiveMarkRead:
     def test_unarchive_error(self, cli_db, capsys):
         pool, client = _mock_pool()
         client.get_entity = AsyncMock(side_effect=RuntimeError("err"))
-        _run_cli("unarchive", pool, cli_db, {"phone": _PHONE, "chat_id": "@ch"})
-        assert "Error unarchiving" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("unarchive", pool, cli_db, {"phone": _PHONE, "chat_id": "@ch"})
+        assert "Error unarchiving" in capsys.readouterr().err
 
     def test_mark_read_ok(self, cli_db, capsys):
         pool, client = _mock_pool()
@@ -762,8 +793,9 @@ class TestCliArchiveUnarchiveMarkRead:
     def test_mark_read_error(self, cli_db, capsys):
         pool, client = _mock_pool()
         client.get_entity = AsyncMock(side_effect=RuntimeError("err"))
-        _run_cli("mark-read", pool, cli_db, {"phone": _PHONE, "chat_id": "@ch", "max_id": None})
-        assert "Error marking" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("mark-read", pool, cli_db, {"phone": _PHONE, "chat_id": "@ch", "max_id": None})
+        assert "Error marking" in capsys.readouterr().err
 
     def test_react_missing_emoji_exits_nonzero(self, cli_db, capsys):
         pool, _ = _mock_pool()
@@ -846,18 +878,20 @@ class TestCliDownloadMedia:
             yield  # make it an async generator
 
         client.iter_messages = MagicMock(return_value=_iter_messages(None, None))
-        _run_cli("download-media", pool, cli_db, {
-            "phone": _PHONE, "chat_id": "@ch", "message_id": 1, "output_dir": "/tmp",
-        })
-        assert "not found" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("download-media", pool, cli_db, {
+                "phone": _PHONE, "chat_id": "@ch", "message_id": 1, "output_dir": "/tmp",
+            })
+        assert "not found" in capsys.readouterr().err
 
     def test_download_media_error(self, cli_db, capsys):
         pool, client = _mock_pool()
         client.get_entity = AsyncMock(side_effect=RuntimeError("err"))
-        _run_cli("download-media", pool, cli_db, {
-            "phone": _PHONE, "chat_id": "@ch", "message_id": 1, "output_dir": "/tmp",
-        })
-        assert "Error downloading media" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("download-media", pool, cli_db, {
+                "phone": _PHONE, "chat_id": "@ch", "message_id": 1, "output_dir": "/tmp",
+            })
+        assert "Error downloading media" in capsys.readouterr().err
 
 
 class TestCliBroadcastStats:
@@ -887,17 +921,19 @@ class TestCliBroadcastStats:
     def test_broadcast_stats_error(self, cli_db, capsys):
         pool, client = _mock_pool()
         client.get_entity = AsyncMock(side_effect=RuntimeError("err"))
-        _run_cli("broadcast-stats", pool, cli_db, {
-            "phone": _PHONE, "chat_id": "@ch",
-        })
-        assert "Error fetching broadcast stats" in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("broadcast-stats", pool, cli_db, {
+                "phone": _PHONE, "chat_id": "@ch",
+            })
+        assert "Error fetching broadcast stats" in capsys.readouterr().err
 
     def test_broadcast_stats_no_accounts(self, cli_db, capsys):
         pool, _ = _mock_pool(clients={})
-        _run_cli("broadcast-stats", pool, cli_db, {
-            "phone": None, "chat_id": "@ch",
-        })
-        assert "No connected accounts." in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("broadcast-stats", pool, cli_db, {
+                "phone": None, "chat_id": "@ch",
+            })
+        assert "No connected accounts." in capsys.readouterr().err
 
 
 class TestCliLeave:
@@ -949,10 +985,11 @@ class TestCliLeave:
 
     def test_leave_no_accounts(self, cli_db, capsys):
         pool, _ = _mock_pool(clients={})
-        _run_cli("leave", pool, cli_db, {
-            "phone": None, "dialog_ids": ["1"], "yes": True,
-        })
-        assert "No connected accounts." in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("leave", pool, cli_db, {
+                "phone": None, "dialog_ids": ["1"], "yes": True,
+            })
+        assert "No connected accounts." in capsys.readouterr().err
 
 
 class TestCliCreateChannel:
@@ -995,10 +1032,11 @@ class TestCliCreateChannel:
 
     def test_create_channel_no_accounts(self, cli_db, capsys):
         pool, _ = _mock_pool(clients={})
-        _run_cli("create-channel", pool, cli_db, {
-            "phone": None, "title": "Ch", "about": "", "username": "",
-        })
-        assert "No connected accounts." in capsys.readouterr().out
+        with pytest.raises(typer.Exit):
+            _run_cli("create-channel", pool, cli_db, {
+                "phone": None, "title": "Ch", "about": "", "username": "",
+            })
+        assert "No connected accounts." in capsys.readouterr().err
 
 
 # =========================================================================

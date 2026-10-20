@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import typer
 
 from tg_agent.config import AppConfig
 from tg_agent.database import Database
@@ -150,15 +151,19 @@ class TestMyTelegramActions:
     def test_list_no_accounts(self, capsys):
         pool = _make_pool_with_clients()
         pool.clients = {}
-        self._run_action("list", pool=pool)
-        out = capsys.readouterr().out
-        assert "No connected" in out
+        with pytest.raises(typer.Exit):
+                self._run_action("list", pool=pool)
+        err = capsys.readouterr().err
+
+        assert "No connected" in err
 
     def test_list_phone_not_connected(self, capsys):
         pool = _make_pool_with_clients(["+2222"])
-        self._run_action("list", pool=pool, extra_args={"phone": "+9999"})
-        out = capsys.readouterr().out
-        assert "not connected" in out
+        with pytest.raises(typer.Exit):
+            self._run_action("list", pool=pool, extra_args={"phone": "+9999"})
+        err = capsys.readouterr().err
+
+        assert "not connected" in err
 
     def test_topics_action(self, capsys):
         pool = _make_pool_with_clients()
@@ -190,9 +195,11 @@ class TestMyTelegramActions:
     def test_send_no_client(self, capsys):
         pool = _make_pool_with_clients()
         pool.get_native_client_by_phone = AsyncMock(return_value=None)
-        self._run_action("send", pool=pool, extra_args={"recipient": "@user", "text": "hello"})
-        out = capsys.readouterr().out
-        assert "unavailable" in out.lower()
+        with pytest.raises(typer.Exit):
+            self._run_action("send", pool=pool, extra_args={"recipient": "@user", "text": "hello"})
+        err = capsys.readouterr().err
+
+        assert "unavailable" in err.lower()
 
     def test_forward_action(self, capsys):
         pool = _make_pool_with_clients()
@@ -351,12 +358,14 @@ class TestMyTelegramActions:
             service_cls.return_value.transcribe_voice = AsyncMock(
                 side_effect=RuntimeError("boom")
             )
-            self._run_action(
-                "transcribe", pool=pool,
-                extra_args={"chat_id": "@ch", "message_id": 42, "engine": "groq"},
-            )
-        out = capsys.readouterr().out
-        assert "Error transcribing" in out
+            with pytest.raises(typer.Exit):
+                self._run_action(
+                    "transcribe", pool=pool,
+                    extra_args={"chat_id": "@ch", "message_id": 42, "engine": "groq"},
+                )
+        err = capsys.readouterr().err
+
+        assert "Error transcribing" in err
 
     def test_transcribe_action_engine_defaults_from_env(self, capsys, monkeypatch):
         monkeypatch.setenv("TELEGRAM_TRANSCRIBE_ENGINE", "whisper")
@@ -458,15 +467,16 @@ class TestMyTelegramActions:
         pool = _make_pool_with_clients()
         mock_client = AsyncMock()
         pool.get_native_client_by_phone = AsyncMock(return_value=(mock_client, "+1111"))
-        self._run_action(
-            "edit-permissions", pool=pool,
-            extra_args={
-                "chat_id": "@ch", "user_id": "@u",
-                "send_messages": None, "send_media": None, "until_date": None,
-            },
-        )
-        out = capsys.readouterr().out
-        assert "specify" in out.lower() or "error" in out.lower()
+        with pytest.raises(typer.Exit):
+                self._run_action(
+                    "edit-permissions", pool=pool,
+                    extra_args={
+                        "chat_id": "@ch", "user_id": "@u",
+                        "send_messages": None, "send_media": None, "until_date": None,
+                    },
+                )
+        err = capsys.readouterr().err
+        assert "specify" in err.lower() or "error" in err.lower()
 
     def test_kick_action(self, capsys):
         pool = _make_pool_with_clients()
@@ -690,9 +700,10 @@ class TestMyTelegramNoAccounts:
         pool.disconnect_all = AsyncMock()
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action("delete-message", pool=pool, db=db,
-                         extra_args={"chat_id": "@ch", "message_ids": ["1"]})
-        assert "no connected" in capsys.readouterr().out.lower()
+        with pytest.raises(typer.Exit):
+                self._run_action("delete-message", pool=pool, db=db,
+                                 extra_args={"chat_id": "@ch", "message_ids": ["1"]})
+        assert "no connected" in capsys.readouterr().err.lower()
 
     def test_pin_no_accounts(self, capsys):
         pool = MagicMock()
@@ -700,9 +711,10 @@ class TestMyTelegramNoAccounts:
         pool.disconnect_all = AsyncMock()
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action("pin-message", pool=pool, db=db,
-                         extra_args={"chat_id": "@ch", "message_id": 1})
-        assert "no connected" in capsys.readouterr().out.lower()
+        with pytest.raises(typer.Exit):
+                self._run_action("pin-message", pool=pool, db=db,
+                                 extra_args={"chat_id": "@ch", "message_id": 1})
+        assert "no connected" in capsys.readouterr().err.lower()
 
     def test_unpin_no_accounts(self, capsys):
         pool = MagicMock()
@@ -710,9 +722,10 @@ class TestMyTelegramNoAccounts:
         pool.disconnect_all = AsyncMock()
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action("unpin-message", pool=pool, db=db,
-                         extra_args={"chat_id": "@ch", "message_id": 1})
-        assert "no connected" in capsys.readouterr().out.lower()
+        with pytest.raises(typer.Exit):
+                self._run_action("unpin-message", pool=pool, db=db,
+                                 extra_args={"chat_id": "@ch", "message_id": 1})
+        assert "no connected" in capsys.readouterr().err.lower()
 
     def test_download_no_accounts(self, capsys):
         pool = MagicMock()
@@ -720,9 +733,10 @@ class TestMyTelegramNoAccounts:
         pool.disconnect_all = AsyncMock()
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action("download-media", pool=pool, db=db,
-                         extra_args={"chat_id": "@ch", "message_id": 1})
-        assert "no connected" in capsys.readouterr().out.lower()
+        with pytest.raises(typer.Exit):
+                self._run_action("download-media", pool=pool, db=db,
+                                 extra_args={"chat_id": "@ch", "message_id": 1})
+        assert "no connected" in capsys.readouterr().err.lower()
 
     def test_participants_no_accounts(self, capsys):
         pool = MagicMock()
@@ -730,9 +744,10 @@ class TestMyTelegramNoAccounts:
         pool.disconnect_all = AsyncMock()
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action("participants", pool=pool, db=db,
-                         extra_args={"chat_id": "@ch", "limit": 10, "search": ""})
-        assert "no connected" in capsys.readouterr().out.lower()
+        with pytest.raises(typer.Exit):
+                self._run_action("participants", pool=pool, db=db,
+                                 extra_args={"chat_id": "@ch", "limit": 10, "search": ""})
+        assert "no connected" in capsys.readouterr().err.lower()
 
     def test_edit_admin_no_accounts(self, capsys):
         pool = MagicMock()
@@ -740,9 +755,10 @@ class TestMyTelegramNoAccounts:
         pool.disconnect_all = AsyncMock()
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action("edit-admin", pool=pool, db=db,
-                         extra_args={"chat_id": "@ch", "user_id": "@u", "is_admin": True, "title": None})
-        assert "no connected" in capsys.readouterr().out.lower()
+        with pytest.raises(typer.Exit):
+                self._run_action("edit-admin", pool=pool, db=db,
+                                 extra_args={"chat_id": "@ch", "user_id": "@u", "is_admin": True, "title": None})
+        assert "no connected" in capsys.readouterr().err.lower()
 
     def test_edit_permissions_no_accounts(self, capsys):
         pool = MagicMock()
@@ -750,12 +766,13 @@ class TestMyTelegramNoAccounts:
         pool.disconnect_all = AsyncMock()
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action("edit-permissions", pool=pool, db=db,
-                         extra_args={
-                             "chat_id": "@ch", "user_id": "@u",
-                             "send_messages": False, "send_media": None, "until_date": None,
-                         })
-        assert "no connected" in capsys.readouterr().out.lower()
+        with pytest.raises(typer.Exit):
+                self._run_action("edit-permissions", pool=pool, db=db,
+                                 extra_args={
+                                     "chat_id": "@ch", "user_id": "@u",
+                                     "send_messages": False, "send_media": None, "until_date": None,
+                                 })
+        assert "no connected" in capsys.readouterr().err.lower()
 
     def test_kick_no_accounts(self, capsys):
         pool = MagicMock()
@@ -763,9 +780,10 @@ class TestMyTelegramNoAccounts:
         pool.disconnect_all = AsyncMock()
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action("kick", pool=pool, db=db,
-                         extra_args={"chat_id": "@ch", "user_id": "@u"})
-        assert "no connected" in capsys.readouterr().out.lower()
+        with pytest.raises(typer.Exit):
+                self._run_action("kick", pool=pool, db=db,
+                                 extra_args={"chat_id": "@ch", "user_id": "@u"})
+        assert "no connected" in capsys.readouterr().err.lower()
 
     def test_broadcast_stats_no_accounts(self, capsys):
         pool = MagicMock()
@@ -773,9 +791,10 @@ class TestMyTelegramNoAccounts:
         pool.disconnect_all = AsyncMock()
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action("broadcast-stats", pool=pool, db=db,
-                         extra_args={"chat_id": "@ch"})
-        assert "no connected" in capsys.readouterr().out.lower()
+        with pytest.raises(typer.Exit):
+                self._run_action("broadcast-stats", pool=pool, db=db,
+                                 extra_args={"chat_id": "@ch"})
+        assert "no connected" in capsys.readouterr().err.lower()
 
     def test_archive_no_accounts(self, capsys):
         pool = MagicMock()
@@ -783,9 +802,10 @@ class TestMyTelegramNoAccounts:
         pool.disconnect_all = AsyncMock()
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action("archive", pool=pool, db=db,
-                         extra_args={"chat_id": "@ch"})
-        assert "no connected" in capsys.readouterr().out.lower()
+        with pytest.raises(typer.Exit):
+                self._run_action("archive", pool=pool, db=db,
+                                 extra_args={"chat_id": "@ch"})
+        assert "no connected" in capsys.readouterr().err.lower()
 
     def test_unarchive_no_accounts(self, capsys):
         pool = MagicMock()
@@ -793,9 +813,10 @@ class TestMyTelegramNoAccounts:
         pool.disconnect_all = AsyncMock()
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action("unarchive", pool=pool, db=db,
-                         extra_args={"chat_id": "@ch"})
-        assert "no connected" in capsys.readouterr().out.lower()
+        with pytest.raises(typer.Exit):
+                self._run_action("unarchive", pool=pool, db=db,
+                                 extra_args={"chat_id": "@ch"})
+        assert "no connected" in capsys.readouterr().err.lower()
 
     def test_mark_read_no_accounts(self, capsys):
         pool = MagicMock()
@@ -803,9 +824,10 @@ class TestMyTelegramNoAccounts:
         pool.disconnect_all = AsyncMock()
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action("mark-read", pool=pool, db=db,
-                         extra_args={"chat_id": "@ch", "max_id": None})
-        assert "no connected" in capsys.readouterr().out.lower()
+        with pytest.raises(typer.Exit):
+                self._run_action("mark-read", pool=pool, db=db,
+                                 extra_args={"chat_id": "@ch", "max_id": None})
+        assert "no connected" in capsys.readouterr().err.lower()
 
 
 # ===========================================================================
@@ -859,201 +881,229 @@ class TestMyTelegramMoreBranches:
         pool = _make_pool_with_clients(["+2222"])  # only +2222 connected
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action(
-            "forward", pool=pool, db=db,
-            extra_args={
-                "phone": "+1111",  # not in pool.clients
-                "from_chat": "@a", "to_chat": "@b",
-                "message_ids": ["1"], "yes": True,
-            },
-        )
-        out = capsys.readouterr().out
-        assert "not connected" in out.lower()
+        with pytest.raises(typer.Exit):
+            self._run_action(
+                "forward", pool=pool, db=db,
+                extra_args={
+                    "phone": "+1111",  # not in pool.clients
+                    "from_chat": "@a", "to_chat": "@b",
+                    "message_ids": ["1"], "yes": True,
+                },
+            )
+        err = capsys.readouterr().err
+
+        assert "not connected" in err.lower()
 
     def test_edit_message_phone_not_connected(self, capsys):
         pool = _make_pool_with_clients(["+2222"])
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action(
-            "edit-message", pool=pool, db=db,
-            extra_args={
-                "phone": "+1111",
-                "chat_id": "@ch", "message_id": 1, "text": "x", "yes": True,
-            },
-        )
-        out = capsys.readouterr().out
-        assert "not connected" in out.lower()
+        with pytest.raises(typer.Exit):
+            self._run_action(
+                "edit-message", pool=pool, db=db,
+                extra_args={
+                    "phone": "+1111",
+                    "chat_id": "@ch", "message_id": 1, "text": "x", "yes": True,
+                },
+            )
+        err = capsys.readouterr().err
+
+        assert "not connected" in err.lower()
 
     def test_delete_message_phone_not_connected(self, capsys):
         pool = _make_pool_with_clients(["+2222"])
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action(
-            "delete-message", pool=pool, db=db,
-            extra_args={
-                "phone": "+1111",
-                "chat_id": "@ch", "message_ids": ["1"], "yes": True,
-            },
-        )
-        out = capsys.readouterr().out
-        assert "not connected" in out.lower()
+        with pytest.raises(typer.Exit):
+            self._run_action(
+                "delete-message", pool=pool, db=db,
+                extra_args={
+                    "phone": "+1111",
+                    "chat_id": "@ch", "message_ids": ["1"], "yes": True,
+                },
+            )
+        err = capsys.readouterr().err
+
+        assert "not connected" in err.lower()
 
     def test_pin_message_phone_not_connected(self, capsys):
         pool = _make_pool_with_clients(["+2222"])
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action(
-            "pin-message", pool=pool, db=db,
-            extra_args={
-                "phone": "+1111",
-                "chat_id": "@ch", "message_id": 1, "yes": True,
-            },
-        )
-        out = capsys.readouterr().out
-        assert "not connected" in out.lower()
+        with pytest.raises(typer.Exit):
+            self._run_action(
+                "pin-message", pool=pool, db=db,
+                extra_args={
+                    "phone": "+1111",
+                    "chat_id": "@ch", "message_id": 1, "yes": True,
+                },
+            )
+        err = capsys.readouterr().err
+
+        assert "not connected" in err.lower()
 
     def test_unpin_message_phone_not_connected(self, capsys):
         pool = _make_pool_with_clients(["+2222"])
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action(
-            "unpin-message", pool=pool, db=db,
-            extra_args={
-                "phone": "+1111",
-                "chat_id": "@ch", "message_id": 1, "yes": True,
-            },
-        )
-        out = capsys.readouterr().out
-        assert "not connected" in out.lower()
+        with pytest.raises(typer.Exit):
+            self._run_action(
+                "unpin-message", pool=pool, db=db,
+                extra_args={
+                    "phone": "+1111",
+                    "chat_id": "@ch", "message_id": 1, "yes": True,
+                },
+            )
+        err = capsys.readouterr().err
+
+        assert "not connected" in err.lower()
 
     def test_download_media_phone_not_connected(self, capsys):
         pool = _make_pool_with_clients(["+2222"])
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action(
-            "download-media", pool=pool, db=db,
-            extra_args={
-                "phone": "+1111",
-                "chat_id": "@ch", "message_id": 1, "yes": True,
-            },
-        )
-        out = capsys.readouterr().out
-        assert "not connected" in out.lower()
+        with pytest.raises(typer.Exit):
+            self._run_action(
+                "download-media", pool=pool, db=db,
+                extra_args={
+                    "phone": "+1111",
+                    "chat_id": "@ch", "message_id": 1, "yes": True,
+                },
+            )
+        err = capsys.readouterr().err
+
+        assert "not connected" in err.lower()
 
     def test_participants_phone_not_connected(self, capsys):
         pool = _make_pool_with_clients(["+2222"])
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action(
-            "participants", pool=pool, db=db,
-            extra_args={
-                "phone": "+1111",
-                "chat_id": "@ch", "limit": 10, "search": "", "yes": True,
-            },
-        )
-        out = capsys.readouterr().out
-        assert "not connected" in out.lower()
+        with pytest.raises(typer.Exit):
+            self._run_action(
+                "participants", pool=pool, db=db,
+                extra_args={
+                    "phone": "+1111",
+                    "chat_id": "@ch", "limit": 10, "search": "", "yes": True,
+                },
+            )
+        err = capsys.readouterr().err
+
+        assert "not connected" in err.lower()
 
     def test_edit_admin_phone_not_connected(self, capsys):
         pool = _make_pool_with_clients(["+2222"])
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action(
-            "edit-admin", pool=pool, db=db,
-            extra_args={
-                "phone": "+1111",
-                "chat_id": "@ch", "user_id": "@u",
-                "is_admin": True, "title": None, "yes": True,
-            },
-        )
-        out = capsys.readouterr().out
-        assert "not connected" in out.lower()
+        with pytest.raises(typer.Exit):
+            self._run_action(
+                "edit-admin", pool=pool, db=db,
+                extra_args={
+                    "phone": "+1111",
+                    "chat_id": "@ch", "user_id": "@u",
+                    "is_admin": True, "title": None, "yes": True,
+                },
+            )
+        err = capsys.readouterr().err
+
+        assert "not connected" in err.lower()
 
     def test_edit_permissions_phone_not_connected(self, capsys):
         pool = _make_pool_with_clients(["+2222"])
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action(
-            "edit-permissions", pool=pool, db=db,
-            extra_args={
-                "phone": "+1111",
-                "chat_id": "@ch", "user_id": "@u",
-                "send_messages": False, "send_media": None,
-                "until_date": None, "yes": True,
-            },
-        )
-        out = capsys.readouterr().out
-        assert "not connected" in out.lower()
+        with pytest.raises(typer.Exit):
+            self._run_action(
+                "edit-permissions", pool=pool, db=db,
+                extra_args={
+                    "phone": "+1111",
+                    "chat_id": "@ch", "user_id": "@u",
+                    "send_messages": False, "send_media": None,
+                    "until_date": None, "yes": True,
+                },
+            )
+        err = capsys.readouterr().err
+
+        assert "not connected" in err.lower()
 
     def test_kick_phone_not_connected(self, capsys):
         pool = _make_pool_with_clients(["+2222"])
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action(
-            "kick", pool=pool, db=db,
-            extra_args={
-                "phone": "+1111",
-                "chat_id": "@ch", "user_id": "@u", "yes": True,
-            },
-        )
-        out = capsys.readouterr().out
-        assert "not connected" in out.lower()
+        with pytest.raises(typer.Exit):
+            self._run_action(
+                "kick", pool=pool, db=db,
+                extra_args={
+                    "phone": "+1111",
+                    "chat_id": "@ch", "user_id": "@u", "yes": True,
+                },
+            )
+        err = capsys.readouterr().err
+
+        assert "not connected" in err.lower()
 
     def test_broadcast_stats_phone_not_connected(self, capsys):
         pool = _make_pool_with_clients(["+2222"])
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action(
-            "broadcast-stats", pool=pool, db=db,
-            extra_args={
-                "phone": "+1111",
-                "chat_id": "@ch", "yes": True,
-            },
-        )
-        out = capsys.readouterr().out
-        assert "not connected" in out.lower()
+        with pytest.raises(typer.Exit):
+            self._run_action(
+                "broadcast-stats", pool=pool, db=db,
+                extra_args={
+                    "phone": "+1111",
+                    "chat_id": "@ch", "yes": True,
+                },
+            )
+        err = capsys.readouterr().err
+
+        assert "not connected" in err.lower()
 
     def test_archive_phone_not_connected(self, capsys):
         pool = _make_pool_with_clients(["+2222"])
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action(
-            "archive", pool=pool, db=db,
-            extra_args={
-                "phone": "+1111",
-                "chat_id": "@ch", "yes": True,
-            },
-        )
-        out = capsys.readouterr().out
-        assert "not connected" in out.lower()
+        with pytest.raises(typer.Exit):
+            self._run_action(
+                "archive", pool=pool, db=db,
+                extra_args={
+                    "phone": "+1111",
+                    "chat_id": "@ch", "yes": True,
+                },
+            )
+        err = capsys.readouterr().err
+
+        assert "not connected" in err.lower()
 
     def test_unarchive_phone_not_connected(self, capsys):
         pool = _make_pool_with_clients(["+2222"])
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action(
-            "unarchive", pool=pool, db=db,
-            extra_args={
-                "phone": "+1111",
-                "chat_id": "@ch", "yes": True,
-            },
-        )
-        out = capsys.readouterr().out
-        assert "not connected" in out.lower()
+        with pytest.raises(typer.Exit):
+            self._run_action(
+                "unarchive", pool=pool, db=db,
+                extra_args={
+                    "phone": "+1111",
+                    "chat_id": "@ch", "yes": True,
+                },
+            )
+        err = capsys.readouterr().err
+
+        assert "not connected" in err.lower()
 
     def test_mark_read_phone_not_connected(self, capsys):
         pool = _make_pool_with_clients(["+2222"])
         db = _make_mock_db()
         db.close = AsyncMock()
-        self._run_action(
-            "mark-read", pool=pool, db=db,
-            extra_args={
-                "phone": "+1111",
-                "chat_id": "@ch", "max_id": None, "yes": True,
-            },
-        )
-        out = capsys.readouterr().out
-        assert "not connected" in out.lower()
+        with pytest.raises(typer.Exit):
+            self._run_action(
+                "mark-read", pool=pool, db=db,
+                extra_args={
+                    "phone": "+1111",
+                    "chat_id": "@ch", "max_id": None, "yes": True,
+                },
+            )
+        err = capsys.readouterr().err
+
+        assert "not connected" in err.lower()
 
 
 # ===========================================================================

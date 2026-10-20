@@ -303,16 +303,22 @@ def test_messages_read_live_defaults_to_db_primary(cli_db, capsys):
 
 
 def test_messages_read_live_resolve_failure_names_account_and_hints_phone(cli_db, capsys):
-    """A resolve failure says which account was queried and hints --phone (#1480)."""
+    """A resolve failure says which account was queried and hints --phone (#1480).
+
+    Since #1486 it also fails the process: stderr + non-zero exit.
+    """
     asyncio.run(cli_db.add_account(Account(phone="+90000000009", session_string="b", is_primary=True)))
 
-    pool, out = _run_live(
-        cli_db, "@somedialog", capsys=capsys,
-        resolve_side_effect=ValueError("Cannot find any entity"),
-    )
+    with pytest.raises(typer.Exit) as excinfo:
+        _run_live(
+            cli_db, "@somedialog", capsys=capsys,
+            resolve_side_effect=ValueError("Cannot find any entity"),
+        )
 
-    assert "Cannot resolve '@somedialog' via account +90000000009" in out
-    assert "--phone" in out
+    assert excinfo.value.exit_code == 1
+    err = capsys.readouterr().err
+    assert "Cannot resolve '@somedialog' via account +90000000009" in err
+    assert "--phone" in err
 
 
 def test_messages_read_live_empty_phone_falls_back_to_default(cli_db, capsys):

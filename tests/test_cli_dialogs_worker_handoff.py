@@ -16,6 +16,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import typer
 
 from tests.helpers import cli_ns as _ns
 from tg_agent.cli.commands import dialogs as dialogs_cli
@@ -140,21 +141,24 @@ def test_send_runs_directly_when_serve_is_not_running(cli_db):
     pool = _mock_pool()
     pool.get_native_client_by_phone = AsyncMock(return_value=None)
 
-    init_pool = _run(
-        _ns(
-            dialogs_action="send",
-            phone="+1234567890",
-            recipient="100111",
-            text="hello",
-            yes=True,
-            direct=False,
-        ),
-        cli_db,
-        serve_running=False,
-        pool=pool,
-    )
+    with pytest.raises(typer.Exit):
+        _run(
+            _ns(
+                dialogs_action="send",
+                phone="+1234567890",
+                recipient="100111",
+                text="hello",
+                yes=True,
+                direct=False,
+            ),
+            cli_db,
+            serve_running=False,
+            pool=pool,
+        )
 
-    init_pool.assert_called_once()
+    # The pool was built and torn down through the normal lifecycle (#1486:
+    # the unavailable-client error now exits non-zero after the teardown).
+    pool.disconnect_all.assert_awaited_once()
     assert _commands(cli_db) == []
 
 
@@ -163,21 +167,22 @@ def test_direct_flag_bypasses_the_queue(cli_db):
     pool = _mock_pool()
     pool.get_native_client_by_phone = AsyncMock(return_value=None)
 
-    init_pool = _run(
-        _ns(
-            dialogs_action="send",
-            phone="+1234567890",
-            recipient="100111",
-            text="hello",
-            yes=True,
-            direct=True,
-        ),
-        cli_db,
-        serve_running=True,
-        pool=pool,
-    )
+    with pytest.raises(typer.Exit):
+        _run(
+            _ns(
+                dialogs_action="send",
+                phone="+1234567890",
+                recipient="100111",
+                text="hello",
+                yes=True,
+                direct=True,
+            ),
+            cli_db,
+            serve_running=True,
+            pool=pool,
+        )
 
-    init_pool.assert_called_once()
+    pool.disconnect_all.assert_awaited_once()
     assert _commands(cli_db) == []
 
 
