@@ -28,12 +28,12 @@ from tg_agent.models import (
 from tg_agent.scheduler.service import SchedulerManager
 from tg_agent.search.ai_search import AISearchEngine
 from tg_agent.search.engine import SearchEngine
+from tg_agent.security import SessionCipher
 from tg_agent.services.agent_provider_service import (
     ProviderConfigService,
     ProviderModelCacheEntry,
     ProviderModelCompatibilityRecord,
 )
-from tg_agent.security import SessionCipher
 from tg_agent.services.embedding_service import EmbeddingService
 from tg_agent.telegram.collector import Collector
 from tg_agent.web.app import create_app
@@ -477,7 +477,7 @@ async def test_settings_save_semantic_persists_values_and_resets_index(client):
     stored_key = await db.get_setting("semantic_embeddings_api_key")
     assert stored_key is not None
     assert stored_key.startswith("enc:v2:")
-    assert SessionCipher("test-session-encryption-key").decrypt(stored_key) == "secret-key"
+    assert SessionCipher("test-encryption-key").decrypt(stored_key) == "secret-key"
     assert await db.get_setting("semantic_embeddings_batch_size") == "32"
     assert await db.get_setting("semantic_last_embedded_id") is None
 

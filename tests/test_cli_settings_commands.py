@@ -175,8 +175,13 @@ def test_semantic_show_current(capsys):
 
 
 def test_semantic_show_api_key_masked(capsys):
-    db = make_cli_db(get_setting=AsyncMock(return_value="sk-secret-key-12345"))
-    db.repos.settings.get_secret = AsyncMock(return_value="sk-secret-key-12345")
+    db = make_cli_db()
+
+    async def _get_setting(key):
+        return "sk-secret-key-12345" if key == "semantic_embeddings_api_key" else None
+
+    db.get_setting = AsyncMock(side_effect=_get_setting)
+    db.repos.settings.get_setting = AsyncMock(side_effect=_get_setting)
     with patch("tg_agent.cli.commands.settings.runtime.init_db", AsyncMock(return_value=(make_cli_config(), db))), \
          patch("asyncio.run", fake_asyncio_run):
         run(_args(settings_action="semantic", provider=None, model=None, api_key=None))

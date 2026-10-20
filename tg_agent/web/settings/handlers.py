@@ -690,7 +690,12 @@ async def handle_save_semantic_search_settings(
     await db.repos.settings.set_setting(EMBEDDINGS_BASE_URL_SETTING, form.base_url)
     await db.repos.settings.set_setting(EMBEDDINGS_BATCH_SIZE_SETTING, str(form.batch_size))
     if form.api_key is not None and form.api_key != CREDENTIALS_MASK:
-        await db.repos.settings.set_setting(EMBEDDINGS_API_KEY_SETTING, form.api_key)
+        # Secret at rest (#1597): encrypted like provider keys; refuse rather
+        # than persist plaintext when SESSION_ENCRYPTION_KEY is not configured.
+        try:
+            await db.repos.settings.set_secret(EMBEDDINGS_API_KEY_SETTING, form.api_key)
+        except RuntimeError:
+            return SettingsFlash(error="encryption_key_required")
     if changed or form.reset_index:
         await db.repos.messages.reset_embeddings_index()
         deps.get_search_engine(request).invalidate_numpy_index()

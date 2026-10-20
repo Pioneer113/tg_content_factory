@@ -1419,6 +1419,7 @@ class TestEmbeddingServiceCoverage:
         search.get_setting = AsyncMock(return_value=None)
         search.settings = MagicMock()
         search.settings.get_setting = AsyncMock(return_value=None)
+        search.settings.get_secret = AsyncMock(return_value=None)
         svc = EmbeddingService(search)
 
         with pytest.raises(RuntimeError, match="unavailable"):
@@ -1434,6 +1435,7 @@ class TestEmbeddingServiceCoverage:
         search.get_setting = AsyncMock(return_value=None)
         search.settings = MagicMock()
         search.settings.get_setting = AsyncMock(return_value=None)
+        search.settings.get_secret = AsyncMock(return_value=None)
         svc = EmbeddingService(search)
 
         with patch.dict("sys.modules", {"langchain": None, "langchain.embeddings": None}):
