@@ -59,19 +59,28 @@ _CATCHUP_DIALOG_TYPES = ("dm", "bot")
 
 
 async def load_dm_catchup_settings(db: Any) -> DmCatchupSettings:
-    """Прочитать настройки догона из settings-таблицы; битый JSON — дефолты."""
+    """Прочитать настройки догона из settings-таблицы.
+
+    Битый JSON — громкая ошибка `DmCatchupSettingsError`, а не тихий откат на
+    дефолты (#1581): тихий фолбэк маскировал бы опечатку оператора режимом
+    `journal_only`. Отсутствие ключа — норма, дефолты.
+    """
     raw = await db.get_setting(DM_CATCHUP_SETTING_KEY)
     if not raw:
         return DmCatchupSettings()
     try:
         return DmCatchupSettings.model_validate_json(raw)
-    except ValidationError:
-        logger.warning(
-            "dm_catchup: некорректная настройка %s (%r), использую дефолты",
-            DM_CATCHUP_SETTING_KEY,
-            raw,
-        )
-        return DmCatchupSettings()
+    except ValidationError as exc:
+        first = exc.errors()[0]
+        raise DmCatchupSettingsError(
+            f"настройка {DM_CATCHUP_SETTING_KEY} не прошла валидацию "
+            f"({len(exc.errors())} ошибок; первая: {first.get('loc')}: "
+            f"{first.get('msg')}); raw={raw[:200]!r}"
+        ) from exc
+
+
+class DmCatchupSettingsError(ValueError):
+    """Настройка догона в settings-таблице не валидируется моделью (#1581)."""
 
 
 def _ensure_aware(dt: datetime) -> datetime:

@@ -372,8 +372,13 @@ def test_cli_send_enqueues_dm_send_reply(cli_db, capsys):
     out = _run_dm_impl(lambda: dm_cli.send_impl("cfg", draft_id=draft_id), cli_db, capsys)
 
     assert f"#{draft_id}" in out
+    # phone в payload (#1581): generic queue log печатает аккаунт, а не '-'.
     assert [(c.command_type, c.payload, c.status) for c in _commands(cli_db)] == [
-        ("dm.send_reply", {"draft_id": draft_id}, TelegramCommandStatus.PENDING)
+        (
+            "dm.send_reply",
+            {"draft_id": draft_id, "phone": "+10000000001"},
+            TelegramCommandStatus.PENDING,
+        )
     ]
 
 
@@ -432,3 +437,105 @@ def test_cli_list_prints_drafts(cli_db, capsys):
 
     out = _run_dm_impl(lambda: dm_cli.list_impl("cfg", status=None, limit=100), cli_db, capsys)
     assert "draft" in out
+
+
+# --------------------------------------------------------------------------- #
+# #1581: черновик разбирает журнальную строку; статус слушателя/догона в CLI
+# --------------------------------------------------------------------------- #
+
+
+def test_cli_create_marks_journal_processed(cli_db, capsys):
+    """dm drafts create — потребитель флага processed: черновик создан → строка
+    журнала разобрана, счётчик unprocessed в статусе слушателя честен."""
+    _reopen(cli_db)
+    asyncio.run(
+        cli_db.repos.incoming_dms.record(
+            IncomingDm(phone="+10000000001", chat_id=555, message_id=7, text="привет")
+        )
+    )
+
+    out = _run_dm_impl(
+        lambda: dm_cli.create_impl(
+            "cfg", incoming_dm_id=1, text="ответ", phone=None, chat_id=None
+        ),
+        cli_db,
+        capsys,
+    )
+    assert "создан" in out
+
+    _reopen(cli_db)
+    assert asyncio.run(cli_db.repos.incoming_dms.count_unprocessed()) == 0
+
+
+def _publish_listener_snapshot(db, *, payload=None):
+    from tg_agent.models import RuntimeSnapshot
+
+    return asyncio.run(
+        db.repos.runtime_snapshots.upsert_snapshot(
+            RuntimeSnapshot(
+                snapshot_type="dm_listener_status",
+                payload=payload
+                or {
+                    "running": True,
+                    "accounts": {
+                        "+10000000001": {
+                            "attached": True,
+                            "updates_received": 3,
+                            "last_update_at": "2026-10-20T12:00:00+00:00",
+                            "seconds_since_update": 1.5,
+                        }
+                    },
+                    "unprocessed": 2,
+                    "timestamp": "2026-10-20T12:00:00+00:00",
+                    "catchup": {
+                        "running": False,
+                        "last_runs": {
+                            "+10000000001": {
+                                "dialogs": 4,
+                                "stored": 2,
+                                "already": 1,
+                                "finished_at": "2026-10-20T11:59:00+00:00",
+                            }
+                        },
+                    },
+                },
+            )
+        )
+    )
+
+
+def test_cli_status_reports_snapshot_and_settings(cli_db, capsys):
+    """dm status показывает реальное состояние: снимок слушателя + эффективные
+    настройки догона (#1581)."""
+    _reopen(cli_db)
+    _publish_listener_snapshot(cli_db)
+    asyncio.run(
+        cli_db.set_setting("dm_catchup", '{"mode": "full", "staleness_sec": 60}')
+    )
+
+    out = _run_dm_impl(lambda: dm_cli.status_impl("cfg"), cli_db, capsys)
+
+    assert "Running: yes" in out
+    assert "Unprocessed: 2" in out
+    assert "+10000000001" in out
+    assert "Mode: full" in out
+    assert "staleness: 60s" in out
+    assert "dialogs=4" in out  # исход последнего прохода догона
+
+
+def test_cli_status_without_snapshot_is_honest(cli_db, capsys):
+    out = _run_dm_impl(lambda: dm_cli.status_impl("cfg"), cli_db, capsys)
+    assert "No dm_listener_status snapshot" in out
+    assert "Mode: journal_only" in out  # настройки читаются и без воркера
+
+
+def test_cli_status_invalid_settings_loud_error(cli_db, capsys):
+    """Битая настройка догона — громкий чистый статус-ошибкой, не молчание."""
+    _reopen(cli_db)
+    asyncio.run(cli_db.set_setting("dm_catchup", "{битый json"))
+
+    with pytest.raises(typer.Exit):
+        _run_dm_impl(lambda: dm_cli.status_impl("cfg"), cli_db, capsys)
+    out = capsys.readouterr().out
+    assert "INVALID" in out
+    assert "dm_catchup" in out

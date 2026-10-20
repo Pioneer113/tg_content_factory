@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
 from telethon.errors import TypeNotFoundError
 from telethon_floodgate import (
     FloodWaitInfo,
@@ -30,7 +31,11 @@ from tg_agent.models import (
     IncomingDm,
 )
 from tg_agent.telegram import dm_catchup
-from tg_agent.telegram.dm_catchup import DmCatchupService, load_dm_catchup_settings
+from tg_agent.telegram.dm_catchup import (
+    DmCatchupService,
+    DmCatchupSettingsError,
+    load_dm_catchup_settings,
+)
 
 
 def _utc(**kwargs) -> datetime:
@@ -648,7 +653,8 @@ async def test_stop_cancels_running_pass(tmp_path, monkeypatch):
 # --- загрузка и приоритет настроек ---
 
 
-async def test_load_settings_defaults_and_corrupt_fallback(tmp_path):
+async def test_load_settings_defaults_and_invalid_raises(tmp_path):
+    """Битый JSON — громкая ошибка, а не тихий откат на дефолты (#1581)."""
     db = await _make_db(tmp_path)
     try:
         assert await load_dm_catchup_settings(db) == DmCatchupSettings()
@@ -661,7 +667,8 @@ async def test_load_settings_defaults_and_corrupt_fallback(tmp_path):
         assert (settings.mode, settings.staleness_sec) == ("full", 60)
 
         await db.set_setting(DM_CATCHUP_SETTING_KEY, "{битый json")
-        assert await load_dm_catchup_settings(db) == DmCatchupSettings()
+        with pytest.raises(DmCatchupSettingsError, match=DM_CATCHUP_SETTING_KEY):
+            await load_dm_catchup_settings(db)
     finally:
         await db.close()
 

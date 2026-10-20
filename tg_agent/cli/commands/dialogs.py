@@ -1007,7 +1007,9 @@ async def _dialogs_queue(args, db, pool) -> None:
                 run_after = cmd.run_after.isoformat() if cmd.run_after else "-"
                 print(
                     f"#{cmd.id} {cmd.command_type} status={cmd.status.value} "
-                    f"phone={payload_phone or '-'} run_after={run_after}"
+                    # «unassigned», а не '-': команда без аккаунта в payload —
+                    # наблюдаемое состояние, а не пустая клетка (#1581).
+                    f"phone={payload_phone or 'unassigned'} run_after={run_after}"
                 )
     elif args.queue_action == "cancel":
         if not _confirm_or_abort(args, f"Cancel queue command #{args.command_id}"):
