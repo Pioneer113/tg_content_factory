@@ -12,12 +12,12 @@ async def sq_handlers(db):
     return _get_tool_handlers(db)
 
 
-async def _add_query(db, query="test query", interval_minutes=30, is_active=True):
+async def _add_query(db, query="test query", interval_minutes=30, is_active=True, is_regex=False):
     """Helper: add a search query via the service and return its id."""
     from tg_agent.services.search_query_service import SearchQueryService
 
     svc = SearchQueryService(db)
-    sq_id = await svc.add(query, interval_minutes=interval_minutes)
+    sq_id = await svc.add(query, interval_minutes=interval_minutes, is_regex=is_regex)
     if not is_active:
         await svc.toggle(sq_id)  # toggle off since created as active
     return sq_id
@@ -228,3 +228,12 @@ class TestRunSearchQueryTool:
         text = _text(result)
         assert "выполнен" in text
         assert "0 совпадений" in text
+
+    @pytest.mark.anyio
+    async def test_run_regex_reports_unavailable_count(self, db, sq_handlers):
+        """A regex query reports its count as unavailable, never a fake 0 (#1607)."""
+        sq_id = await _add_query(db, "(GPT|Claude)", is_regex=True)
+        result = await sq_handlers["run_search_query"]({"sq_id": sq_id})
+        text = _text(result)
+        assert "недоступен" in text
+        assert "0 совпадений" not in text
