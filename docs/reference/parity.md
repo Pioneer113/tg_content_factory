@@ -243,6 +243,23 @@
 | Архивировать | `dialogs archive` | `POST /dialogs/archive` | `archive_chat` |
 | Разархивировать | `dialogs unarchive` | `POST /dialogs/unarchive` | `unarchive_chat` |
 
+## DM-цикл (входящие)
+
+| Операция | CLI | Web Endpoint | Agent Tool |
+|----------|-----|-------------|------------|
+| Журнал входящих (список/запись) | `dm journal list` | `GET /dms/api/incoming`, `GET /dms/api/incoming/{id}` | `list_incoming_dms`, `get_incoming_dm` |
+| Список черновиков | `dm drafts list` | `GET /dms` | `list_dm_drafts` |
+| Создать черновик | `dm drafts create` | *исключение: CLI/воркер-only (#1579)* | `create_dm_draft` |
+| Одобрить черновик | `dm drafts approve` | `POST /dms/api/drafts/{id}/approve` | `approve_dm_draft` |
+| Отклонить черновик | `dm drafts reject` | `POST /dms/api/drafts/{id}/reject` | `reject_dm_draft` |
+| Отправить черновик | `dm drafts send` | *исключение: worker-only очередь* | *исключение: отправка вне tool-контракта* |
+| Архив переписки | `dm archive list` | *исключение: только CLI/agent* | `read_dm_archive` |
+
+> **Приватность (#1580).** Журнал и архив — личная переписка: tool-ответы и
+> CLI-вывод не логируются, телефоны/usernames не попадают во внешние артефакты
+> (issue/PR/коммиты). Отправка ответа — всегда отдельный явный шаг очереди
+> воркера (`dm drafts send` → `dm.send_reply`), апрув сам ничего не отправляет.
+
 ## Фото-загрузчик
 
 | Операция | CLI | Web Endpoint | Agent Tool |
