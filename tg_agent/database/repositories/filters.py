@@ -257,6 +257,19 @@ _SQL_FORWARD_SHARE_SAMPLED = """
     FROM channels ch
 """
 
+# «Массовый постинг» (#1571): count сообщений за последние 24ч. Channels-driven
+# — в карту входят и каналы с нулём за сутки: они участвуют в P95-распределении.
+# Окно — strftime-литерал (дубль паттерна get_err24_data): messages.date хранится
+# как ISO с '+00:00', строка datetime('now') с пробелом сравнивалась бы неверно.
+_SQL_VOLUME_24H = """
+    SELECT
+        ch.channel_id AS channel_id,
+        (SELECT COUNT(*) FROM messages m
+         WHERE m.channel_id = ch.channel_id
+           AND m.date >= strftime('%Y-%m-%dT%H:%M:%f+00:00', 'now', '-1 day')) AS cnt
+    FROM channels ch
+"""
+
 if TYPE_CHECKING:
     from tg_agent.database.facade import Database
 
@@ -493,6 +506,21 @@ class FilterRepository:
         rows = await cur.fetchall()
         return {row["channel_id"]: (row["total"], row["fwd"] or 0) for row in rows}
 
+    async def fetch_volume_map(self, channel_id: int | None = None) -> dict[int, int]:
+        """Карта `channel_id → сообщений за последние 24ч` (#1571, high_volume).
+
+        Channels-driven: каналы без свежих сообщений входят с нулём — P95-порог
+        считается по распределению всех каналов отчёта, а не только активных.
+        """
+        sql = _SQL_VOLUME_24H
+        params: tuple = ()
+        if channel_id is not None:
+            sql += " WHERE ch.channel_id = ?"
+            params = (channel_id,)
+        cur = await self._db.execute(sql, params)
+        rows = await cur.fetchall()
+        return {row["channel_id"]: row["cnt"] for row in rows}
+
     # ── Parallel fetch: separate read-only connections ─────────────────────
 
     def _can_parallel(self) -> bool:
@@ -575,6 +603,7 @@ class FilterRepository:
         dict[int, tuple[int, int]],  # auto_feed_map
         dict[int, tuple[int, int]],  # engagement_map
         dict[int, tuple[int, int]],  # forward_map
+        dict[int, int],              # volume_map (24h)
     ]:
         """Run the map queries in parallel on separate read-only connections.
 
@@ -622,12 +651,18 @@ class FilterRepository:
         )
         cd_params: tuple = (channel_id,) if channel_id is not None else ()
 
+        v_sql = _SQL_VOLUME_24H
+        v_params: tuple = ()
+        if channel_id is not None:
+            v_sql += " WHERE ch.channel_id = ?"
+            v_params = (channel_id,)
+
         async def _no_rows() -> list[aiosqlite.Row]:
             return []
 
-        conns = [await self._open_readonly_conn() for _ in range(7 + int(include_cross_dupe))]
+        conns = [await self._open_readonly_conn() for _ in range(8 + int(include_cross_dupe))]
         try:
-            rows_u, rows_s, rows_sm, rows_cy, rows_af, rows_e, rows_f, rows_cd = await asyncio.gather(
+            rows_u, rows_s, rows_sm, rows_cy, rows_af, rows_e, rows_f, rows_v, rows_cd = await asyncio.gather(
                 self._run_on_conn(conns[0], u_sql, u_params),
                 self._run_on_conn(conns[1], s_sql, s_params),
                 self._run_on_conn(conns[2], sm_sql, sm_params),
@@ -635,7 +670,8 @@ class FilterRepository:
                 self._run_on_conn(conns[4], af_sql, af_params),
                 self._run_on_conn(conns[5], e_sql, e_params),
                 self._run_on_conn(conns[6], f_sql, f_params),
-                self._run_on_conn(conns[7], cd_sql, cd_params) if include_cross_dupe else _no_rows(),
+                self._run_on_conn(conns[7], v_sql, v_params),
+                self._run_on_conn(conns[8], cd_sql, cd_params) if include_cross_dupe else _no_rows(),
             )
         finally:
             for conn in conns:
@@ -650,4 +686,5 @@ class FilterRepository:
             {r["channel_id"]: (r["total"], r["short_link"] or 0) for r in rows_af},
             {r["channel_id"]: (r["viewed"], r["views_sum"] or 0) for r in rows_e},
             {r["channel_id"]: (r["total"], r["fwd"] or 0) for r in rows_f},
+            {r["channel_id"]: r["cnt"] for r in rows_v},
         )

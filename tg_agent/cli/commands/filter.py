@@ -90,12 +90,13 @@ async def analyze_impl(config_path: str, *, quick: bool = False, sample_size: in
             print("No channels found.")
             return
 
-        fmt = "{:<6} {:<25} {:<10} {:<10} {:<10} {:<10} {:<10} {:<10} {:<10} {:<10} {:<30}"
+        fmt = "{:<6} {:<25} {:<10} {:<10} {:<10} {:<10} {:<10} {:<10} {:<10} {:<10} {:<9} {:<30}"
         header = (
-            "ChanID", "Title", "Uniq%", "SubRatio", "Cyr%", "Short%", "XDupe%", "Auto%", "Views%", "Fwd%", "Flags",
+            "ChanID", "Title", "Uniq%", "SubRatio", "Cyr%", "Short%", "XDupe%", "Auto%",
+            "Views%", "Fwd%", "msgs/24h", "Flags",
         )
         print(fmt.format(*header))
-        print("-" * 135)
+        print("-" * 145)
         for r in report.results:
             flags_str = ", ".join(r.flags) if r.flags else "-"
             print(
@@ -110,6 +111,7 @@ async def analyze_impl(config_path: str, *, quick: bool = False, sample_size: in
                     f"{r.auto_feed_pct:.1f}" if r.auto_feed_pct is not None else "-",
                     f"{r.views_ratio_pct:.1f}" if r.views_ratio_pct is not None else "-",
                     f"{r.forward_pct:.1f}" if r.forward_pct is not None else "-",
+                    str(r.volume_24h) if r.volume_24h is not None else "-",
                     flags_str[:30],
                 )
             )

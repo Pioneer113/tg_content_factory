@@ -185,6 +185,41 @@ def test_analyze_prints_views_and_forward_columns(tmp_path, cli_init_patch, caps
     assert "low_engagement, forwarder" in out
 
 
+def test_analyze_prints_volume_column(tmp_path, cli_init_patch, capsys):
+    """`filter analyze` exposes the msgs/24h column (#1571)."""
+    db_path = str(tmp_path / "filter_analyze_volume.db")
+    db = Database(db_path, session_encryption_secret="test-session-encryption-key")
+    asyncio.run(db.initialize())
+    asyncio.run(db.add_account(Account(phone="+100", session_string="sess")))
+    with cli_init_patch(db, _FILTER_INIT_DB_TARGET):
+        from tg_agent.cli.commands.filter import run
+        from tg_agent.filters.models import ChannelFilterResult
+
+        with patch("tg_agent.cli.commands.filter.ChannelAnalyzer") as mock_analyzer:
+            mock_instance = MagicMock()
+            mock_report = MagicMock()
+            mock_report.results = [
+                ChannelFilterResult(
+                    channel_id=5200,
+                    title="Feed",
+                    flags=["high_volume"],
+                    volume_24h=123,
+                    is_filtered=False,
+                )
+            ]
+            mock_report.total_channels = 1
+            mock_report.filtered_count = 0
+            mock_instance.analyze_all = AsyncMock(return_value=mock_report)
+            mock_analyzer.return_value = mock_instance
+
+            run(_ns(filter_action="analyze"))
+
+    out = capsys.readouterr().out
+    assert "msgs/24h" in out
+    assert "123" in out
+    assert "high_volume" in out
+
+
 def test_filter_analyze_parser_accepts_quick_flag():
     """CLI exposes --quick on `filter analyze` (#774)."""
     from typer.testing import CliRunner

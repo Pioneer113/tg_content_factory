@@ -17,6 +17,7 @@ class ChannelFilterResult(BaseModel):
     auto_feed_pct: float | None = None
     views_ratio_pct: float | None = None
     forward_pct: float | None = None
+    volume_24h: int | None = None
     is_filtered: bool = False
 
 

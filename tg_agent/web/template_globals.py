@@ -32,6 +32,7 @@ FILTER_FLAG_EMOJI = {
     "auto_feed": (Markup('<i class="bi bi-robot"></i>'), "Автогенерённая лента"),
     "low_engagement": (Markup('<i class="bi bi-activity"></i>'), "Мёртвое вовлечение"),
     "forwarder": (Markup('<i class="bi bi-send"></i>'), "Пересылочный канал"),
+    "high_volume": (Markup('<i class="bi bi-fire"></i>'), "Массовый постинг (24ч)"),
 }
 
 # Human-readable labels for AccountSessionStatus values shown in the accounts

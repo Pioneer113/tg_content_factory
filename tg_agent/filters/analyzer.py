@@ -14,6 +14,8 @@ from tg_agent.filters.criteria import (
     DEFAULT_QUICK_SAMPLE_SIZE,
     FORWARD_SHARE_MIN_MESSAGES,
     FORWARD_SHARE_THRESHOLD,
+    HIGH_VOLUME_MIN_24H,
+    HIGH_VOLUME_PERCENTILE,
     KEEP_TAG,
     LABEL_ONLY_FLAGS,
     LOW_ENGAGEMENT_MIN_VIEWED_MESSAGES,
@@ -53,6 +55,19 @@ class FilterThresholds:
     min_sub_ratio: float
     max_cross_dupe: float
     min_cyrillic: float
+
+
+def _percentile(values: list[int], pct: float) -> float | None:
+    """Перцентиль `pct` (линейная интерполяция, как numpy.percentile); None на пустой выборке."""
+    if not values:
+        return None
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return float(ordered[0])
+    rank = pct / 100 * (len(ordered) - 1)
+    lo = int(rank)
+    hi = min(lo + 1, len(ordered) - 1)
+    return ordered[lo] + (ordered[hi] - ordered[lo]) * (rank - lo)
 
 
 async def _timed_fetch(label: str, coro):
@@ -138,6 +153,7 @@ class ChannelAnalyzer:
                 auto_feed_map,
                 engagement_map,
                 forward_map,
+                volume_map,
             ) = await self._repo.fetch_maps_parallel(
                 channel_id, include_cross_dupe=not skip_cross_dupe, sample_size=sample_size
             )
@@ -171,6 +187,7 @@ class ChannelAnalyzer:
             forward_map = await _timed_fetch(
                 "forward-share map", self._repo.fetch_forward_share_map(channel_id)
             )
+            volume_map = await _timed_fetch("volume map", self._repo.fetch_volume_map(channel_id))
         return (
             uniqueness_map,
             subscriber_map,
@@ -180,6 +197,7 @@ class ChannelAnalyzer:
             auto_feed_map,
             engagement_map,
             forward_map,
+            volume_map,
         )
 
     def _append_uniqueness_flag(
@@ -338,6 +356,26 @@ class ChannelAnalyzer:
             flags.append("forwarder")
         return forward_pct
 
+    def _append_volume_flag(
+        self,
+        flags: list[str],
+        channel_id_value: int,
+        volume_map: dict,
+        high_volume_p95: float | None,
+    ) -> int | None:
+        """`high_volume` (#1571): count_24h >= max(P95, HIGH_VOLUME_MIN_24H).
+
+        Порог нестрогий (>=): канал ровно на пороге — уже лента. P95 —
+        относительная часть (на плоской выборке опускается полом), None
+        (нет данных) флаг не ставит.
+        """
+        volume_24h: int | None = volume_map.get(channel_id_value)
+        if volume_24h is not None and high_volume_p95 is not None:
+            if volume_24h >= max(high_volume_p95, HIGH_VOLUME_MIN_24H):
+                # Label-only (LABEL_ONLY_FLAGS): до калибровки на живой БД.
+                flags.append("high_volume")
+        return volume_24h
+
     def _build_channel_result(
         self,
         channel,
@@ -350,6 +388,8 @@ class ChannelAnalyzer:
         auto_feed_map: dict,
         engagement_map: dict,
         forward_map: dict,
+        volume_map: dict,
+        high_volume_p95: float | None,
         min_subs: int,
         thresholds: FilterThresholds,
     ) -> ChannelFilterResult:
@@ -374,6 +414,7 @@ class ChannelAnalyzer:
         auto_feed_pct = self._append_auto_feed_flag(flags, channel_id_value, auto_feed_map)
         views_ratio_pct = self._append_engagement_flag(flags, channel, subscriber_count, engagement_map)
         forward_pct = self._append_forward_flag(flags, channel_id_value, forward_map)
+        volume_24h = self._append_volume_flag(flags, channel_id_value, volume_map, high_volume_p95)
         self._append_suspicious_username_flag(flags, channel)
 
         # Флаги-метки (LABEL_ONLY_FLAGS) не блокируют сбор — см. criteria.py.
@@ -391,6 +432,7 @@ class ChannelAnalyzer:
             auto_feed_pct=auto_feed_pct,
             views_ratio_pct=views_ratio_pct,
             forward_pct=forward_pct,
+            volume_24h=volume_24h,
             is_filtered=any(f not in LABEL_ONLY_FLAGS for f in flags),
         )
 
@@ -406,9 +448,13 @@ class ChannelAnalyzer:
         auto_feed_map: dict,
         engagement_map: dict,
         forward_map: dict,
+        volume_map: dict,
         min_subs: int,
         thresholds: FilterThresholds,
     ) -> list[ChannelFilterResult]:
+        # P95 считается один раз по всей когорте отчёта (включая каналы с нулём
+        # за сутки из volume_map) и спускается в каждый результат.
+        high_volume_p95 = _percentile(list(volume_map.values()), HIGH_VOLUME_PERCENTILE)
         return [
             self._build_channel_result(
                 channel,
@@ -420,6 +466,8 @@ class ChannelAnalyzer:
                 auto_feed_map=auto_feed_map,
                 engagement_map=engagement_map,
                 forward_map=forward_map,
+                volume_map=volume_map,
+                high_volume_p95=high_volume_p95,
                 min_subs=min_subs,
                 thresholds=thresholds,
             )
@@ -461,6 +509,7 @@ class ChannelAnalyzer:
             auto_feed_map,
             engagement_map,
             forward_map,
+            volume_map,
         ) = await self._fetch_analysis_maps(
             channel_id, skip_cross_dupe=skip_cross_dupe, sample_size=sample_size
         )
@@ -476,6 +525,7 @@ class ChannelAnalyzer:
             auto_feed_map=auto_feed_map,
             engagement_map=engagement_map,
             forward_map=forward_map,
+            volume_map=volume_map,
             min_subs=min_subs,
             thresholds=thresholds,
         )
