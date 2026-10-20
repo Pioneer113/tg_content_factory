@@ -6,10 +6,15 @@ import argparse
 import asyncio
 import base64
 import hashlib
+import json
+import subprocess
+import sys
+import tomllib
 from collections.abc import Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from functools import lru_cache
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -54,6 +59,68 @@ def fake_asyncio_run(coro):
     """Run a coroutine in a fresh loop for CLI tests that patch asyncio.run."""
     with asyncio.Runner() as runner:
         return runner.run(coro)
+
+
+@lru_cache(maxsize=1)
+def editable_install_staleness() -> str | None:
+    """Describe how the installed tg-agent dist diverges from this workspace.
+
+    Returns None when the distribution is absent (nothing installed — e.g. a
+    bare CI job) or matches pyproject. A stale editable install surviving the
+    #1582 ``src/`` → ``tg_agent/`` rename keeps console_scripts pointing at
+    ``src.main:main``, so every console-entrypoint test dies with
+    ``ModuleNotFoundError: No module named 'src'`` (#1649). The detector test
+    turns that into one clear "reinstall" failure, and
+    tests/test_cli_exit_codes.py skips its console variants instead.
+
+    The dist is inspected in an ``-I`` subprocess on purpose: the pytest
+    process puts rootdir on sys.path, so a stray ``tg_agent.egg-info`` build
+    artifact in the repo root would shadow the (possibly stale) site-packages
+    dist-info and hide the divergence from an in-process check.
+    """
+    probe = (
+        "import importlib.metadata as m, json, sys\n"
+        "try:\n"
+        "    d = m.distribution('tg-agent')\n"
+        "except m.PackageNotFoundError:\n"
+        "    print(json.dumps(None))\n"
+        "else:\n"
+        "    print(json.dumps({\n"
+        "        'version': d.version,\n"
+        "        'entry': next((ep.value for ep in d.entry_points\n"
+        "                       if ep.group == 'console_scripts' and ep.name == 'tg-agent'), None),\n"
+        "        'top_level': (d.read_text('top_level.txt') or '').split(),\n"
+        "    }))\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", probe],
+        check=False, capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode != 0:
+        return f"probe for the installed tg-agent dist failed: {result.stderr.strip()}"
+    installed = json.loads(result.stdout)
+    if installed is None:
+        return None
+    pyproject = tomllib.loads(
+        (Path(__file__).resolve().parents[1] / "pyproject.toml").read_text()
+    )
+    expected_entry = pyproject["project"]["scripts"]["tg-agent"]
+    expected_version = pyproject["project"]["version"]
+    mismatches = []
+    if installed["entry"] != expected_entry:
+        mismatches.append(
+            f"console script 'tg-agent' resolves to {installed['entry']!r}, "
+            f"pyproject declares {expected_entry!r}"
+        )
+    if installed["version"] != expected_version:
+        mismatches.append(
+            f"installed version is {installed['version']!r}, pyproject declares {expected_version!r}"
+        )
+    if "tg_agent" not in installed["top_level"]:
+        mismatches.append(
+            f"dist top_level declares {installed['top_level'] or 'nothing'}, expected 'tg_agent'"
+        )
+    return "; ".join(mismatches) if mismatches else None
 
 
 def make_cli_config(**overrides) -> MagicMock:
