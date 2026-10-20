@@ -13,6 +13,7 @@ import argparse
 import asyncio
 import inspect
 import logging
+import sys
 from typing import Any, cast
 
 import typer
@@ -239,6 +240,11 @@ async def toggle_impl(config_path: str, *, query_id: int) -> None:
     _, db = await runtime.init_db(config_path)
     try:
         svc = SearchQueryService(SearchQueryBundle.from_database(db))
+        if await svc.get(query_id) is None:
+            # Missing id must fail loudly, not report a toggled row that isn't
+            # there (#1606); service-level toggle() is a silent no-op on misses.
+            print(f"Search query id={query_id} not found", file=sys.stderr)
+            sys.exit(1)
         await svc.toggle(query_id)
         print(f"Toggled search query id={query_id}")
     finally:
@@ -250,6 +256,11 @@ async def run_impl(config_path: str, *, query_id: int) -> None:
     _, db = await runtime.init_db(config_path)
     try:
         svc = SearchQueryService(SearchQueryBundle.from_database(db))
+        if await svc.get(query_id) is None:
+            # run_once() returns 0 for a missing id, which read as a successful
+            # run with zero matches — distinguish it from a real empty result (#1606).
+            print(f"Search query id={query_id} not found", file=sys.stderr)
+            sys.exit(1)
         count = await svc.run_once(query_id)
         if count is None:
             # Regex query: count not tracked — say so instead of a fake 0 (#1607)
