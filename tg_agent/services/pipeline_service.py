@@ -611,6 +611,8 @@ class PipelineService:
             "generate_interval_minutes": pipeline.generate_interval_minutes,
             "publish_times": pipeline.publish_times,
             "refinement_steps": pipeline.refinement_steps,
+            "ab_num_variants": pipeline.ab_num_variants,
+            "ab_auto_select": pipeline.ab_auto_select,
             "source_ids": detail["source_ids"],
             "target_refs": detail["target_refs"],
         }
@@ -657,6 +659,8 @@ class PipelineService:
             publish_mode=payload.get("publish_mode", PipelinePublishMode.MODERATED),
             generation_backend=payload.get("generation_backend", PipelineGenerationBackend.CHAIN),
             generate_interval_minutes=int(payload.get("generate_interval_minutes", 60)),
+            ab_num_variants=int(payload.get("ab_num_variants", 1)),
+            ab_auto_select=bool(payload.get("ab_auto_select", False)),
             # Honour an explicit is_active from the payload; default False so a
             # plain export->import round-trip stays inactive (export_json never
             # emits is_active). The CLI `--json-file` path passes is_active so a
