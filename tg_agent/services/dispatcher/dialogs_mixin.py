@@ -7,9 +7,9 @@ refresh/clear, leave, and resolve.
 
 Two ``dialogs.*`` handlers deliberately stay on the facade class, not here:
 ``dialogs.join`` (the suite patches ``TelegramActionService`` through the facade
-module namespace) and ``dialogs.download_media`` (it reads ``mod.__file__`` to
-locate ``data/downloads`` and the suite monkeypatches that). Keeping them on the
-facade is the only way those patches reach the call site.
+module namespace) and ``dialogs.download_media`` (its ``_downloads_dir`` hangs off
+the runtime data root and the suite redirects that via ``TG_AGENT_DATA_DIR``).
+Keeping them on the facade is the only way those patches reach the call site.
 """
 
 from __future__ import annotations
