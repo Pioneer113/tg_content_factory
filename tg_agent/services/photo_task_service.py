@@ -302,7 +302,29 @@ class PhotoTaskService:
     ) -> int:
         if not entries:
             raise ValueError("Batch manifest is empty")
-        batch_id = await self._bundle.create_batch(
+        # Validate every entry BEFORE writing anything (#1601): a failure on
+        # entry N must not leave a partial HELD batch behind, and a retry
+        # after fixing the manifest must not duplicate earlier entries.
+        items: list[PhotoBatchItem] = []
+        for entry in entries:
+            files = self.validate_files([str(path) for path in entry.get("files", [])])
+            items.append(
+                PhotoBatchItem(
+                    phone=phone,
+                    target_dialog_id=target.dialog_id,
+                    target_title=target.title,
+                    target_type=target.target_type,
+                    file_paths=files,
+                    send_mode=self.normalize_mode(
+                        entry.get("mode", PhotoSendMode.ALBUM.value),
+                        len(files),
+                    ),
+                    caption=entry.get("caption", caption),
+                    schedule_at=self._parse_schedule_at(entry.get("at")),
+                    status=PhotoBatchStatus.HELD,
+                )
+            )
+        return await self._bundle.create_batch_with_items(
             PhotoBatch(
                 phone=phone,
                 target_dialog_id=target.dialog_id,
@@ -311,30 +333,9 @@ class PhotoTaskService:
                 send_mode=PhotoSendMode.ALBUM,
                 caption=caption,
                 status=PhotoBatchStatus.HELD,
-            )
+            ),
+            items,
         )
-        for entry in entries:
-            files = self.validate_files([str(path) for path in entry.get("files", [])])
-            send_mode = self.normalize_mode(
-                entry.get("mode", PhotoSendMode.ALBUM.value),
-                len(files),
-            )
-            schedule_at = self._parse_schedule_at(entry.get("at"))
-            await self._bundle.create_item(
-                PhotoBatchItem(
-                    batch_id=batch_id,
-                    phone=phone,
-                    target_dialog_id=target.dialog_id,
-                    target_title=target.title,
-                    target_type=target.target_type,
-                    file_paths=files,
-                    send_mode=send_mode,
-                    caption=entry.get("caption", caption),
-                    schedule_at=schedule_at,
-                    status=PhotoBatchStatus.HELD,
-                )
-            )
-        return batch_id
 
     async def publish_batch(self, batch_id: int) -> int:
         batch = await self._bundle.get_batch(batch_id)

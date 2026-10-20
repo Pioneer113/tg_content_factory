@@ -103,6 +103,19 @@ class PhotoLoaderRepository:
             created_at=parse_datetime(row["created_at"]),
         )
 
+    @staticmethod
+    def _batch_insert_params(batch: PhotoBatch) -> tuple:
+        return (
+            batch.phone,
+            batch.target_dialog_id,
+            batch.target_title,
+            batch.target_type,
+            batch.send_mode.value,
+            batch.caption,
+            batch.status.value,
+            batch.error,
+        )
+
     async def create_batch(self, batch: PhotoBatch) -> int:
         """Создать фото-батч (общая цель/режим отправки); вернуть его id."""
         assert self._database is not None, (
@@ -115,18 +128,42 @@ class PhotoLoaderRepository:
                 send_mode, caption, status, error
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (
-                batch.phone,
-                batch.target_dialog_id,
-                batch.target_title,
-                batch.target_type,
-                batch.send_mode.value,
-                batch.caption,
-                batch.status.value,
-                batch.error,
-            ),
+            self._batch_insert_params(batch),
         )
         return cur.lastrowid or 0
+
+    async def create_batch_with_items(self, batch: PhotoBatch, items: list[PhotoBatchItem]) -> int:
+        """Атомарно создать батч вместе со всеми элементами; вернуть id батча.
+
+        Один транзакционный блок (#1601): ошибка на любом элементе откатывает
+        и сам батч — частичный батч в HELD не должен переживать неудачный
+        batch-create. ``item.batch_id`` игнорируется, элементам проставляется
+        реальный id вставленного батча."""
+        assert self._database is not None, (
+            "PhotoLoaderRepository.create_batch_with_items requires a Database reference"
+        )
+        async with self._database.transaction() as conn:
+            cur = await conn.execute(
+                """
+                INSERT INTO photo_batches (
+                    phone, target_dialog_id, target_title, target_type,
+                    send_mode, caption, status, error
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                self._batch_insert_params(batch),
+            )
+            batch_id = cur.lastrowid or 0
+            for item in items:
+                await conn.execute(
+                    """
+                    INSERT INTO photo_batch_items (
+                        batch_id, phone, target_dialog_id, target_title, target_type,
+                        file_paths, send_mode, caption, schedule_at, status, error, telegram_message_ids
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (batch_id, *self._item_insert_params(item)),
+                )
+        return batch_id
 
     async def update_batch(
         self,
@@ -208,6 +245,23 @@ class PhotoLoaderRepository:
         )
         return [self._to_batch(row) for row in await cur.fetchall()]
 
+    @staticmethod
+    def _item_insert_params(item: PhotoBatchItem) -> tuple:
+        """Параметры INSERT без ``batch_id`` (он подставляется отдельным слотом)."""
+        return (
+            item.phone,
+            item.target_dialog_id,
+            item.target_title,
+            item.target_type,
+            safe_json_dumps(item.file_paths),
+            item.send_mode.value,
+            item.caption,
+            item.schedule_at.astimezone(timezone.utc).isoformat() if item.schedule_at else None,
+            item.status.value,
+            item.error,
+            safe_json_dumps(item.telegram_message_ids),
+        )
+
     async def create_item(self, item: PhotoBatchItem) -> int:
         """Создать элемент батча (одна отправка с файлами и опциональным расписанием); вернуть id."""
         assert self._database is not None, (
@@ -220,20 +274,7 @@ class PhotoLoaderRepository:
                 file_paths, send_mode, caption, schedule_at, status, error, telegram_message_ids
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (
-                item.batch_id,
-                item.phone,
-                item.target_dialog_id,
-                item.target_title,
-                item.target_type,
-                safe_json_dumps(item.file_paths),
-                item.send_mode.value,
-                item.caption,
-                item.schedule_at.astimezone(timezone.utc).isoformat() if item.schedule_at else None,
-                item.status.value,
-                item.error,
-                safe_json_dumps(item.telegram_message_ids),
-            ),
+            (item.batch_id, *self._item_insert_params(item)),
         )
         return cur.lastrowid or 0
 
