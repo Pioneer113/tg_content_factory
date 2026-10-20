@@ -65,9 +65,10 @@ class SearchPersistence:
                 if ch.is_active:
                     channel = channel_with_meta(ch, await self._fetch_meta(ch))
                 # Search discovers channels, but is not an operator approval
-                # to collect them. Keep the row for message FKs while making
-                # new discoveries opt-in to collection.
-                channel = channel.model_copy(update={"is_active": False})
+                # to collect them (#1313): new discoveries land in the approval
+                # queue and stay invisible to the standard readers until the
+                # owner decides (replaces the temporary is_active=0 from #1308).
+                channel = channel.model_copy(update={"approval_state": "pending"})
             await self._search.add_channel(channel)
         return new_channel_ids
 
