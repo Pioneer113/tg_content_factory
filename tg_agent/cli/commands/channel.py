@@ -97,6 +97,9 @@ async def tag_delete_impl(db, *, name: str) -> None:
 
 async def tag_set_impl(db, *, pk: int, tags: str) -> None:
     """``channel tag set`` — replace a channel's tags (comma-separated)."""
+    if await db.get_channel_by_pk(pk) is None:
+        print(f"Channel pk={pk} not found")
+        return
     tag_names = [t.strip() for t in tags.split(",") if t.strip()]
     await db.repos.channels.set_channel_tags(pk, tag_names)
     print(f"Tags for channel pk={pk} set to: {', '.join(tag_names)}")
@@ -104,6 +107,9 @@ async def tag_set_impl(db, *, pk: int, tags: str) -> None:
 
 async def tag_get_impl(db, *, pk: int) -> None:
     """``channel tag get`` — show a channel's tags."""
+    if await db.get_channel_by_pk(pk) is None:
+        print(f"Channel pk={pk} not found")
+        return
     tags = await db.repos.channels.get_channel_tags(pk)
     if not tags:
         print(f"No tags for channel pk={pk}.")
