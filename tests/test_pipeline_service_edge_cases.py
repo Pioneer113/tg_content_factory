@@ -508,6 +508,50 @@ async def test_import_json_restores_refinement_steps_and_publish_times(svc):
 
 
 @pytest.mark.anyio
+async def test_export_import_roundtrip_keeps_ab_settings(svc):
+    """#1621: export -> import must keep ab_num_variants/ab_auto_select."""
+    pid = await svc.add(
+        name="ABPipeline",
+        prompt_template="Summarize {source_messages}",
+        source_channel_ids=[1001],
+        target_refs=[PipelineTargetRef(phone="+100", dialog_id=77)],
+        ab_num_variants=3,
+        ab_auto_select=True,
+    )
+    export = await svc.export_json(pid)
+    assert export is not None
+    assert export["ab_num_variants"] == 3
+    assert export["ab_auto_select"] is True
+
+    new_id = await svc.import_json(export, name_override="ABImported")
+    imported = await svc.get(new_id)
+    assert imported is not None
+    assert imported.ab_num_variants == 3
+    assert imported.ab_auto_select is True
+
+
+@pytest.mark.anyio
+async def test_import_json_honours_explicit_ab_fields(svc):
+    """#1621: explicit ab_num_variants/ab_auto_select in the payload are applied."""
+    payload = {
+        "name": "ExplicitAB",
+        "prompt_template": "Summarize {source_messages}",
+        "publish_mode": "moderated",
+        "generation_backend": "chain",
+        "generate_interval_minutes": 60,
+        "ab_num_variants": 3,
+        "ab_auto_select": True,
+        "source_ids": [],
+        "target_refs": [],
+    }
+    new_id = await svc.import_json(payload)
+    imported = await svc.get(new_id)
+    assert imported is not None
+    assert imported.ab_num_variants == 3
+    assert imported.ab_auto_select is True
+
+
+@pytest.mark.anyio
 async def test_import_json_from_string(svc, pipeline_id):
     """Import a pipeline from a JSON string."""
     export = await svc.export_json(pipeline_id)
