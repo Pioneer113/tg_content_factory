@@ -324,7 +324,9 @@ class PhotoTaskService:
                     status=PhotoBatchStatus.HELD,
                 )
             )
-        return await self._bundle.create_batch_with_items(
+        # Atomic write via the repository (no bundle pass-through —
+        # test_db_access_conventions guards the bundle method surface).
+        return await self._bundle.photo_loader.create_batch_with_items(
             PhotoBatch(
                 phone=phone,
                 target_dialog_id=target.dialog_id,

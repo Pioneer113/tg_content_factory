@@ -1596,8 +1596,7 @@ class TestPhotoTaskServiceCreateBatch:
         img.write_bytes(b"\xff\xd8\xff")
 
         bundle = MagicMock()
-        bundle.create_batch = AsyncMock(return_value=10)
-        bundle.create_item = AsyncMock(return_value=100)
+        bundle.photo_loader.create_batch_with_items = AsyncMock(return_value=10)
 
         svc = PhotoTaskService(bundle, MagicMock())
         target = PhotoTarget(dialog_id=50, title="BatchTarget")

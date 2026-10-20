@@ -665,10 +665,6 @@ class PhotoLoaderBundle:
         """Создать батч отправки фото; возвращает его id."""
         return await self.photo_loader.create_batch(batch)
 
-    async def create_batch_with_items(self, batch: PhotoBatch, items: list[PhotoBatchItem]) -> int:
-        """Атомарно создать батч вместе со всеми элементами (#1601); вернуть id батча."""
-        return await self.photo_loader.create_batch_with_items(batch, items)
-
     async def update_batch(
         self,
         batch_id: int,
