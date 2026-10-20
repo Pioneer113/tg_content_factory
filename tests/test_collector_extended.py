@@ -849,3 +849,41 @@ async def test_post_collection_flood_plain_flood_notifies_above_max_and_rereads(
         Channel(channel_id=123, title="Ch"), "+1", max_wait + 1, None, set(), 5, 2
     )
     assert (kind, total) == ("return", 5)
+
+
+# ------------------------------------------------------------------
+# Provenance stage 4 (#1312): префильтры сбора не трогают human-каналы
+# ------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_pre_filter_suppressed_on_human_channel(db, caplog):
+    """Пречек min_subs на человеческом канале подавлен: флаг не ставится,
+    origin не меняется, в логе видно подавление, сбор продолжается (#1312)."""
+    import logging
+
+    from tg_agent.config import SchedulerConfig
+
+    await db.add_channel(Channel(channel_id=802, title="802", filtered_origin="human"))
+    await db.execute_write(
+        "INSERT INTO channel_stats (channel_id, subscriber_count) VALUES (?, ?)",
+        (802, 3),
+    )
+
+    collector = Collector(MagicMock(), db, SchedulerConfig())
+    collector._maybe_auto_delete = AsyncMock()
+
+    channel = Channel(channel_id=802, title="802", channel_type="supergroup")
+    with caplog.at_level(logging.INFO):
+        proceed = await collector._apply_pre_collection_filters(
+            channel, 802, MagicMock(), MagicMock(),
+            is_first_run=False, force=False, min_subs=20, cancel_event=None, phone="+1",
+        )
+
+    assert proceed is True
+    collector._maybe_auto_delete.assert_not_awaited()
+    row = await db.get_channel_by_channel_id(802)
+    assert row.is_filtered is False
+    assert row.filtered_origin == "human"
+    assert not row.filter_flags
+    assert "Suppressed automatic channel decision" in caplog.text

@@ -16,12 +16,18 @@ from tg_agent.filters.models import ChannelFilterResult, FilterReport
 
 
 async def _insert_channel(
-    db, channel_id, title="Test", channel_type: str | None = "channel", username=None
+    db,
+    channel_id,
+    title="Test",
+    channel_type: str | None = "channel",
+    username=None,
+    *,
+    filtered_origin: str = "auto",
 ):
     await db.execute(
-        "INSERT INTO channels (channel_id, title, username, channel_type, is_active) "
-        "VALUES (?, ?, ?, ?, 1)",
-        (channel_id, title, username, channel_type),
+        "INSERT INTO channels (channel_id, title, username, channel_type, is_active, filtered_origin) "
+        "VALUES (?, ?, ?, ?, 1, ?)",
+        (channel_id, title, username, channel_type, filtered_origin),
     )
     await db.commit()
 
@@ -884,8 +890,9 @@ class TestAnalyzerStickyFlags:
         assert "title_changed" in row["filter_flags"]
 
     async def test_manual_preserved_after_apply(self, db, raw_db):
-        # Ручной вердикт без смены origin (массовый сценарий 07.10.26, raw UPDATE):
-        # sticky-скан apply_filters обязан вернуть канал в фильтр после reset (#1499).
+        # Этап 4 #1312: sticky «manual» уволен. Человеческий вердикт выражается
+        # filtered_origin='human' (protected writer-ы); auto-строка с флагом
+        # manual больше не переживает цикл reset → apply — канал переоценивается.
         await _insert_channel(raw_db, 712, username="durov")
         await _insert_messages(raw_db, 712, ["unique a", "unique b", "unique c"])
         await raw_db.execute(
@@ -902,8 +909,106 @@ class TestAnalyzerStickyFlags:
             "SELECT is_filtered, filter_flags FROM channels WHERE channel_id = ?", (712,)
         )
         row = await cur.fetchone()
+        assert row["is_filtered"] == 0
+        assert "manual" not in (row["filter_flags"] or "")
+
+
+class TestProvenanceHumanExclusion:
+    """Этап 4 #1312: человеческие каналы для анализатора не существуют —
+    ни метрик, ни вердиктов, ни предложений «а может отфильтруем»."""
+
+    async def test_approved_channel_not_analyzed(self, db, raw_db):
+        # channel_id человеческого канала отсутствует в выборке анализатора:
+        # доказывает «не трогаем и не считаем», а не просто «не фильтруем».
+        await _insert_channel(raw_db, 720, username=None, filtered_origin="human")
+        await _insert_messages(raw_db, 720, ["spam"] * 20)
+        await _insert_channel(raw_db, 721, username="spammer")
+        await _insert_messages(raw_db, 721, ["spam"] * 20)
+        await raw_db.commit()
+
+        analyzer = ChannelAnalyzer(db)
+        report = await analyzer.analyze_all()
+
+        assert 720 not in [r.channel_id for r in report.results]
+        found = [r for r in report.results if r.channel_id == 721]
+        assert len(found) == 1
+        assert "low_uniqueness" in found[0].flags
+
+    async def test_fetch_channels_for_analysis_excludes_human(self, db, raw_db):
+        await _insert_channel(raw_db, 730, filtered_origin="human")
+        await _insert_channel(raw_db, 731)
+        await raw_db.commit()
+
+        rows = await db.filter_repo.fetch_channels_for_analysis()
+        ids = {row["channel_id"] for row in rows}
+        assert 730 not in ids
+        assert 731 in ids
+
+        # Точечный запрос человеческого канала тоже пуст — метрики не считаются.
+        assert await db.filter_repo.fetch_channels_for_analysis(730) == []
+        single_auto = await db.filter_repo.fetch_channels_for_analysis(731)
+        assert [row["channel_id"] for row in single_auto] == [731]
+
+    async def test_analyzer_cycle_preserves_human_unfilter(self, db, raw_db):
+        # «802»: человек снял авто-фильтр — цикл analyze+apply не возвращает его.
+        await _insert_channel(raw_db, 740, username=None, filtered_origin="human")
+        await _insert_messages(raw_db, 740, ["spam"] * 20)
+        await raw_db.commit()
+
+        analyzer = ChannelAnalyzer(db)
+        report = await analyzer.analyze_all()
+        await analyzer.apply_filters(report)
+
+        cur = await raw_db.execute(
+            "SELECT is_filtered, filter_flags, filtered_origin FROM channels WHERE channel_id = 740"
+        )
+        row = await cur.fetchone()
+        assert row["is_filtered"] == 0
+        assert row["filtered_origin"] == "human"
+
+    async def test_analyzer_cycle_preserves_human_filter_verdict(self, db, raw_db):
+        # Человеческий вердикт «фильтровать» цикл анализатора не сбрасывает.
+        await _insert_channel(raw_db, 741, username=None, filtered_origin="human")
+        await _insert_messages(raw_db, 741, ["spam"] * 20)
+        await raw_db.execute(
+            "UPDATE channels SET is_filtered = 1, filter_flags = 'low_subscriber_manual' "
+            "WHERE channel_id = 741"
+        )
+        await raw_db.commit()
+
+        analyzer = ChannelAnalyzer(db)
+        report = await analyzer.analyze_all()
+        await analyzer.apply_filters(report)
+
+        cur = await raw_db.execute(
+            "SELECT is_filtered, filter_flags, filtered_origin FROM channels WHERE channel_id = 741"
+        )
+        row = await cur.fetchone()
         assert row["is_filtered"] == 1
-        assert "manual" in row["filter_flags"]
+        assert row["filtered_origin"] == "human"
+        assert row["filter_flags"] == "low_subscriber_manual"
+
+    async def test_precheck_subscriber_ratio_skips_human_channel(self, db, raw_db):
+        # Пречек соотношения подписчики/сообщения фильтрует auto-канал,
+        # человеческий (одинаковые данные) не трогает вовсе.
+        await _insert_channel(raw_db, 750, username=None, filtered_origin="human")
+        await _insert_messages(raw_db, 750, ["post"] * 100)
+        await _insert_stats(raw_db, 750, 3)
+        await _insert_channel(raw_db, 751, username="lowsub")
+        await _insert_messages(raw_db, 751, ["post"] * 100)
+        await _insert_stats(raw_db, 751, 3)
+        await raw_db.commit()
+
+        analyzer = ChannelAnalyzer(db)
+        applied = await analyzer.precheck_subscriber_ratio()
+        assert applied == 1
+
+        human = await db.get_channel_by_channel_id(750)
+        assert human.is_filtered is False
+        assert human.filtered_origin == "human"
+        auto = await db.get_channel_by_channel_id(751)
+        assert auto.is_filtered is True
+        assert "low_subscriber_ratio" in auto.filter_flags
 
 
 class TestChannelAnalyzer:
