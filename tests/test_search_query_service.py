@@ -224,13 +224,46 @@ async def test_update_nonexistent_returns_false(service):
 
 
 @pytest.mark.anyio
-async def test_run_once_regex_query_returns_zero(service, bundle):
-    """Regex queries return 0 (not FTS-countable)."""
+async def test_add_invalid_regex_rejected(service, bundle):
+    """A regex query with an un-compilable pattern is rejected at add (#1607)."""
+    with pytest.raises(ValueError, match="invalid regex"):
+        await service.add("[bad", is_regex=True)
+
+    assert await bundle.get_all() == []
+
+
+@pytest.mark.anyio
+async def test_add_valid_regex_accepted(service, bundle):
+    """A valid regex pattern still adds fine."""
+    sq_id = await service.add("(GPT|Claude)", is_regex=True)
+
+    stored = await bundle.get_by_id(sq_id)
+    assert stored is not None
+    assert stored.query == "(GPT|Claude)"
+
+
+@pytest.mark.anyio
+async def test_update_invalid_regex_rejected(service, bundle):
+    """Editing a query to an un-compilable regex is rejected, old value kept (#1607)."""
+    sq_id = await service.add("fine")
+
+    with pytest.raises(ValueError, match="invalid regex"):
+        await service.update(sq_id, "[bad", 60, is_regex=True)
+
+    stored = await bundle.get_by_id(sq_id)
+    assert stored is not None
+    assert stored.query == "fine"
+
+
+@pytest.mark.anyio
+async def test_run_once_regex_query_returns_none(service, bundle):
+    """Regex match counts are not tracked: run_once returns None (unavailable),
+    not 0 — 0 would be indistinguishable from a genuine no-match (#1607)."""
     sq_id = await service.add("test", is_regex=True)
 
     result = await service.run_once(sq_id)
 
-    assert result == 0
+    assert result is None
 
 
 @pytest.mark.anyio
@@ -304,3 +337,18 @@ async def test_get_with_stats_excludes_regex_from_fts(service, bundle):
     for item in result:
         assert "daily_stats" in item
         assert "total_30d" in item
+
+
+@pytest.mark.anyio
+async def test_get_with_stats_regex_total_unavailable_not_zero(service, bundle):
+    """Regex totals are None (unavailable); a non-regex query with no data is
+    genuinely 0 — the two must stay distinguishable (#1607)."""
+    await service.add("regex.*", is_regex=True, track_stats=True)
+    await service.add("plain query", track_stats=True)
+
+    result = await service.get_with_stats(days=7)
+
+    by_query = {item["query"].query: item for item in result}
+    assert by_query["regex.*"]["total_30d"] is None
+    assert by_query["regex.*"]["daily_stats"] == []
+    assert by_query["plain query"]["total_30d"] == 0

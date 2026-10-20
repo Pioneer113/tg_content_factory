@@ -1424,6 +1424,39 @@ class TestSearchQueryAdd:
         assert "Added search query id=42" in out
         assert "hello world" in out
 
+    def test_add_invalid_regex_prints_error(self, capsys):
+        """A rejected invalid regex prints an error and creates nothing (#1607)."""
+        from tg_agent.cli.commands.search_query import run
+
+        db = MagicMock()
+        db.close = AsyncMock()
+
+        svc_instance = MagicMock()
+        svc_instance.add = AsyncMock(side_effect=ValueError("invalid regex: missing ], unterminated subtree"))
+        bundle = MagicMock()
+
+        with patch("tg_agent.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
+            mock_bundle_cls.from_database.return_value = bundle
+            run(cli_ns(
+                search_query_action="add",
+                query="[bad regex",
+                interval=60,
+                regex=True,
+                fts=False,
+                notify=False,
+                track_stats=True,
+                exclude_patterns=None,
+                max_length=None,
+            ))
+
+        out = capsys.readouterr().out
+        assert "Error:" in out
+        assert "invalid regex" in out
+        assert "Added search query" not in out
+        svc_instance.add.assert_awaited_once()
+
     def test_add_with_exclude_patterns(self, capsys):
         from tg_agent.cli.commands.search_query import run
 
@@ -1517,6 +1550,27 @@ class TestSearchQueryRun:
 
         out = capsys.readouterr().out
         assert "8 matches" in out
+
+    def test_run_regex_count_unavailable(self, capsys):
+        """Regex queries report an unavailable count, never a fake 0 (#1607)."""
+        from tg_agent.cli.commands.search_query import run
+
+        db = MagicMock()
+        db.close = AsyncMock()
+
+        svc_instance = MagicMock()
+        svc_instance.run_once = AsyncMock(return_value=None)
+        bundle = MagicMock()
+
+        with patch("tg_agent.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryBundle") as mock_bundle_cls:
+            mock_bundle_cls.from_database.return_value = bundle
+            run(cli_ns(search_query_action="run", id=3))
+
+        out = capsys.readouterr().out
+        assert "0 matches" not in out
+        assert "unavailable" in out
 
 
 class TestSearchQueryEdit:

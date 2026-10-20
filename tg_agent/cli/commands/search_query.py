@@ -62,12 +62,14 @@ async def list_impl(config_path: str) -> None:
         print("-" * 90)
         for item in items:
             sq = item["query"]
+            total = item["total_30d"]
             print(
                 fmt.format(
                     sq.id or 0,
                     sq.query[:40],
                     f"{sq.interval_minutes}m",
-                    item["total_30d"],
+                    # None = regex query: count not tracked, must not read as 0 (#1607)
+                    total if total is not None else "—",
                     (item["last_run"] or "—")[:20],
                 )
             )
@@ -141,6 +143,10 @@ async def add_impl(
         except ValidationError as e:
             print(f"Error: {e.errors()[0]['msg']}")
             return
+        except ValueError as e:
+            # e.g. invalid regex pattern (#1607)
+            print(f"Error: {e}")
+            return
         print(f"Added search query id={sq_id}: {query}")
         warning = await _chat_filter_warning(svc, chats)
         if warning:
@@ -202,6 +208,10 @@ async def edit_impl(
         except ValidationError as e:
             print(f"Error: {e.errors()[0]['msg']}")
             return
+        except ValueError as e:
+            # e.g. invalid regex pattern (#1607)
+            print(f"Error: {e}")
+            return
         print(f"Updated search query id={query_id}")
         warning = await _chat_filter_warning(
             svc,
@@ -241,7 +251,11 @@ async def run_impl(config_path: str, *, query_id: int) -> None:
     try:
         svc = SearchQueryService(SearchQueryBundle.from_database(db))
         count = await svc.run_once(query_id)
-        print(f"Search query id={query_id} executed: {count} matches found.")
+        if count is None:
+            # Regex query: count not tracked — say so instead of a fake 0 (#1607)
+            print(f"Search query id={query_id} executed: match count unavailable for regex queries.")
+        else:
+            print(f"Search query id={query_id} executed: {count} matches found.")
     finally:
         await db.close()
 

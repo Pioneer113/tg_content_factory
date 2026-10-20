@@ -42,7 +42,8 @@ async def add_search_query(request: Request, form: SearchQueryForm) -> SearchQue
             max_length=form.max_length,
             chat_filter=form.chat_filter,
         )
-    except ValidationError:
+    except (ValidationError, ValueError):
+        # ValueError: invalid regex pattern (#1607)
         return SearchQueryRedirect(error="invalid_value")
     chat_validation = await svc.validate_chat_filter(form.chat_filter)
     await _sync_scheduler(request)
@@ -72,7 +73,8 @@ async def edit_search_query(request: Request, sq_id: int, form: SearchQueryForm)
             max_length=form.max_length,
             chat_filter=form.chat_filter,
         )
-    except ValidationError:
+    except (ValidationError, ValueError):
+        # ValueError: invalid regex pattern (#1607)
         return SearchQueryRedirect(error="invalid_value")
     chat_validation = await svc.validate_chat_filter(form.chat_filter)
     await _sync_scheduler(request)

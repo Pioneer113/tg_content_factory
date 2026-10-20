@@ -313,6 +313,11 @@ def register(db, client_pool, embedding_service, **kwargs):
 
             svc = SearchQueryService(db)
             count = await svc.run_once(int(sq_id))
+            if count is None:
+                # Regex query: count not tracked — say so instead of a fake 0 (#1607)
+                return _text_response(
+                    f"Запрос id={sq_id} выполнен: подсчёт совпадений для regex-запросов недоступен."
+                )
             return _text_response(f"Запрос id={sq_id} выполнен: найдено {count} совпадений.")
         except Exception as e:
             return _text_response(f"Ошибка выполнения поискового запроса: {e}")

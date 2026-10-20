@@ -93,7 +93,7 @@
             </td>
             <td>{% if sq.track_stats %}{{ sq.interval_minutes }} мин{% else %}—{% endif %}</td>
             <td>{% if sq.is_active %}<span class="badge-active">{{ icon("active") }}</span>{% else %}<span class="badge-inactive">&#9679;</span>{% endif %}</td>
-            <td>{{ item.total_30d }}</td>
+            <td>{{ item.total_30d if item.total_30d is not none else '—' }}</td>
             <td>{{ item.last_run[:16] if item.last_run else "—" }}</td>
             <td>
                 {% if sq.is_regex %}
@@ -221,7 +221,7 @@
             <small class="text-muted">
                 {% if sq.is_regex %}regex{% endif %}{% if sq.is_fts %}fts{% endif %}
                 {% if sq.track_stats %}&middot; {{ sq.interval_minutes }} мин{% endif %}
-                &middot; {{ item.total_30d }} за 30д
+                &middot; {{ item.total_30d if item.total_30d is not none else '—' }} за 30д
                 {% if item.last_run %}&middot; {{ item.last_run[:16] }}{% endif %}
             </small>
             <div class="small mt-1">
