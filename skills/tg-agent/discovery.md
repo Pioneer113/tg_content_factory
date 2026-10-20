@@ -70,10 +70,10 @@ tg-agent channel toggle <channel-id-or-username>
 tg-agent channel collect <channel-id-or-username>
 ```
 
-`toggle` flips the cached inactive row to active with `origin="human"` (the
-auto-filter logic can never undo a human activation; the decision is audited
-in `channel_decisions`). `collect` pulls the first history — through the
-worker queue if the daemon is running.
+`toggle` approves the pending candidate (`approval_state='approved'`,
+`active_origin='human'` — the auto-filter logic can never undo a human
+approval; the decision is audited in the decisions journal). `collect` pulls
+the first history — through the worker queue if the daemon is running.
 
 Never bulk-activate without a per-candidate yes.
 
@@ -102,5 +102,5 @@ tg-agent channel tag set <pk> keep
   and stop.
 - `search-query` commands are an FTS counter over ALREADY collected messages —
   unrelated to discovery candidates; do not use them here.
-- Inactive discovery candidates are invisible to regular collection until
-  toggled.
+- Discovery candidates sit in the approval queue (`approval_state='pending'`)
+  and are invisible to regular collection until approved with `channel toggle`.
