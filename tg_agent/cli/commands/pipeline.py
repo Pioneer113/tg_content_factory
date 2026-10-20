@@ -238,6 +238,11 @@ async def _pipeline_add_from_json(
         "name": args.name,
         "prompt_template": args.prompt_template or ".",
         "llm_model": args.llm_model,
+        # Same flags the --node and legacy paths pass (#1594): import_json
+        # defaults to MODERATED/CHAIN/None when the payload omits them.
+        "image_model": args.image_model,
+        "generation_backend": args.generation_backend,
+        "publish_mode": args.publish_mode,
         "source_ids": args.source or [],
         "target_refs": (
             [{"phone": r.phone, "dialog_id": r.dialog_id} for r in _parse_target_refs(args.target)]
