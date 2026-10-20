@@ -1641,23 +1641,25 @@ class TestMessagesReadDbMode:
         db.close = AsyncMock()
 
         with patch("tg_agent.cli.commands.messages.runtime.init_db", side_effect=_make_coro((MagicMock(), db))):
-            run(cli_ns(
-                messages_action="read",
-                identifier="testch",
-                live=False,
-                query=None,
-                date_from=None,
-                date_to=None,
-                limit=10,
-                output_format="text",
-                topic_id=None,
-                offset_id=None,
-                include_reaction_users=True,
-                reaction_users_limit=20,
-            ))
+            with pytest.raises(typer.Exit) as exc_info:
+                run(cli_ns(
+                    messages_action="read",
+                    identifier="testch",
+                    live=False,
+                    query=None,
+                    date_from=None,
+                    date_to=None,
+                    limit=10,
+                    output_format="text",
+                    topic_id=None,
+                    offset_id=None,
+                    include_reaction_users=True,
+                    reaction_users_limit=20,
+                ))
 
-        out = capsys.readouterr().out
-        assert "--include-reaction-users works only with --live." in out
+        captured = capsys.readouterr()
+        assert "--include-reaction-users works only with --live." in captured.err
+        assert exc_info.value.exit_code == 1
         db.get_channels.assert_not_called()
 
     def test_channel_not_found(self, capsys):

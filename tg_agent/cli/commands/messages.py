@@ -251,8 +251,11 @@ async def messages_read_impl(
                 print(f"Error reading messages: {exc}")
         else:
             if include_reaction_users:
-                print("--include-reaction-users works only with --live.")
-                return
+                print(
+                    "--include-reaction-users works only with --live.",
+                    file=sys.stderr,
+                )
+                raise typer.Exit(1)
             # DB mode: read collected messages
             channels = await db.get_channels()
             ch = resolve_channel(channels, identifier)
