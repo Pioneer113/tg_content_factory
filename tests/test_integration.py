@@ -107,7 +107,9 @@ class TestAuthFlow:
         assert "WWW-Authenticate" in resp.headers
 
     @pytest.mark.anyio
-    async def test_with_auth_returns_200(self, auth_client):
+    async def test_with_auth_returns_200(self, auth_client, app_with_db):
+        app, _ = app_with_db
+        app.state.agent_manager = SimpleNamespace(available=False)
         resp = await auth_client.get("/")
         assert resp.status_code == 200
         assert resp.url.path == "/search"
@@ -514,7 +516,7 @@ class TestCollectorIncremental:
 
         pool = _make_pool(get_available_client=AsyncMock(return_value=(mock_client, "+7000")))
 
-        config = SchedulerConfig(delay_between_requests_sec=0)
+        config = SchedulerConfig(delay_between_channels_sec=0, delay_between_requests_sec=0)
         collector = Collector(pool, test_db, config)
         await collector.collect_all_channels()
 
@@ -638,7 +640,7 @@ class TestFloodWaitRotation:
             ),
         )
 
-        config = SchedulerConfig(max_flood_wait_sec=300, delay_between_requests_sec=0)
+        config = SchedulerConfig(max_flood_wait_sec=300, delay_between_channels_sec=0, delay_between_requests_sec=0)
         collector = Collector(pool, test_db, config)
         await collector.collect_all_channels()
 

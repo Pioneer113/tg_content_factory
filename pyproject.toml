@@ -103,6 +103,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    # The offline wheel-content test builds with the declared backend in this environment.
+    "setuptools>=77.0",
+    "wheel",
     "import-linter>=2.11",
     "pytest>=9.0.3",
     "pytest-asyncio>=1.3.0",

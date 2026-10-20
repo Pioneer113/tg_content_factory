@@ -3,6 +3,7 @@
 import json
 import os
 import sqlite3
+from contextlib import closing
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -79,7 +80,7 @@ async def test_dotenv_only_import_encrypts_session(tmp_path, monkeypatch):
     session.auth_key = AuthKey(os.urandom(256))
     plaintext = session.save()
     await account.import_impl("config.yaml", phone="+79990000009", session_string=plaintext)
-    with sqlite3.connect("data/tg_search.db") as conn:
+    with closing(sqlite3.connect("data/tg_search.db")) as conn:
         stored = conn.execute("SELECT session_string FROM accounts").fetchone()[0]
     assert stored.startswith("enc:v2:")
     assert stored != plaintext

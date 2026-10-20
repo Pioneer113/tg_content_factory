@@ -209,6 +209,7 @@ def _read_test_source(path_str: str) -> str:
         return ""
 
 
+@lru_cache(maxsize=None)
 def _file_requires_aiosqlite_serial(path_str: str) -> bool:
     text = _read_test_source(path_str)
     return any(

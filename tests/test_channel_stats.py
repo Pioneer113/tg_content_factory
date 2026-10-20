@@ -406,7 +406,7 @@ async def test_collect_all_stats(db):
 
     pool = make_mock_pool(get_available_client=AsyncMock(return_value=(mock_client, "+7000")))
 
-    collector = Collector(pool, db, SchedulerConfig())
+    collector = Collector(pool, db, SchedulerConfig(delay_between_channels_sec=0, delay_between_requests_sec=0))
     result = await collector.collect_all_stats()
 
     assert result["channels"] == 2

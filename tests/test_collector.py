@@ -219,7 +219,7 @@ async def test_collect_positive_id_end_to_end(db):
 
     pool = make_mock_pool(get_available_client=AsyncMock(return_value=(mock_client, "+7000")))
 
-    collector = Collector(pool, db, SchedulerConfig())
+    collector = Collector(pool, db, SchedulerConfig(delay_between_channels_sec=0, delay_between_requests_sec=0))
     stats = await collector.collect_all_channels()
 
     assert stats["channels"] == 1
@@ -636,7 +636,7 @@ async def test_collect_all_channels_continues_after_mid_run_resolve_flood(db):
     s2 = TelegramTransportSession(raw2, disconnect_on_close=False, phone="+7002", pool=pool)
     pool.get_available_client = AsyncMock(side_effect=[(s1, "+7001"), (s2, "+7002")])
     collector = Collector(
-        pool, db, SchedulerConfig(delay_between_requests_sec=0, max_flood_wait_sec=10)
+        pool, db, SchedulerConfig(delay_between_channels_sec=0, delay_between_requests_sec=0, max_flood_wait_sec=10)
     )
 
     stats = await collector.collect_all_channels()
@@ -680,7 +680,7 @@ async def test_collect_all_channels_rotates_flooded_channel_mid_run(db):
     s2 = TelegramTransportSession(raw2, disconnect_on_close=False, phone="+7002", pool=pool)
     pool.get_available_client = AsyncMock(side_effect=[(s1, "+7001"), (s2, "+7002")])
     collector = Collector(
-        pool, db, SchedulerConfig(delay_between_requests_sec=0, max_flood_wait_sec=10)
+        pool, db, SchedulerConfig(delay_between_channels_sec=0, delay_between_requests_sec=0, max_flood_wait_sec=10)
     )
 
     stats = await collector.collect_all_channels()
@@ -844,7 +844,7 @@ async def test_collect_no_username_channel_fetches_dialogs_once(db):
 
     pool = make_mock_pool(get_available_client=AsyncMock(return_value=(mock_client, "+7000")))
 
-    collector = Collector(pool, db, SchedulerConfig())
+    collector = Collector(pool, db, SchedulerConfig(delay_between_channels_sec=0, delay_between_requests_sec=0))
     # First collection — cache is cold, get_dialogs() must be called
     await collector.collect_all_channels()
     mock_client.get_dialogs.assert_awaited_once()
@@ -944,7 +944,7 @@ async def test_collect_channel_no_username_no_cache_skips_without_error(db):
 
     pool = make_mock_pool(get_available_client=AsyncMock(return_value=(mock_client, "+7000")))
 
-    collector = Collector(pool, db, SchedulerConfig())
+    collector = Collector(pool, db, SchedulerConfig(delay_between_channels_sec=0, delay_between_requests_sec=0))
     stats = await collector.collect_all_channels()
     assert stats["errors"] == 0
     assert stats["messages"] == 0
@@ -971,7 +971,7 @@ async def test_collect_private_group_uses_map_phone(db):
     )
     pool._channel_phone_map[1877929309] = "+7001"
 
-    collector = Collector(pool, db, SchedulerConfig())
+    collector = Collector(pool, db, SchedulerConfig(delay_between_channels_sec=0, delay_between_requests_sec=0))
     stats = await collector.collect_all_channels()
 
     assert stats["errors"] == 0
@@ -1010,7 +1010,7 @@ async def test_collect_private_group_discovers_access_phone(db):
         get_client_by_phone=AsyncMock(side_effect=get_client_by_phone_side_effect),
     )
 
-    collector = Collector(pool, db, SchedulerConfig())
+    collector = Collector(pool, db, SchedulerConfig(delay_between_channels_sec=0, delay_between_requests_sec=0))
     stats = await collector.collect_all_channels()
 
     assert stats["errors"] == 0
@@ -1032,7 +1032,7 @@ async def test_collect_private_group_without_resolvable_entity_skips_for_review_
         get_available_client=AsyncMock(return_value=(mock_client, "+7000")),
     )
 
-    collector = Collector(pool, db, SchedulerConfig())
+    collector = Collector(pool, db, SchedulerConfig(delay_between_channels_sec=0, delay_between_requests_sec=0))
     stats = await collector.collect_all_channels()
 
     assert stats["errors"] == 0
@@ -1056,7 +1056,7 @@ async def test_collect_all_dialogs_timeout(db):
 
     pool = make_mock_pool(get_available_client=AsyncMock(return_value=(mock_client, "+7000")))
 
-    collector = Collector(pool, db, SchedulerConfig())
+    collector = Collector(pool, db, SchedulerConfig(delay_between_channels_sec=0, delay_between_requests_sec=0))
     stats = await collector.collect_all_channels()
 
     # Collection should complete despite dialogs timeout

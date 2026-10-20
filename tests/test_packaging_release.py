@@ -30,9 +30,12 @@ def test_packaging_config_keeps_tg_agent_namespace_for_console_script() -> None:
 
 
 def _build_wheel(tmp_path: Path) -> Path:
-    """Build a wheel through the declared PEP 517 path (isolated build env)."""
+    """Build a wheel offline with the declared backend installed by the dev extra."""
     subprocess.run(
-        [sys.executable, "-m", "pip", "wheel", "--no-deps", "-w", str(tmp_path), str(ROOT)],
+        [
+            sys.executable, "-m", "pip", "wheel", "--no-deps", "--no-build-isolation", "--no-index",
+            "-w", str(tmp_path), str(ROOT),
+        ],
         check=True,
         capture_output=True,
         text=True,
@@ -54,8 +57,8 @@ def test_wheel_ships_tg_agent_package_not_src(tmp_path: Path) -> None:
     import name ever drifts back to something generic.
 
     Explicit level/mutation markers: this spawns ``pip wheel`` out-of-process
-    with build isolation (PyPI network, tens of seconds) — outside the unit
-    contract and excluded from mutation runs (mutmut_skip semantics).
+    using the locally installed build backend — outside the unit contract and
+    excluded from mutation runs (mutmut_skip semantics).
     """
     wheel = _build_wheel(tmp_path)
 

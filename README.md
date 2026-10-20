@@ -236,11 +236,11 @@ telethon-cli users get-me --output json
  # Install dev dependencies
  pip install -e ".[dev]"
 
- # Run parallel-safe tests (all available CPUs minus one worker)
+ # Run parallel-safe tests (up to four workers locally)
  pytest tests/ -v -m "not aiosqlite_serial" -n auto
 
- # Run aiosqlite-backed tests serially
- pytest tests/ -v -m aiosqlite_serial
+ # Keep aiosqlite-backed tests sequential within each file; run independent files in parallel
+ pytest tests/ -q -m aiosqlite_serial -n auto --dist=loadfile
 
  # Run a single test
  pytest tests/test_web.py::test_health_endpoint -v
