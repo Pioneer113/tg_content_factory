@@ -202,6 +202,10 @@ FLASH_ERRORS = {
     "photo_run_due_failed": "Не удалось выполнить due photo tasks.",
     "semantic_invalid_value": "Некорректные настройки semantic search.",
     "semantic_unavailable": "Текущий semantic backend недоступен в этой среде.",
+    "encryption_key_required": (
+        "SESSION_ENCRYPTION_KEY не задан — API-ключ semantic-поиска не сохранён: "
+        "без него секрет лёг бы в БД открытым текстом."
+    ),
     "photo_item_cancel_failed": "Не удалось отменить photo task.",
     "pipeline_invalid": "Параметры pipeline некорректны или dialog cache не заполнен.",
     "pipeline_run_failed": "Не удалось поставить запуск pipeline в очередь.",

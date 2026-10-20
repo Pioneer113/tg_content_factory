@@ -28,14 +28,21 @@ from tg_agent.filters.criteria import (
     SETTING_FILTER_MIN_SUBSCRIBER_RATIO,
     SETTING_FILTER_MIN_UNIQUENESS,
 )
+from tg_agent.security.masking import CREDENTIALS_MASK, is_secret_setting_key
 
 
 async def get_impl(config_path: str, *, key: str | None = None) -> None:
-    """Show one setting (``--key``) or all settings."""
+    """Show one setting (``--key``) or all settings.
+
+    Secret-looking keys (``*_api_key``/``*_token``/``*_secret``/…) are masked —
+    CLI output lands in agent transcripts and logs (#1597).
+    """
     _, db = await runtime.init_db(config_path)
     try:
         if key:
             value = await db.get_setting(key)
+            if value and is_secret_setting_key(key):
+                value = CREDENTIALS_MASK
             print(f"{key} = {value or '(not set)'}")
         else:
             rows = await db.repos.settings.list_all()
@@ -46,7 +53,12 @@ async def get_impl(config_path: str, *, key: str | None = None) -> None:
             print(fmt.format("Key", "Value"))
             print("-" * 80)
             for k, v in rows:
-                print(fmt.format(k, v[:80] if v else ""))
+                display = (
+                    CREDENTIALS_MASK
+                    if v and is_secret_setting_key(k)
+                    else (v[:80] if v else "")
+                )
+                print(fmt.format(k, display))
     finally:
         await db.close()
 
@@ -67,6 +79,8 @@ async def set_impl(config_path: str, *, key: str, value: str) -> None:
     """
     _, db = await runtime.init_db(config_path)
     try:
+        from tg_agent.services.embedding_service import EMBEDDINGS_API_KEY_SETTING
+
         paused_key = "collection_queue_paused"
         reconcile_keys = {
             "collect_interval_minutes",
@@ -82,16 +96,26 @@ async def set_impl(config_path: str, *, key: str, value: str) -> None:
             followup = "scheduler.reconcile"
         elif key in reconcile_keys:
             followup = "scheduler.reconcile"
-        await db.set_setting(key, value)
+        if key == EMBEDDINGS_API_KEY_SETTING:
+            # Secret at rest (#1597): encrypted like provider keys, refused
+            # without SESSION_ENCRYPTION_KEY instead of saved as plaintext.
+            try:
+                await db.repos.settings.set_secret(key, value)
+            except RuntimeError as exc:
+                print(f"ERROR: {exc}")
+                return
+        else:
+            await db.set_setting(key, value)
+        display = CREDENTIALS_MASK if is_secret_setting_key(key) else value
         if followup is None:
-            print(f"Set {key} = {value}")
+            print(f"Set {key} = {display}")
         else:
             from tg_agent.services.telegram_command_service import TelegramCommandService
 
             await TelegramCommandService(db).enqueue(
                 followup, payload={}, requested_by="cli:settings.set"
             )
-            print(f"Set {key} = {value}; enqueued {followup} for the running worker")
+            print(f"Set {key} = {display}; enqueued {followup} for the running worker")
     finally:
         await db.close()
 
@@ -253,6 +277,15 @@ async def semantic_impl(
             EMBEDDINGS_PROVIDER_SETTING,
         )
 
+        # Refuse BEFORE any partial write (#1597): the API key is stored
+        # encrypted (enc:v2), which is impossible without SESSION_ENCRYPTION_KEY.
+        if api_key is not None and not db.repos.settings.secrets_enabled:
+            print(
+                "ERROR: SESSION_ENCRYPTION_KEY is required to store the embeddings "
+                "API key; without it the key would be saved as plaintext."
+            )
+            return
+
         semantic_keys = [
             ("provider", EMBEDDINGS_PROVIDER_SETTING),
             ("model", EMBEDDINGS_MODEL_SETTING),
@@ -263,8 +296,12 @@ async def semantic_impl(
         for attr, setting_key in semantic_keys:
             val = values[attr]
             if val is not None:
-                await db.set_setting(setting_key, val)
-                display = val[:20] + "..." if attr == "api_key" and len(val) > 20 else val
+                if attr == "api_key":
+                    await db.repos.settings.set_secret(setting_key, val)
+                    display = CREDENTIALS_MASK
+                else:
+                    await db.set_setting(setting_key, val)
+                    display = val
                 updated.append(f"{setting_key} = {display}")
         if updated:
             for u in updated:
@@ -273,7 +310,7 @@ async def semantic_impl(
             for _attr, setting_key in semantic_keys:
                 val = await db.get_setting(setting_key)
                 if setting_key == EMBEDDINGS_API_KEY_SETTING and val:
-                    val = val[:8] + "..."
+                    val = CREDENTIALS_MASK
                 print(f"  {setting_key} = {val or '(not set)'}")
     finally:
         await db.close()

@@ -197,7 +197,7 @@ class Database:
         self._tasks = CollectionTasksRepository(read_db, database=self)
         self._search_log = SearchLogRepository(read_db, database=self)
         self._channel_stats = ChannelStatsRepository(read_db, database=self)
-        self._settings = SettingsRepository(read_db, database=self)
+        self._settings = SettingsRepository(read_db, database=self, session_cipher=session_cipher)
         self._filters = FilterRepository(read_db, database=self)
         self._notification_bots = NotificationBotsRepository(read_db, database=self)
         self._notified_messages = NotifiedMessagesRepository(read_db, database=self)

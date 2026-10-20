@@ -6,6 +6,7 @@ from typing import Any, TypeAlias, TypeVar
 from fastapi import Request
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from tg_agent.security.masking import CREDENTIALS_MASK
 from tg_agent.services.embedding_service import (
     DEFAULT_EMBEDDINGS_BATCH_SIZE,
     DEFAULT_EMBEDDINGS_MODEL,
@@ -13,7 +14,7 @@ from tg_agent.services.embedding_service import (
 )
 from tg_agent.services.telegram_command_dispatcher import DEFAULT_REACTION_MIN_INTERVAL_SEC
 
-CREDENTIALS_MASK = "••••••••"
+__all__ = ["CREDENTIALS_MASK", "SettingsFormError"]
 
 
 class SettingsFormError(ValueError):

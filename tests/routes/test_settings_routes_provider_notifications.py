@@ -146,7 +146,9 @@ async def test_save_scheduler_clamps_interval(route_client, db):
 
 @pytest.mark.anyio
 async def test_save_semantic_search_saves_api_key(route_client, db):
-    """Test save semantic search saves API key when not masked (lines 610-613)."""
+    """Test save semantic search stores the API key encrypted (issue #1597)."""
+    from tg_agent.security import SessionCipher
+
     resp = await route_client.post(
         "/settings/save-semantic-search",
         data={
@@ -160,7 +162,28 @@ async def test_save_semantic_search_saves_api_key(route_client, db):
     assert resp.status_code == 303
     assert "msg=semantic_saved" in resp.headers["location"]
     saved_key = await db.get_setting("semantic_embeddings_api_key")
-    assert saved_key == "sk-test-key-123"
+    assert saved_key is not None
+    assert saved_key.startswith("enc:v2:")
+    assert "sk-test-key-123" not in saved_key
+    assert SessionCipher("test-session-encryption-key").decrypt(saved_key) == "sk-test-key-123"
+
+
+@pytest.mark.anyio
+async def test_save_semantic_search_refuses_without_encryption_key(route_client, db):
+    """Without SESSION_ENCRYPTION_KEY the key must be refused, not stored as plaintext."""
+    db.repos.settings._session_cipher = None
+    resp = await route_client.post(
+        "/settings/save-semantic-search",
+        data={
+            "semantic_embeddings_provider": "openai",
+            "semantic_embeddings_model": "text-embedding-3-small",
+            "semantic_embeddings_batch_size": "100",
+            "semantic_embeddings_api_key": "sk-test-key-123",
+        },
+        follow_redirects=False,
+    )
+    assert "error=encryption_key_required" in resp.headers["location"]
+    assert await db.get_setting("semantic_embeddings_api_key") is None
 
 
 @pytest.mark.anyio

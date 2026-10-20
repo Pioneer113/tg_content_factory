@@ -65,7 +65,8 @@ class EmbeddingService:
             await self._search.get_setting(EMBEDDINGS_MODEL_SETTING) or DEFAULT_EMBEDDINGS_MODEL
         ).strip()
         api_key = (
-            await self._search.get_setting(EMBEDDINGS_API_KEY_SETTING)
+            # The stored key is enc:v2-encrypted (#1597); legacy plaintext passes through.
+            await self._search.settings.get_secret(EMBEDDINGS_API_KEY_SETTING)
             or (self._config.llm.api_key if self._config else "")
         ).strip()
         base_url = (await self._search.get_setting(EMBEDDINGS_BASE_URL_SETTING) or "").strip()

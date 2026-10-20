@@ -242,6 +242,9 @@ account send-code | verify-code        # interactive first-time auth — user do
 account flood-status | flood-clear
 notification setup | status | delete | test | dry-run | set-account
 settings get | set | info | server-time | agent | filter-criteria | reactions | semantic
+# settings: secret-looking keys (*_api_key, *_token, *_secret, session_secret_key) are
+# masked in get/set output; settings semantic --api-key and `set semantic_embeddings_api_key`
+# store the key encrypted (enc:v2) and are refused without SESSION_ENCRYPTION_KEY (#1597).
 # settings set: runtime keys reach the live worker too — collection_queue_paused
 # (values true/1/yes/on → pause, else resume) enqueues collection.pause/resume;
 # scheduler_autostart, *_interval_minutes, scheduler_job_disabled:* enqueue scheduler.reconcile.
