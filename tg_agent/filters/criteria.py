@@ -33,6 +33,14 @@ CROSS_DUPE_THRESHOLD = 50.0
 NON_CYRILLIC_THRESHOLD = 10.0
 CHAT_NOISE_THRESHOLD = 70.0
 
+# Настройки-пороги (#1596): пишет CLI `settings filter-criteria`, читает
+# ChannelAnalyzer._load_thresholds(). Нет настройки — действует константа-дефолт
+# выше; значение вне допустимого диапазона — тоже откат к дефолту.
+SETTING_FILTER_MIN_UNIQUENESS = "filter_min_uniqueness"
+SETTING_FILTER_MIN_SUBSCRIBER_RATIO = "filter_min_subscriber_ratio"
+SETTING_FILTER_MAX_CROSS_DUPE_PCT = "filter_max_cross_dupe_pct"
+SETTING_FILTER_MIN_CYRILLIC_PCT = "filter_min_cyrillic_pct"
+
 # «Автогенерённая лента» (auto_feed): канал публикует короткие посты по одному
 # шаблону со ссылкой наружу (слаг-фиды, автопостинг). Откалибровано на живой БД
 # 04.10.26: шаблонный слаг-фид = 88.8% коротких постов со ссылкой, writeup-канал =

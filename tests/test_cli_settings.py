@@ -109,6 +109,37 @@ class TestFilterCriteria:
         out = capsys.readouterr().out
         assert "0.75" in out
 
+    # Валидация диапазонов (#1596): проценты 0–100, ratio > 0; невалидное
+    # значение отклоняет вызов целиком — ничего не сохраняется.
+
+    def test_filter_criteria_rejects_percent_above_100(self, cli_env, capsys):
+        from tg_agent.cli.commands.settings import run
+        run(_ns(settings_action="filter-criteria", min_uniqueness=101))
+        out = capsys.readouterr().out
+        assert "Invalid" in out
+        assert "Nothing saved" in out
+
+    def test_filter_criteria_rejects_negative_percent(self, cli_env, capsys):
+        from tg_agent.cli.commands.settings import run
+        run(_ns(settings_action="filter-criteria", max_cross_dupe=-5))
+        out = capsys.readouterr().out
+        assert "Invalid" in out
+
+    def test_filter_criteria_rejects_nonpositive_sub_ratio(self, cli_env, capsys):
+        from tg_agent.cli.commands.settings import run
+        run(_ns(settings_action="filter-criteria", min_sub_ratio=0))
+        out = capsys.readouterr().out
+        assert "Invalid" in out
+
+    def test_filter_criteria_rejection_writes_nothing(self, cli_env, capsys):
+        from tg_agent.cli.commands.settings import run
+        run(_ns(settings_action="filter-criteria", min_uniqueness=150, min_cyrillic=60))
+        capsys.readouterr()
+        run(_ns(settings_action="filter-criteria"))
+        out = capsys.readouterr().out
+        # Валидный min_cyrillic=60 из отклонённого вызова тоже не сохранился.
+        assert "filter_min_cyrillic_pct = (not set)" in out
+
 
 class TestReactions:
     def test_reactions_show_defaults(self, cli_env, capsys):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import dataclass
 
 from tg_agent.database import Database
 from tg_agent.filters.criteria import (
@@ -21,11 +22,15 @@ from tg_agent.filters.criteria import (
     LOW_SUBSCRIBER_RATIO_THRESHOLD,
     LOW_UNIQUENESS_THRESHOLD,
     NON_CYRILLIC_THRESHOLD,
+    SETTING_FILTER_MAX_CROSS_DUPE_PCT,
+    SETTING_FILTER_MIN_CYRILLIC_PCT,
+    SETTING_FILTER_MIN_SUBSCRIBER_RATIO,
+    SETTING_FILTER_MIN_UNIQUENESS,
     SUSPICIOUS_USERNAME_RE,
     WHITELIST_FLAG,
 )
 from tg_agent.filters.models import ChannelFilterResult, FilterReport
-from tg_agent.settings_utils import parse_int_setting
+from tg_agent.settings_utils import parse_float_setting, parse_int_setting
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +38,21 @@ logger = logging.getLogger(__name__)
 # is added in one place (e.g. gigagroup, #971). Everything else — incl. NULL
 # channel_type from legacy imports — is judged as broadcast / by the data.
 CHAT_CHANNEL_TYPES = ("group", "supergroup", "gigagroup", "forum")
+
+
+@dataclass(frozen=True)
+class FilterThresholds:
+    """Операторские пороги из settings (#1596); дефолты — константы criteria.py.
+
+    min_sub_ratio заменяет broadcast-порог LOW_SUBSCRIBER_RATIO_THRESHOLD;
+    чат-порог остаётся константой — у метрики чатов своя калибровка, а ключ
+    настройки один и означает канальный (broadcast) порог.
+    """
+
+    min_uniqueness: float
+    min_sub_ratio: float
+    max_cross_dupe: float
+    min_cyrillic: float
 
 
 async def _timed_fetch(label: str, coro):
@@ -57,6 +77,38 @@ class ChannelAnalyzer:
             setting_name="min_subscribers_filter",
             default=0,
             logger=logger,
+        )
+
+    async def _load_threshold_setting(
+        self,
+        key: str,
+        default: float,
+        *,
+        minimum: float,
+        maximum: float | None,
+    ) -> float:
+        raw = await self._database.get_setting(key)
+        value = parse_float_setting(raw, setting_name=key, default=default, logger=logger)
+        if value < minimum or (maximum is not None and value > maximum):
+            logger.warning("%s out of range in settings DB (%r), using default %s", key, raw, default)
+            return default
+        return value
+
+    async def _load_thresholds(self) -> FilterThresholds:
+        """Пороги из settings (#1596): нет ключа / мусор / вне диапазона — дефолт."""
+        return FilterThresholds(
+            min_uniqueness=await self._load_threshold_setting(
+                SETTING_FILTER_MIN_UNIQUENESS, LOW_UNIQUENESS_THRESHOLD, minimum=0.0, maximum=100.0
+            ),
+            min_sub_ratio=await self._load_threshold_setting(
+                SETTING_FILTER_MIN_SUBSCRIBER_RATIO, LOW_SUBSCRIBER_RATIO_THRESHOLD, minimum=0.0, maximum=None
+            ),
+            max_cross_dupe=await self._load_threshold_setting(
+                SETTING_FILTER_MAX_CROSS_DUPE_PCT, CROSS_DUPE_THRESHOLD, minimum=0.0, maximum=100.0
+            ),
+            min_cyrillic=await self._load_threshold_setting(
+                SETTING_FILTER_MIN_CYRILLIC_PCT, NON_CYRILLIC_THRESHOLD, minimum=0.0, maximum=100.0
+            ),
         )
 
     async def _fetch_channels_for_report(self, channel_id: int | None, started_at: float) -> list:
@@ -130,7 +182,9 @@ class ChannelAnalyzer:
             forward_map,
         )
 
-    def _append_uniqueness_flag(self, flags: list[str], channel_id_value: int, uniqueness_map: dict) -> float | None:
+    def _append_uniqueness_flag(
+        self, flags: list[str], channel_id_value: int, uniqueness_map: dict, min_uniqueness: float
+    ) -> float | None:
         uniqueness_pct: float | None = None
         low_uniqueness = False
         if channel_id_value in uniqueness_map:
@@ -138,7 +192,7 @@ class ChannelAnalyzer:
             if total > 0:
                 raw_uniqueness = uniq / total * 100
                 uniqueness_pct = round(raw_uniqueness, 1)
-                low_uniqueness = raw_uniqueness < LOW_UNIQUENESS_THRESHOLD
+                low_uniqueness = raw_uniqueness < min_uniqueness
         if low_uniqueness:
             flags.append("low_uniqueness")
         return uniqueness_pct
@@ -150,6 +204,7 @@ class ChannelAnalyzer:
         message_count: int,
         subscriber_count: int | None,
         min_subs: int,
+        sub_ratio_threshold: float,
     ) -> float | None:
         subscriber_ratio: float | None = None
         low_subscriber = False
@@ -160,7 +215,7 @@ class ChannelAnalyzer:
             # the DB are typed, and for a chat the metric is meaningless anyway.
             is_broadcast = channel["channel_type"] not in CHAT_CHANNEL_TYPES
             threshold = (
-                LOW_SUBSCRIBER_RATIO_THRESHOLD
+                sub_ratio_threshold
                 if is_broadcast
                 else LOW_SUBSCRIBER_RATIO_CHAT_THRESHOLD
             )
@@ -174,7 +229,9 @@ class ChannelAnalyzer:
             flags.append("low_subscriber_ratio")
         return subscriber_ratio
 
-    def _append_cross_dupe_flag(self, flags: list[str], channel_id_value: int, cross_dupe_map: dict) -> float | None:
+    def _append_cross_dupe_flag(
+        self, flags: list[str], channel_id_value: int, cross_dupe_map: dict, max_cross_dupe: float
+    ) -> float | None:
         cross_dupe_pct: float | None = None
         cross_dupe = False
         if channel_id_value in cross_dupe_map:
@@ -182,12 +239,14 @@ class ChannelAnalyzer:
             if uniq_total > 0:
                 raw_cross_pct = duped / uniq_total * 100
                 cross_dupe_pct = round(raw_cross_pct, 1)
-                cross_dupe = raw_cross_pct > CROSS_DUPE_THRESHOLD
+                cross_dupe = raw_cross_pct > max_cross_dupe
         if cross_dupe:
             flags.append("cross_channel_spam")
         return cross_dupe_pct
 
-    def _append_cyrillic_flag(self, flags: list[str], channel_id_value: int, cyrillic_map: dict) -> float | None:
+    def _append_cyrillic_flag(
+        self, flags: list[str], channel_id_value: int, cyrillic_map: dict, min_cyrillic: float
+    ) -> float | None:
         cyrillic_pct: float | None = None
         non_cyrillic = False
         if channel_id_value in cyrillic_map:
@@ -195,7 +254,7 @@ class ChannelAnalyzer:
             if cyr_total > 0:
                 raw_cyr_pct = cyr_count / cyr_total * 100
                 cyrillic_pct = round(raw_cyr_pct, 1)
-                non_cyrillic = raw_cyr_pct < NON_CYRILLIC_THRESHOLD
+                non_cyrillic = raw_cyr_pct < min_cyrillic
         if non_cyrillic:
             flags.append("non_cyrillic")
         return cyrillic_pct
@@ -292,16 +351,25 @@ class ChannelAnalyzer:
         engagement_map: dict,
         forward_map: dict,
         min_subs: int,
+        thresholds: FilterThresholds,
     ) -> ChannelFilterResult:
         channel_id_value = channel["channel_id"]
         message_count = int(channel["message_count"] or 0)
         flags: list[str] = []
 
-        uniqueness_pct = self._append_uniqueness_flag(flags, channel_id_value, uniqueness_map)
+        uniqueness_pct = self._append_uniqueness_flag(
+            flags, channel_id_value, uniqueness_map, thresholds.min_uniqueness
+        )
         subscriber_count = subscriber_map.get(channel_id_value)
-        subscriber_ratio = self._append_subscriber_flags(flags, channel, message_count, subscriber_count, min_subs)
-        cross_dupe_pct = self._append_cross_dupe_flag(flags, channel_id_value, cross_dupe_map)
-        cyrillic_pct = self._append_cyrillic_flag(flags, channel_id_value, cyrillic_map)
+        subscriber_ratio = self._append_subscriber_flags(
+            flags, channel, message_count, subscriber_count, min_subs, thresholds.min_sub_ratio
+        )
+        cross_dupe_pct = self._append_cross_dupe_flag(
+            flags, channel_id_value, cross_dupe_map, thresholds.max_cross_dupe
+        )
+        cyrillic_pct = self._append_cyrillic_flag(
+            flags, channel_id_value, cyrillic_map, thresholds.min_cyrillic
+        )
         short_msg_pct = self._append_chat_noise_flag(flags, channel, channel_id_value, short_map)
         auto_feed_pct = self._append_auto_feed_flag(flags, channel_id_value, auto_feed_map)
         views_ratio_pct = self._append_engagement_flag(flags, channel, subscriber_count, engagement_map)
@@ -339,6 +407,7 @@ class ChannelAnalyzer:
         engagement_map: dict,
         forward_map: dict,
         min_subs: int,
+        thresholds: FilterThresholds,
     ) -> list[ChannelFilterResult]:
         return [
             self._build_channel_result(
@@ -352,6 +421,7 @@ class ChannelAnalyzer:
                 engagement_map=engagement_map,
                 forward_map=forward_map,
                 min_subs=min_subs,
+                thresholds=thresholds,
             )
             for channel in channels
         ]
@@ -395,6 +465,7 @@ class ChannelAnalyzer:
             channel_id, skip_cross_dupe=skip_cross_dupe, sample_size=sample_size
         )
         min_subs = await self._load_min_subscribers_filter()
+        thresholds = await self._load_thresholds()
         results = self._build_channel_results(
             channels,
             uniqueness_map=uniqueness_map,
@@ -406,6 +477,7 @@ class ChannelAnalyzer:
             engagement_map=engagement_map,
             forward_map=forward_map,
             min_subs=min_subs,
+            thresholds=thresholds,
         )
         return self._filter_report_from_results(results, t0)
 
@@ -578,6 +650,7 @@ class ChannelAnalyzer:
             include_filtered=False,
         )
         stats_map = await self._database.get_latest_stats_for_all()
+        thresholds = await self._load_thresholds()
         to_filter: list[tuple[int, str]] = []
         for channel in channels:
             if channel.channel_id in keep_ids:
@@ -590,7 +663,7 @@ class ChannelAnalyzer:
             # rule as _append_subscriber_flags.
             is_broadcast = channel.channel_type not in CHAT_CHANNEL_TYPES
             threshold = (
-                LOW_SUBSCRIBER_RATIO_THRESHOLD
+                thresholds.min_sub_ratio
                 if is_broadcast
                 else LOW_SUBSCRIBER_RATIO_CHAT_THRESHOLD
             )

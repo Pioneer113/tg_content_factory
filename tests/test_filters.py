@@ -178,11 +178,14 @@ class TestSavedThresholdSettings:
     """
 
     async def test_saved_uniqueness_threshold_used(self, db, raw_db):
-        # 40% уникальности: выше дефолта 30 (чисто), ниже сохранённого 35 → флаг.
+        # 40% уникальности (4 distinct / 10): выше дефолта 30 (чисто),
+        # ниже сохранённого 45 → флаг.
         await _insert_channel(raw_db, 110)
-        texts = ["unique A", "unique B", "unique C", "unique D"] + ["same"] * 6
+        texts = ["уникальный пост раз", "уникальный пост два", "уникальный пост три"] + [
+            "одно и то же сообщение"
+        ] * 7
         await _insert_messages(raw_db, 110, texts)
-        await db.set_setting("filter_min_uniqueness", "35")
+        await db.set_setting("filter_min_uniqueness", "45")
         analyzer = ChannelAnalyzer(db)
         result = await analyzer.analyze_channel(110)
         assert result.uniqueness_pct == 40.0
@@ -252,11 +255,14 @@ class TestSavedThresholdSettings:
         # Вне-диапазонное значение в БД (напр. до появления валидации записи)
         # не крэшит и не глушит флаг: откат к дефолту criteria.py.
         await _insert_channel(raw_db, 340)
-        texts = ["unique A", "unique B", "unique C", "unique D"] + ["same"] * 6
+        texts = ["уникальный пост раз", "уникальный пост два", "уникальный пост три"] + [
+            "одно и то же сообщение"
+        ] * 7
         await _insert_messages(raw_db, 340, texts)
         await db.set_setting("filter_min_uniqueness", "150")
         analyzer = ChannelAnalyzer(db)
         result = await analyzer.analyze_channel(340)
+        assert result.uniqueness_pct == 40.0
         assert "low_uniqueness" not in result.flags
 
 

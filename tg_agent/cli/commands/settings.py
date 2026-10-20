@@ -22,6 +22,12 @@ from tg_agent.cli.commands.common import (
     apply_startup,
     run_async,
 )
+from tg_agent.filters.criteria import (
+    SETTING_FILTER_MAX_CROSS_DUPE_PCT,
+    SETTING_FILTER_MIN_CYRILLIC_PCT,
+    SETTING_FILTER_MIN_SUBSCRIBER_RATIO,
+    SETTING_FILTER_MIN_UNIQUENESS,
+)
 
 
 async def get_impl(config_path: str, *, key: str | None = None) -> None:
@@ -153,14 +159,32 @@ async def filter_criteria_impl(
     max_cross_dupe: float | None = None,
     min_cyrillic: float | None = None,
 ) -> None:
-    """Configure (or show) the channel-filter thresholds."""
+    """Configure (or show) the channel-filter thresholds.
+
+    Values are validated before saving (#1596): the three percent thresholds
+    must be within 0–100, min_sub_ratio must be > 0. Any invalid value rejects
+    the whole invocation — nothing is saved.
+    """
+    if min_uniqueness is not None and not 0.0 <= min_uniqueness <= 100.0:
+        print(f"Invalid --min-uniqueness {min_uniqueness}: must be within 0–100. Nothing saved.")
+        return
+    if min_sub_ratio is not None and min_sub_ratio <= 0:
+        print(f"Invalid --min-sub-ratio {min_sub_ratio}: must be greater than 0. Nothing saved.")
+        return
+    if max_cross_dupe is not None and not 0.0 <= max_cross_dupe <= 100.0:
+        print(f"Invalid --max-cross-dupe {max_cross_dupe}: must be within 0–100. Nothing saved.")
+        return
+    if min_cyrillic is not None and not 0.0 <= min_cyrillic <= 100.0:
+        print(f"Invalid --min-cyrillic {min_cyrillic}: must be within 0–100. Nothing saved.")
+        return
+
     _, db = await runtime.init_db(config_path)
     try:
         mapping = {
-            "min_uniqueness": "filter_min_uniqueness",
-            "min_sub_ratio": "filter_min_subscriber_ratio",
-            "max_cross_dupe": "filter_max_cross_dupe_pct",
-            "min_cyrillic": "filter_min_cyrillic_pct",
+            "min_uniqueness": SETTING_FILTER_MIN_UNIQUENESS,
+            "min_sub_ratio": SETTING_FILTER_MIN_SUBSCRIBER_RATIO,
+            "max_cross_dupe": SETTING_FILTER_MAX_CROSS_DUPE_PCT,
+            "min_cyrillic": SETTING_FILTER_MIN_CYRILLIC_PCT,
         }
         values = {
             "min_uniqueness": min_uniqueness,
