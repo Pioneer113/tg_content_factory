@@ -309,9 +309,14 @@ async def test_expired_lease_reclaims_stranded_task(route_client):
     assert final["result_payload"] == {"sent": True}
 
 
-async def test_lease_seconds_without_claimed_by_rejected(route_client):
-    resp = await route_client.post("/api/tasks/claim", json={"types": ["dm_reply"], "lease_seconds": 60})
-    assert resp.status_code == 422
+async def test_partial_lease_pair_rejected(route_client):
+    # Both one-sided lease claims must 422 (not 500 on the repo assert).
+    for payload in [
+        {"types": ["dm_reply"], "lease_seconds": 60},
+        {"types": ["dm_reply"], "claimed_by": "worker-a"},
+    ]:
+        resp = await route_client.post("/api/tasks/claim", json=payload)
+        assert resp.status_code == 422
 
 
 async def test_lease_rejects_invalid_values(route_client):

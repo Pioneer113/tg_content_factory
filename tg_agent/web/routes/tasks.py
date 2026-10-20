@@ -55,9 +55,9 @@ class ClaimRequest(BaseModel):
     lease_seconds: int | None = Field(default=None, ge=1, le=7 * 24 * 3600)
 
     @model_validator(mode="after")
-    def _lease_needs_owner(self) -> ClaimRequest:
-        if self.lease_seconds is not None and self.claimed_by is None:
-            raise ValueError("lease_seconds requires claimed_by")
+    def _lease_pair_is_complete(self) -> ClaimRequest:
+        if (self.claimed_by is None) != (self.lease_seconds is None):
+            raise ValueError("claimed_by and lease_seconds must be provided together")
         return self
 
 
