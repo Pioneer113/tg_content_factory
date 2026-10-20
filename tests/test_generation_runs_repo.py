@@ -160,6 +160,30 @@ async def test_list_pending_moderation_returns_runs(db):
 
 
 @pytest.mark.anyio
+async def test_list_pending_moderation_created_at_asc_orders_before_limit(db):
+    """order="created_at_asc" sorts the FULL queue before LIMIT (issue #1619).
+
+    A small page must start at the oldest created_at, not at the newest ids:
+    ties on created_at break by id ASC so the order is deterministic.
+    """
+    repo = db.repos.generation_runs
+    for i in range(1, 7):
+        run_id = await repo.create_run(42, f"draft-{i}")
+        await db.execute_write(
+            "UPDATE generation_runs SET created_at = ? WHERE id = ?",
+            (f"2026-10-19 {i:02}:00:00", run_id),
+        )
+
+    rows = await repo.list_pending_moderation(42, limit=2, order="created_at_asc")
+
+    assert [run.id for run in rows] == [1, 2]
+
+    # Default order (moderation queue) stays newest-first.
+    newest = await repo.list_pending_moderation(42, limit=2)
+    assert [run.id for run in newest] == [6, 5]
+
+
+@pytest.mark.anyio
 async def test_set_moderation_status_cannot_flip_terminal_publish_states(db):
     """Moderation decisions must not flip publishing/published runs (issue 1234)."""
     repo = db.repos.generation_runs

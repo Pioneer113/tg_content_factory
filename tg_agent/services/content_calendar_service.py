@@ -114,6 +114,9 @@ class ContentCalendarService:
         runs = await self._db.repos.generation_runs.list_pending_moderation(
             pipeline_id=pipeline_id,
             limit=limit * 2,
+            # #1619: сортировка очереди должна происходить до усечения выборки,
+            # иначе малый limit вытесняет ранние черновики.
+            order="created_at_asc",
         )
 
         events: list[CalendarEvent] = []
