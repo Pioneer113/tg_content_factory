@@ -13,7 +13,7 @@ import pytest
 from tests.helpers import cli_add_channel as _add_channel
 from tests.helpers import cli_ns as _ns
 from tests.helpers import fake_asyncio_run, make_cli_config, make_cli_db
-from tg_agent.cli.commands.channel import _handle_tag, run
+from tg_agent.cli.commands.channel import _handle_tag, run, tag_get_impl, tag_set_impl
 
 # ---------------------------------------------------------------------------
 # _handle_tag (pure logic + db mock)
@@ -91,6 +91,35 @@ class TestHandleTag:
         out = capsys.readouterr().out
         assert "x, y" in out
         assert "pk=10" in out
+
+
+# ---------------------------------------------------------------------------
+# channel tag on a missing channel pk (#1600) — real :memory: db, no mocks
+# ---------------------------------------------------------------------------
+
+
+class TestHandleTagMissingChannel:
+    @pytest.mark.anyio
+    async def test_set_missing_pk_reports_not_found_no_traceback(self, db, capsys):
+        await tag_set_impl(db, pk=999, tags="ghost")
+        out = capsys.readouterr().out
+        assert "not found" in out
+        assert "pk=999" in out
+
+    @pytest.mark.anyio
+    async def test_get_missing_pk_is_not_found_not_no_tags(self, db, capsys):
+        await tag_get_impl(db, pk=999)
+        out = capsys.readouterr().out
+        assert "not found" in out
+
+    @pytest.mark.anyio
+    async def test_get_existing_pk_without_tags_is_not_not_found(self, db, capsys):
+        from tg_agent.models import Channel
+
+        pk = await db.add_channel(Channel(channel_id=100, title="Real"))
+        await tag_get_impl(db, pk=pk)
+        out = capsys.readouterr().out
+        assert "not found" not in out
 
 
 # ---------------------------------------------------------------------------
