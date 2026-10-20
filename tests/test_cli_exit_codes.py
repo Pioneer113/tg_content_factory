@@ -35,6 +35,12 @@ _SCRIPT = textwrap.dedent(
             await asyncio.Event().wait()
         asyncio.run(pending())
 
+    @app.command()
+    def confirm():
+        # Mirrors the [y/N] gates (filter purge, dialogs leave, ...): a blocking
+        # input() that hits EOF when an agent runs the CLI with a closed stdin.
+        input("Continue? [y/N] ")
+
     cli.app = app
     entrypoint = sys.argv.pop(1)
     if entrypoint == "module":
@@ -81,3 +87,20 @@ def test_entrypoint_interrupted_wait_exits_nonzero(entrypoint):
     )
     assert result.returncode in (1, 130), result.stderr
     assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize("entrypoint", ["module", "console"])
+def test_entrypoint_confirm_eof_exits_cleanly(entrypoint):
+    # Issue #1590: EOF at a confirmation prompt (closed stdin, no TTY) used to
+    # escape as Typer's own Abort — a RuntimeError main() did not catch — and
+    # print a traceback. It must be a clean non-zero refusal instead.
+    result = subprocess.run(
+        _command(entrypoint, "confirm"),
+        check=False, capture_output=True, text=True, timeout=30,
+        stdin=subprocess.DEVNULL,
+        cwd=Path(__file__).resolve().parents[1],
+    )
+    assert result.returncode == 1, result.stderr
+    assert "Traceback" not in result.stderr
+    assert "EOFError" not in result.stderr
+    assert "Aborted" in result.stderr

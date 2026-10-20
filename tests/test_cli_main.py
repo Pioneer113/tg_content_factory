@@ -246,3 +246,52 @@ class TestNegIdScopeIsNarrow:
             code = _run_main(["search", "--typo"])
         assert code == 0
         assert mock_impl.call_args.kwargs["query"] == "--typo"
+
+
+_FILTER_INIT_DB_TARGET = "tg_agent.cli.commands.filter.runtime.init_db"
+
+
+class TestConfirmEofOnClosedStdin:
+    """EOF at a confirmation prompt (agent run without a TTY, #1590).
+
+    ``input()`` inside the async command bodies raises ``EOFError`` on a closed
+    stdin; Typer converts it to its **own** ``Abort`` (a ``RuntimeError``, NOT a
+    ``click.exceptions.Abort``) and, in non-standalone mode, re-raises it past
+    ``app()``. ``main()`` must still turn that into a clean non-zero exit with no
+    traceback.
+    """
+
+    def test_filter_purge_eof_exits_one_without_traceback(self, db, cli_init_patch, capsys):
+        """The exact reported repro: ``filter purge`` with EOF at the prompt."""
+        with cli_init_patch(db, _FILTER_INIT_DB_TARGET):
+            with patch("builtins.input", side_effect=EOFError):
+                try:
+                    with patch("sys.argv", ["main.py", "filter", "purge"]):
+                        main()
+                    code = 0
+                except SystemExit as exc:
+                    code = exc.code
+
+        assert code == 1
+        out = capsys.readouterr()
+        combined = out.out + out.err
+        assert "Traceback" not in combined
+        assert "Aborted" in combined
+
+    def test_eof_reaches_main_through_async_body(self, db, cli_init_patch):
+        """The EOFError surfaces through the real async body (``run_async``), so
+        the abort handling must sit at the ``main()`` boundary, not in each body."""
+        captured: dict[str, object] = {}
+
+        def eof_input(*_a: object) -> str:
+            captured["reached_prompt"] = True
+            raise EOFError
+
+        with cli_init_patch(db, _FILTER_INIT_DB_TARGET):
+            with patch("builtins.input", side_effect=eof_input):
+                try:
+                    with patch("sys.argv", ["main.py", "filter", "purge"]):
+                        main()
+                except SystemExit:
+                    pass
+        assert captured.get("reached_prompt") is True

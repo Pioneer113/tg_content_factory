@@ -5,6 +5,14 @@ from typing import Any, cast
 
 import click
 
+try:
+    from typer.exceptions import Abort as TyperAbort
+except ImportError:  # pragma: no cover - defensive fallback, mirrors _CLICK_EXCEPTIONS below
+    # Older Typer versions (>=0.12 floor in pyproject) may not ship the module;
+    # there ``typer.Abort`` IS ``click.exceptions.Abort``, which the first
+    # tuple element below already catches.
+    TyperAbort = click.exceptions.Abort
+
 # Typer is the single CLI entry point (epic #959, Final — issue #1125). Every
 # command is declared on ``tg_agent/cli/typer_app.py::app`` and registered by importing
 # ``tg_agent.cli.typer_commands`` (its module body attaches the command groups to
@@ -86,9 +94,15 @@ def main() -> None:
         click_exc = cast("click.ClickException", exc)
         click_exc.show()
         raise SystemExit(click_exc.exit_code) from None
-    except click.exceptions.Abort:
+    except (click.exceptions.Abort, TyperAbort):
         # Ctrl-C / abort — Click prints "Aborted!" in standalone mode; match the
         # conventional non-zero exit so an interrupted CLI run is distinguishable.
+        # Typer's Abort is a separate class (RuntimeError, not a
+        # click.exceptions.Abort): EOF at a confirmation prompt (agent run with a
+        # closed stdin) surfaces as ``typer.exceptions.Abort`` in non-standalone
+        # mode and must refuse just as cleanly (#1590). On Typer versions without
+        # the module, ``TyperAbort`` aliases click's own Abort (harmless duplicate
+        # in the tuple).
         click.echo("Aborted!", err=True)
         raise SystemExit(1) from None
 

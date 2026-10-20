@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import signal
 from collections.abc import Coroutine
 from enum import Enum
 from typing import Any, TypeVar
@@ -141,6 +142,31 @@ def apply_startup(ctx: typer.Context) -> None:
 
     active = getattr(typer_commands, "apply_startup", _apply_startup)
     active(ctx)
+
+
+def sync_prompt(text: str) -> str:
+    """Read one line from stdin for a [y/N]-style confirmation gate.
+
+    A bare ``input()`` inside an async command body blocks the event-loop thread.
+    With ``asyncio.Runner``'s SIGINT handler active (any ``asyncio.run`` on
+    Python ≥3.11), the first Ctrl-C only marks the main task for cancellation —
+    the loop thread is stuck in the read, the interrupted read retries (PEP 475),
+    and the process hangs with its aiosqlite threads open until a second Ctrl-C
+    (which may then skip the ``finally: await db.close()`` teardown). Temporarily
+    restoring the default handler makes the FIRST Ctrl-C raise
+    ``KeyboardInterrupt`` right at the prompt, unwinding through the command's
+    normal cleanup (#1590).
+    """
+    try:
+        previous = signal.getsignal(signal.SIGINT)
+        signal.signal(signal.SIGINT, signal.default_int_handler)
+    except ValueError:
+        # Not the main thread — cannot (and need not) touch signal handlers.
+        return input(text)
+    try:
+        return input(text)
+    finally:
+        signal.signal(signal.SIGINT, previous)
 
 
 def run_async(coro: Coroutine[Any, Any, _T]) -> _T:
