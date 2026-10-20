@@ -427,11 +427,12 @@ class GenerationRunsRepository:
         предстоящих, #1619: усечение страницы не должно менять начало
         отсортированной очереди, поэтому порядок задаётся до LIMIT).
         """
-        order_sql = (
-            "ORDER BY id DESC"
-            if order == "newest"
-            else "ORDER BY created_at ASC, id ASC"
-        )
+        if order == "newest":
+            order_sql = "ORDER BY id DESC"
+        elif order == "created_at_asc":
+            order_sql = "ORDER BY created_at ASC, id ASC"
+        else:
+            raise ValueError(f"Invalid order: {order!r}")
         if pipeline_id is None:
             cur = await self._db.execute(
                 "SELECT * FROM generation_runs WHERE moderation_status IN ('pending', 'approved')"

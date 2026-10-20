@@ -184,6 +184,14 @@ async def test_list_pending_moderation_created_at_asc_orders_before_limit(db):
 
 
 @pytest.mark.anyio
+async def test_list_pending_moderation_rejects_unknown_order(db):
+    """An unknown order string must fail loudly, not silently re-sort (#1619 review)."""
+    repo = db.repos.generation_runs
+    with pytest.raises(ValueError, match="Invalid order"):
+        await repo.list_pending_moderation(42, order="createdAtAsc")
+
+
+@pytest.mark.anyio
 async def test_set_moderation_status_cannot_flip_terminal_publish_states(db):
     """Moderation decisions must not flip publishing/published runs (issue 1234)."""
     repo = db.repos.generation_runs
