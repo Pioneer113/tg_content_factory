@@ -15,8 +15,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from tg_agent.models import IncomingDm
 from tests.helpers import build_web_app, make_auth_client, make_test_config
+from tg_agent.models import IncomingDm
 
 
 @pytest.fixture
