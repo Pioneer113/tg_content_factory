@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -13,6 +14,7 @@ from tg_agent.models import Channel, Message, SearchResult
 @pytest.mark.anyio
 async def test_root_redirects_to_search_when_no_agent(route_client):
     """Test root redirects to /search when agent unavailable."""
+    route_client._transport_app.state.agent_manager = SimpleNamespace(available=False)
     resp = await route_client.get("/", follow_redirects=False)
     assert resp.status_code == 303
     assert "/search" in resp.headers.get("location", "")
@@ -43,6 +45,7 @@ async def test_search_page_renders(route_client):
 @pytest.mark.anyio
 async def test_sidebar_hides_agent_link_when_unavailable(route_client):
     """The sidebar should preserve the existing agent availability gate."""
+    route_client._transport_app.state.agent_manager = SimpleNamespace(available=False)
     resp = await route_client.get("/search")
 
     assert resp.status_code == 200

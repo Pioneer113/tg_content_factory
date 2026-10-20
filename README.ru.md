@@ -227,8 +227,8 @@ telethon-cli users get-me --output json
  # Параллельно запускаем только safe-подмножество
  pytest tests/ -v -m "not aiosqlite_serial" -n auto
 
- # Тесты с aiosqlite выполняем последовательно
- pytest tests/ -v -m aiosqlite_serial
+ # Тесты с aiosqlite: последовательно внутри файла, независимые файлы — параллельно
+ pytest tests/ -q -m aiosqlite_serial -n auto --dist=loadfile
 
  # Один тест
  pytest tests/test_web.py::test_health_endpoint -v

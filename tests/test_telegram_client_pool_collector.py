@@ -2578,7 +2578,8 @@ async def test_collect_all_stats_respects_max_channels():
     )
     db.get_latest_stats_for_all = AsyncMock(return_value={})
 
-    collector = Collector(pool, db, SchedulerConfig(stats_all_worker_count=1))
+    config = SchedulerConfig(delay_between_channels_sec=0, delay_between_requests_sec=0, stats_all_worker_count=1)
+    collector = Collector(pool, db, config)
     seen: list[int] = []
 
     async def _collect_stats(channel):
@@ -2617,7 +2618,8 @@ async def test_collect_all_stats_prioritizes_channels_without_or_stale_stats():
         }
     )
 
-    collector = Collector(pool, db, SchedulerConfig(stats_all_worker_count=1))
+    config = SchedulerConfig(delay_between_channels_sec=0, delay_between_requests_sec=0, stats_all_worker_count=1)
+    collector = Collector(pool, db, config)
     seen: list[int] = []
 
     async def _collect_stats(channel):

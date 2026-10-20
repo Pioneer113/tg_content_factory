@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
+from functools import partial
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -13,6 +14,7 @@ from tests.agent_tools_helpers import _get_tool_handlers, _text
 from tg_agent.agent.tools import _PIPELINE_SAFE_TOOLS, build_agent_tools_dict
 from tg_agent.agent.tools.deepagents_sync import build_deepagents_tools
 from tg_agent.models import Channel, ChannelStats, Message
+from tg_agent.services import provider_service
 
 
 def _assert_no_formatter_contract_error(tool_name: str, text: str) -> None:
@@ -114,13 +116,23 @@ def test_agent_tools_reference_docs_cover_registry(mock_db):
     assert missing == []
 
 
-def test_deepagents_all_tools_smoke_with_minimal_contract_args(cli_db):
+def test_deepagents_all_tools_smoke_with_minimal_contract_args(cli_db, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "offline-contract-key")
+    external_provider = MagicMock(side_effect=AssertionError("Contract smoke must use the offline provider"))
+    monkeypatch.setattr(provider_service.RuntimeProviderRegistry, "_make_openai_provider", external_provider)
+    monkeypatch.setattr(
+        provider_service, "build_provider_service", partial(provider_service.build_provider_service, env={})
+    )
     tool_map: dict[str, Callable] = {tool.__name__: tool for tool in build_deepagents_tools(cli_db)}
 
     for tool_name, tool in sorted(tool_map.items()):
         result = tool(**_minimal_deepagents_kwargs(tool_name))
         assert isinstance(result, str), tool_name
         _assert_no_formatter_contract_error(tool_name, result)
+        if tool_name == "generate_draft":
+            assert "DRAFT (default provider):" in result
+
+    external_provider.assert_not_called()
 
 
 @pytest.mark.anyio

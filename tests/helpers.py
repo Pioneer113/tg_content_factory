@@ -52,11 +52,8 @@ def cli_ns(**kwargs) -> argparse.Namespace:
 
 def fake_asyncio_run(coro):
     """Run a coroutine in a fresh loop for CLI tests that patch asyncio.run."""
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+    with asyncio.Runner() as runner:
+        return runner.run(coro)
 
 
 def make_cli_config(**overrides) -> MagicMock:
@@ -742,6 +739,8 @@ def make_test_config(
     config.telegram.api_hash = "test_hash"
     config.web.password = password
     config.security.session_encryption_key = "test-session-encryption-key"
+    config.scheduler.delay_between_channels_sec = 0
+    config.scheduler.delay_between_requests_sec = 0
     return config
 
 

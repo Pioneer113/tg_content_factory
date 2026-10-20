@@ -170,7 +170,7 @@ Default non-live development:
 ```bash
 python3 -m ruff check tg_agent/ tests/ conftest.py
 python3 -m pytest tests/ -v -m "not aiosqlite_serial and not real_tg_safe and not real_tg_mutation_safe and not real_tg_manual and not real_provider_smoke" -n auto
-python3 -m pytest tests/ -v -m "aiosqlite_serial and not real_tg_safe and not real_tg_mutation_safe and not real_tg_manual and not real_provider_smoke"
+python3 -m pytest tests/ -q -m "aiosqlite_serial and not real_tg_safe and not real_tg_mutation_safe and not real_tg_manual and not real_provider_smoke" -n auto --dist=loadfile
 ```
 
 Verify the CLI inventory is disabled by default:
