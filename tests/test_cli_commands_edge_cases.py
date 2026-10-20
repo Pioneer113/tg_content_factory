@@ -1533,6 +1533,27 @@ class TestSearchQueryToggle:
         out = capsys.readouterr().out
         assert "Toggled search query id=10" in out
 
+    def test_toggle_not_found(self, db, capsys):
+        """Missing id exits non-zero with 'not found' — no false success (#1606)."""
+        import pytest
+
+        from tg_agent.cli.commands.search_query import run
+        from tg_agent.database.bundles import SearchQueryBundle
+        from tg_agent.services.search_query_service import SearchQueryService
+
+        db.close = AsyncMock()
+        svc_instance = SearchQueryService(SearchQueryBundle.from_database(db))
+
+        with patch("tg_agent.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryService", return_value=svc_instance):
+            with pytest.raises(SystemExit) as excinfo:
+                run(cli_ns(search_query_action="toggle", id=999))
+
+        assert excinfo.value.code == 1
+        captured = capsys.readouterr()
+        assert "not found" in captured.err
+        assert "Toggled" not in captured.out
+
 
 class TestSearchQueryRun:
     def test_run(self, capsys):
@@ -1574,6 +1595,27 @@ class TestSearchQueryRun:
         out = capsys.readouterr().out
         assert "0 matches" not in out
         assert "unavailable" in out
+
+    def test_run_not_found(self, db, capsys):
+        """Missing id exits non-zero with 'not found' — not '0 matches' (#1606)."""
+        import pytest
+
+        from tg_agent.cli.commands.search_query import run
+        from tg_agent.database.bundles import SearchQueryBundle
+        from tg_agent.services.search_query_service import SearchQueryService
+
+        svc_instance = SearchQueryService(SearchQueryBundle.from_database(db))
+
+        with patch("tg_agent.cli.commands.search_query.runtime.init_db", side_effect=_make_coro((None, db))), \
+             patch("tg_agent.cli.commands.search_query.SearchQueryService", return_value=svc_instance), \
+             patch.object(db, "close", new=AsyncMock()):
+            with pytest.raises(SystemExit) as excinfo:
+                run(cli_ns(search_query_action="run", id=999))
+
+        assert excinfo.value.code == 1
+        captured = capsys.readouterr()
+        assert "not found" in captured.err
+        assert "executed" not in captured.out
 
 
 class TestSearchQueryEdit:
