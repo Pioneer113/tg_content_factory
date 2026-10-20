@@ -189,6 +189,42 @@ async def test_get_upcoming_filters_by_pipeline(service, mock_db):
     mock_db.repos.generation_runs.list_pending_moderation.assert_called_once()
 
 
+@pytest.mark.anyio
+async def test_get_upcoming_limit_is_prefix_of_full_queue(db):
+    """Regression #1619: --limit must not change which runs lead the queue.
+
+    The pending-moderation fetch truncates newest-by-id BEFORE the service
+    sorts by created_at, so a small limit hid the earliest drafts. The sorted
+    queue must be built before slicing: limit=1 is the head of the limit=6
+    result, also under the pipeline filter.
+    """
+    from tg_agent.services.content_calendar_service import ContentCalendarService
+
+    await db.execute_write(
+        "INSERT INTO content_pipelines (id, name, prompt_template)"
+        " VALUES (1, 'Calendar pipeline', 'prompt')"
+    )
+    repo = db.repos.generation_runs
+    for i in range(1, 7):
+        run_id = await repo.create_run(1, f"Draft {i}")
+        await db.execute_write(
+            "UPDATE generation_runs SET created_at = ? WHERE id = ?",
+            (f"2026-10-19 {i:02}:00:00", run_id),
+        )
+
+    calendar = ContentCalendarService(db)
+
+    full = await calendar.get_upcoming(limit=6)
+    one = await calendar.get_upcoming(limit=1)
+    three = await calendar.get_upcoming(limit=3)
+    scoped = await calendar.get_upcoming(limit=1, pipeline_id=1)
+
+    assert [e.run_id for e in full] == [1, 2, 3, 4, 5, 6]
+    assert [e.run_id for e in one] == [1]
+    assert [e.run_id for e in three] == [1, 2, 3]
+    assert [e.run_id for e in scoped] == [1]
+
+
 # === get_stats tests ===
 
 
