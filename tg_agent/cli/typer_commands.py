@@ -65,6 +65,7 @@ from tg_agent.cli.commands.common import (
     SearchMode,
     SinceUnit,
     TriBool,
+    resolve_date_bounds,
 )
 from tg_agent.cli.commands.debug import debug_app
 from tg_agent.cli.commands.dialogs import dialogs_app
@@ -247,6 +248,7 @@ def search(
 ) -> None:
     """Search messages."""
     apply_startup(ctx)
+    date_from, date_to = resolve_date_bounds(date_from, date_to)
     run_async(
         search_cmd.search_impl(
             ctx.obj.config,

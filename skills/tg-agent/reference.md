@@ -97,6 +97,10 @@ search-query list | get | add | edit | delete | toggle | run | stats
 - `search --mode` picks local DB (FTS5), direct Telegram API, or AI-powered search.
   `--date-from`/`--date-to` constrain the window on the DB modes only
   (`local`/`semantic`/`hybrid`) and are rejected with an error on live modes;
+  both take `YYYY-MM-DD` — a relaxed `YYYY-M-D` (`2026-10-5`) is normalized to
+  the canonical form, a full ISO datetime keeps exact precision, and anything
+  else is a usage error with exit 2, never a silently empty/oversized window
+  (#1593);
   `--format json|csv` renders the hits with `@username`/title attribution —
   the AI digest workflow ([digest.md](digest.md)) is built on these.
 

@@ -1243,7 +1243,8 @@ async def test_messages_normalize_date_to_date_only():
 
 
 @pytest.mark.anyio
-async def test_messages_normalize_date_to_datetime():
+async def test_messages_normalize_date_to_datetime_keeps_exact_precision():
+    """Full ISO datetime bounds are supported and compare exactly (#1593)."""
     from tg_agent.database.repositories.messages import MessagesRepository
 
     val, op = MessagesRepository._normalize_date_to("2025-01-15T12:00:00")

@@ -11,6 +11,7 @@ from tg_agent.cli.commands.common import (
     AnalyticsGenre,
     AnalyticsUseful,
     apply_startup,
+    resolve_date_bounds,
     run_async,
 )
 
@@ -558,6 +559,7 @@ def analytics_top(
 ) -> None:
     """Top messages by reactions."""
     apply_startup(ctx)
+    date_from, date_to = resolve_date_bounds(date_from, date_to)
     run_async(top_impl(ctx.obj.config, limit=limit, date_from=date_from, date_to=date_to))
 
 
@@ -569,6 +571,7 @@ def analytics_content_types(
 ) -> None:
     """Engagement by content type."""
     apply_startup(ctx)
+    date_from, date_to = resolve_date_bounds(date_from, date_to)
     run_async(content_types_impl(ctx.obj.config, date_from=date_from, date_to=date_to))
 
 
@@ -580,6 +583,7 @@ def analytics_hourly(
 ) -> None:
     """Hourly activity patterns."""
     apply_startup(ctx)
+    date_from, date_to = resolve_date_bounds(date_from, date_to)
     run_async(hourly_impl(ctx.obj.config, date_from=date_from, date_to=date_to))
 
 

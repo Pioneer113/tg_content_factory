@@ -3,7 +3,10 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from tg_agent.cli.commands.common import resolve_channel
+import pytest
+import typer
+
+from tg_agent.cli.commands.common import resolve_channel, resolve_date_bounds
 
 
 def test_resolve_channel_by_pk():
@@ -80,3 +83,23 @@ def test_resolve_channel_no_username():
     ]
     result = resolve_channel(channels, "@nonexistent")
     assert result is None
+
+
+# resolve_date_bounds (#1593)
+
+
+def test_resolve_date_bounds_normalizes_relaxed_dates():
+    """2026-10-5 ≡ 2026-10-05: relaxed day/month get canonicalized (#1593)."""
+    assert resolve_date_bounds("2026-10-5", "2026-10-9") == ("2026-10-05", "2026-10-09")
+
+
+def test_resolve_date_bounds_passes_canonical_and_none_through():
+    assert resolve_date_bounds("2026-10-05", None) == ("2026-10-05", None)
+
+
+def test_resolve_date_bounds_rejects_garbage():
+    """Non-date input becomes a usage error, never a silent wrong window (#1593)."""
+    with pytest.raises(typer.BadParameter):
+        resolve_date_bounds("yesterday", None)
+    with pytest.raises(typer.BadParameter):
+        resolve_date_bounds(None, "2026-13-45")

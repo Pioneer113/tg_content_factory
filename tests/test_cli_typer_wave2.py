@@ -189,6 +189,21 @@ def test_export_telegram_rejects_unknown_format():
     mock_impl.assert_not_called()
 
 
+def test_export_telegram_rejects_non_canonical_dates():
+    """Date bounds validate before any DB work (#1593)."""
+    mock_impl = MagicMock()
+    with (
+        patch("tg_agent.cli.typer_commands.export_cmd.telegram_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async") as mock_run_async,
+    ):
+        result = runner.invoke(
+            app, ["export", "telegram", "--channel-id", "1", "--date-from", "yesterday"]
+        )
+        assert result.exit_code == 2
+        mock_run_async.assert_not_called()
+        mock_impl.assert_not_called()
+
+
 # --------------------------------------------------------------------------- #
 # translate → stats / detect / run / message
 # --------------------------------------------------------------------------- #
