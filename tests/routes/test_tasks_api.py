@@ -3,6 +3,8 @@ the full claim-race / concurrency suite lives in #962."""
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 pytestmark = pytest.mark.anyio
@@ -227,3 +229,100 @@ async def test_create_rejects_oversized_payload(route_client):
     big = {"text": "x" * (70 * 1024)}
     resp = await route_client.post("/api/tasks", json={"type": "dm_reply", "payload": big})
     assert resp.status_code == 422
+
+
+# Lease/TTL recovery for stranded claims (#1468)
+
+
+async def test_lease_claim_response_records_owner(route_client):
+    resp = await route_client.post(
+        "/api/tasks/claim",
+        json={"types": ["dm_reply"], "claimed_by": "worker-a", "lease_seconds": 300},
+    )
+    assert resp.status_code == 204  # nothing pending yet
+
+    created = await route_client.post("/api/tasks", json={"type": "dm_reply"})
+    task_id = created.json()["id"]
+    claimed = await route_client.post(
+        "/api/tasks/claim",
+        json={"types": ["dm_reply"], "claimed_by": "worker-a", "lease_seconds": 300},
+    )
+    assert claimed.status_code == 200
+    body = claimed.json()
+    assert body["id"] == task_id
+    assert body["claimed_by"] == "worker-a"
+    assert body["claimed_at"] is not None
+
+
+async def test_live_lease_not_stolen_by_second_worker(route_client):
+    created = await route_client.post("/api/tasks", json={"type": "dm_reply"})
+    task_id = created.json()["id"]
+    first = await route_client.post(
+        "/api/tasks/claim",
+        json={"types": ["dm_reply"], "claimed_by": "worker-a", "lease_seconds": 3600},
+    )
+    assert first.status_code == 200
+
+    second = await route_client.post(
+        "/api/tasks/claim",
+        json={"types": ["dm_reply"], "claimed_by": "worker-b", "lease_seconds": 3600},
+    )
+    assert second.status_code == 204
+    task = (await route_client.get(f"/api/tasks/{task_id}")).json()
+    assert task["status"] == "running"
+    assert task["claimed_by"] == "worker-a"
+
+
+async def test_expired_lease_reclaims_stranded_task(route_client):
+    """Holder died right after claiming: TTL expiry lets the retry re-claim it."""
+    created = await route_client.post("/api/tasks", json={"type": "dm_reply"})
+    task_id = created.json()["id"]
+    stranded = await route_client.post(
+        "/api/tasks/claim",
+        json={"types": ["dm_reply"], "claimed_by": "worker-a", "lease_seconds": 60},
+    )
+    assert stranded.status_code == 200
+
+    # Simulate the lease expiring (the dead holder never renewed it).
+    db = route_client._transport_app.state.db
+    stale = (datetime.now(timezone.utc) - timedelta(seconds=61)).isoformat()
+    await db.execute_write(
+        "UPDATE collection_tasks SET claimed_at = ? WHERE id = ?", (stale, task_id)
+    )
+
+    reclaimed = await route_client.post(
+        "/api/tasks/claim",
+        json={"types": ["dm_reply"], "claimed_by": "worker-b", "lease_seconds": 60},
+    )
+    assert reclaimed.status_code == 200
+    body = reclaimed.json()
+    assert body["id"] == task_id
+    assert body["claimed_by"] == "worker-b"
+
+    # The new holder completes; a replayed report stays idempotent (#1467).
+    done = await route_client.post(f"/api/tasks/{task_id}/complete", json={"result_payload": {"sent": True}})
+    assert done.status_code == 200
+    replay = await route_client.post(f"/api/tasks/{task_id}/complete", json={"result_payload": {"sent": True}})
+    assert replay.status_code == 200 and replay.json() == {"ok": True}
+    final = (await route_client.get(f"/api/tasks/{task_id}")).json()
+    assert final["status"] == "completed"
+    assert final["result_payload"] == {"sent": True}
+
+
+async def test_partial_lease_pair_rejected(route_client):
+    # Both one-sided lease claims must 422 (not 500 on the repo assert).
+    for payload in [
+        {"types": ["dm_reply"], "lease_seconds": 60},
+        {"types": ["dm_reply"], "claimed_by": "worker-a"},
+    ]:
+        resp = await route_client.post("/api/tasks/claim", json=payload)
+        assert resp.status_code == 422
+
+
+async def test_lease_rejects_invalid_values(route_client):
+    for claimed_by, lease_seconds in [("", 60), ("w", 0), ("w", -5)]:
+        resp = await route_client.post(
+            "/api/tasks/claim",
+            json={"types": ["dm_reply"], "claimed_by": claimed_by, "lease_seconds": lease_seconds},
+        )
+        assert resp.status_code == 422

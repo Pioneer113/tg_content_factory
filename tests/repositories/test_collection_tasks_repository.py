@@ -887,3 +887,111 @@ async def test_to_task_deserializes_payload(collection_tasks_repo):
     assert isinstance(task.payload, StatsAllTaskPayload)
     assert task.payload.channel_ids == [1, 2, 3]
     assert task.payload.next_index == 5
+
+
+# claim_next_due_generic_task lease/TTL tests (#1468)
+
+
+async def _create_interop_task(repo) -> int:
+    return await repo.create_generic_task("dm_reply", payload={"text": "hi"})
+
+
+async def test_lease_claim_records_owner(collection_tasks_repo):
+    """A lease claim stamps claimed_by/claimed_at on the task."""
+    task_id = await _create_interop_task(collection_tasks_repo)
+    now = datetime.now(tz=timezone.utc)
+
+    claimed = await collection_tasks_repo.claim_next_due_generic_task(
+        now, ["dm_reply"], claimed_by="worker-a", lease_seconds=300
+    )
+
+    assert claimed is not None and claimed.id == task_id
+    assert claimed.claimed_by == "worker-a"
+    assert claimed.claimed_at is not None
+
+
+async def test_internal_claim_leaves_lease_columns_null(collection_tasks_repo):
+    """The dispatcher's no-lease claim keeps its old shape: no owner recorded."""
+    task_id = await _create_interop_task(collection_tasks_repo)
+    now = datetime.now(tz=timezone.utc)
+
+    claimed = await collection_tasks_repo.claim_next_due_generic_task(now, ["dm_reply"])
+
+    assert claimed is not None and claimed.id == task_id
+    assert claimed.claimed_by is None
+    assert claimed.claimed_at is None
+
+
+async def test_live_lease_cannot_be_stolen(collection_tasks_repo):
+    """Within the TTL a second worker's claim must not take the RUNNING task."""
+    task_id = await _create_interop_task(collection_tasks_repo)
+    t0 = datetime.now(tz=timezone.utc)
+
+    await collection_tasks_repo.claim_next_due_generic_task(
+        t0, ["dm_reply"], claimed_by="worker-a", lease_seconds=300
+    )
+    stolen = await collection_tasks_repo.claim_next_due_generic_task(
+        t0 + timedelta(minutes=1), ["dm_reply"], claimed_by="worker-b", lease_seconds=300
+    )
+
+    assert stolen is None
+    task = await collection_tasks_repo.get_collection_task(task_id)
+    assert task.claimed_by == "worker-a"
+
+
+async def test_expired_lease_is_reclaimed(collection_tasks_repo):
+    """After TTL expiry a claim re-claims the stranded task and transfers ownership."""
+    task_id = await _create_interop_task(collection_tasks_repo)
+    t0 = datetime.now(tz=timezone.utc)
+
+    first = await collection_tasks_repo.claim_next_due_generic_task(
+        t0, ["dm_reply"], claimed_by="worker-a", lease_seconds=300
+    )
+    assert first is not None
+    reclaimed = await collection_tasks_repo.claim_next_due_generic_task(
+        t0 + timedelta(seconds=301), ["dm_reply"], claimed_by="worker-b", lease_seconds=300
+    )
+
+    assert reclaimed is not None and reclaimed.id == task_id
+    assert reclaimed.claimed_by == "worker-b"
+    assert reclaimed.claimed_at is not None
+    assert reclaimed.claimed_at > first.claimed_at
+
+
+async def test_expired_lease_reclaim_keeps_id_ordering(collection_tasks_repo):
+    """Ordering stays COALESCE(run_after,''), id: the older stranded task is
+    re-claimed before newer pending work, both within one recovery flow."""
+    first_id = await _create_interop_task(collection_tasks_repo)
+    second_id = await _create_interop_task(collection_tasks_repo)
+    t0 = datetime.now(tz=timezone.utc)
+
+    stranded = await collection_tasks_repo.claim_next_due_generic_task(
+        t0, ["dm_reply"], claimed_by="worker-a", lease_seconds=60
+    )
+    assert stranded is not None and stranded.id == first_id
+    reclaim = await collection_tasks_repo.claim_next_due_generic_task(
+        t0 + timedelta(seconds=61), ["dm_reply"], claimed_by="worker-b", lease_seconds=60
+    )
+    assert reclaim is not None and reclaim.id == first_id
+    assert reclaim.claimed_by == "worker-b"
+    # Only the stranded task was handed out; the pending one is next in line.
+    still_pending = await collection_tasks_repo.get_collection_task(second_id)
+    assert still_pending is not None and still_pending.status == CollectionTaskStatus.PENDING
+
+
+async def test_expired_lease_invisible_to_no_lease_claim(collection_tasks_repo):
+    """Without lease args the claim still sees PENDING only — dispatcher untouched."""
+    task_id = await _create_interop_task(collection_tasks_repo)
+    t0 = datetime.now(tz=timezone.utc)
+
+    await collection_tasks_repo.claim_next_due_generic_task(
+        t0, ["dm_reply"], claimed_by="worker-a", lease_seconds=60
+    )
+    plain = await collection_tasks_repo.claim_next_due_generic_task(
+        t0 + timedelta(hours=1), ["dm_reply"]
+    )
+
+    assert plain is None
+    task = await collection_tasks_repo.get_collection_task(task_id)
+    assert task.status == CollectionTaskStatus.RUNNING
+    assert task.claimed_by == "worker-a"

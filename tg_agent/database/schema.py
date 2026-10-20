@@ -112,7 +112,9 @@ CREATE TABLE IF NOT EXISTS collection_tasks (
     completed_at TEXT,
     last_progress_at TEXT,
     result_payload TEXT,
-    idempotency_key TEXT
+    idempotency_key TEXT,
+    claimed_by TEXT,
+    claimed_at TEXT
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_collection_tasks_idempotency_key
