@@ -83,6 +83,19 @@ async def test_add_search_query_with_chat_filter_saves_and_warns(route_client, d
 
 
 @pytest.mark.anyio
+async def test_add_search_query_invalid_regex_rejected(route_client, db):
+    """An un-compilable regex pattern redirects to invalid_value and is not saved (#1607)."""
+    resp = await route_client.post(
+        "/search-queries/add",
+        data={"query": "[bad", "interval_minutes": "60", "is_regex": "on", "is_fts": ""},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+    assert "error=invalid_value" in resp.headers["location"]
+    assert await db.repos.search_queries.get_all() == []
+
+
+@pytest.mark.anyio
 async def test_toggle_search_query(route_client):
     """Test toggle search query."""
     await route_client.post(

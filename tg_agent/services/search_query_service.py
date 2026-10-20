@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
+import regex
+
 from tg_agent.database import Database
 from tg_agent.database.bundles import SearchQueryBundle
 from tg_agent.models import SearchQuery, SearchQueryDailyStat
@@ -21,6 +23,20 @@ class SearchQueryService:
             bundle = SearchQueryBundle.from_database(bundle)
         self._bundle = bundle
 
+    @staticmethod
+    def _validate_regex_pattern(query: str) -> None:
+        """Reject un-compilable regex patterns at the add/update boundary (#1607).
+
+        ``message_matches_query`` treats an un-compilable regex as a silent
+        no-match, so a bad pattern would never notify and never error. Validated
+        with the same ``regex`` engine the matcher uses. Deliberately NOT a
+        model validator: legacy rows with bad patterns must still load.
+        """
+        try:
+            regex.compile(query)
+        except regex.error as e:
+            raise ValueError(f"invalid regex: {e}") from e
+
     async def add(
         self,
         query: str,
@@ -34,6 +50,8 @@ class SearchQueryService:
         max_length: int | None = None,
         chat_filter: str = "",
     ) -> int:
+        if is_regex:
+            self._validate_regex_pattern(query)
         sq = SearchQuery(
             query=query,
             interval_minutes=interval_minutes,
@@ -75,6 +93,8 @@ class SearchQueryService:
         existing = await self._bundle.get_by_id(sq_id)
         if not existing:
             return False
+        if is_regex:
+            self._validate_regex_pattern(query)
         sq = SearchQuery(
             query=query,
             interval_minutes=interval_minutes,
@@ -93,13 +113,15 @@ class SearchQueryService:
     async def delete(self, sq_id: int) -> None:
         await self._bundle.delete(sq_id)
 
-    async def run_once(self, sq_id: int) -> int:
+    async def run_once(self, sq_id: int) -> int | None:
         sq = await self._bundle.get_by_id(sq_id)
         if not sq:
             return 0
         if sq.is_regex:
-            logger.info("Search query '%s' (id=%d): regex not counted via FTS", sq.query, sq_id)
-            return 0
+            # Regex has no FTS count; None = "unavailable" so callers can tell it
+            # apart from a genuine zero matches (#1607).
+            logger.info("Search query '%s' (id=%d): regex match count not tracked", sq.query, sq_id)
+            return None
         daily = await self._bundle.get_fts_daily_stats_for_query(sq, days=1)
         today = datetime.now(timezone.utc).date().isoformat()
         count = next((stat.count for stat in daily if stat.day == today), 0)
@@ -127,9 +149,15 @@ class SearchQueryService:
         result = []
         for sq in queries:
             sq_id = sq.id
-            raw = stats_map.get(sq_id, []) if sq_id is not None and sq_id in tracked_ids else None
-            daily = self._fill_missing_days(raw, days)
-            total = sum(s.count for s in daily)
+            if sq.is_regex:
+                # No FTS stats exist for regex; report None (unavailable), not 0,
+                # so a broken-looking regex query isn't mistaken for a cold one (#1607)
+                daily: list[SearchQueryDailyStat] = []
+                total: int | None = None
+            else:
+                raw = stats_map.get(sq_id, []) if sq_id is not None and sq_id in tracked_ids else None
+                daily = self._fill_missing_days(raw, days)
+                total = sum(s.count for s in daily)
             chat_validation = validate_chat_filter(sq.chat_filter, channels)
             result.append(
                 {
