@@ -19,6 +19,7 @@ the wiring from CLI tokens to the body is what is under test.
 
 from __future__ import annotations
 
+import pytest
 from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
@@ -164,6 +165,46 @@ def test_collect_sample_defaults_limit_to_ten():
 # --------------------------------------------------------------------------- #
 
 
+@pytest.mark.parametrize("bad_date", ["2026-10-5", "yesterday", "2026-13-45"])
+def test_search_rejects_non_canonical_dates(bad_date):
+    """--date-from/--date-to validate before any DB work (#1593): garbage used
+    to reach SQL as a raw string and silently mis-window the query."""
+    mock_impl = MagicMock()
+    with (
+        patch("tg_agent.cli.typer_commands.search_cmd.search_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async") as mock_run_async,
+    ):
+        result = runner.invoke(app, ["search", "LLM", "--date-from", bad_date])
+        assert result.exit_code == 2, f"--date-from {bad_date}: {result.exit_code}"
+        mock_run_async.assert_not_called()
+        mock_impl.assert_not_called()
+
+    mock_impl = MagicMock()
+    with (
+        patch("tg_agent.cli.typer_commands.search_cmd.search_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async") as mock_run_async,
+    ):
+        result = runner.invoke(app, ["search", "LLM", "--date-to", bad_date])
+        assert result.exit_code == 2, f"--date-to {bad_date}: {result.exit_code}"
+        mock_run_async.assert_not_called()
+
+
+def test_search_accepts_relaxed_date_and_normalizes():
+    """2026-10-5 is equivalent to 2026-10-05 (#1593) — the body normalizes it
+    before delegating, so search_impl receives the canonical form."""
+    mock_impl = MagicMock()
+    with (
+        patch("tg_agent.cli.typer_commands.search_cmd.search_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
+    ):
+        result = runner.invoke(
+            app, ["search", "LLM", "--date-from", "2026-10-5", "--date-to", "2026-10-9"]
+        )
+    assert result.exit_code == 0
+    assert mock_impl.call_args.kwargs["date_from"] == "2026-10-05"
+    assert mock_impl.call_args.kwargs["date_to"] == "2026-10-09"
+
+
 def test_search_defaults():
     mock_impl = MagicMock()
     with (
@@ -289,6 +330,19 @@ def test_messages_read_rejects_unknown_format():
         result = runner.invoke(app, ["messages", "read", "100", "--format", "bogus"])
     assert result.exit_code == 2
     mock_impl.assert_not_called()
+
+
+def test_messages_read_rejects_non_canonical_dates():
+    """--date-from/--date-to validate before any DB work (#1593)."""
+    mock_impl = MagicMock()
+    with (
+        patch("tg_agent.cli.typer_commands.messages_cmd.messages_read_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async") as mock_run_async,
+    ):
+        result = runner.invoke(app, ["messages", "read", "100", "--date-from", "yesterday"])
+        assert result.exit_code == 2
+        mock_run_async.assert_not_called()
+        mock_impl.assert_not_called()
 
 
 # --------------------------------------------------------------------------- #

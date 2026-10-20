@@ -1243,12 +1243,12 @@ async def test_messages_normalize_date_to_date_only():
 
 
 @pytest.mark.anyio
-async def test_messages_normalize_date_to_datetime():
+async def test_messages_normalize_date_to_datetime_rejected():
+    """Datetime bounds are outside the date-only contract (#1593)."""
     from tg_agent.database.repositories.messages import MessagesRepository
 
-    val, op = MessagesRepository._normalize_date_to("2025-01-15T12:00:00")
-    assert op == "<="
-    assert val == "2025-01-15T12:00:00"
+    with pytest.raises(ValueError):
+        MessagesRepository._normalize_date_to("2025-01-15T12:00:00")
 
 
 @pytest.mark.anyio

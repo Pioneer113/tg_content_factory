@@ -283,6 +283,23 @@ def test_normalize_date_from_value():
     assert result == "2026-03-16"
 
 
+def test_normalize_date_from_non_canonical_day():
+    """--date-from 2026-10-5 must behave exactly like 2026-10-05 (#1593)."""
+    assert MessagesRepository._normalize_date_from("2026-10-5") == "2026-10-05"
+
+
+def test_normalize_date_from_garbage_rejected():
+    """Non-date garbage must raise, not reach SQL as a string (#1593)."""
+    with pytest.raises(ValueError):
+        MessagesRepository._normalize_date_from("yesterday")
+
+
+def test_normalize_date_from_impossible_date_rejected():
+    """Out-of-calendar values must raise, not silently empty the window (#1593)."""
+    with pytest.raises(ValueError):
+        MessagesRepository._normalize_date_from("2026-13-45")
+
+
 # _normalize_date_to tests
 
 
@@ -293,11 +310,11 @@ def test_normalize_date_to_none():
     assert op == "<="
 
 
-def test_normalize_date_to_datetime():
-    """Test normalizing date_to with datetime format."""
-    result, op = MessagesRepository._normalize_date_to("2026-03-16T12:00:00")
-    assert result == "2026-03-16T12:00:00"
-    assert op == "<="
+def test_normalize_date_to_datetime_rejected():
+    """Datetime bounds are outside the date-only contract (#1593): the old
+    string pass-through compared 'T' against ' ' and mis-windowed the query."""
+    with pytest.raises(ValueError):
+        MessagesRepository._normalize_date_to("2026-03-16T12:00:00")
 
 
 def test_normalize_date_to_date_only():
@@ -307,12 +324,30 @@ def test_normalize_date_to_date_only():
     assert op == "<"
 
 
+def test_normalize_date_to_non_canonical_day():
+    """--date-to 2026-10-5 must behave exactly like 2026-10-05 (#1593)."""
+    result, op = MessagesRepository._normalize_date_to("2026-10-5")
+    assert result == "2026-10-06"
+    assert op == "<"
+
+
+def test_normalize_date_to_garbage_rejected():
+    """Non-date garbage must raise, not silently widen the window (#1593)."""
+    with pytest.raises(ValueError):
+        MessagesRepository._normalize_date_to("yesterday")
+
+
 def test_normalize_date_to_module_function():
     """Test the module-level _normalize_date_to function."""
     # Module function returns (operator, value), unlike the method
     op, result = _normalize_date_to("2026-03-16")
     assert result == "2026-03-17"  # Next day for inclusive filter
     assert op == "<"
+
+
+def test_normalize_date_to_module_function_rejects_garbage():
+    with pytest.raises(ValueError):
+        _normalize_date_to("2026-10-5T99:99")
 
 
 # search_messages tests
@@ -383,6 +418,33 @@ async def test_search_messages_by_date_from(messages_repo):
     messages, total = await messages_repo.search_messages(SearchParams(date_from="2026-03-15"))
     assert len(messages) == 1
     assert messages[0].text == "New"
+
+
+async def test_search_messages_non_canonical_dates_match_canonical(messages_repo):
+    """#1593: '2026-10-5' used to reach SQL as a raw string; lexicographic
+    comparison dropped every date_from row and over-included date_to ones."""
+    await messages_repo.insert_messages_batch(
+        [
+            make_message(1, 100, "Before", date=datetime(2026, 10, 1, tzinfo=timezone.utc)),
+            make_message(1, 101, "On", date=datetime(2026, 10, 5, tzinfo=timezone.utc)),
+            make_message(1, 102, "After", date=datetime(2026, 10, 12, tzinfo=timezone.utc)),
+        ]
+    )
+
+    canonical_from, total_from = await messages_repo.search_messages(
+        SearchParams(date_from="2026-10-05")
+    )
+    relaxed_from, total_relaxed = await messages_repo.search_messages(
+        SearchParams(date_from="2026-10-5")
+    )
+    assert sorted(m.text for m in canonical_from) == ["After", "On"]
+    assert total_relaxed == total_from
+    assert sorted(m.text for m in relaxed_from) == sorted(m.text for m in canonical_from)
+
+    canonical_to, _ = await messages_repo.search_messages(SearchParams(date_to="2026-10-05"))
+    relaxed_to, _ = await messages_repo.search_messages(SearchParams(date_to="2026-10-5"))
+    assert sorted(m.text for m in canonical_to) == ["Before", "On"]
+    assert sorted(m.text for m in relaxed_to) == sorted(m.text for m in canonical_to)
 
 
 async def test_search_messages_by_date_to(messages_repo):

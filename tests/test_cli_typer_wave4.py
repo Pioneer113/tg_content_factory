@@ -78,6 +78,40 @@ def test_analytics_top_flags():
     mock_impl.assert_called_once_with("config.yaml", limit=5, date_from="2024-01-01", date_to=None)
 
 
+@pytest.mark.parametrize(
+    ("flag", "bad_date"),
+    [("--date-from", "yesterday"), ("--date-to", "2026-13-45"), ("--date-from", "2026-10-5X")],
+)
+def test_analytics_top_rejects_non_canonical_dates(flag, bad_date):
+    """Date bounds validate before any DB work (#1593): garbage used to reach
+    SQL as a raw string and silently mis-window the analytics query."""
+    mock_impl = MagicMock()
+    with (
+        patch("tg_agent.cli.typer_commands.analytics_cmd.top_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async") as mock_run_async,
+    ):
+        result = runner.invoke(app, ["analytics", "top", flag, bad_date])
+        assert result.exit_code == 2, f"{flag} {bad_date}: {result.exit_code}"
+        mock_run_async.assert_not_called()
+        mock_impl.assert_not_called()
+
+
+def test_analytics_top_normalizes_relaxed_dates():
+    """--date-from 2026-10-5 is equivalent to 2026-10-05 (#1593)."""
+    mock_impl = MagicMock()
+    with (
+        patch("tg_agent.cli.typer_commands.analytics_cmd.top_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
+    ):
+        result = runner.invoke(
+            app, ["analytics", "top", "--date-from", "2026-10-5", "--date-to", "2026-10-9"]
+        )
+    assert result.exit_code == 0
+    mock_impl.assert_called_once_with(
+        "config.yaml", limit=20, date_from="2026-10-05", date_to="2026-10-09"
+    )
+
+
 def test_analytics_content_types():
     mock_impl = MagicMock()
     with (
