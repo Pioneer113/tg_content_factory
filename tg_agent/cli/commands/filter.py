@@ -18,6 +18,7 @@ from tg_agent.cli import runtime
 from tg_agent.cli.commands.common import (
     apply_startup,
     run_async,
+    sync_prompt,
 )
 from tg_agent.database.bundles import ChannelBundle
 from tg_agent.filters.analyzer import ChannelAnalyzer
@@ -303,7 +304,7 @@ async def purge_impl(config_path: str, *, pks: str | None = None, yes: bool = Fa
             pk_list = None
             scope = "all filtered channels"
         if not yes:
-            confirm = input(
+            confirm = sync_prompt(
                 f"Purge messages from {scope}? This deletes stored messages. [y/N] "
             ).strip().lower()
             if confirm != "y":
@@ -326,7 +327,7 @@ async def purge_messages_impl(config_path: str, *, channel_id: int, yes: bool = 
         ch = next((c for c in channels if c.channel_id == channel_id), None)
         title = ch.title if ch else str(channel_id)
         if not yes:
-            confirm = input(
+            confirm = sync_prompt(
                 f"Delete all messages for channel {title} ({channel_id}) from DB? [y/N] "
             ).strip().lower()
             if confirm != "y":
@@ -365,7 +366,7 @@ async def hard_delete_impl(config_path: str, *, pks: str | None = None, yes: boo
                 print("No filtered channels to delete.")
                 return
         if not yes:
-            confirm = input(
+            confirm = sync_prompt(
                 f"Hard-delete {len(pk_list)} channel(s) from DB? "
                 "This is irreversible. Type YES to confirm: "
             )

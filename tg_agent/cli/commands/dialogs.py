@@ -17,6 +17,7 @@ from tg_agent.cli.commands.common import (
     OutputFormat,
     apply_startup,
     run_async,
+    sync_prompt,
 )
 from tg_agent.cli.worker_handoff import serve_is_running
 from tg_agent.models import DialogMessage, TelegramCommandStatus
@@ -90,7 +91,7 @@ def _confirm_or_abort(args, *lines: str) -> bool:
         return True
     for line in lines:
         print(line)
-    answer = input("Continue? [y/N] ").strip().lower()
+    answer = sync_prompt("Continue? [y/N] ").strip().lower()
     if answer != "y":
         print("Aborted.")
         return False
@@ -198,7 +199,7 @@ async def _dialogs_leave(args, db, pool, *, channel_service_cls) -> None:
         for channel_id, channel_type in dialogs:
             title = title_map.get(channel_id, str(channel_id))
             print(f"  {channel_id}  {title}  ({channel_type})")
-        answer = input("Continue? [y/N] ").strip().lower()
+        answer = sync_prompt("Continue? [y/N] ").strip().lower()
         if answer != "y":
             print("Aborted.")
             return
@@ -247,7 +248,7 @@ async def _dialogs_delete(args, db, pool, *, channel_service_cls) -> None:
         for channel_id, channel_type in dialogs:
             title = title_map.get(channel_id, str(channel_id))
             print(f"  {channel_id}  {title}  ({channel_type})")
-        answer = input("This is irreversible. Continue? [y/N] ").strip().lower()
+        answer = sync_prompt("This is irreversible. Continue? [y/N] ").strip().lower()
         if answer != "y":
             print("Aborted.")
             return

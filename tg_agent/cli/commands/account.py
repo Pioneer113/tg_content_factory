@@ -28,6 +28,7 @@ from tg_agent.cli import runtime
 from tg_agent.cli.commands.common import (
     apply_startup,
     run_async,
+    sync_prompt,
 )
 from tg_agent.database.repositories.accounts import AccountSessionDecryptError
 from tg_agent.models import Account
@@ -448,7 +449,7 @@ async def delete_impl(config_path: str, *, account_id: int, notify_to: str | Non
                 marker = " [primary]" if other.is_primary else ""
                 print(f"  {idx}. {other.phone}{marker}")
             try:
-                choice = input("Номер аккаунта [0]: ").strip()
+                choice = sync_prompt("Номер аккаунта [0]: ").strip()
             except (EOFError, KeyboardInterrupt):
                 choice = ""
                 print()

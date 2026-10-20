@@ -103,3 +103,54 @@ def test_resolve_date_bounds_rejects_garbage():
         resolve_date_bounds("yesterday", None)
     with pytest.raises(typer.BadParameter):
         resolve_date_bounds(None, "2026-13-45")
+
+
+# sync_prompt — Ctrl-C-safe stdin reads for confirmation gates (#1590)
+
+
+def test_sync_prompt_returns_the_typed_answer(monkeypatch):
+    monkeypatch.setattr("builtins.input", lambda _p: "y")
+    from tg_agent.cli.commands.common import sync_prompt
+
+    assert sync_prompt("Continue? [y/N] ") == "y"
+
+
+def test_sync_prompt_installs_default_sigint_handler_while_reading(monkeypatch):
+    """While blocked in input(), the first Ctrl-C must raise KeyboardInterrupt
+    immediately — asyncio.Runner's task-cancelling handler cannot unblock a
+    sync read, which left the process hanging with open aiosqlite threads."""
+    import signal
+
+    from tg_agent.cli.commands.common import sync_prompt
+
+    seen = {}
+
+    def fake_input(_p):
+        seen["handler"] = signal.getsignal(signal.SIGINT)
+        return "n"
+
+    monkeypatch.setattr("builtins.input", fake_input)
+    original = signal.getsignal(signal.SIGINT)
+    try:
+        sync_prompt("Continue? [y/N] ")
+        assert seen["handler"] is signal.default_int_handler
+    finally:
+        assert signal.getsignal(signal.SIGINT) is original
+
+
+def test_sync_prompt_restores_previous_handler(monkeypatch):
+    import signal
+
+    from tg_agent.cli.commands.common import sync_prompt
+
+    def sentinel_handler(signum, frame):  # pragma: no cover - never fired in-test
+        raise AssertionError
+
+    monkeypatch.setattr("builtins.input", lambda _p: "y")
+    previous = signal.getsignal(signal.SIGINT)
+    signal.signal(signal.SIGINT, sentinel_handler)
+    try:
+        sync_prompt("Continue? [y/N] ")
+        assert signal.getsignal(signal.SIGINT) is sentinel_handler
+    finally:
+        signal.signal(signal.SIGINT, previous)
