@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from tg_agent.models import EXTERNAL_INTEROP_TASK_TYPES, CollectionTaskStatus, CollectionTaskType
 from tg_agent.utils.json import safe_json_dumps
@@ -47,6 +47,18 @@ class CreateTaskRequest(BaseModel):
 
 class ClaimRequest(BaseModel):
     types: list[str] = Field(default_factory=list)
+    # Lease/TTL recovery (#1468): the claiming worker identifies itself and
+    # bounds its lease. A stranded RUNNING task (its holder died after a lost
+    # claim response) becomes claimable again only once `lease_seconds` have
+    # passed since `claimed_at` — never while the lease is live.
+    claimed_by: str | None = Field(default=None, min_length=1, max_length=255)
+    lease_seconds: int | None = Field(default=None, ge=1, le=7 * 24 * 3600)
+
+    @model_validator(mode="after")
+    def _lease_needs_owner(self) -> ClaimRequest:
+        if self.lease_seconds is not None and self.claimed_by is None:
+            raise ValueError("lease_seconds requires claimed_by")
+        return self
 
 
 class CompleteRequest(BaseModel):
@@ -91,19 +103,23 @@ async def claim_task(request: Request, body: ClaimRequest):
     # Types are already gated to the external allow-list above; the dispatcher's
     # HANDLED_TYPES never includes them, so this claim only ever races other
     # external workers, not the factory's own dispatcher.
-    task = await tasks.claim_next_due_generic_task(datetime.now(timezone.utc), requested)
+    task = await tasks.claim_next_due_generic_task(
+        datetime.now(timezone.utc),
+        requested,
+        claimed_by=body.claimed_by,
+        lease_seconds=body.lease_seconds,
+    )
     if task is None:
         return Response(status_code=204)
     return JSONResponse(_task_json(task))
 
 
-# NOTE (orphan recovery, follow-up): an external interop task can get stuck in
-# RUNNING if the worker that claimed it dies mid-task. We deliberately do NOT add
-# a blanket "requeue all RUNNING" endpoint — with multiple worker instances (or a
-# rolling restart) it would reset peers' in-flight tasks to PENDING and cause
-# duplicate execution (Codex review on #961). Safe recovery needs per-claim
-# ownership + a lease/TTL (claimed_by / claimed_at, reclaim only after expiry);
-# tracked as a follow-up. Until then the interop API assumes a single worker.
+# NOTE (orphan recovery, #1468): a RUNNING interop task is reclaimable through
+# POST /claim once its lease expires — pass `claimed_by` + `lease_seconds` and
+# a task whose holder died mid-task (lost claim response) is handed to the
+# retrying worker after TTL expiry, with ownership transferred. Live leases are
+# never stolen, and ownerless RUNNING rows (internal claims) are untouched, so
+# peers' in-flight tasks stay safe with multiple workers (Codex review on #961).
 async def _load_external_task(tasks, task_id: int):
     """Fetch a task and gate it to the external interop allow-list.
 

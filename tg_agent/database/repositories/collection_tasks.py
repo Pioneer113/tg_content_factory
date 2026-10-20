@@ -173,6 +173,10 @@ class CollectionTasksRepository:
                 if "result_payload" in row.keys()
                 else None
             ),
+            claimed_by=row["claimed_by"] if "claimed_by" in row.keys() else None,
+            claimed_at=(
+                parse_datetime(row["claimed_at"]) if "claimed_at" in row.keys() else None
+            ),
         )
 
     async def create_collection_task(
@@ -972,13 +976,26 @@ class CollectionTasksRepository:
         return cur.lastrowid or 0
 
     async def claim_next_due_generic_task(
-        self, now: datetime, handled_types: list[str]
+        self,
+        now: datetime,
+        handled_types: list[str],
+        *,
+        claimed_by: str | None = None,
+        lease_seconds: int | None = None,
     ) -> CollectionTask | None:
         """Атомарно захватить следующую готовую задачу из ``handled_types``, переведя её в RUNNING.
 
         Один UPDATE…RETURNING исключает гонку двух воркеров за одну задачу. Берётся
         самая ранняя PENDING с наступившим ``run_after``; возвращает ``None``, если
         готовых нет или список типов пуст.
+
+        С ``claimed_by`` + ``lease_seconds`` (interop API, #1468) захват ещё и
+        записывает владельца и его lease, а RUNNING-задача, чей lease истёк
+        (``claimed_at <= now - lease_seconds``), снова захватываема — это
+        восстановление «осиротевшего» claim, чей держатель умер, не получив ответ.
+        Лежащие без владельца RUNNING-строки (``claimed_at IS NULL`` — internal
+        claims) так не перехватываются. Без lease-аргументов поведение прежнее:
+        только PENDING (контракт диспетчера не менялся).
         """
         if not handled_types:
             return None
@@ -987,18 +1004,49 @@ class CollectionTasksRepository:
         )
         now_iso = now.astimezone(timezone.utc).isoformat()
         placeholders = ", ".join("?" for _ in handled_types)
-        cur = await self._database.execute_write(
-            f"UPDATE collection_tasks "
-            f"SET status = 'running', started_at = ?, last_progress_at = ?, completed_at = NULL "
-            f"WHERE id = ("
-            f"    SELECT id FROM collection_tasks "
-            f"    WHERE task_type IN ({placeholders}) "
-            f"    AND status = ? "
-            f"    AND (run_after IS NULL OR run_after <= ?) "
-            f"    ORDER BY COALESCE(run_after, ''), id ASC LIMIT 1"
-            f") RETURNING *",
-            (now_iso, now_iso, *handled_types, CollectionTaskStatus.PENDING.value, now_iso),
-        )
+        if claimed_by is not None:
+            assert lease_seconds is not None, "claimed_by requires lease_seconds"
+            lease_cutoff = (
+                now - timedelta(seconds=lease_seconds)
+            ).astimezone(timezone.utc).isoformat()
+            cur = await self._database.execute_write(
+                f"UPDATE collection_tasks "
+                f"SET status = 'running', started_at = ?, last_progress_at = ?, "
+                f"completed_at = NULL, claimed_by = ?, claimed_at = ? "
+                f"WHERE id = ("
+                f"    SELECT id FROM collection_tasks "
+                f"    WHERE task_type IN ({placeholders}) "
+                f"    AND ("
+                f"        (status = ? AND (run_after IS NULL OR run_after <= ?)) "
+                f"        OR (status = ? AND claimed_at IS NOT NULL AND claimed_at <= ?)"
+                f"    ) "
+                f"    ORDER BY COALESCE(run_after, ''), id ASC LIMIT 1"
+                f") RETURNING *",
+                (
+                    now_iso,
+                    now_iso,
+                    claimed_by,
+                    now_iso,
+                    *handled_types,
+                    CollectionTaskStatus.PENDING.value,
+                    now_iso,
+                    CollectionTaskStatus.RUNNING.value,
+                    lease_cutoff,
+                ),
+            )
+        else:
+            cur = await self._database.execute_write(
+                f"UPDATE collection_tasks "
+                f"SET status = 'running', started_at = ?, last_progress_at = ?, completed_at = NULL "
+                f"WHERE id = ("
+                f"    SELECT id FROM collection_tasks "
+                f"    WHERE task_type IN ({placeholders}) "
+                f"    AND status = ? "
+                f"    AND (run_after IS NULL OR run_after <= ?) "
+                f"    ORDER BY COALESCE(run_after, ''), id ASC LIMIT 1"
+                f") RETURNING *",
+                (now_iso, now_iso, *handled_types, CollectionTaskStatus.PENDING.value, now_iso),
+            )
         row = await cur.fetchone()
         if row is None:
             return None

@@ -759,6 +759,10 @@ class CollectionTask(BaseModel):
     last_progress_at: datetime | None = None
     # Result written back by an external interop worker on completion (#961).
     result_payload: dict[str, Any] | None = None
+    # Lease/TTL ownership for external interop claims (#1468): who holds the
+    # task and since when; a RUNNING task is reclaimable once the lease expires.
+    claimed_by: str | None = None
+    claimed_at: datetime | None = None
 
 
 class ChannelStats(BaseModel):

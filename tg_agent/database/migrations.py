@@ -83,6 +83,10 @@ SCHEMA_REPAIR_COLUMNS: Mapping[str, ColumnSpec] = {
         # Interop tasks (#961): result written back by an external worker.
         "result_payload": "result_payload TEXT",
         "idempotency_key": "idempotency_key TEXT",
+        # Lease/TTL ownership for interop claims (#1468): who holds the task and
+        # since when; a RUNNING task is reclaimable once the lease expires.
+        "claimed_by": "claimed_by TEXT",
+        "claimed_at": "claimed_at TEXT",
     },
     "telegram_commands": {
         "run_after": "run_after TEXT",
