@@ -247,6 +247,63 @@ async def test_photo_task_create_batch_holds_until_publish(db, tmp_path, real_po
 
 
 @pytest.mark.anyio
+async def test_photo_task_create_batch_error_leaves_no_partial_batch(db, tmp_path):
+    """#1601: ошибка валидации любого entry не оставляет в БД батч и элементы."""
+    image = tmp_path / "one.jpg"
+    image.write_bytes(b"x")
+    service = PhotoTaskService(PhotoLoaderBundle.from_database(db), MagicMock())
+
+    with pytest.raises(ValueError, match="File not found"):
+        await service.create_batch(
+            phone="+7000",
+            target=PhotoTarget(dialog_id=-1001),
+            entries=[
+                {
+                    "at": "2026-12-01T10:00:00+00:00",
+                    "files": [str(image)],
+                    "caption": "Первый пост",
+                },
+                {
+                    "at": "2026-12-02T10:00:00+00:00",
+                    "files": [str(tmp_path / "missing.jpg")],
+                    "caption": "Второй пост",
+                },
+            ],
+        )
+
+    assert await db.repos.photo_loader.list_batches() == []
+    assert await db.repos.photo_loader.list_items() == []
+
+
+@pytest.mark.anyio
+async def test_photo_task_create_batch_write_error_rolls_back_batch(db, tmp_path, monkeypatch):
+    """#1601: сбой записи после валидации откатывает и батч, и уже вставленные элементы."""
+    from tg_agent.database.repositories import photo_loader as photo_loader_repo_module
+
+    image = tmp_path / "one.jpg"
+    image.write_bytes(b"x")
+    service = PhotoTaskService(PhotoLoaderBundle.from_database(db), MagicMock())
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("insert failed")
+
+    monkeypatch.setattr(photo_loader_repo_module, "safe_json_dumps", _boom)
+
+    with pytest.raises(RuntimeError, match="insert failed"):
+        await service.create_batch(
+            phone="+7000",
+            target=PhotoTarget(dialog_id=-1001),
+            entries=[
+                {"at": "2026-12-01T10:00:00+00:00", "files": [str(image)]},
+                {"at": "2026-12-02T10:00:00+00:00", "files": [str(image)]},
+            ],
+        )
+
+    assert await db.repos.photo_loader.list_batches() == []
+    assert await db.repos.photo_loader.list_items() == []
+
+
+@pytest.mark.anyio
 async def test_photo_auto_upload_sends_only_new_files(db, tmp_path, real_pool_harness_factory):
     folder = tmp_path / "photos"
     folder.mkdir()
