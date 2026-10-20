@@ -1916,6 +1916,69 @@ def test_pipeline_add_json_file_inactive(tmp_path, cli_init_patch, capsys):
     assert pipelines[0].is_active is False
 
 
+def test_pipeline_add_json_file_forwards_flags(tmp_path, cli_init_patch, capsys):
+    """--json-file forwards --publish-mode/--generation-backend/--image-model (#1594)."""
+    import json
+
+    db_path = str(tmp_path / "cli_pipeline_add_json_flags.db")
+    db = Database(db_path, session_encryption_secret="test-session-encryption-key")
+    asyncio.run(db.initialize())
+    _add_pipeline_prereqs(db)
+
+    graph_data = {
+        "nodes": [
+            {"id": "s", "type": "source", "name": "src", "config": {}},
+            {"id": "f", "type": "fetch_messages", "name": "fetch", "config": {}},
+            {"id": "p", "type": "publish", "name": "pub", "config": {}},
+        ],
+        "edges": [
+            {"from_node": "s", "to_node": "f"},
+            {"from_node": "f", "to_node": "p"},
+        ],
+    }
+    json_path = str(tmp_path / "graph.json")
+    with open(json_path, "w") as f:
+        json.dump(graph_data, f)
+
+    with cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS):
+        from tg_agent.cli.commands.pipeline import run
+
+        run(
+            _ns(
+                pipeline_action="add",
+                name="JsonFileFlags",
+                prompt_template=None,
+                source=[1001],
+                target=["+100|77"],
+                llm_model=None,
+                image_model="together:flux",
+                publish_mode="auto",
+                generation_backend="agent",
+                interval=60,
+                inactive=False,
+                json_file=json_path,
+                node_specs=None,
+                edge=None,
+                node_configs=None,
+            )
+        )
+
+    asyncio.run(db.close())
+    out = capsys.readouterr().out
+    assert "Added pipeline id=" in out
+
+    verify_db = Database(db_path, session_encryption_secret="test-session-encryption-key")
+    asyncio.run(verify_db.initialize())
+    pipelines = asyncio.run(verify_db.repos.content_pipelines.get_all())
+    asyncio.run(verify_db.close())
+    assert len(pipelines) == 1
+    # Non-default flags must survive the --json-file import payload (#1594):
+    # import_json otherwise silently falls back to moderated/chain/None.
+    assert pipelines[0].publish_mode.value == "auto"
+    assert pipelines[0].generation_backend.value == "agent"
+    assert pipelines[0].image_model == "together:flux"
+
+
 # ── Issue #463: runs/run-show semantic display ───────────────────────────────
 
 
