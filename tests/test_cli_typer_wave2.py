@@ -227,6 +227,21 @@ def test_translate_detect_batch_size():
     mock_impl.assert_called_once_with("config.yaml", batch_size=100)
 
 
+def test_translate_detect_rejects_non_positive_batch_size():
+    """--batch-size <= 0 is rejected up front (#1618): batch_size=0 loops forever
+    in detect_impl (LIMIT 0 returns no rows, ``0 < 0`` never breaks)."""
+    mock_impl = MagicMock()
+    with (
+        patch("tg_agent.cli.typer_commands.translate_cmd.detect_impl", mock_impl),
+        patch("tg_agent.cli.typer_commands.run_async"),
+    ):
+        for value in ("0", "-1"):
+            result = runner.invoke(app, ["translate", "detect", "--batch-size", value])
+            assert result.exit_code == 2, f"--batch-size {value}: {result.output}"
+            assert "--batch-size" in result.output
+    mock_impl.assert_not_called()
+
+
 def test_translate_run_defaults():
     mock_impl = MagicMock()
     with (
