@@ -5,6 +5,7 @@ import asyncio
 import csv
 import io
 import json
+import sys
 
 import typer
 from telethon_floodgate import HandledFloodWaitError, run_with_flood_wait
@@ -147,6 +148,16 @@ async def messages_read_impl(
         include_reaction_users = bool(include_reaction_users)
         reaction_users_limit = normalize_reaction_users_limit(reaction_users_limit)
 
+        if live and output_format != "text":
+            # Live output has no json/csv printer (#1598) — refuse the mix
+            # instead of silently ignoring --format.
+            print(
+                f"--format {output_format} is not supported with --live "
+                "(live output is text-only). Drop --format or drop --live.",
+                file=sys.stderr,
+            )
+            raise typer.Exit(1)
+
         if live:
             # Live mode: read from Telegram
             _, pool = await runtime.init_pool(config, db)
@@ -248,9 +259,10 @@ async def messages_read_impl(
             if not ch:
                 print(
                     f"Channel '{identifier}' not found in DB. "
-                    "Use --live to read directly from Telegram."
+                    "Use --live to read directly from Telegram.",
+                    file=sys.stderr,
                 )
-                return
+                raise typer.Exit(1)
             page = await db.search_messages(
                 query=query,
                 channel_id=ch.channel_id,
@@ -260,9 +272,10 @@ async def messages_read_impl(
                 topic_id=topic_id,
             )
             messages = page.messages
-            if not messages:
+            if not messages and output_format == "text":
                 print("No messages found.")
                 return
+            # Empty json/csv still honor the declared format ([] / header-only).
             _print_messages(messages, output_format, page.total, has_more=page.has_more)
     finally:
         if pool:

@@ -182,21 +182,24 @@ def test_messages_read_with_query_filter(cli_env, capsys):
 def test_messages_read_channel_not_found(cli_env, capsys):
     from tg_agent.cli.commands.messages import run
 
-    run(_ns(
-        messages_action="read",
-        identifier="99999",
-        limit=50,
-        live=False,
-        phone=None,
-        query="",
-        date_from=None,
-        date_to=None,
-        topic_id=None,
-        offset_id=None,
-        output_format="text",
-    ))
-    out = capsys.readouterr().out
-    assert "not found" in out.lower() or "No messages found" in out
+    with pytest.raises(typer.Exit) as exc_info:
+        run(_ns(
+            messages_action="read",
+            identifier="99999",
+            limit=50,
+            live=False,
+            phone=None,
+            query="",
+            date_from=None,
+            date_to=None,
+            topic_id=None,
+            offset_id=None,
+            output_format="text",
+        ))
+    captured = capsys.readouterr()
+    assert "not found" in captured.err.lower()
+    assert captured.out == ""
+    assert exc_info.value.exit_code == 1
 
 
 def test_messages_read_no_messages(cli_env, capsys):
