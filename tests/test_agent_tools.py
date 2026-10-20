@@ -580,7 +580,7 @@ class TestPipelineStatsTool:
             total_published=15,
             total_rejected=2,
             pending_moderation=3,
-            success_rate=0.75,
+            success_rate=75.0,  # percent units, as the service returns it (#1616)
         )
         with patch("tg_agent.services.content_analytics_service.ContentAnalyticsService") as mock_svc:
             mock_svc.return_value.get_pipeline_stats = AsyncMock(return_value=[stat])

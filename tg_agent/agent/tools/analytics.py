@@ -106,7 +106,7 @@ def register(db, client_pool, embedding_service, **kwargs):
                     f"генераций={s.total_generations}, опубл.={s.total_published}, "
                     f"отклон.={getattr(s, 'total_rejected', 0)}, "
                     f"на модерации={getattr(s, 'pending_moderation', 0)}, "
-                    f"success_rate={success_rate:.0%}"
+                    f"success_rate={success_rate:.0f}%"
                 )
             return _text_response("\n".join(lines))
         except Exception as e:
