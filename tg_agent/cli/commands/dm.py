@@ -208,8 +208,77 @@ async def status_impl(config_path: str) -> None:
         await db.close()
 
 
-dm_app = typer.Typer(no_args_is_help=True, help="Incoming DM reply drafts")
+async def journal_list_impl(config_path: str, *, limit: int, offset: int) -> None:
+    """Журнал входящих DM (окно TTL 24ч), свежие первыми (#1580)."""
+    _, db = await runtime.init_db(config_path)
+    try:
+        rows = await db.repos.incoming_dms.list(limit=limit, offset=offset)
+        if not rows:
+            print("Incoming DM journal is empty (24h TTL window).")
+            return
+        fmt = "{:<5} {:<16} {:<10} {:<8} {:<16} {:<30}"
+        print(fmt.format("ID", "Phone", "Chat", "Msg ID", "Received", "Text"))
+        print("-" * 95)
+        for r in rows:
+            received = r.received_at.strftime("%Y-%m-%d %H:%M") if r.received_at else "-"
+            text = r.text or ""
+            print(
+                fmt.format(
+                    str(r.id),
+                    r.phone,
+                    str(r.chat_id),
+                    str(r.message_id),
+                    received,
+                    (text[:28] + "…" if len(text) > 28 else text),
+                )
+            )
+    finally:
+        await db.close()
+
+
+async def archive_list_impl(
+    config_path: str,
+    *,
+    phone: str | None,
+    chat_id: int | None,
+    limit: int,
+) -> None:
+    """Постоянный архив DM (обе стороны, без TTL), свежие первыми (#1580)."""
+    _, db = await runtime.init_db(config_path)
+    try:
+        rows = await db.repos.dm_messages.list(
+            phone=phone, chat_id=chat_id, limit=limit
+        )
+        if not rows:
+            print("DM archive is empty for the given filter.")
+            return
+        fmt = "{:<5} {:<16} {:<10} {:<4} {:<16} {:<28}"
+        print(fmt.format("ID", "Phone", "Chat", "Dir", "Date", "Text"))
+        print("-" * 95)
+        for r in rows:
+            date = r.message_date.strftime("%Y-%m-%d %H:%M") if r.message_date else "-"
+            text = r.text or ""
+            print(
+                fmt.format(
+                    str(r.id),
+                    r.phone,
+                    str(r.chat_id),
+                    "out" if r.out else "in",
+                    date,
+                    (text[:26] + "…" if len(text) > 26 else text),
+                )
+            )
+    finally:
+        await db.close()
+
+
+dm_app = typer.Typer(no_args_is_help=True, help="Incoming DM: journal, archive, reply drafts")
 drafts_app = typer.Typer(no_args_is_help=True, help="Reply drafts: list, decide, queue send")
+journal_app = typer.Typer(no_args_is_help=True, help="Incoming DM journal (24h TTL window)")
+archive_app = typer.Typer(no_args_is_help=True, help="Persistent DM archive (dm_messages)")
+dm_app.add_typer(drafts_app, name="drafts")
+dm_app.add_typer(journal_app, name="journal")
+dm_app.add_typer(archive_app, name="archive")
 
 
 @dm_app.command("status")
@@ -217,9 +286,6 @@ def dm_status(ctx: typer.Context) -> None:
     """Show DM listener/catch-up status from the worker snapshot + settings."""
     apply_startup(ctx)
     run_async(status_impl(ctx.obj.config))
-
-
-dm_app.add_typer(drafts_app, name="drafts")
 
 
 @drafts_app.command("list")
@@ -286,3 +352,28 @@ def drafts_send(
     """Queue an approved draft for the worker to send (never sends in-process)."""
     apply_startup(ctx)
     run_async(send_impl(ctx.obj.config, draft_id=draft_id))
+
+
+@journal_app.command("list")
+def journal_list(
+    ctx: typer.Context,
+    limit: int = typer.Option(100, "--limit", help="Max rows"),
+    offset: int = typer.Option(0, "--offset", help="Page offset"),
+) -> None:
+    """List the incoming-DM journal (fresh first, 24h TTL window)."""
+    apply_startup(ctx)
+    run_async(journal_list_impl(ctx.obj.config, limit=limit, offset=offset))
+
+
+@archive_app.command("list")
+def archive_list(
+    ctx: typer.Context,
+    phone: str | None = typer.Option(None, "--phone", help="Filter by account phone"),
+    chat_id: int | None = typer.Option(None, "--chat-id", help="Filter by dialog chat id"),
+    limit: int = typer.Option(100, "--limit", help="Max rows"),
+) -> None:
+    """List the persistent DM archive (both directions, fresh first)."""
+    apply_startup(ctx)
+    run_async(
+        archive_list_impl(ctx.obj.config, phone=phone, chat_id=chat_id, limit=limit)
+    )

@@ -547,7 +547,7 @@ def test_cli_journal_list_prints_rows(cli_db, capsys):
         lambda: dm_cli.journal_list_impl("cfg", limit=100, offset=0), cli_db, capsys
     )
     assert "+10000000001" in out
-    assert "chat" in out
+    assert "Chat" in out
 
 
 def test_cli_journal_list_empty(cli_db, capsys):
