@@ -14,6 +14,7 @@ from tg_agent.agent.provider_registry import (
 )
 from tg_agent.utils.datetime import try_parse_datetime
 from tg_agent.utils.json import safe_json_dumps
+from tg_agent.web.paths import data_root
 
 if TYPE_CHECKING:
     from typing import Protocol
@@ -62,10 +63,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 MODEL_COMPATIBILITY_FRESHNESS_HOURS = 24
-_PROJECT_ROOT = Path(__file__).resolve().parents[2]
-COMMUNITY_COMPATIBILITY_CATALOG_PATH = (
-    _PROJECT_ROOT / "data" / "deepagents_model_compatibility_catalog.json"
-)
+# Default export target lives under the runtime data root (cwd / TG_AGENT_DATA_DIR),
+# not inside the package dir — wheel installs may have read-only site-packages (#1595).
+COMMUNITY_COMPATIBILITY_CATALOG_PATH = data_root() / "deepagents_model_compatibility_catalog.json"
 
 
 @dataclass(slots=True)

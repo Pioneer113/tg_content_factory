@@ -16,10 +16,11 @@ from tg_agent.services.telegram_actions import (
     TelegramActionPathEscapeError,
     TelegramActionService,
 )
+from tg_agent.web.paths import data_root
 
 
 def _downloads_dir() -> pathlib.Path:
-    return pathlib.Path(__file__).resolve().parents[3] / "data" / "downloads"
+    return data_root() / "downloads"
 
 
 def register_pin_media_tools(ctx: Any, client_pool: Any) -> list[Any]:

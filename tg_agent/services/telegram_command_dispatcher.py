@@ -52,6 +52,7 @@ from tg_agent.telegram.collector import Collector
 from tg_agent.telegram.notifier import Notifier
 from tg_agent.telegram.reactions import TelegramReactionInvalidError
 from tg_agent.utils.safe_logging import elapsed_ms, query_log_fields
+from tg_agent.web.paths import data_root
 
 try:  # telethon is an optional dependency at test-time
     from telethon.errors import ReactionInvalidError
@@ -67,7 +68,7 @@ logger = logging.getLogger(__name__)
 
 
 def _downloads_dir() -> Path:
-    return Path(__file__).resolve().parents[2] / "data" / "downloads"
+    return data_root() / "downloads"
 
 
 # Re-exported so existing patch points keep working:

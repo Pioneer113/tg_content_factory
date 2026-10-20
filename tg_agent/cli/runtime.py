@@ -11,9 +11,11 @@ from tg_agent.settings_utils import parse_int_setting
 from tg_agent.telegram.auth import TelegramAuth
 from tg_agent.telegram.client_pool import ClientPool
 from tg_agent.utils.safe_logging import RedactingFormatter
-from tg_agent.web.paths import PROJECT_ROOT
+from tg_agent.web.paths import data_root
 
-_DATA_ROOT = PROJECT_ROOT / "data"
+# Snapshot of data_root() at import: cwd-relative "./data" (or TG_AGENT_DATA_DIR),
+# never inside the package dir — wheel installs may have read-only site-packages (#1595).
+_DATA_ROOT = data_root()
 _LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 _LOG_DATEFMT = "%Y-%m-%d %H:%M:%S"
 _TUI_LOG_PATH = _DATA_ROOT / "agent_tui.log"
