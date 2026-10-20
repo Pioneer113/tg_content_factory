@@ -1347,6 +1347,39 @@ class TestPipelineAbAddRW:
         assert row["ab_auto_select"] == 1
         assert "Added pipeline" in capsys.readouterr().out
 
+    def test_add_dag_persists_ab_fields(self, tmp_path, cli_init_patch, capsys):
+        """DAG `pipeline add --node --ab-variants N --ab-auto-select` persists A/B config (#1620)."""
+        db_path = _empty_db_path(tmp_path, "pipeline_ab_add_dag.db")
+
+        _pipeline_cli_run(
+            db_path,
+            cli_init_patch,
+            _pipeline_ns(
+                "add",
+                name="ABDag",
+                ab_variants=3,
+                ab_auto_select=True,
+                node_specs=["source", "llm_generate:prompt_template=x", "publish"],
+                source=None,
+                target=None,
+                prompt_template=None,
+            ),
+        )
+
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT ab_num_variants, ab_auto_select FROM content_pipelines "
+                "WHERE name = 'ABDag'"
+            ).fetchone()
+        finally:
+            conn.close()
+        assert row is not None
+        assert row["ab_num_variants"] == 3
+        assert row["ab_auto_select"] == 1
+        assert "Added pipeline" in capsys.readouterr().out
+
 
 class TestPipelineAbEditRW:
     def test_edit_sets_ab_fields(self, tmp_path, cli_init_patch, capsys):
