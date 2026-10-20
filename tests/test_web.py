@@ -33,6 +33,7 @@ from tg_agent.services.agent_provider_service import (
     ProviderModelCacheEntry,
     ProviderModelCompatibilityRecord,
 )
+from tg_agent.security import SessionCipher
 from tg_agent.services.embedding_service import EmbeddingService
 from tg_agent.telegram.collector import Collector
 from tg_agent.web.app import create_app
@@ -473,7 +474,10 @@ async def test_settings_save_semantic_persists_values_and_resets_index(client):
     assert await db.get_setting("semantic_embeddings_provider") == "openai"
     assert await db.get_setting("semantic_embeddings_model") == "text-embedding-3-small"
     assert await db.get_setting("semantic_embeddings_base_url") == "https://api.openai.com/v1"
-    assert await db.get_setting("semantic_embeddings_api_key") == "secret-key"
+    stored_key = await db.get_setting("semantic_embeddings_api_key")
+    assert stored_key is not None
+    assert stored_key.startswith("enc:v2:")
+    assert SessionCipher("test-session-encryption-key").decrypt(stored_key) == "secret-key"
     assert await db.get_setting("semantic_embeddings_batch_size") == "32"
     assert await db.get_setting("semantic_last_embedded_id") is None
 

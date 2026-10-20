@@ -92,6 +92,10 @@ def make_cli_db(**overrides) -> MagicMock:
     db.repos.messages.reset_embeddings_index = AsyncMock()
     db.repos.settings.get_setting = AsyncMock(return_value=None)
     db.repos.settings.list_all = AsyncMock(return_value=[])
+    # Secret-setting surface (issue #1597): enabled cipher + awaitable secret ops.
+    db.repos.settings.secrets_enabled = True
+    db.repos.settings.set_secret = AsyncMock()
+    db.repos.settings.get_secret = AsyncMock(return_value=None)
     for key, value in overrides.items():
         setattr(db, key, value)
     return db

@@ -1,6 +1,7 @@
 """Tests for CLI settings commands: agent, filter-criteria, semantic."""
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import patch
 
 import pytest
@@ -8,6 +9,7 @@ import pytest
 from tests.helpers import cli_ns as _ns
 from tg_agent.config import AppConfig
 from tg_agent.database import Database
+from tg_agent.security import SessionCipher
 
 
 @pytest.fixture
@@ -21,6 +23,55 @@ def cli_env(cli_db):
 
     with patch("tg_agent.cli.commands.settings.runtime.init_db", side_effect=fake_init_db):
         yield cli_db
+
+
+@pytest.fixture
+def cli_env_encrypted(cli_db):
+    """CLI init_db returns a db carrying the session cipher (SESSION_ENCRYPTION_KEY set)."""
+    config = AppConfig()
+
+    async def fake_init_db(config_path: str):
+        cmd_db = Database(
+            cli_db._db_path, session_encryption_secret="test-session-encryption-key"
+        )
+        await cmd_db.initialize()
+        return config, cmd_db
+
+    with patch("tg_agent.cli.commands.settings.runtime.init_db", side_effect=fake_init_db):
+        yield cli_db
+
+
+@pytest.fixture
+def cli_env_no_encryption_key(tmp_path):
+    """CLI against a db without any session cipher (SESSION_ENCRYPTION_KEY unset)."""
+    db_path = str(tmp_path / "no_key.db")
+    config = AppConfig()
+
+    async def fake_init_db(config_path: str):
+        cmd_db = Database(db_path, session_encryption_secret=None)
+        await cmd_db.initialize()
+        return config, cmd_db
+
+    with patch("tg_agent.cli.commands.settings.runtime.init_db", side_effect=fake_init_db):
+        yield db_path
+
+
+async def _write_setting(db_path: str, key: str, value: str) -> None:
+    db = Database(db_path, session_encryption_secret="test-session-encryption-key")
+    await db.initialize()
+    try:
+        await db.set_setting(key, value)
+    finally:
+        await db.close()
+
+
+async def _read_setting(db_path: str, key: str) -> str | None:
+    db = Database(db_path, session_encryption_secret="test-session-encryption-key")
+    await db.initialize()
+    try:
+        return await db.get_setting(key)
+    finally:
+        await db.close()
 
 
 class TestAgent:
@@ -197,18 +248,22 @@ class TestSemantic:
         out = capsys.readouterr().out
         assert "semantic_embeddings_model = text-embedding-3-small" in out
 
-    def test_semantic_set_api_key_short(self, cli_env, capsys):
+    def test_semantic_set_api_key_masked_and_stored_encrypted(self, cli_env_encrypted, capsys):
         from tg_agent.cli.commands.settings import run
+
         run(_ns(settings_action="semantic", api_key="short"))
         out = capsys.readouterr().out
-        assert "semantic_embeddings_api_key = short" in out
+        assert "short" not in out
+        assert "••••••••" in out
 
-    def test_semantic_set_api_key_long_truncates(self, cli_env, capsys):
+    def test_semantic_set_api_key_long_masked(self, cli_env_encrypted, capsys):
         from tg_agent.cli.commands.settings import run
+
         long_key = "sk-" + "a" * 30
         run(_ns(settings_action="semantic", api_key=long_key))
         out = capsys.readouterr().out
-        assert "..." in out
+        assert long_key not in out
+        assert "••••••••" in out
 
     def test_semantic_set_multiple(self, cli_env, capsys):
         from tg_agent.cli.commands.settings import run
@@ -224,3 +279,108 @@ class TestSemantic:
         run(_ns(settings_action="semantic"))
         out = capsys.readouterr().out
         assert "openai" in out
+
+
+class TestSecretMasking:
+    """Issue #1597: the embeddings API key is masked in output and stored encrypted.
+
+    Two symptoms from the issue: (1) `settings get` prints the secret verbatim;
+    (2) the key is stored in the settings table as plaintext. The CLI here talks
+    to a real SQLite file, so both are asserted end to end.
+    """
+
+    KEY = "semantic_embeddings_api_key"
+    RAW = "sk-FAKEKEY-0123456789abcdefghijklmnopqrstuvwxyz"
+    ENC_SECRET = "test-session-encryption-key"
+
+    def test_get_all_masks_secret_values(self, cli_env, cli_db, capsys):
+        from tg_agent.cli.commands.settings import run
+
+        asyncio.run(_write_setting(cli_db._db_path, self.KEY, self.RAW))
+        run(_ns(settings_action="get"))
+        out = capsys.readouterr().out
+        assert self.KEY in out  # row still listed
+        assert self.RAW not in out  # value never printed
+        assert "••••••••" in out
+
+    def test_get_all_masks_session_secret_key(self, cli_env, cli_db, capsys):
+        from tg_agent.cli.commands.settings import run
+
+        asyncio.run(_write_setting(cli_db._db_path, "session_secret_key", "hmac-secret-1"))
+        run(_ns(settings_action="get"))
+        out = capsys.readouterr().out
+        assert "hmac-secret-1" not in out
+
+    def test_get_specific_secret_key_masks_value(self, cli_env, cli_db, capsys):
+        from tg_agent.cli.commands.settings import run
+
+        asyncio.run(_write_setting(cli_db._db_path, self.KEY, self.RAW))
+        run(_ns(settings_action="get", key=self.KEY))
+        out = capsys.readouterr().out
+        assert self.KEY in out
+        assert self.RAW not in out
+        assert "••••••••" in out
+
+    def test_get_non_secret_key_still_prints_value(self, cli_env, cli_db, capsys):
+        from tg_agent.cli.commands.settings import run
+
+        asyncio.run(_write_setting(cli_db._db_path, "collect_interval_minutes", "45"))
+        run(_ns(settings_action="get", key="collect_interval_minutes"))
+        out = capsys.readouterr().out
+        assert "45" in out
+
+    def test_semantic_set_api_key_stored_encrypted_not_plaintext(
+        self, cli_env_encrypted, cli_db, capsys
+    ):
+        from tg_agent.cli.commands.settings import run
+
+        run(_ns(settings_action="semantic", api_key=self.RAW))
+        capsys.readouterr()
+        stored = asyncio.run(_read_setting(cli_db._db_path, self.KEY))
+        assert stored is not None
+        assert stored.startswith("enc:v2:")
+        assert self.RAW not in stored
+        # Round-trip: the stored value decrypts back to the entered key.
+        assert SessionCipher(self.ENC_SECRET).decrypt(stored) == self.RAW
+
+    def test_semantic_show_masks_api_key(self, cli_env_encrypted, cli_db, capsys):
+        from tg_agent.cli.commands.settings import run
+
+        run(_ns(settings_action="semantic", api_key=self.RAW))
+        capsys.readouterr()
+        run(_ns(settings_action="semantic"))
+        out = capsys.readouterr().out
+        assert self.RAW not in out
+        assert "••••••••" in out
+
+    def test_semantic_set_api_key_refuses_without_encryption_key(
+        self, cli_env_no_encryption_key, capsys
+    ):
+        from tg_agent.cli.commands.settings import run
+
+        run(_ns(settings_action="semantic", api_key=self.RAW))
+        out = capsys.readouterr().out
+        assert "ERROR" in out
+        assert "SESSION_ENCRYPTION_KEY" in out
+        stored = asyncio.run(_read_setting(cli_env_no_encryption_key, self.KEY))
+        assert stored is None  # refused, not silently stored as plaintext
+
+    def test_settings_set_api_key_routes_to_encrypted_store(
+        self, cli_env_encrypted, cli_db, capsys
+    ):
+        from tg_agent.cli.commands.settings import run
+
+        run(_ns(settings_action="set", key=self.KEY, value=self.RAW))
+        out = capsys.readouterr().out
+        assert self.RAW not in out
+        stored = asyncio.run(_read_setting(cli_db._db_path, self.KEY))
+        assert stored is not None
+        assert stored.startswith("enc:v2:")
+        assert SessionCipher(self.ENC_SECRET).decrypt(stored) == self.RAW
+
+    def test_settings_set_secret_key_masks_echo(self, cli_env, capsys):
+        from tg_agent.cli.commands.settings import run
+
+        run(_ns(settings_action="set", key="session_secret_key", value="hmac-secret-1"))
+        out = capsys.readouterr().out
+        assert "hmac-secret-1" not in out

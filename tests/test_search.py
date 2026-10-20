@@ -893,3 +893,57 @@ async def test_has_semantic_index_true_after_embeddings_indexed(db):
     _set_semantic_backend(engine, numpy=True)
     assert await db.repos.messages.count_embeddings() == 1
     assert await engine.has_semantic_index() is True
+
+
+# ── Embeddings API key at rest (issue #1597) ─────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_runtime_config_decrypts_stored_api_key(db):
+    """The embeddings key is stored enc:v2; the service must read it back as plaintext."""
+    from tg_agent.security import SessionCipher
+    from tg_agent.services.embedding_service import EMBEDDINGS_API_KEY_SETTING
+
+    cipher = SessionCipher("test-session-encryption-key")
+    await db.set_setting(EMBEDDINGS_API_KEY_SETTING, cipher.encrypt("sk-plain-123"))
+    service = EmbeddingService(db)
+    cfg = await service._runtime_config()
+    assert cfg.api_key == "sk-plain-123"
+
+
+@pytest.mark.anyio
+async def test_runtime_config_encrypted_key_without_cipher_raises(tmp_path):
+    """An encrypted stored key without SESSION_ENCRYPTION_KEY must fail loudly, not send ciphertext."""
+    from tg_agent.database import Database
+    from tg_agent.security import SessionCipher
+    from tg_agent.services.embedding_service import EMBEDDINGS_API_KEY_SETTING
+
+    raw_cipher = SessionCipher("test-session-encryption-key")
+    database = Database(str(tmp_path / "nockey.db"), session_encryption_secret=None)
+    await database.initialize()
+    try:
+        await database.set_setting(
+            EMBEDDINGS_API_KEY_SETTING, raw_cipher.encrypt("sk-plain-123")
+        )
+        service = EmbeddingService(database)
+        with pytest.raises(RuntimeError, match="SESSION_ENCRYPTION_KEY"):
+            await service._runtime_config()
+    finally:
+        await database.close()
+
+
+@pytest.mark.anyio
+async def test_runtime_config_plaintext_key_still_read(tmp_path):
+    """Legacy plaintext keys keep working (decrypt passthrough)."""
+    from tg_agent.database import Database
+    from tg_agent.services.embedding_service import EMBEDDINGS_API_KEY_SETTING
+
+    database = Database(str(tmp_path / "plain.db"), session_encryption_secret=None)
+    await database.initialize()
+    try:
+        await database.set_setting(EMBEDDINGS_API_KEY_SETTING, "sk-legacy-plain")
+        service = EmbeddingService(database)
+        cfg = await service._runtime_config()
+        assert cfg.api_key == "sk-legacy-plain"
+    finally:
+        await database.close()
