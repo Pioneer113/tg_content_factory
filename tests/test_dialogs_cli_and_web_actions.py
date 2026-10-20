@@ -1598,3 +1598,29 @@ class TestWebCreateChannel:
         await _assert_enqueued(
             app, "dialogs.create_channel", {"phone": _PHONE, "title": "Test"},
         )
+
+
+class TestDialogsQueueStatusLog:
+    """``dialogs queue status`` — generic queue log prints phone or explicit
+    "unassigned", never a bare ``-`` (#1581)."""
+
+    async def test_missing_phone_prints_unassigned(self, db, capsys):
+        from tg_agent.cli.commands.dialogs import _dialogs_queue
+        from tg_agent.models import TelegramCommand
+
+        await db.repos.telegram_commands.create_command(
+            TelegramCommand(command_type="dm.send_reply", payload={"draft_id": 1})
+        )
+        args = cli_ns(
+            dialogs_action="queue",
+            queue_action="status",
+            command_type=None,
+            phone=None,
+            limit=20,
+        )
+
+        await _dialogs_queue(args, db, None)
+
+        out = capsys.readouterr().out
+        assert "phone=unassigned" in out
+        assert "phone=-" not in out
