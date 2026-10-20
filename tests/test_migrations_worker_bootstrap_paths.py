@@ -705,7 +705,7 @@ async def test_generate_image_url_result(mock_db, tmp_path):
         mock_svc.return_value.generate = AsyncMock(return_value="https://example.com/image.png")
         mock_svc.return_value.adapter_names = ["test"]
 
-        # Patch DATA_IMAGE_DIR to use tmp_path
+        # Redirect the runtime data root (image_dir()) to tmp_path
         _created_clients = []
 
         class _TrackingAsyncClient:
@@ -715,7 +715,7 @@ async def test_generate_image_url_result(mock_db, tmp_path):
                 return c
 
         try:
-            with patch("tg_agent.agent.tools.images.DATA_IMAGE_DIR", tmp_path):
+            with patch.dict(os.environ, {"TG_AGENT_DATA_DIR": str(tmp_path)}):
                 with patch("httpx.AsyncClient", _TrackingAsyncClient):
                     handlers = _get_tool_handlers(mock_db)
                     result = await handlers["generate_image"]({"prompt": "a cat", "model": "test:model"})

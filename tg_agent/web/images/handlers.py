@@ -88,7 +88,8 @@ def _to_image_url(result: str) -> str:
 
     Hosted results (S3, legacy DALL·E ``url``) start with ``http`` and pass
     through unchanged. File results (gpt-image-1 b64, HuggingFace) are saved
-    under ``DATA_IMAGE_DIR`` and served at ``/data/image/<name>``; return that
+    under ``image_dir()`` (the runtime data root) and served at
+    ``/data/image/<name>``; return that
     URL so ``<img src>`` resolves instead of pointing at a raw filesystem path.
     """
     if result.startswith("http"):

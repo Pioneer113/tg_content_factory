@@ -11,7 +11,7 @@ from pathlib import Path
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
-from tg_agent.cli.runtime import APP_LOG_PATH
+from tg_agent.cli.runtime import app_log_path
 from tg_agent.web import deps
 
 router = APIRouter()
@@ -25,8 +25,7 @@ _LOG_RE = re.compile(
 
 
 def _read_log_tail(path: Path | None = None, max_lines: int = 500) -> list[dict]:
-    if path is None:
-        path = APP_LOG_PATH
+    path = path or app_log_path()
     if not path.exists():
         return []
     try:

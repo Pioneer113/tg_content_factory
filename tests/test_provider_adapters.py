@@ -934,13 +934,12 @@ async def test_openai_image_adapter_gpt_image_saves_b64(monkeypatch, tmp_path):
     """gpt-image-1 returns b64_json — adapter must decode and persist it to a file."""
     import base64
 
-    from tg_agent.services import provider_adapters
     from tg_agent.services.provider_adapters import make_openai_image_adapter
 
     fake_png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
     b64 = base64.b64encode(fake_png).decode()
     cap = patch_async_openai(monkeypatch, response=[_FakeImage(b64_json=b64)], capture={})
-    monkeypatch.setattr(provider_adapters, "DEFAULT_IMAGE_OUTPUT_DIR", str(tmp_path))
+    monkeypatch.setenv("TG_AGENT_DATA_DIR", str(tmp_path))
 
     adapter = make_openai_image_adapter("fake-key")
     result = await adapter("a sunset", "")  # empty model → default gpt-image-1

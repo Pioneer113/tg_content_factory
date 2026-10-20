@@ -14,6 +14,8 @@ from typing import Any, Awaitable, Callable, Dict, Optional, Protocol, runtime_c
 
 import aiohttp
 
+from tg_agent.web.paths import image_dir
+
 logger = logging.getLogger(__name__)
 
 # Type alias for image generation adapters
@@ -30,12 +32,12 @@ class _ImageResultLike(Protocol):
     b64_json: Optional[str]
 
 
-# Default directory where binary / base64 image results are persisted.
-# Must match where the web app serves generated images from — ``DATA_IMAGE_DIR``
-# (``data/image``) mounted at ``/data/image`` in tg_agent/web/assembly.py. Writing
+# Binary / base64 image results are persisted under the runtime data root.
+# Must match where the web app serves generated images from — ``image_dir()``
+# (``<data root>/image``, tg_agent/web/paths.py) mounted at ``/data/image`` in
+# tg_agent/web/assembly.py. Writing
 # elsewhere (the old ``data/images``) made saved files unreachable over HTTP, so
 # gpt-image-1 / HuggingFace results rendered as broken images in a no-S3 deploy.
-DEFAULT_IMAGE_OUTPUT_DIR = "data/image"
 
 
 def _image_target_path(output_dir: str | None = None) -> Path:
@@ -44,10 +46,10 @@ def _image_target_path(output_dir: str | None = None) -> Path:
     Single source of the on-disk naming convention, shared by every image
     adapter — both those that already hold the bytes (:func:`save_image_bytes`)
     and the Codex adapter, which must hand the path to the engine *before* the
-    file exists. ``output_dir`` defaults to :data:`DEFAULT_IMAGE_OUTPUT_DIR`,
-    resolved at call time so the module-level default stays overridable.
+    file exists. ``output_dir`` defaults to :func:`image_dir`, resolved at call
+    time so ``TG_AGENT_DATA_DIR`` stays overridable (#1595).
     """
-    out = Path(output_dir or DEFAULT_IMAGE_OUTPUT_DIR)
+    out = Path(output_dir or image_dir())
     out.mkdir(parents=True, exist_ok=True)
     return out / f"{uuid.uuid4().hex}.png"
 
@@ -299,7 +301,7 @@ def make_together_image_adapter(api_key: str) -> ImageAdapter:
 
 
 def make_huggingface_image_adapter(
-    api_token: str, output_dir: str = DEFAULT_IMAGE_OUTPUT_DIR
+    api_token: str, output_dir: str | None = None
 ) -> ImageAdapter:
     """HuggingFace Inference API — returns binary image, saved to local file."""
 
@@ -613,7 +615,7 @@ async def _close_codex_image_subprocess(
 
 
 def make_codex_image_adapter(
-    output_dir: str = DEFAULT_IMAGE_OUTPUT_DIR,
+    output_dir: str | None = None,
     image_timeout: float = CODEX_IMAGE_TIMEOUT_SECONDS,
 ) -> ImageAdapter:
     """Codex SDK image generation — drives the local Codex engine, saves a file.

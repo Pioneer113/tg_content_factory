@@ -142,6 +142,10 @@ archive — no TTL, idempotent/resumable. Each run takes a FRESH dialog snapshot
 a partial snapshot or flood marks the run incomplete — rerun the command, it continues
 from archive cursors. Local DB write, no Telegram send; while the worker daemon runs it
 is refused by the session lock (`tg-agent stop` first — see Session lock above).
+`dialogs download-media` writes to `--output-dir` (default: current directory); the queued
+command and the agent tool (which carry no directory by contract) land files in the runtime
+data root (`./data/downloads`, overridable via `TG_AGENT_DATA_DIR`) — never inside the
+installed package (#1595).
 
 ## dm — reply drafts for incoming private messages (#1429)
 

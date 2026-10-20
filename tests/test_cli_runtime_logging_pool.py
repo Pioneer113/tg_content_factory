@@ -64,9 +64,9 @@ class TestSetupLogging:
 
 class TestEnsureDataDirs:
     def test_ensure_data_dirs_creates_subdirs(self, tmp_path, monkeypatch):
-        """ensure_data_dirs creates expected subdirectories."""
+        """ensure_data_dirs creates expected subdirectories under the data root."""
         data_root = tmp_path / "data_test"
-        monkeypatch.setattr("tg_agent.cli.runtime._DATA_ROOT", data_root)
+        monkeypatch.setenv("TG_AGENT_DATA_DIR", str(data_root))
 
         ensure_data_dirs()
 
@@ -76,7 +76,7 @@ class TestEnsureDataDirs:
     def test_ensure_data_dirs_idempotent(self, tmp_path, monkeypatch):
         """ensure_data_dirs does not fail when dirs already exist."""
         data_root = tmp_path / "data_idem"
-        monkeypatch.setattr("tg_agent.cli.runtime._DATA_ROOT", data_root)
+        monkeypatch.setenv("TG_AGENT_DATA_DIR", str(data_root))
 
         ensure_data_dirs()
         ensure_data_dirs()  # should not raise
