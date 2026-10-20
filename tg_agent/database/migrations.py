@@ -15,6 +15,11 @@ logger = logging.getLogger(__name__)
 _PRIVATE_CHANNEL_PROVENANCE_MARKER = "_migration_private_channel_provenance_v1"
 _PRIVATE_CHANNEL_PROVENANCE_REASON = "backfill: private group, owner-supplied"
 _CHANNEL_USERNAME_REPAIR_MARKER = "_migration_channels_username_repaired_v1"
+_CHANNEL_APPROVAL_LEGACY_MARKER = "_migration_channel_approval_legacy_v1"
+_CHANNEL_APPROVAL_LEGACY_REASON = (
+    "backfill: search-discovered rows from #1308 (is_active=0) moved to the "
+    "approval queue as approval_state='pending', is_active restored (#1313)"
+)
 
 
 ColumnSpec = Mapping[str, str]
@@ -782,6 +787,69 @@ async def _backfill_private_channel_provenance(
     return filtered_private
 
 
+async def convert_legacy_search_quarantine(db: aiosqlite.Connection) -> int:
+    """Convert #1308's temporary ``is_active=0`` rows to ``approval_state='pending'``.
+
+    Stage 0 (#1308) parked search-discovered channels with ``is_active=0``:
+    rows switched off without saying why. They become honest pending rows of
+    the approval queue (#1313) with ``is_active=1`` — invisible to the standard
+    readers by the gate instead of a fake deactivation.
+
+    Scope is never-collected auto rows only: ``last_collected_id > 0`` means the
+    channel was really collected before its deactivation (gone/unavailable) —
+    that deactivation has its own cause and stays; ``active_origin='human'``
+    rows are owner decisions and stay too. One-shot, guarded by a settings
+    marker and the ``is_active = 0`` predicate, in one transaction.
+    """
+    cur = await db.execute(
+        "SELECT value FROM settings WHERE key = ? LIMIT 1",
+        (_CHANNEL_APPROVAL_LEGACY_MARKER,),
+    )
+    if await cur.fetchone():
+        return 0
+    if not {"is_active", "last_collected_id"} <= await table_columns(db, "channels"):
+        # A channels table older than those columns cannot contain #1308 rows.
+        return 0
+
+    await db.execute("BEGIN IMMEDIATE")
+    try:
+        cur = await db.execute(
+            "SELECT id, channel_id, title FROM channels "
+            "WHERE is_active = 0 AND active_origin != 'human' "
+            "AND COALESCE(last_collected_id, 0) = 0 ORDER BY id ASC"
+        )
+        rows: list[aiosqlite.Row] = list(await cur.fetchall())
+        for row in rows:
+            upd = await db.execute(
+                "UPDATE channels SET approval_state = 'pending', is_active = 1 "
+                "WHERE id = ? AND is_active = 0 AND active_origin != 'human'",
+                (row["id"],),
+            )
+            if upd.rowcount != 1:
+                continue
+            await db.execute(
+                "INSERT INTO decisions "
+                "(entity, entity_key, entity_name, field, old_value, new_value, origin, actor, reason) "
+                "VALUES ('channel', ?, ?, 'approval_state', 'approved', 'pending', 'migration', NULL, ?)",
+                (row["channel_id"], row["title"], _CHANNEL_APPROVAL_LEGACY_REASON),
+            )
+        await db.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, '1')",
+            (_CHANNEL_APPROVAL_LEGACY_MARKER,),
+        )
+        await db.execute("COMMIT")
+    except Exception:
+        await db.execute("ROLLBACK")
+        raise
+    if rows:
+        logger.info(
+            "Approval queue legacy conversion: %d search-quarantined channels "
+            "moved to approval_state='pending'",
+            len(rows),
+        )
+    return len(rows)
+
+
 async def run_migrations(db: aiosqlite.Connection) -> bool:
     """Repair the SQLite schema without rewriting existing user data.
 
@@ -885,6 +953,10 @@ async def run_migrations(db: aiosqlite.Connection) -> bool:
     await backfill_private_channel_provenance(
         db, username_column_known=username_column_known
     )
+
+    # One-off: #1308's temporary is_active=0 search rows become honest
+    # approval_queue pending rows (#1313).
+    await convert_legacy_search_quarantine(db)
 
     # One-off: fill message_reactions.date for rows that predate the column so
     # reaction analytics can filter by date without joining messages (#760).

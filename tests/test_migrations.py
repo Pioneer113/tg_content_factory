@@ -14,6 +14,7 @@ from tg_agent.database.migrations import (
     _migrate_zai_empty_base_url_to_coding,
     _migrate_zai_legacy_base_url,
     backfill_private_channel_provenance,
+    convert_legacy_search_quarantine,
     run_migrations,
 )
 
@@ -286,6 +287,49 @@ async def test_run_migrations_creates_settings_before_repair_marker_lookup(tmp_p
             "SELECT value FROM settings WHERE key = '_migration_private_channel_provenance_v1'"
         )
         assert await cur.fetchone() is not None
+    finally:
+        await conn.close()
+
+
+@pytest.mark.anyio
+@pytest.mark.aiosqlite_serial
+async def test_legacy_search_quarantine_converts_only_never_collected_rows(tmp_path):
+    """#1313: #1308's is_active=0 search rows become pending; real deactivations stay."""
+    conn = await _connect(str(tmp_path / "approval-legacy.db"))
+    try:
+        await run_migrations(conn)
+        await conn.executescript(
+            """
+            INSERT INTO channels (channel_id, title, is_active) VALUES (1, 'Search found', 0);
+            INSERT INTO channels (channel_id, title, is_active, last_collected_id)
+                VALUES (2, 'Gone after collecting', 0, 42);
+            INSERT INTO channels (channel_id, title, is_active, active_origin)
+                VALUES (3, 'Owner switched off', 0, 'human');
+            DELETE FROM settings WHERE key = '_migration_channel_approval_legacy_v1';
+            """
+        )
+        await conn.commit()
+
+        converted = await convert_legacy_search_quarantine(conn)
+
+        assert converted == 1
+        cur = await conn.execute(
+            "SELECT channel_id, is_active, approval_state FROM channels ORDER BY channel_id"
+        )
+        rows = await cur.fetchall()
+        states = {row["channel_id"]: (row["is_active"], row["approval_state"]) for row in rows}
+        assert states[1] == (1, "pending")
+        assert states[2] == (0, "approved")
+        assert states[3] == (0, "approved")
+        cur = await conn.execute(
+            "SELECT new_value, origin FROM decisions WHERE entity = 'channel' "
+            "AND field = 'approval_state'"
+        )
+        decisions = await cur.fetchall()
+        assert [(d["new_value"], d["origin"]) for d in decisions] == [("pending", "migration")]
+
+        # One-shot: the marker makes a rerun a no-op.
+        assert await convert_legacy_search_quarantine(conn) == 0
     finally:
         await conn.close()
 
