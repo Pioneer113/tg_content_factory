@@ -17,6 +17,9 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+import typer
+
 from tests.helpers import AsyncIterMessages, cli_ns
 from tg_agent.cli.commands.filter import _build_deletion_service, _parse_pks, _print_result
 from tg_agent.cli.commands.messages import _print_live_messages, _print_messages
@@ -1692,23 +1695,25 @@ class TestMessagesReadDbMode:
         db.close = AsyncMock()
 
         with patch("tg_agent.cli.commands.messages.runtime.init_db", side_effect=_make_coro((MagicMock(), db))):
-            run(cli_ns(
-                messages_action="read",
-                identifier="testch",
-                live=False,
-                query=None,
-                date_from=None,
-                date_to=None,
-                limit=10,
-                output_format="text",
-                topic_id=None,
-                offset_id=None,
-                include_reaction_users=True,
-                reaction_users_limit=20,
-            ))
+            with pytest.raises(typer.Exit) as exc_info:
+                run(cli_ns(
+                    messages_action="read",
+                    identifier="testch",
+                    live=False,
+                    query=None,
+                    date_from=None,
+                    date_to=None,
+                    limit=10,
+                    output_format="text",
+                    topic_id=None,
+                    offset_id=None,
+                    include_reaction_users=True,
+                    reaction_users_limit=20,
+                ))
 
-        out = capsys.readouterr().out
-        assert "--include-reaction-users works only with --live." in out
+        captured = capsys.readouterr()
+        assert "--include-reaction-users works only with --live." in captured.err
+        assert exc_info.value.exit_code == 1
         db.get_channels.assert_not_called()
 
     def test_channel_not_found(self, capsys):
@@ -1719,21 +1724,23 @@ class TestMessagesReadDbMode:
         db.close = AsyncMock()
 
         with patch("tg_agent.cli.commands.messages.runtime.init_db", side_effect=_make_coro((MagicMock(), db))):
-            run(cli_ns(
-                messages_action="read",
-                identifier="nonexistent",
-                live=False,
-                query=None,
-                date_from=None,
-                date_to=None,
-                limit=10,
-                output_format="text",
-                topic_id=None,
-                offset_id=None,
-            ))
+            with pytest.raises(typer.Exit) as exc_info:
+                run(cli_ns(
+                    messages_action="read",
+                    identifier="nonexistent",
+                    live=False,
+                    query=None,
+                    date_from=None,
+                    date_to=None,
+                    limit=10,
+                    output_format="text",
+                    topic_id=None,
+                    offset_id=None,
+                ))
 
-        out = capsys.readouterr().out
-        assert "not found" in out
+        captured = capsys.readouterr()
+        assert "not found" in captured.err
+        assert exc_info.value.exit_code == 1
 
     def test_no_messages_found(self, capsys):
         from tg_agent.cli.commands.messages import run

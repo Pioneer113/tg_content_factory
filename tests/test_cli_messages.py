@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import typer
 
 from tests.helpers import cli_add_channel as _add_channel
 from tests.helpers import cli_ns as _ns
@@ -181,21 +182,24 @@ def test_messages_read_with_query_filter(cli_env, capsys):
 def test_messages_read_channel_not_found(cli_env, capsys):
     from tg_agent.cli.commands.messages import run
 
-    run(_ns(
-        messages_action="read",
-        identifier="99999",
-        limit=50,
-        live=False,
-        phone=None,
-        query="",
-        date_from=None,
-        date_to=None,
-        topic_id=None,
-        offset_id=None,
-        output_format="text",
-    ))
-    out = capsys.readouterr().out
-    assert "not found" in out.lower() or "No messages found" in out
+    with pytest.raises(typer.Exit) as exc_info:
+        run(_ns(
+            messages_action="read",
+            identifier="99999",
+            limit=50,
+            live=False,
+            phone=None,
+            query="",
+            date_from=None,
+            date_to=None,
+            topic_id=None,
+            offset_id=None,
+            output_format="text",
+        ))
+    captured = capsys.readouterr()
+    assert "not found" in captured.err.lower()
+    assert captured.out == ""
+    assert exc_info.value.exit_code == 1
 
 
 def test_messages_read_no_messages(cli_env, capsys):
@@ -344,3 +348,102 @@ def test_messages_read_live_empty_phone_falls_back_to_default(cli_db, capsys):
     out = capsys.readouterr().out
     assert "empty phone ok" in out
     assert "not connected" not in out
+
+
+# ---------------------------------------------------------------------------
+# issue #1598: --format json/csv must honor the declared format on empty
+# results; errors go to stderr with a non-zero exit code; --live rejects
+# non-text formats explicitly instead of silently ignoring --format.
+# ---------------------------------------------------------------------------
+
+
+def test_messages_read_json_empty_result_is_valid_json(cli_env, capsys):
+    _add_channel(cli_env, channel_id=100, title="EmptyCh")
+
+    from tg_agent.cli.commands.messages import run
+
+    run(_ns(
+        messages_action="read",
+        identifier="100",
+        limit=50,
+        live=False,
+        phone=None,
+        query="",
+        date_from=None,
+        date_to=None,
+        topic_id=None,
+        offset_id=None,
+        output_format="json",
+    ))
+    out = capsys.readouterr().out
+    assert json.loads(out) == []
+
+
+def test_messages_read_csv_empty_result_has_header(cli_env, capsys):
+    _add_channel(cli_env, channel_id=100, title="EmptyCh")
+
+    from tg_agent.cli.commands.messages import run
+
+    run(_ns(
+        messages_action="read",
+        identifier="100",
+        limit=50,
+        live=False,
+        phone=None,
+        query="",
+        date_from=None,
+        date_to=None,
+        topic_id=None,
+        offset_id=None,
+        output_format="csv",
+    ))
+    out = capsys.readouterr().out
+    lines = out.splitlines()
+    assert lines, "CSV output must not be empty"
+    assert lines[0].startswith("id,")
+
+
+def test_messages_read_channel_not_found_json_stderr_and_exit(cli_env, capsys):
+    from tg_agent.cli.commands.messages import run
+
+    with pytest.raises(typer.Exit) as exc_info:
+        run(_ns(
+            messages_action="read",
+            identifier="99999",
+            limit=50,
+            live=False,
+            phone=None,
+            query="",
+            date_from=None,
+            date_to=None,
+            topic_id=None,
+            offset_id=None,
+            output_format="json",
+        ))
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "not found" in captured.err.lower()
+    assert exc_info.value.exit_code == 1
+
+
+def test_messages_read_live_rejects_non_text_format(cli_env, capsys):
+    from tg_agent.cli.commands.messages import run
+
+    with pytest.raises(typer.Exit) as exc_info:
+        run(_ns(
+            messages_action="read",
+            identifier="100",
+            limit=50,
+            live=True,
+            phone=None,
+            query="",
+            date_from=None,
+            date_to=None,
+            topic_id=None,
+            offset_id=None,
+            output_format="json",
+        ))
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err.strip()
+    assert exc_info.value.exit_code == 1

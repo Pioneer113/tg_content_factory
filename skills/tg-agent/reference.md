@@ -89,6 +89,10 @@ search-query list | get | add | edit | delete | toggle | run | stats
 
 - `messages read` accepts t.me links, @usernames or internal ids as `<identifier>`;
   `--live` reads directly from Telegram instead of the local DB.
+- `--format json` always emits valid JSON (empty result → `[]`); `--format csv`
+  always includes the header row. Errors (e.g. channel not found in DB) go to
+  **stderr** with exit code 1. `--live` combined with `--format json|csv` is
+  rejected with exit code 1 — live output is text-only (#1598).
 - Forum messages carry `topic_id` plus the cached `topic_title` (#1552): text output
   renders `topic=<id> (<title>)`, JSON/CSV expose both fields. Titles come from the
   collector-maintained cache; an unknown/deleted topic renders without a title.
