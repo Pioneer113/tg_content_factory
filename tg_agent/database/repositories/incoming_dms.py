@@ -106,6 +106,21 @@ class IncomingDmsRepository:
         row = await cur.fetchone()
         return self._to_dm(row) if row else None
 
+    async def list(self, *, limit: int = 100, offset: int = 0) -> list[IncomingDm]:
+        """Журнал, свежие первыми; страница ``limit``/``offset``.
+
+        TTL-семантика здесь бесплатна: таблица и есть окно 24ч (prune-on-write
+        при каждой записи + дочистка в heartbeat), отдельный фильтр по времени
+        не нужен. Архив ``dm_messages`` — отдельная таблица без TTL (#1453),
+        сюда не попадает (#1579).
+        """
+        cur = await self._db.execute(
+            "SELECT * FROM incoming_dms ORDER BY id DESC LIMIT ? OFFSET ?",
+            (int(limit), int(offset)),
+        )
+        rows = await cur.fetchall()
+        return [self._to_dm(row) for row in rows]
+
     async def max_message_id(self, phone: str, chat_id: int) -> int:
         """Водяной знак догона: максимум message_id журнала диалога, 0 если пусто."""
         cur = await self._db.execute(
