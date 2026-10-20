@@ -170,6 +170,96 @@ class TestAnalyzerLowUniqueness:
         assert "low_uniqueness" not in result.flags
 
 
+class TestSavedThresholdSettings:
+    """#1596: пороги из `settings filter-criteria` (filter_*) обязаны влиять на analyze.
+
+    Дефолт при отсутствии настройки — константы criteria.py; сохранённый порог
+    заменяет константу; мусор/вне диапазона в БД — откат к дефолту.
+    """
+
+    async def test_saved_uniqueness_threshold_used(self, db, raw_db):
+        # 40% уникальности: выше дефолта 30 (чисто), ниже сохранённого 35 → флаг.
+        await _insert_channel(raw_db, 110)
+        texts = ["unique A", "unique B", "unique C", "unique D"] + ["same"] * 6
+        await _insert_messages(raw_db, 110, texts)
+        await db.set_setting("filter_min_uniqueness", "35")
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(110)
+        assert result.uniqueness_pct == 40.0
+        assert "low_uniqueness" in result.flags
+
+    async def test_saved_cross_dupe_threshold_used(self, db, raw_db):
+        # 10% кросс-дупликатов: ниже дефолта 50 (чисто), выше сохранённого 5 → флаг.
+        await _insert_channel(raw_db, 310, title="Source")
+        await _insert_channel(raw_db, 311, title="Copier")
+        shared = "this is a duplicated message across channels"
+        await _insert_messages(raw_db, 310, [shared] + [f"source own {i}" for i in range(9)])
+        await _insert_messages(raw_db, 311, [f"copier own {i}" for i in range(9)])
+        await raw_db.execute(
+            "INSERT INTO messages (channel_id, message_id, text, date) VALUES (311, 100, ?, '2025-01-05')",
+            (shared,),
+        )
+        await raw_db.commit()
+        await db.set_setting("filter_max_cross_dupe_pct", "5")
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(311)
+        assert result.cross_dupe_pct == 10.0
+        assert "cross_channel_spam" in result.flags
+
+    async def test_defaults_preserved_without_settings(self, db, raw_db):
+        # Настроек нет — работают дефолты criteria.py: 10% < 50 → чисто.
+        await _insert_channel(raw_db, 310, title="Source")
+        await _insert_channel(raw_db, 312, title="Copier")
+        shared = "this is a duplicated message across channels"
+        await _insert_messages(raw_db, 310, [shared] + [f"source own {i}" for i in range(9)])
+        await _insert_messages(raw_db, 312, [f"copier own {i}" for i in range(9)])
+        await raw_db.execute(
+            "INSERT INTO messages (channel_id, message_id, text, date) VALUES (312, 100, ?, '2025-01-05')",
+            (shared,),
+        )
+        await raw_db.commit()
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(312)
+        assert result.cross_dupe_pct == 10.0
+        assert "cross_channel_spam" not in result.flags
+
+    async def test_saved_subscriber_ratio_threshold_used(self, db, raw_db):
+        # ratio 2.5: выше дефолта 1.0 (чисто), ниже сохранённого 3.0 → флаг.
+        await _insert_channel(raw_db, 320)
+        await _insert_messages(raw_db, 320, ["post one", "post two"])
+        await _insert_stats(raw_db, 320, 5)
+        await db.set_setting("filter_min_subscriber_ratio", "3.0")
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(320)
+        assert result.subscriber_ratio == 2.5
+        assert "low_subscriber_ratio" in result.flags
+
+    async def test_saved_cyrillic_threshold_used(self, db, raw_db):
+        # 50% кириллицы: выше дефолта 10 (чисто), ниже сохранённых 60 → non_cyrillic.
+        await _insert_channel(raw_db, 330)
+        texts = [
+            "привет мир раз", "привет мир два", "привет мир три", "привет мир четыре", "привет мир пять",
+            "hello world one", "hello world two", "hello world three", "hello world four", "hello world five",
+        ]
+        await _insert_messages(raw_db, 330, texts)
+        await db.set_setting("filter_min_cyrillic_pct", "60")
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(330)
+        assert result.cyrillic_pct == 50.0
+        assert "non_cyrillic" in result.flags
+
+    async def test_out_of_range_saved_threshold_falls_back_to_default(self, db, raw_db):
+        # Вне-диапазонное значение в БД (напр. до появления валидации записи)
+        # не крэшит и не глушит флаг: откат к дефолту criteria.py.
+        await _insert_channel(raw_db, 340)
+        texts = ["unique A", "unique B", "unique C", "unique D"] + ["same"] * 6
+        await _insert_messages(raw_db, 340, texts)
+        await db.set_setting("filter_min_uniqueness", "150")
+        analyzer = ChannelAnalyzer(db)
+        result = await analyzer.analyze_channel(340)
+        assert "low_uniqueness" not in result.flags
+
+
 class TestAnalyzerSubscriberRatio:
     async def test_healthy_ratio(self, db, raw_db):
         await _insert_channel(raw_db, 200)
