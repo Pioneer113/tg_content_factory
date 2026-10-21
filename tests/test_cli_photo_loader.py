@@ -6,6 +6,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import typer
 
 from tg_agent.database import Database
 from tg_agent.models import Account, PhotoSendMode
@@ -552,10 +553,10 @@ def test_auto_toggle_not_found(tmp_path, cli_init_patch, capsys):
     ):
         from tg_agent.cli.commands.photo_loader import run
 
-        run(_ns(photo_loader_action="auto-toggle", id=999))
+        with pytest.raises(typer.Exit):
+            run(_ns(photo_loader_action="auto-toggle", id=999))
 
-    out = capsys.readouterr().out
-    assert "not found" in out
+    assert "not found" in capsys.readouterr().err
 
 
 def test_run_due_action(tmp_path, cli_init_patch, capsys):

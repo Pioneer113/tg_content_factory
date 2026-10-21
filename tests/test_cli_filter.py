@@ -6,6 +6,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import typer
 
 from tg_agent.database import Database
 from tg_agent.models import Account, Channel
@@ -643,10 +644,11 @@ def test_filter_flag_invalid_flag_rejected(tmp_path, cli_init_patch, capsys):
         with cli_init_patch(seed, _FILTER_INIT_DB_TARGET, fresh_database=True):
             from tg_agent.cli.commands.filter import run
 
-            run(_ns(filter_action="flag", pk=pk, set_flag="low_uniqueness", unset_flag=None))
+            with pytest.raises(typer.Exit):
+                run(_ns(filter_action="flag", pk=pk, set_flag="low_uniqueness", unset_flag=None))
 
-        out = capsys.readouterr().out
-        assert "Unknown operator flag 'low_uniqueness'" in out
+        err = capsys.readouterr().err
+        assert "Unknown operator flag 'low_uniqueness'" in err
         assert _read_channel_filter_row(db_path, pk)[0] == 0
     finally:
         asyncio.run(seed.close())
@@ -660,13 +662,15 @@ def test_filter_flag_requires_exactly_one_action(tmp_path, cli_init_patch, capsy
         with cli_init_patch(seed, _FILTER_INIT_DB_TARGET, fresh_database=True):
             from tg_agent.cli.commands.filter import run
 
-            run(_ns(filter_action="flag", pk=1, set_flag=None, unset_flag=None))
-            run(_ns(filter_action="flag", pk=1, set_flag="manual", unset_flag="manual"))
+            with pytest.raises(typer.Exit):
+                run(_ns(filter_action="flag", pk=1, set_flag=None, unset_flag=None))
+            with pytest.raises(typer.Exit):
+                run(_ns(filter_action="flag", pk=1, set_flag="manual", unset_flag="manual"))
     finally:
         asyncio.run(seed.close())
 
-    out = capsys.readouterr().out
-    assert out.count("Usage: filter flag") == 2
+    err = capsys.readouterr().err
+    assert err.count("Usage: filter flag") == 2
 
 
 def test_filter_flag_not_found(tmp_path, cli_init_patch, capsys):

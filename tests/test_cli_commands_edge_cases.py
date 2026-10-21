@@ -723,11 +723,11 @@ class TestSchedulerSetInterval:
         db.close = AsyncMock()
 
         config = MagicMock()
-        with patch("tg_agent.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))):
+        with patch("tg_agent.cli.commands.scheduler.runtime.init_db", side_effect=_make_coro((config, db))), \
+             pytest.raises(typer.Exit):
             run(cli_ns(scheduler_action="set-interval", job_id="custom_job", minutes=60))
 
-        out = capsys.readouterr().out
-        assert "Unknown job_id" in out
+        assert "Unknown job_id" in capsys.readouterr().err
         db.repos.settings.set_setting.assert_not_awaited()
 
     def test_set_interval_clamped(self, capsys):

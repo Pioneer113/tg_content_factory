@@ -22,6 +22,7 @@ import typer
 from tg_agent.cli import runtime
 from tg_agent.cli.commands.common import (
     apply_startup,
+    cli_error,
     run_async,
 )
 from tg_agent.database import Database
@@ -205,8 +206,7 @@ async def set_interval_impl(config_path: str, *, job_id: str, minutes: int) -> N
             sq_id = int(job_id.removeprefix("sq_"))
             sq = await db.repos.search_queries.get_by_id(sq_id)
             if not sq:
-                print(f"Search query {sq_id} not found.")
-                return
+                cli_error(f"Search query {sq_id} not found.")
             await db.repos.search_queries.update(
                 sq_id, sq.model_copy(update={"interval_minutes": minutes})
             )
@@ -214,12 +214,10 @@ async def set_interval_impl(config_path: str, *, job_id: str, minutes: int) -> N
             pid = int(job_id.removeprefix("pipeline_run_").removeprefix("content_generate_"))
             pipeline = await db.repos.content_pipelines.get_by_id(pid)
             if not pipeline:
-                print(f"Pipeline {pid} not found.")
-                return
+                cli_error(f"Pipeline {pid} not found.")
             await db.repos.content_pipelines.update_generate_interval(pid, minutes)
         else:
-            print(f"Unknown job_id '{job_id}'.")
-            return
+            cli_error(f"Unknown job_id '{job_id}'.")
         await _enqueue_reconcile(db, "set-interval")
         print(f"Interval for '{job_id}' set to {minutes} min.")
     finally:

@@ -3,6 +3,9 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+import typer
+
 from tests.helpers import cli_ns, fake_asyncio_run, make_cli_config, make_cli_db
 from tg_agent.cli.commands.provider import run
 
@@ -81,9 +84,10 @@ def test_add_unknown_provider(capsys):
     with patch("tg_agent.cli.commands.provider.runtime.init_db", AsyncMock(return_value=(make_cli_config(), db))), \
          patch("tg_agent.cli.commands.provider.ProviderConfigService", return_value=svc), \
          patch("tg_agent.cli.commands.provider.provider_spec", return_value=None), \
-         patch("asyncio.run", fake_asyncio_run):
+         patch("asyncio.run", fake_asyncio_run), \
+         pytest.raises(typer.Exit):
         run(_args(provider_action="add", name="unknown_provider", api_key="key", base_url=None))
-    assert "Unknown provider" in capsys.readouterr().out
+    assert "Unknown provider" in capsys.readouterr().err
 
 
 def test_add_writes_disabled(capsys):
@@ -93,9 +97,10 @@ def test_add_writes_disabled(capsys):
     with patch("tg_agent.cli.commands.provider.runtime.init_db", AsyncMock(return_value=(make_cli_config(), db))), \
          patch("tg_agent.cli.commands.provider.ProviderConfigService", return_value=svc), \
          patch("tg_agent.cli.commands.provider.provider_spec", return_value=spec), \
-         patch("asyncio.run", fake_asyncio_run):
+         patch("asyncio.run", fake_asyncio_run), \
+         pytest.raises(typer.Exit):
         run(_args(provider_action="add", name="openai", api_key="key", base_url=None))
-    assert "SESSION_ENCRYPTION_KEY" in capsys.readouterr().out
+    assert "SESSION_ENCRYPTION_KEY" in capsys.readouterr().err
 
 
 def test_add_new_provider(capsys):
@@ -136,9 +141,10 @@ def test_delete_writes_disabled(capsys):
     svc = _make_svc(writes_enabled=False)
     with patch("tg_agent.cli.commands.provider.runtime.init_db", AsyncMock(return_value=(make_cli_config(), db))), \
          patch("tg_agent.cli.commands.provider.ProviderConfigService", return_value=svc), \
-         patch("asyncio.run", fake_asyncio_run):
+         patch("asyncio.run", fake_asyncio_run), \
+         pytest.raises(typer.Exit):
         run(_args(provider_action="delete", name="openai"))
-    assert "SESSION_ENCRYPTION_KEY" in capsys.readouterr().out
+    assert "SESSION_ENCRYPTION_KEY" in capsys.readouterr().err
 
 
 def test_delete_not_found(capsys):
@@ -146,9 +152,10 @@ def test_delete_not_found(capsys):
     svc = _make_svc(load_provider_configs=AsyncMock(return_value=[]))
     with patch("tg_agent.cli.commands.provider.runtime.init_db", AsyncMock(return_value=(make_cli_config(), db))), \
          patch("tg_agent.cli.commands.provider.ProviderConfigService", return_value=svc), \
-         patch("asyncio.run", fake_asyncio_run):
+         patch("asyncio.run", fake_asyncio_run), \
+         pytest.raises(typer.Exit):
         run(_args(provider_action="delete", name="openai"))
-    assert "not found" in capsys.readouterr().out
+    assert "not found" in capsys.readouterr().err
 
 
 def test_delete_success(capsys):
@@ -172,9 +179,10 @@ def test_probe_not_configured(capsys):
     svc = _make_svc(load_provider_configs=AsyncMock(return_value=[]))
     with patch("tg_agent.cli.commands.provider.runtime.init_db", AsyncMock(return_value=(make_cli_config(), db))), \
          patch("tg_agent.cli.commands.provider.ProviderConfigService", return_value=svc), \
-         patch("asyncio.run", fake_asyncio_run):
+         patch("asyncio.run", fake_asyncio_run), \
+         pytest.raises(typer.Exit):
         run(_args(provider_action="probe", name="openai"))
-    assert "not configured" in capsys.readouterr().out
+    assert "not configured" in capsys.readouterr().err
 
 
 def test_probe_success(capsys):
@@ -218,9 +226,10 @@ def test_probe_exception(capsys):
     )
     with patch("tg_agent.cli.commands.provider.runtime.init_db", AsyncMock(return_value=(make_cli_config(), db))), \
          patch("tg_agent.cli.commands.provider.ProviderConfigService", return_value=svc), \
-         patch("asyncio.run", fake_asyncio_run):
+         patch("asyncio.run", fake_asyncio_run), \
+         pytest.raises(typer.Exit):
         run(_args(provider_action="probe", name="openai"))
-    assert "FAIL" in capsys.readouterr().out
+    assert "FAIL" in capsys.readouterr().err
 
 
 # ---------------------------------------------------------------------------
@@ -244,9 +253,10 @@ def test_refresh_single_exception(capsys):
     svc = _make_svc(refresh_models_for_provider=AsyncMock(side_effect=RuntimeError("fail")))
     with patch("tg_agent.cli.commands.provider.runtime.init_db", AsyncMock(return_value=(make_cli_config(), db))), \
          patch("tg_agent.cli.commands.provider.ProviderConfigService", return_value=svc), \
-         patch("asyncio.run", fake_asyncio_run):
+         patch("asyncio.run", fake_asyncio_run), \
+         pytest.raises(typer.Exit):
         run(_args(provider_action="refresh", name="openai"))
-    assert "FAIL" in capsys.readouterr().out
+    assert "FAIL" in capsys.readouterr().err
 
 
 def test_refresh_all(capsys):
@@ -299,6 +309,9 @@ def test_test_all_with_failure(capsys):
     )
     with patch("tg_agent.cli.commands.provider.runtime.init_db", AsyncMock(return_value=(make_cli_config(), db))), \
          patch("tg_agent.cli.commands.provider.ProviderConfigService", return_value=svc), \
-         patch("asyncio.run", fake_asyncio_run):
+         patch("asyncio.run", fake_asyncio_run), \
+         pytest.raises(typer.Exit):
         run(_args(provider_action="test-all"))
-    assert "FAIL" in capsys.readouterr().out
+    captured = capsys.readouterr()
+    assert "FAIL" in captured.out
+    assert "failed." in captured.err

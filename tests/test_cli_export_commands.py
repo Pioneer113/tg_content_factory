@@ -5,6 +5,9 @@ import json
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+import typer
+
 from tests.helpers import cli_ns, fake_asyncio_run, make_cli_db
 from tg_agent.cli.commands.export import _export_csv, _export_json, _export_rss, _rfc822, run
 
@@ -162,7 +165,8 @@ def test_run_unknown_format(capsys):
     msgs = [_make_msg()]
     db.search_messages = AsyncMock(return_value=(msgs, 1))
     with patch("tg_agent.cli.commands.export.runtime.init_db", AsyncMock(return_value=(MagicMock(), db))), \
-         patch("asyncio.run", fake_asyncio_run):
+         patch("asyncio.run", fake_asyncio_run), \
+         pytest.raises(typer.Exit):
         run(_args(export_action="xml"))
     assert "Unknown" in capsys.readouterr().err
 

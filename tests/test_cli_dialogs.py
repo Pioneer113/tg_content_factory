@@ -4,6 +4,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import typer
 
 from tests.helpers import cli_ns as _ns
 from tg_agent.cli.commands.dialogs import run_with_dependencies
@@ -77,9 +78,11 @@ def test_cli_dialogs_list_no_accounts(cli_db, capsys):
     """Test `dialogs list` with no connected accounts."""
     pool = _mock_pool()
     pool.clients = {}
-    _run(_ns(dialogs_action="list", phone=None), pool, cli_db)
-    out = capsys.readouterr().out
-    assert "No connected accounts" in out
+    with pytest.raises(typer.Exit):
+        _run(_ns(dialogs_action="list", phone=None), pool, cli_db)
+    err = capsys.readouterr().err
+
+    assert "No connected accounts" in err
 
 
 def _seed_account(db, phone, *, is_primary=False):
@@ -152,9 +155,11 @@ def test_cli_dialogs_list_falls_back_to_connected_when_primary_down(cli_db, caps
 def test_cli_dialogs_list_phone_not_connected(cli_db, capsys):
     """Test `dialogs list` with phone that is not connected."""
     pool = _mock_pool()
-    _run(_ns(dialogs_action="list", phone="+9999999999"), pool, cli_db)
-    out = capsys.readouterr().out
-    assert "not connected" in out
+    with pytest.raises(typer.Exit):
+        _run(_ns(dialogs_action="list", phone="+9999999999"), pool, cli_db)
+    err = capsys.readouterr().err
+
+    assert "not connected" in err
 
 
 def test_cli_dialogs_refresh(cli_db, capsys):
@@ -169,9 +174,11 @@ def test_cli_dialogs_refresh_no_accounts(cli_db, capsys):
     """Test `dialogs refresh` with no connected accounts."""
     pool = _mock_pool()
     pool.clients = {}
-    _run(_ns(dialogs_action="refresh", phone=None), pool, cli_db)
-    out = capsys.readouterr().out
-    assert "No connected accounts" in out
+    with pytest.raises(typer.Exit):
+        _run(_ns(dialogs_action="refresh", phone=None), pool, cli_db)
+    err = capsys.readouterr().err
+
+    assert "No connected accounts" in err
 
 
 def test_cli_dialogs_leave(cli_db, capsys):
@@ -243,13 +250,15 @@ def test_cli_dialogs_send_no_client(cli_db, capsys):
     """Test `dialogs send` when client unavailable."""
     pool = _mock_pool()
     pool.get_native_client_by_phone = AsyncMock(return_value=None)
-    _run(
-        _ns(dialogs_action="send", phone="+1234567890",
-            recipient="100111", text="hello", yes=True),
-        pool, cli_db,
-    )
-    out = capsys.readouterr().out
-    assert "unavailable" in out.lower()
+    with pytest.raises(typer.Exit):
+        _run(
+            _ns(dialogs_action="send", phone="+1234567890",
+                recipient="100111", text="hello", yes=True),
+            pool, cli_db,
+        )
+    err = capsys.readouterr().err
+
+    assert "unavailable" in err.lower()
 
 
 def test_cli_dialogs_archive_history_runs_backfill(cli_db, capsys):
@@ -310,10 +319,12 @@ def test_cli_dialogs_archive_history_rejects_non_numeric_chat_id(cli_db, capsys)
         patch("tg_agent.cli.commands.dialogs.serve_is_running", return_value=False),
         patch("tg_agent.cli.commands.dialogs.backfill_account", new_callable=AsyncMock) as fake_backfill,
     ):
-        _run(_ns(dialogs_action="archive-history", phone="+1234567890", chat_id="abc"), pool, cli_db)
+        with pytest.raises(typer.Exit):
+            _run(_ns(dialogs_action="archive-history", phone="+1234567890", chat_id="abc"), pool, cli_db)
 
-    out = capsys.readouterr().out
-    assert "Invalid --chat-id" in out
+    err = capsys.readouterr().err
+
+    assert "Invalid --chat-id" in err
     fake_backfill.assert_not_awaited()
 
 

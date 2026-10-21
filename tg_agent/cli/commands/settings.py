@@ -20,6 +20,7 @@ import typer
 from tg_agent.cli import runtime
 from tg_agent.cli.commands.common import (
     apply_startup,
+    cli_error,
     run_async,
 )
 from tg_agent.filters.criteria import (
@@ -102,8 +103,7 @@ async def set_impl(config_path: str, *, key: str, value: str) -> None:
             try:
                 await db.repos.settings.set_secret(key, value)
             except RuntimeError as exc:
-                print(f"ERROR: {exc}")
-                return
+                cli_error(f"ERROR: {exc}")
         else:
             await db.set_setting(key, value)
         display = CREDENTIALS_MASK if is_secret_setting_key(key) else value
@@ -190,17 +190,13 @@ async def filter_criteria_impl(
     the whole invocation — nothing is saved.
     """
     if min_uniqueness is not None and not 0.0 <= min_uniqueness <= 100.0:
-        print(f"Invalid --min-uniqueness {min_uniqueness}: must be within 0–100. Nothing saved.")
-        return
+        cli_error(f"Invalid --min-uniqueness {min_uniqueness}: must be within 0–100. Nothing saved.")
     if min_sub_ratio is not None and min_sub_ratio <= 0:
-        print(f"Invalid --min-sub-ratio {min_sub_ratio}: must be greater than 0. Nothing saved.")
-        return
+        cli_error(f"Invalid --min-sub-ratio {min_sub_ratio}: must be greater than 0. Nothing saved.")
     if max_cross_dupe is not None and not 0.0 <= max_cross_dupe <= 100.0:
-        print(f"Invalid --max-cross-dupe {max_cross_dupe}: must be within 0–100. Nothing saved.")
-        return
+        cli_error(f"Invalid --max-cross-dupe {max_cross_dupe}: must be within 0–100. Nothing saved.")
     if min_cyrillic is not None and not 0.0 <= min_cyrillic <= 100.0:
-        print(f"Invalid --min-cyrillic {min_cyrillic}: must be within 0–100. Nothing saved.")
-        return
+        cli_error(f"Invalid --min-cyrillic {min_cyrillic}: must be within 0–100. Nothing saved.")
 
     _, db = await runtime.init_db(config_path)
     try:
@@ -280,11 +276,10 @@ async def semantic_impl(
         # Refuse BEFORE any partial write (#1597): the API key is stored
         # encrypted (enc:v2), which is impossible without SESSION_ENCRYPTION_KEY.
         if api_key is not None and not db.repos.settings.secrets_enabled:
-            print(
+            cli_error(
                 "ERROR: SESSION_ENCRYPTION_KEY is required to store the embeddings "
                 "API key; without it the key would be saved as plaintext."
             )
-            return
 
         semantic_keys = [
             ("provider", EMBEDDINGS_PROVIDER_SETTING),

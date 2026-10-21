@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import typer
 
 from tg_agent.config import AppConfig
 from tg_agent.database import Database
@@ -56,9 +57,11 @@ class TestMyTelegramCommand:
 
         from tg_agent.cli.commands.dialogs import run
 
-        run(_ns(dialogs_action="list", phone=None))
-        out = capsys.readouterr().out
-        assert "No connected accounts" in out
+        with pytest.raises(typer.Exit):
+            run(_ns(dialogs_action="list", phone=None))
+        err = capsys.readouterr().err
+
+        assert "No connected accounts" in err
 
     def test_list_account_not_connected(self, cli_env_with_pool, capsys):
         """Test dialogs list when specified account not connected."""
@@ -67,9 +70,11 @@ class TestMyTelegramCommand:
 
         from tg_agent.cli.commands.dialogs import run
 
-        run(_ns(dialogs_action="list", phone="+70009999999"))
-        out = capsys.readouterr().out
-        assert "not connected" in out
+        with pytest.raises(typer.Exit):
+            run(_ns(dialogs_action="list", phone="+70009999999"))
+        err = capsys.readouterr().err
+
+        assert "not connected" in err
 
     def test_list_success(self, cli_env_with_pool, capsys):
         """Test dialogs list with dialogs."""
@@ -150,9 +155,11 @@ class TestMyTelegramCommand:
 
         from tg_agent.cli.commands.dialogs import run
 
-        run(_ns(dialogs_action="leave", phone=None, dialog_ids=["-100123"], yes=True))
-        out = capsys.readouterr().out
-        assert "No connected accounts" in out
+        with pytest.raises(typer.Exit):
+            run(_ns(dialogs_action="leave", phone=None, dialog_ids=["-100123"], yes=True))
+        err = capsys.readouterr().err
+
+        assert "No connected accounts" in err
 
     def test_leave_account_not_connected(self, cli_env_with_pool, capsys):
         """Test dialogs leave when specified account not connected."""
@@ -161,9 +168,11 @@ class TestMyTelegramCommand:
 
         from tg_agent.cli.commands.dialogs import run
 
-        run(_ns(dialogs_action="leave", phone="+10009999999", dialog_ids=["-100123"], yes=True))
-        out = capsys.readouterr().out
-        assert "not connected" in out
+        with pytest.raises(typer.Exit):
+            run(_ns(dialogs_action="leave", phone="+10009999999", dialog_ids=["-100123"], yes=True))
+        err = capsys.readouterr().err
+
+        assert "not connected" in err
 
     def test_leave_invalid_ids(self, cli_env_with_pool, capsys):
         """Test dialogs leave with non-numeric dialog IDs."""

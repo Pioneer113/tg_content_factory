@@ -5,6 +5,7 @@ import asyncio
 from unittest.mock import patch
 
 import pytest
+import typer
 
 from tests.helpers import cli_ns as _ns
 from tg_agent.config import AppConfig
@@ -165,26 +166,28 @@ class TestFilterCriteria:
 
     def test_filter_criteria_rejects_percent_above_100(self, cli_env, capsys):
         from tg_agent.cli.commands.settings import run
-        run(_ns(settings_action="filter-criteria", min_uniqueness=101))
-        out = capsys.readouterr().out
-        assert "Invalid" in out
-        assert "Nothing saved" in out
+        with pytest.raises(typer.Exit):
+            run(_ns(settings_action="filter-criteria", min_uniqueness=101))
+        err = capsys.readouterr().err
+        assert "Invalid" in err
+        assert "Nothing saved" in err
 
     def test_filter_criteria_rejects_negative_percent(self, cli_env, capsys):
         from tg_agent.cli.commands.settings import run
-        run(_ns(settings_action="filter-criteria", max_cross_dupe=-5))
-        out = capsys.readouterr().out
-        assert "Invalid" in out
+        with pytest.raises(typer.Exit):
+            run(_ns(settings_action="filter-criteria", max_cross_dupe=-5))
+        assert "Invalid" in capsys.readouterr().err
 
     def test_filter_criteria_rejects_nonpositive_sub_ratio(self, cli_env, capsys):
         from tg_agent.cli.commands.settings import run
-        run(_ns(settings_action="filter-criteria", min_sub_ratio=0))
-        out = capsys.readouterr().out
-        assert "Invalid" in out
+        with pytest.raises(typer.Exit):
+            run(_ns(settings_action="filter-criteria", min_sub_ratio=0))
+        assert "Invalid" in capsys.readouterr().err
 
     def test_filter_criteria_rejection_writes_nothing(self, cli_env, capsys):
         from tg_agent.cli.commands.settings import run
-        run(_ns(settings_action="filter-criteria", min_uniqueness=150, min_cyrillic=60))
+        with pytest.raises(typer.Exit):
+            run(_ns(settings_action="filter-criteria", min_uniqueness=150, min_cyrillic=60))
         capsys.readouterr()
         run(_ns(settings_action="filter-criteria"))
         out = capsys.readouterr().out
@@ -358,10 +361,11 @@ class TestSecretMasking:
     ):
         from tg_agent.cli.commands.settings import run
 
-        run(_ns(settings_action="semantic", api_key=self.RAW))
-        out = capsys.readouterr().out
-        assert "ERROR" in out
-        assert "SESSION_ENCRYPTION_KEY" in out
+        with pytest.raises(typer.Exit):
+            run(_ns(settings_action="semantic", api_key=self.RAW))
+        err = capsys.readouterr().err
+        assert "ERROR" in err
+        assert "SESSION_ENCRYPTION_KEY" in err
         stored = asyncio.run(_read_setting(cli_env_no_encryption_key, self.KEY))
         assert stored is None  # refused, not silently stored as plaintext
 

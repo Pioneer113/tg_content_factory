@@ -16,6 +16,7 @@ from tg_agent.cli.commands.common import (
     _NEG_ID_POSITIONAL,
     OutputFormat,
     apply_startup,
+    cli_error,
     run_async,
     sync_prompt,
 )
@@ -43,23 +44,22 @@ from tg_agent.utils.text_safety import csv_safe_cell
 
 
 async def _resolve_phone(db, pool, args) -> str | None:
-    """Pick the account phone for a dialogs action, printing why it can't run.
+    """Pick the account phone for a dialogs action, or fail loudly (#1486).
 
     An explicit ``--phone`` wins (must be connected). Otherwise the DB primary
     account is used when connected, falling back to the first connected phone
     when the primary is not (#1480).
 
-    Returns the resolved phone, or ``None`` (after printing an error) when there
-    are no connected accounts or the requested account is not connected.
+    Returns the resolved phone; exits non-zero (stderr + ``typer.Exit``) when
+    there are no connected accounts or the requested account is not connected —
+    a dialogs action that cannot run is a failure, not a silent no-op.
     """
     if not pool.clients:
-        print("No connected accounts.")
-        return None
+        cli_error("No connected accounts.")
     explicit = getattr(args, "phone", None)
     if explicit:
         if explicit not in pool.clients:
-            print(f"Account {explicit} not connected.")
-            return None
+            cli_error(f"Account {explicit} not connected.")
         return explicit
     # pool.clients is non-empty here, and a non-empty `connected` set always
     # yields a phone from resolve_default_phone — no None case to handle.
@@ -145,16 +145,12 @@ async def _dialogs_resolve(args, db, pool) -> None:
         entity = await pool.resolve_any_entity(args.identifier, phone=phone)
     except RuntimeError as exc:
         if "no_client" in str(exc):
-            print("No connected accounts.")
-            return
-        print(f"Error resolving entity: {exc}")
-        return
+            cli_error("No connected accounts.")
+        cli_error(f"Error resolving entity: {exc}")
     except Exception as exc:
-        print(f"Error resolving entity: {exc}")
-        return
+        cli_error(f"Error resolving entity: {exc}")
     if not entity:
-        print(f"Entity '{args.identifier}' not found.")
-        return
+        cli_error(f"Entity '{args.identifier}' not found.")
     print(f"Title: {entity['title']}")
     print(f"Type: {entity['channel_type']}")
     print(f"ID: {entity['channel_id']}")
@@ -278,9 +274,9 @@ async def _dialogs_join(args, db, pool) -> None:
         mode = "invite" if result.via_invite else "public"
         print(f"Joined/subscribed to {result.target} as {result.phone} ({mode}).")
     except TelegramActionClientUnavailableError:
-        print(f"Client for {phone} unavailable (flood-wait or not connected).")
+        cli_error(f"Client for {phone} unavailable (flood-wait or not connected).")
     except Exception as exc:
-        print(f"Error joining channel/group: {exc}")
+        cli_error(f"Error joining channel/group: {exc}")
 
 
 async def _dialogs_topics(args, db, pool) -> None:
@@ -331,9 +327,9 @@ async def _dialogs_send(args, db, pool) -> None:
         message_id = f" message_id={result.message_id}" if result.message_id is not None else ""
         print(f"Message sent to {recipient}.{message_id}")
     except TelegramActionClientUnavailableError:
-        print(f"Client for {phone} unavailable (flood-wait or not connected).")
+        cli_error(f"Client for {phone} unavailable (flood-wait or not connected).")
     except Exception as exc:
-        print(f"Error sending message: {exc}")
+        cli_error(f"Error sending message: {exc}")
 
 
 async def _dialogs_forward(args, db, pool) -> None:
@@ -360,9 +356,9 @@ async def _dialogs_forward(args, db, pool) -> None:
             id_suffix = " forwarded_ids=" + ",".join(str(i) for i in fwd_result.message_ids)
         print(f"Forwarded {len(ids)} message(s) from {args.from_chat} to {args.to_chat}.{id_suffix}")
     except TelegramActionClientUnavailableError:
-        print(f"Client for {phone} unavailable (flood-wait or not connected).")
+        cli_error(f"Client for {phone} unavailable (flood-wait or not connected).")
     except Exception as exc:
-        print(f"Error forwarding messages: {exc}")
+        cli_error(f"Error forwarding messages: {exc}")
 
 
 async def _dialogs_edit_message(args, db, pool) -> None:
@@ -385,9 +381,9 @@ async def _dialogs_edit_message(args, db, pool) -> None:
         )
         print(f"Message #{args.message_id} edited.")
     except TelegramActionClientUnavailableError:
-        print(f"Client for {phone} unavailable (flood-wait or not connected).")
+        cli_error(f"Client for {phone} unavailable (flood-wait or not connected).")
     except Exception as exc:
-        print(f"Error editing message: {exc}")
+        cli_error(f"Error editing message: {exc}")
 
 
 async def _dialogs_delete_message(args, db, pool) -> None:
@@ -410,9 +406,9 @@ async def _dialogs_delete_message(args, db, pool) -> None:
         )
         print(f"Deleted {len(ids)} message(s).")
     except TelegramActionClientUnavailableError:
-        print(f"Client for {phone} unavailable (flood-wait or not connected).")
+        cli_error(f"Client for {phone} unavailable (flood-wait or not connected).")
     except Exception as exc:
-        print(f"Error deleting messages: {exc}")
+        cli_error(f"Error deleting messages: {exc}")
 
 
 async def _dialogs_react(args, db, pool) -> None:
@@ -428,11 +424,10 @@ async def _dialogs_react(args, db, pool) -> None:
         and acc.flood_wait_until is not None
         and is_blocking_flood_wait_until(acc.flood_wait_until)
     ):
-        print(
+        cli_error(
             f"Account {phone} is flood-waited until "
             f"{acc.flood_wait_until.isoformat()}."
         )
-        return
     if args.clear:
         emoji = None
     else:
@@ -443,11 +438,10 @@ async def _dialogs_react(args, db, pool) -> None:
         try:
             emoji = normalize_outgoing_reaction_emoji(raw_emoji)
         except TelegramReactionInvalidError:
-            print(
+            cli_error(
                 "Error: Telegram does not support this reaction emoji. "
                 f"Supported reactions: {SUPPORTED_REACTION_EMOJIS_DISPLAY}"
             )
-            return
     action = (
         f"Clear reaction from message #{args.message_id} in {args.chat_id}"
         if args.clear
@@ -475,9 +469,9 @@ async def _dialogs_react(args, db, pool) -> None:
                 f"in {args.chat_id} (account {result.phone})"
             )
     except TelegramActionClientUnavailableError:
-        print(f"Client for {phone} unavailable (no lease could be acquired).")
+        cli_error(f"Client for {phone} unavailable (no lease could be acquired).")
     except Exception as exc:
-        print(f"Error sending reaction: {type(exc).__name__}: {exc}")
+        cli_error(f"Error sending reaction: {type(exc).__name__}: {exc}")
 
 
 async def _dialogs_pin_message(args, db, pool) -> None:
@@ -495,9 +489,9 @@ async def _dialogs_pin_message(args, db, pool) -> None:
         )
         print(f"Message #{args.message_id} pinned.")
     except TelegramActionClientUnavailableError:
-        print(f"Client for {phone} unavailable.")
+        cli_error(f"Client for {phone} unavailable.")
     except Exception as exc:
-        print(f"Error pinning message: {exc}")
+        cli_error(f"Error pinning message: {exc}")
 
 
 async def _dialogs_unpin_message(args, db, pool) -> None:
@@ -515,9 +509,9 @@ async def _dialogs_unpin_message(args, db, pool) -> None:
         )
         print("Message(s) unpinned.")
     except TelegramActionClientUnavailableError:
-        print(f"Client for {phone} unavailable.")
+        cli_error(f"Client for {phone} unavailable.")
     except Exception as exc:
-        print(f"Error unpinning message: {exc}")
+        cli_error(f"Error unpinning message: {exc}")
 
 
 async def _dialogs_download_media(args, db, pool) -> None:
@@ -534,15 +528,15 @@ async def _dialogs_download_media(args, db, pool) -> None:
         )
         print(f"Downloaded: {result.path}")
     except TelegramActionClientUnavailableError:
-        print(f"Client for {phone} unavailable.")
+        cli_error(f"Client for {phone} unavailable.")
     except TelegramActionMessageNotFoundError:
-        print(f"Message #{args.message_id} not found.")
+        cli_error(f"Message #{args.message_id} not found.")
     except TelegramActionNoMediaError:
         print("No media in this message.")
     except HandledFloodWaitError as exc:
-        print(f"Flood wait: {exc.info.detail}")
+        cli_error(f"Flood wait: {exc.info.detail}")
     except Exception as exc:
-        print(f"Error downloading media: {exc}")
+        cli_error(f"Error downloading media: {exc}")
 
 
 async def _dialogs_transcribe(args, db, pool) -> None:
@@ -566,20 +560,16 @@ async def _dialogs_transcribe(args, db, pool) -> None:
             db=db,
         )
     except TelegramActionClientUnavailableError:
-        print(f"Client for {phone} unavailable.")
-        return
+        cli_error(f"Client for {phone} unavailable.")
     except TelegramActionMessageNotFoundError:
-        print(f"Message #{args.message_id} not found.")
-        return
+        cli_error(f"Message #{args.message_id} not found.")
     except TelegramActionNoMediaError:
         print("No media in this message.")
         return
     except HandledFloodWaitError as exc:
-        print(f"Flood wait: {exc.info.detail}")
-        return
+        cli_error(f"Flood wait: {exc.info.detail}")
     except Exception as exc:
-        print(f"Error transcribing: {exc}")
-        return
+        cli_error(f"Error transcribing: {exc}")
 
     status = result.get("status")
     if status == "ok":
@@ -663,9 +653,9 @@ async def _dialogs_read(args, db, pool) -> None:
         )
         _print_dm_messages(result.messages, args.format)
     except TelegramActionClientUnavailableError:
-        print(f"Client for {phone} unavailable.")
+        cli_error(f"Client for {phone} unavailable.")
     except Exception as exc:
-        print(f"Error reading history: {exc}")
+        cli_error(f"Error reading history: {exc}")
 
 
 async def _dialogs_archive_history(args, db, pool) -> None:
@@ -682,8 +672,9 @@ async def _dialogs_archive_history(args, db, pool) -> None:
         try:
             chat_ids = {int(args.chat_id)}
         except ValueError:
-            print(f"Invalid --chat-id: {args.chat_id!r} — expected a numeric Telegram chat id.")
-            return
+            cli_error(
+                f"Invalid --chat-id: {args.chat_id!r} — expected a numeric Telegram chat id."
+            )
     stats = await backfill_account(pool, db, phone, chat_ids=chat_ids)
     incoming, outgoing = await db.repos.dm_messages.count_by_direction(phone)
     print(
@@ -728,9 +719,9 @@ async def _dialogs_participants(args, db, pool) -> None:
             )
         print(f"\nTotal: {len(participants)}")
     except TelegramActionClientUnavailableError:
-        print(f"Client for {phone} unavailable.")
+        cli_error(f"Client for {phone} unavailable.")
     except Exception as exc:
-        print(f"Error fetching participants: {exc}")
+        cli_error(f"Error fetching participants: {exc}")
 
 
 async def _dialogs_edit_admin(args, db, pool) -> None:
@@ -749,9 +740,9 @@ async def _dialogs_edit_admin(args, db, pool) -> None:
         )
         print(f"Admin rights updated for {args.user_id}.")
     except TelegramActionClientUnavailableError:
-        print(f"Client for {phone} unavailable.")
+        cli_error(f"Client for {phone} unavailable.")
     except Exception as exc:
-        print(f"Error editing admin: {exc}")
+        cli_error(f"Error editing admin: {exc}")
 
 
 def _parse_permission_bool(value: str | bool | None, option: str) -> bool | None:
@@ -774,10 +765,11 @@ async def _dialogs_edit_permissions(args, db, pool) -> None:
         return
     if not _confirm_or_abort(args, f"Edit permissions for {args.user_id} in {args.chat_id}"):
         return
+    if args.send_messages is None and args.send_media is None:
+        # Validated before the try so cli_error's typer.Exit is not swallowed
+        # by the broad handler below (#1486).
+        cli_error("Error: specify at least one flag (--send-messages or --send-media).")
     try:
-        if args.send_messages is None and args.send_media is None:
-            print("Error: specify at least one flag (--send-messages or --send-media).")
-            return
         until_date = None
         if args.until_date:
             until_date = parse_required_datetime(args.until_date)
@@ -791,9 +783,9 @@ async def _dialogs_edit_permissions(args, db, pool) -> None:
         )
         print(f"Permissions updated for {args.user_id}.")
     except TelegramActionClientUnavailableError:
-        print(f"Client for {phone} unavailable.")
+        cli_error(f"Client for {phone} unavailable.")
     except Exception as exc:
-        print(f"Error editing permissions: {exc}")
+        cli_error(f"Error editing permissions: {exc}")
 
 
 async def _dialogs_kick(args, db, pool) -> None:
@@ -810,9 +802,9 @@ async def _dialogs_kick(args, db, pool) -> None:
         )
         print(f"{args.user_id} kicked from {args.chat_id}.")
     except TelegramActionClientUnavailableError:
-        print(f"Client for {phone} unavailable.")
+        cli_error(f"Client for {phone} unavailable.")
     except Exception as exc:
-        print(f"Error kicking participant: {exc}")
+        cli_error(f"Error kicking participant: {exc}")
 
 
 async def _dialogs_broadcast_stats(args, db, pool) -> None:
@@ -844,9 +836,9 @@ async def _dialogs_broadcast_stats(args, db, pool) -> None:
         if enabled_notifications is not None:
             print(f"  enabled_notifications: {enabled_notifications}")
     except TelegramActionClientUnavailableError:
-        print(f"Client for {phone} unavailable.")
+        cli_error(f"Client for {phone} unavailable.")
     except Exception as exc:
-        print(f"Error fetching broadcast stats: {exc}")
+        cli_error(f"Error fetching broadcast stats: {exc}")
 
 
 async def _dialogs_archive(args, db, pool) -> None:
@@ -861,9 +853,9 @@ async def _dialogs_archive(args, db, pool) -> None:
         )
         print(f"{args.chat_id} archived.")
     except TelegramActionClientUnavailableError:
-        print(f"Client for {phone} unavailable.")
+        cli_error(f"Client for {phone} unavailable.")
     except Exception as exc:
-        print(f"Error archiving: {exc}")
+        cli_error(f"Error archiving: {exc}")
 
 
 async def _dialogs_unarchive(args, db, pool) -> None:
@@ -878,9 +870,9 @@ async def _dialogs_unarchive(args, db, pool) -> None:
         )
         print(f"{args.chat_id} unarchived.")
     except TelegramActionClientUnavailableError:
-        print(f"Client for {phone} unavailable.")
+        cli_error(f"Client for {phone} unavailable.")
     except Exception as exc:
-        print(f"Error unarchiving: {exc}")
+        cli_error(f"Error unarchiving: {exc}")
 
 
 async def _dialogs_mark_read(args, db, pool) -> None:
@@ -895,9 +887,9 @@ async def _dialogs_mark_read(args, db, pool) -> None:
         )
         print(f"Messages marked as read in {args.chat_id}.")
     except TelegramActionClientUnavailableError:
-        print(f"Client for {phone} unavailable.")
+        cli_error(f"Client for {phone} unavailable.")
     except Exception as exc:
-        print(f"Error marking messages as read: {exc}")
+        cli_error(f"Error marking messages as read: {exc}")
 
 
 async def _dialogs_cache_clear(args, db, pool) -> None:
@@ -929,12 +921,10 @@ async def _dialogs_create_channel(args, db, pool) -> None:
             megagroup=is_group,
         )
     except TelegramActionClientUnavailableError:
-        print(f"Client for {phone} unavailable.")
-        return
+        cli_error(f"Client for {phone} unavailable.")
     except RuntimeError as exc:
         if "Telegram returned empty response" in str(exc):
-            print(f"Error: Telegram returned empty response — {noun} may not have been created.")
-            return
+            cli_error(f"Error: Telegram returned empty response — {noun} may not have been created.")
         raise
     print(f"Created {noun} id={result.channel_id} title={args.title!r}")
     if username:

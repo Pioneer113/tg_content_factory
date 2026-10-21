@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import typer
 
 from tests.helpers import cli_add_channel as _add_channel
 from tests.helpers import cli_ns as _ns
@@ -149,10 +150,12 @@ class TestCLIAccount:
         asyncio.run(cli_env.set_setting("notification_account_phone", "+70001112233"))
         from tg_agent.cli.commands.account import run
 
-        run(_ns(account_action="delete", id=pk, notify_to="+9999"))
-        out = capsys.readouterr().out
-        assert "ERROR" in out
-        assert "не удалён" in out
+        with pytest.raises(typer.Exit):
+            run(_ns(account_action="delete", id=pk, notify_to="+9999"))
+        captured = capsys.readouterr()
+        assert "ERROR" in captured.err
+        assert "не удалён" in captured.err
+        assert captured.out == ""
         rows = _query_db(cli_env, "SELECT COUNT(*) AS cnt FROM accounts WHERE id=?", (pk,))
         assert rows[0]["cnt"] == 1
         rows = _query_db(

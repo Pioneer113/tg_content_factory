@@ -95,6 +95,15 @@ search-query list | get | add | edit | delete | toggle | run | stats
 
 - `messages read` accepts t.me links, @usernames or internal ids as `<identifier>`;
   `--live` reads directly from Telegram instead of the local DB.
+- **Exit-code contract (#1486):** a failed command prints its error to **stderr**
+  and exits 1 (parser usage errors exit 2); **stdout stays for results**.
+  Empty-but-valid results ("No messages found.") are not failures — they print
+  normally and exit 0. Branch on the exit code, not on parsing stdout text.
+  This holds repo-wide for `messages`/`dialogs`/`account`/`settings`/`provider`/
+  `export`/`scheduler`/`filter`/`photo-loader` (and pre-existing `dm`/`export`
+  checks); remaining groups may still print-and-exit-0 — see issue #1486.
+  Known exception: `dialogs react` without `--emoji`/`--clear` still prints
+  its usage error to stdout and exits 2.
 - `--format json` always emits valid JSON (empty result → `[]`); `--format csv`
   always includes the header row. Errors (e.g. channel not found in DB) go to
   **stderr** with exit code 1. `--live` combined with `--format json|csv` is

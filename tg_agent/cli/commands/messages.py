@@ -15,6 +15,7 @@ from tg_agent.cli.commands.common import (
     _NEG_ID_POSITIONAL,
     OutputFormat,
     apply_startup,
+    cli_error,
     resolve_channel,
     resolve_date_bounds,
     run_async,
@@ -163,20 +164,16 @@ async def messages_read_impl(
             # Live mode: read from Telegram
             _, pool = await runtime.init_pool(config, db)
             if not pool.clients:
-                print("No connected accounts.")
-                return
+                cli_error("No connected accounts.")
             if not phone:
                 phone = await resolve_default_phone(db, connected=set(pool.clients))
             if phone is None:
-                print("No connected accounts.")
-                return
+                cli_error("No connected accounts.")
             if phone not in pool.clients:
-                print(f"Account {phone} not connected.")
-                return
+                cli_error(f"Account {phone} not connected.")
             result = await pool.get_native_client_by_phone(phone)
             if result is None:
-                print(f"Client for {phone} unavailable (flood-wait or not connected).")
-                return
+                cli_error(f"Client for {phone} unavailable (flood-wait or not connected).")
             client, _ = result
             try:
                 # Try numeric ID first; a freshly created chat may not be in
@@ -192,11 +189,10 @@ async def messages_read_impl(
                         client, phone, resolve_target, operation="cli_messages_read_resolve"
                     )
                 except Exception as exc:
-                    print(
+                    cli_error(
                         f"Cannot resolve '{identifier}' via account {phone}: {exc}. "
                         "The dialog may live on another account — retry with --phone."
                     )
-                    return
                 kwargs = {"limit": limit}
                 if offset_id:
                     kwargs["offset_id"] = offset_id
@@ -216,8 +212,7 @@ async def messages_read_impl(
                         pool=pool,
                     )
                 except HandledFloodWaitError as exc:
-                    print(f"Flood wait: {exc.info.detail}")
-                    return
+                    cli_error(f"Flood wait: {exc.info.detail}")
                 if not collected:
                     print("No messages found.")
                     return
@@ -245,11 +240,14 @@ async def messages_read_impl(
                             pool=pool,
                         )
                     except HandledFloodWaitError as exc:
-                        print(f"Flood wait: {exc.info.detail}")
-                        return
+                        cli_error(f"Flood wait: {exc.info.detail}")
                 _print_live_messages(collected, reaction_users_by_message_id)
+            except typer.Exit:
+                # cli_error() from the inner paths must not be re-reported as
+                # "Error reading messages" by the broad handler below (#1486).
+                raise
             except Exception as exc:
-                print(f"Error reading messages: {exc}")
+                cli_error(f"Error reading messages: {exc}")
         else:
             if include_reaction_users:
                 print(
