@@ -18,6 +18,10 @@ PostToolUse (Bash) hook in the project ``.claude/settings.local.json``:
 }
 ```
 
+`.claude/settings.local.json` is gitignored, so installing the hook is a local
+operation per checkout: the mechanism is inert wherever the hook is not configured,
+and nothing restarts a daemon hosted by a different checkout.
+
 Gates (any miss → silent no-op): daemon is a live managed ``tg_agent.main`` process,
 the working tree is clean (a deliberate checkpoint, not mid-edit — a restart on
 a half-applied edit could crash the daemon on broken imports), and some
@@ -106,15 +110,17 @@ def daemon_pid(pid_file: Path) -> int | None:
 
 def restart(repo_root: Path) -> None:
     """Detach a ``tg_agent.main restart`` so the hook process can exit immediately."""
-    log = open(repo_root / "data" / "daemon_auto_restart.log", "ab")  # noqa: SIM115
-    subprocess.Popen(
-        [sys.executable, "-m", "tg_agent.main", "restart"],
-        cwd=repo_root,
-        stdout=log,
-        stderr=subprocess.STDOUT,
-        stdin=subprocess.DEVNULL,
-        start_new_session=True,
-    )
+    with open(repo_root / "data" / "daemon_auto_restart.log", "ab") as log:
+        # Popen dups the fd into the child; the parent's copy must be closed
+        # (a leaked handle trips ResourceWarning under filterwarnings=error).
+        subprocess.Popen(
+            [sys.executable, "-m", "tg_agent.main", "restart"],
+            cwd=repo_root,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
 
 
 def main() -> None:
