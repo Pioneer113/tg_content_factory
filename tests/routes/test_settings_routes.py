@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from tg_agent.models import RuntimeSnapshot
+from tg_agent.models import Channel, RuntimeSnapshot
 from tg_agent.security import SessionCipher
 from tg_agent.services.image_provider_service import ImageProviderConfig, ImageProviderService
 
@@ -825,3 +825,34 @@ async def test_test_notification_success(route_client, db):
     assert "command_id=" in resp.headers["location"]
     commands = await db.repos.telegram_commands.list_commands(limit=1)
     assert commands[0].command_type == "notifications.test"
+
+
+# === Bulk manual filter (stage 4 #1312) ===
+
+
+@pytest.mark.anyio
+async def test_save_filters_bulk_skips_human_channels(route_client, db):
+    """Сохранение формы с min_subscribers>0 не трогает human-каналы («802»):
+    массовый low_subscriber_manual ложится только на auto-строки (#1312)."""
+    await db.add_channel(Channel(channel_id=900, title="802", filtered_origin="human"))
+    await db.add_channel(Channel(channel_id=901, title="Public"))
+    for cid in (900, 901):
+        await db.execute_write(
+            "INSERT INTO channel_stats (channel_id, subscriber_count) VALUES (?, ?)",
+            (cid, 5),
+        )
+
+    resp = await route_client.post(
+        "/settings/save-filters",
+        data={"min_subscribers_filter": "20"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+
+    human = await db.get_channel_by_channel_id(900)
+    assert human.is_filtered is False
+    assert human.filtered_origin == "human"
+    assert not human.filter_flags
+    auto = await db.get_channel_by_channel_id(901)
+    assert auto.is_filtered is True
+    assert "low_subscriber_manual" in (auto.filter_flags or "")

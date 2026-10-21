@@ -41,6 +41,7 @@ _SQL_CHANNELS = """
         FROM messages
         GROUP BY channel_id
     ) cnt ON c.channel_id = cnt.channel_id
+    WHERE c.filtered_origin != 'human'
 """
 
 _SQL_UNIQUENESS = """
@@ -309,7 +310,7 @@ class FilterRepository:
         sql = _SQL_CHANNELS
         params: tuple = ()
         if channel_id is not None:
-            sql += " WHERE c.channel_id = ?"
+            sql += " AND c.channel_id = ?"
             params = (channel_id,)
         sql += " ORDER BY c.id ASC"
         cur = await self._db.execute(sql, params)

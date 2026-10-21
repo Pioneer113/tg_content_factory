@@ -578,9 +578,13 @@ class ChannelAnalyzer:
 
         # Preserve "sticky" flags that are set outside of analyzer — e.g. collector
         # marks channels with `username_changed` when Telegram reports the saved
-        # username no longer matches the channel, and operators set `manual` via UI.
-        # These must survive reset_all_channel_filters → apply new report cycle.
-        sticky_flag_names = ("username_changed", "title_changed", "manual")
+        # username no longer matches the channel. These must survive
+        # reset_all_channel_filters → apply new report cycle. The operator
+        # `manual` flag is NOT sticky anymore (#1312): a human verdict is
+        # expressed by filtered_origin='human' and protected by the SQL guards
+        # on every writer; a legacy auto-origin `manual` row is re-judged like
+        # any other auto channel.
+        sticky_flag_names = ("username_changed", "title_changed")
         cur = await conn.execute(
             "SELECT channel_id, filter_flags FROM channels "
             "WHERE is_filtered = 1 AND filter_flags IS NOT NULL AND filter_flags != ''"
