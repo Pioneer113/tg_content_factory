@@ -41,7 +41,10 @@ Merge all hits into ONE JSON object — the schema every consumer can rely on:
     {
       "title": "Claude 5.5 released",
       "summary": "One or two sentences: what happened and why it matters.",
-      "sources": ["@channel1", "@channel2"],
+      "sources": [
+        {"username": "@channel1", "message_id": 123},
+        {"username": "@channel2", "message_id": 456}
+      ],
       "date": "2026-10-17"
     }
   ]
