@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=77.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tg-shared"
+version = "0.1.0"
+description = "Shared Telegram core for tg-agent (factory) and tg-messenger: account storage contract, flood protection, message models"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    {name = "Axisrow"}
+]
+keywords = ["telegram", "telethon", "flood", "shared"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Typing :: Typed",
+]
+dependencies = [
+    "pydantic>=2.13.4,<3",
+]
+
+# Points at the monorepo until the package is split into its own repository
+# (see README "Repository split").
+[project.urls]
+Homepage = "https://github.com/axisrow/tg_content_factory"
+Issues = "https://github.com/axisrow/tg_content_factory/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+tg_shared = ["py.typed"]
