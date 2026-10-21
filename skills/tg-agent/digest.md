@@ -59,8 +59,8 @@ Merge all hits into ONE JSON object — the schema every consumer can rely on:
   per item; it becomes the item's render link.
 - `sources` — provenance per hit, from the search JSON: `@username` +
   `message_id` (renders as `https://t.me/<username>/<message_id>`); channel
-  title only as fallback when there is no username. t.me posts become the
-  render link ONLY when the story has no web primary source.
+  title only as fallback when there is no username. t.me stays in `sources`
+  as provenance only, never the render link.
 
 ## 3. Selection and editorial rules
 
