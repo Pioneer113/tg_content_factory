@@ -41,6 +41,7 @@ Merge all hits into ONE JSON object — the schema every consumer can rely on:
     {
       "title": "Claude 5.5 released",
       "summary": "One or two sentences: what happened and why it matters.",
+      "link": "https://www.anthropic.com/news/claude-5-5",
       "sources": [
         {"username": "@channel1", "message_id": 123},
         {"username": "@channel2", "message_id": 456}
@@ -53,10 +54,13 @@ Merge all hits into ONE JSON object — the schema every consumer can rely on:
 
 - `date` (top level) — the window the digest covers.
 - `items[].date` — the EVENT date, from the message text, not the repost time.
-- `sources` — per hit, from the search JSON: `@username` + `message_id` (enough to
-  render `https://t.me/<username>/<message_id>`); channel title only as fallback
-  when there is no username. A bare `@username` alone is NOT enough — the final
-  post links every source, it does not just name it.
+- `link` — the item's PRIMARY source URL (repo/blog/status page — the thing the
+  news is about), extracted from the hit texts during collection. Exactly one
+  per item; it becomes the item's render link.
+- `sources` — provenance per hit, from the search JSON: `@username` +
+  `message_id` (renders as `https://t.me/<username>/<message_id>`); channel
+  title only as fallback when there is no username. t.me stays in `sources`
+  as provenance only, never the render link.
 
 ## 3. Selection and editorial rules
 
@@ -70,6 +74,9 @@ Merge all hits into ONE JSON object — the schema every consumer can rely on:
   news for this window.
 - **Only verified items.** If the collected texts do not confirm the facts,
   the item does not exist. No speculation, no filler.
+- **No primary source = no item.** If no hit text carries the original URL
+  and it cannot be resolved otherwise, the story is dropped — do not
+  substitute a stack of t.me links for the missing original.
 - **One story = one item**: duplicates across channels merge, sources
   accumulate. Brand-token channel counts are cluster noise (jobs posts,
   coupon spam) — count the story, not the brand.
@@ -78,11 +85,14 @@ Merge all hits into ONE JSON object — the schema every consumer can rely on:
 
 - Build the JSON first, then render the user-facing text in the requester's
   channel voice (their local spec), not your own taste.
-- **Every item ends with its source links** — bare URLs (`https://t.me/<username>/<message_id>`,
-  or the original external URL when that is what the items are about), one per
-  line, as the last lines of the item. No markdown labels around them. An item
-  without resolvable links does not go out: no links = no item.
-- Telegram caps one message at 4096 chars: send long digests in parts.
+- **Item template (owner-confirmed 2026-10-22)** — title, blank line, body
+  (fact → numbers → verdict), blank line, then ONE bare URL: the item's
+  `link` (primary source). No markdown labels around it. A stack of `t.me`
+  links instead of the original is WRONG format — t.me is fallback only. An
+  item without a resolvable link does not go out: no links = no item.
+- Telegram caps one message at 4096 chars: send long digests in parts,
+  splitting BETWEEN items — a link must never land in a different message
+  than its text.
 - Show the draft before sending. Publish to a channel only after the user
   explicitly approved target + text:
 
