@@ -9,6 +9,17 @@ from pathlib import Path
 
 import pytest
 
+from tests.helpers import editable_install_staleness
+
+# A stale editable install (#1649) keeps the dist's console_scripts pointing at
+# the pre-#1582 ``src.main:main``, so every console variant dies with
+# ModuleNotFoundError: No module named 'src'. Skip those with the fix in the
+# reason; the module variant imports tg_agent from the workspace and still runs.
+_skip_stale_console = pytest.mark.skipif(
+    editable_install_staleness() is not None,
+    reason="stale editable install: console script points at the pre-#1582 src layout; fix: pip install -e '.[dev]'",
+)
+
 # Substitute only the command body: parsing, Typer's non-standalone exception
 # handling, main(), and the production entrypoint all run in the child process.
 _SCRIPT = textwrap.dedent(
@@ -59,7 +70,7 @@ def _command(entrypoint: str, *args: str) -> list[str]:
     return [sys.executable, "-c", _SCRIPT, entrypoint, *args]
 
 
-@pytest.mark.parametrize("entrypoint", ["module", "console"])
+@pytest.mark.parametrize("entrypoint", ["module", pytest.param("console", marks=_skip_stale_console)])
 @pytest.mark.parametrize("code", [0, 1, 7])
 def test_entrypoint_preserves_typer_exit(entrypoint, code):
     result = subprocess.run(
@@ -71,7 +82,7 @@ def test_entrypoint_preserves_typer_exit(entrypoint, code):
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX SIGINT process semantics")
-@pytest.mark.parametrize("entrypoint", ["module", "console"])
+@pytest.mark.parametrize("entrypoint", ["module", pytest.param("console", marks=_skip_stale_console)])
 def test_entrypoint_interrupted_wait_exits_nonzero(entrypoint):
     # communicate's timeout bounds startup as well as execution. A timer in the
     # child sends SIGINT only after the wait coroutine has actually started.
@@ -89,7 +100,7 @@ def test_entrypoint_interrupted_wait_exits_nonzero(entrypoint):
     assert "Traceback" not in result.stderr
 
 
-@pytest.mark.parametrize("entrypoint", ["module", "console"])
+@pytest.mark.parametrize("entrypoint", ["module", pytest.param("console", marks=_skip_stale_console)])
 def test_entrypoint_confirm_eof_exits_cleanly(entrypoint):
     # Issue #1590: EOF at a confirmation prompt (closed stdin, no TTY) used to
     # escape as Typer's own Abort — a RuntimeError main() did not catch — and

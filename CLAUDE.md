@@ -33,6 +33,11 @@ pip install -e ".[dev]"
 # mutmut; the distribution name is tg-agent, not the repository name).
 python -m pip show tg-agent
 
+# If console-entrypoint tests fail with ModuleNotFoundError: No module named
+# 'src', the editable install predates the #1582 src/ -> tg_agent/ rename.
+# tests/test_local_install_consistency.py fails with the diagnosis; repair:
+pip install -e ".[dev]"
+
 # Managed daemon (automation-first default) — stop any previous daemon and
 # run the worker runtime in this process. No web panel, no WEB_PASS; the
 # PID file makes `stop`/`restart` and the CLI worker hand-off work.

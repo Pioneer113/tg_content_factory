@@ -49,6 +49,24 @@ python 3.11+
 pip install -e '.[dev]'
 ```
 
+### Local venv policy
+
+- Any Python within `requires-python` (3.11+) works for local runs; CI pins
+  3.11. There is no local version pin — the "py3.13 failures" investigated in
+  #1649 were a stale install plus a test-helper leak, not a Python-version
+  behavior difference.
+- Keep the editable install fresh. An install that predates a packaging
+  change (e.g. the #1582 `src/` → `tg_agent/` rename) keeps its metadata
+  pointing at the old layout, and console tests fail with
+  `ModuleNotFoundError: No module named 'src'`.
+  `tests/test_local_install_consistency.py` detects this and fails once with
+  the diagnosis instead of leaving cryptic failures to triage.
+- Repair is always the same: `pip install -e '.[dev]'`, then
+  `python -m pip show tg-agent` to confirm.
+- AO worktrees: run the suite with the main checkout's `.venv/bin/pytest` —
+  the worktree code is picked up via conftest sys.path prepend. The editable
+  install lives in the main checkout; reinstall it there, not per worktree.
+
 Create `.env` in the working directory (never commit it — session strings are
 full account access):
 
