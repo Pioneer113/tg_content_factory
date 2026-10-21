@@ -85,9 +85,9 @@ class ChannelsRepository:
         )
         cur = await self._database.execute_write(
             """INSERT INTO channels (channel_id, title, username, channel_type, is_active,
-                                     filtered_origin, username_state, about, linked_chat_id,
-                                     has_comments, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                     filtered_origin, approval_state, username_state, about,
+                                     linked_chat_id, has_comments, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(channel_id) DO UPDATE
                SET title=excluded.title, username=excluded.username,
                    channel_type=excluded.channel_type,
@@ -96,6 +96,7 @@ class ChannelsRepository:
                    filtered_origin=CASE WHEN channels.filtered_origin = 'human'
                                        OR excluded.filtered_origin = 'human'
                                        THEN 'human' ELSE excluded.filtered_origin END,
+                   approval_state=channels.approval_state,
                    username_state=excluded.username_state,
                    about=COALESCE(excluded.about, channels.about),
                    linked_chat_id=COALESCE(excluded.linked_chat_id, channels.linked_chat_id),
@@ -109,6 +110,7 @@ class ChannelsRepository:
                 channel.channel_type,
                 int(channel.is_active),
                 channel.filtered_origin,
+                channel.approval_state,
                 "known",
                 channel.about,
                 channel.linked_chat_id,
@@ -164,8 +166,14 @@ class ChannelsRepository:
         self, active_only: bool = False, include_filtered: bool = True
     ) -> list[Channel]:
         """Каналы по возрастанию pk; ``active_only`` — только активные,
-        ``include_filtered=False`` скрывает отфильтрованные."""
-        conditions = []
+        ``include_filtered=False`` скрывает отфильтрованные.
+
+        Безусловный гейт очереди одобрения (#1313): каналы с
+        ``approval_state='pending'`` не возвращаются никогда — поиск не является
+        одобрением сбора, решение за владельцем. pending-каналы видны только
+        через :meth:`list_pending_approval`.
+        """
+        conditions = ["approval_state != 'pending'"]
         if active_only:
             conditions.append("is_active = 1")
         if not include_filtered:
@@ -203,6 +211,7 @@ class ChannelsRepository:
         """Каналы вместе с числом сообщений (`message_count`); фильтры как у :meth:`get_channels`.
 
         JOIN агрегата по ``channel_id`` (не по pk) — см. конвенцию ключей в docstring модуля.
+        Тот же безусловный гейт ``approval_state != 'pending'`` (#1313).
         """
         sql = """
             SELECT c.*, COALESCE(cnt.total, 0) AS message_count
@@ -211,7 +220,7 @@ class ChannelsRepository:
                 SELECT channel_id, COUNT(*) AS total FROM messages GROUP BY channel_id
             ) cnt ON c.channel_id = cnt.channel_id
         """
-        conditions = []
+        conditions = ["c.approval_state != 'pending'"]
         if active_only:
             conditions.append("c.is_active = 1")
         if not include_filtered:
@@ -284,11 +293,12 @@ class ChannelsRepository:
         *,
         row,
         field: str,
-        old_value: int,
-        new_value: int,
+        old_value: int | str,
+        new_value: int | str,
         origin: str,
         actor: str | None,
         reason: str | None,
+        commit: bool = False,
     ) -> None:
         assert self._database is not None
         await self._database.repos.decisions.record(
@@ -301,7 +311,7 @@ class ChannelsRepository:
             origin=origin,
             actor=actor,
             reason=reason,
-            commit=False,
+            commit=commit,
         )
 
     @staticmethod
@@ -448,6 +458,82 @@ class ChannelsRepository:
         )
         rows = await cur.fetchall()
         return [self._map_channel(row) for row in rows]
+
+    # ── Approval queue (#1313) ───────────────────────────────────────────────
+
+    async def list_pending_approval(self) -> list[Channel]:
+        """Каналы в очереди одобрения (`approval_state='pending'`), по возрастанию pk."""
+        cur = await self._db.execute(
+            "SELECT * FROM channels WHERE approval_state = 'pending' ORDER BY id ASC"
+        )
+        rows = await cur.fetchall()
+        return [self._map_channel(row) for row in rows]
+
+    async def approve_channel(
+        self, pk: int, *, actor: str, reason: str | None = None
+    ) -> int:
+        """Одобрить pending-канал; вернуть число изменённых строк (0 — не в очереди).
+
+        Одобрение — это и есть защищённое human-решение: одним стейтментом
+        ставит ``approval_state='approved'`` **и** ``active_origin='human'``,
+        поэтому дальнейшие авто-вердикты по ``is_active`` это канал не тронут
+        (см. guard в :meth:`add_channel`/:meth:`set_channel_active`).
+        """
+        assert self._database is not None, (
+            "ChannelsRepository.approve_channel requires a Database reference"
+        )
+        async with self._database.transaction() as conn:
+            row = await self._channel_row_for_decision(conn, pk=pk)
+            cur = await conn.execute(
+                "UPDATE channels SET approval_state = 'approved', active_origin = 'human' "
+                "WHERE id = ? AND approval_state = 'pending'",
+                (pk,),
+            )
+            rowcount = cur.rowcount if cur.rowcount is not None else 0
+            if rowcount > 0 and row is not None:
+                await self._record_channel_decision(
+                    row=row,
+                    field="approval_state",
+                    old_value="pending",
+                    new_value="approved",
+                    origin="human",
+                    actor=actor,
+                    reason=reason,
+                )
+            return rowcount
+
+    async def reject_channel(
+        self, pk: int, *, actor: str, reason: str | None = None
+    ) -> int:
+        """Отклонить pending-канал: журнал решения + полная очистка строки (1/0).
+
+        Pending-строку положил поиск только ради FK сообщений; после отказа
+        владельца у данных нет легитимного происхождения — удаляем канал вместе
+        с кэшем (сообщения, эмбеддинги, статистика — см. :meth:`delete_channel`).
+        Само решение остаётся в журнале ``decisions`` по Telegram ``channel_id``.
+        """
+        assert self._database is not None, (
+            "ChannelsRepository.reject_channel requires a Database reference"
+        )
+        cur = await self._db.execute(
+            "SELECT id, channel_id, title, approval_state FROM channels WHERE id = ?",
+            (pk,),
+        )
+        row = await cur.fetchone()
+        if row is None or row["approval_state"] != "pending":
+            return 0
+        await self._record_channel_decision(
+            row=row,
+            field="approval_state",
+            old_value="pending",
+            new_value="rejected",
+            origin="human",
+            actor=actor,
+            reason=reason,
+            commit=True,
+        )
+        await self.delete_channel(pk)
+        return 1
 
     async def set_channel_filtered(
         self,

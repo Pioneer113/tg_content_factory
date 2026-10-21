@@ -332,7 +332,7 @@ def _seed_messages(db, *, channel_id: int, n: int, query: str | None, start_id: 
 
 class TestChannelCandidates:
     def test_lists_search_discovered(self, cli_env, capsys):
-        _add_channel(cli_env, channel_id=500, title="Gemini Fan", is_active=False)
+        _add_channel(cli_env, channel_id=500, title="Gemini Fan", approval_state="pending")
         _seed_messages(cli_env, channel_id=500, n=3, query="Gemini 3")
         _seed_messages(cli_env, channel_id=500, n=1, start_id=10, query="Gemini 3 Pro")
         run(_ns(channel_action="candidates"))
@@ -345,9 +345,9 @@ class TestChannelCandidates:
     def test_excludes_active_untagged_and_filtered(self, cli_env, capsys):
         _add_channel(cli_env, channel_id=600, title="AlreadyActive")
         _seed_messages(cli_env, channel_id=600, n=2, query="Gemini 3")
-        _add_channel(cli_env, channel_id=601, title="NoTagMsgs", is_active=False)
+        _add_channel(cli_env, channel_id=601, title="NoTagMsgs", approval_state="pending")
         _seed_messages(cli_env, channel_id=601, n=2, query=None)
-        _add_channel(cli_env, channel_id=602, title="FilteredOut", is_active=False)
+        _add_channel(cli_env, channel_id=602, title="FilteredOut", approval_state="pending")
         # add_channel's INSERT does not set is_filtered (filters land via filter apply)
         asyncio.run(cli_env.execute_write("UPDATE channels SET is_filtered = 1 WHERE channel_id = ?", (602,)))
         _seed_messages(cli_env, channel_id=602, n=2, query="Gemini 3")
@@ -361,7 +361,7 @@ class TestChannelCandidates:
         assert "No search-discovered candidate channels." in capsys.readouterr().out
 
     def test_json_output(self, cli_env, capsys):
-        _add_channel(cli_env, channel_id=700, title="JsonCh", is_active=False)
+        _add_channel(cli_env, channel_id=700, title="JsonCh", approval_state="pending")
         _seed_messages(cli_env, channel_id=700, n=2, query="Claude 5")
         run(_ns(channel_action="candidates", json=True))
         payload = json.loads(capsys.readouterr().out.strip())
@@ -372,7 +372,7 @@ class TestChannelCandidates:
         assert row["queries"] == ["Claude 5"]
 
     def test_json_query_with_comma_stays_one_entry(self, cli_env, capsys):
-        _add_channel(cli_env, channel_id=710, title="CommaCh", is_active=False)
+        _add_channel(cli_env, channel_id=710, title="CommaCh", approval_state="pending")
         _seed_messages(cli_env, channel_id=710, n=1, query="Claude, Gemini")
         _seed_messages(cli_env, channel_id=710, n=1, start_id=10, query="GPT")
         run(_ns(channel_action="candidates", json=True))
@@ -381,7 +381,7 @@ class TestChannelCandidates:
 
     def test_limit(self, cli_env, capsys):
         for cid in (801, 802, 803):
-            _add_channel(cli_env, channel_id=cid, title=f"Ch{cid}", is_active=False)
+            _add_channel(cli_env, channel_id=cid, title=f"Ch{cid}", approval_state="pending")
             _seed_messages(cli_env, channel_id=cid, n=1, query="GPT-6")
         run(_ns(channel_action="candidates", limit=2))
         out = capsys.readouterr().out

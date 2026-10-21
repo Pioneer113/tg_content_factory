@@ -56,9 +56,9 @@ filter analyze | apply | reset | precheck | suspects | toggle | flag | purge | p
   overrides). The worker collects asynchronously; numbers land in DB — read them via
   `channel list` / `analytics channel`.
 - `channel candidates [--json] [--limit N]` — read-only list of channels discovered by
-  premium search (`search --mode telegram`): inactive rows whose cached messages carry the
+  premium search (`search --mode telegram`): pending-approval rows whose cached messages carry the
   search-query tag. Pick ones worth collecting, then `channel toggle <identifier>`
-  (activates with human origin) + `channel collect <identifier>` for the first fetch.
+  (approves with human origin) + `channel collect <identifier>` for the first fetch.
 - `filter analyze|apply` — score channels for spam/quality (flags incl. `low_engagement` —
   dead engagement: avg views <10% of subscribers over the last 100 posts; `forwarder` —
   forwarding channel: ≥50% of the last 100 posts are forwards, label-only; `high_volume` —

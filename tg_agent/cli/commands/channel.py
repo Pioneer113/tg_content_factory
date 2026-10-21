@@ -295,13 +295,26 @@ async def delete_impl(config_path: str, *, identifier: str) -> None:
 
 
 async def toggle_impl(config_path: str, *, identifier: str) -> None:
-    """``channel toggle`` — flip a channel's active flag."""
+    """``channel toggle`` — flip a channel's active flag.
+
+    For a pending-approval channel (the discovery flow) the toggle is the
+    owner's approval gesture: it approves the candidate (#1313) instead of
+    flipping ``is_active`` — pending rows are already active-but-gated.
+    """
     _, db = await runtime.init_db(config_path)
     try:
         channels = await db.get_channels()
         ch = resolve_channel(channels, identifier)
         if not ch:
-            print(f"Channel '{identifier}' not found")
+            pending = await db.repos.channels.list_pending_approval()
+            ch = resolve_channel(pending, identifier)
+            if not ch:
+                print(f"Channel '{identifier}' not found")
+                return
+            await db.repos.channels.approve_channel(
+                ch.id, actor="cli", reason="channel toggle"
+            )
+            print(f"Channel '{ch.title}' (pk={ch.id}): approved")
             return
         new_state = not ch.is_active
         await db.set_channel_active(ch.id, new_state, origin="human", actor="cli")
@@ -784,14 +797,14 @@ async def list_for_import_impl(config_path: str, *, as_json: bool) -> None:
 
 
 async def candidates_impl(config_path: str, *, as_json: bool = False, limit: int = 50) -> None:
-    """``channel candidates`` — search-discovered channels awaiting activation.
+    """``channel candidates`` — search-discovered channels awaiting approval.
 
     Premium search (``search --mode telegram``) caches discovered channels as
-    inactive rows and tags their cached messages with the query that found
-    them; this read-only listing surfaces those candidates so a human can
-    pick which ones to activate with ``channel toggle``. The INNER JOIN on
-    tagged messages is the origin marker — a plain inactive channel without
-    premium-search messages is not a search candidate.
+    pending rows of the approval queue (#1313) and tags their cached messages
+    with the query that found them; this read-only listing surfaces those
+    candidates so a human can pick which ones to approve with ``channel
+    toggle``. The INNER JOIN on tagged messages is the origin marker — a
+    pending channel without premium-search messages is not a search candidate.
     """
     _, db = await runtime.init_db(config_path)
     try:
@@ -803,9 +816,9 @@ async def candidates_impl(config_path: str, *, as_json: bool = False, limit: int
                JOIN messages m
                  ON m.channel_id = c.channel_id
                 AND m.premium_search_query IS NOT NULL
-               WHERE c.is_active = 0 AND c.is_filtered = 0
+               WHERE c.approval_state = 'pending' AND c.is_filtered = 0
                GROUP BY c.channel_id
-               ORDER BY n_msgs DESC
+               ORDER BY n_msgs DESC, c.channel_id DESC
                LIMIT ?""",
             (limit,),
         )
