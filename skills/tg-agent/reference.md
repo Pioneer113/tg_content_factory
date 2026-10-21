@@ -100,6 +100,8 @@ search-query list | get | add | edit | delete | toggle | run | stats
   This holds repo-wide for `messages`/`dialogs`/`account`/`settings`/`provider`/
   `export`/`scheduler`/`filter`/`photo-loader` (and pre-existing `dm`/`export`
   checks); remaining groups may still print-and-exit-0 — see issue #1486.
+  Known exception: `dialogs react` without `--emoji`/`--clear` still prints
+  its usage error to stdout and exits 2.
 - `--format json` always emits valid JSON (empty result → `[]`); `--format csv`
   always includes the header row. Errors (e.g. channel not found in DB) go to
   **stderr** with exit code 1. `--live` combined with `--format json|csv` is

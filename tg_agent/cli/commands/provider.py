@@ -113,7 +113,6 @@ async def delete_impl(config_path: str, *, name: str) -> None:
         new_configs = [c for c in configs if c.provider != name]
         if len(new_configs) == len(configs):
             cli_error(f"Provider '{name}' not found.")
-            return
         await svc.save_provider_configs(new_configs)
         print(f"Deleted provider: {name}")
     finally:

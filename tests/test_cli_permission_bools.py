@@ -46,11 +46,11 @@ def test_permission_values_reach_action_or_queue(monkeypatch, raw, expected, han
             # Both permission flags None = usage error, refused up front (#1486).
             with pytest.raises(typer.Exit):
                 asyncio.run(dialogs._dialogs_edit_permissions(args, object(), object()))
+            action.assert_not_called()
         else:
             asyncio.run(dialogs._dialogs_edit_permissions(args, object(), object()))
             assert action.call_args.kwargs["send_messages"] is expected
             assert action.call_args.kwargs["send_media"] is expected
-        action.assert_not_called() if raw is None else None
         enqueue.assert_not_called()
 
 
