@@ -41,7 +41,10 @@ Merge all hits into ONE JSON object — the schema every consumer can rely on:
     {
       "title": "Claude 5.5 released",
       "summary": "One or two sentences: what happened and why it matters.",
-      "sources": ["@channel1", "@channel2"],
+      "sources": [
+        {"username": "@channel1", "message_id": 123},
+        {"username": "@channel2", "message_id": 456}
+      ],
       "date": "2026-10-17"
     }
   ]
@@ -50,7 +53,10 @@ Merge all hits into ONE JSON object — the schema every consumer can rely on:
 
 - `date` (top level) — the window the digest covers.
 - `items[].date` — the EVENT date, from the message text, not the repost time.
-- `sources` — `@username` (or channel title) per hit, from the search JSON.
+- `sources` — per hit, from the search JSON: `@username` + `message_id` (enough to
+  render `https://t.me/<username>/<message_id>`); channel title only as fallback
+  when there is no username. A bare `@username` alone is NOT enough — the final
+  post links every source, it does not just name it.
 
 ## 3. Selection and editorial rules
 
@@ -72,6 +78,10 @@ Merge all hits into ONE JSON object — the schema every consumer can rely on:
 
 - Build the JSON first, then render the user-facing text in the requester's
   channel voice (their local spec), not your own taste.
+- **Every item ends with its source links** — bare URLs (`https://t.me/<username>/<message_id>`,
+  or the original external URL when that is what the items are about), one per
+  line, as the last lines of the item. No markdown labels around them. An item
+  without resolvable links does not go out: no links = no item.
 - Telegram caps one message at 4096 chars: send long digests in parts.
 - Show the draft before sending. Publish to a channel only after the user
   explicitly approved target + text:
