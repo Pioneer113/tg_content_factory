@@ -1,6 +1,7 @@
 """Tests for src/cli/commands/analytics.py — CLI analytics subcommands."""
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -402,6 +403,67 @@ def test_channel_rating_with_data(capsys):
     assert "useful" in out
     assert "original" in out
     mock_svc.list_ratings.assert_awaited_once_with(useful="useful", genre=None, limit=50)
+
+
+# ---------------------------------------------------------------------------
+# usefulness (контент-рейтинг «полезное vs вода», детерминированный, без LLM)
+# ---------------------------------------------------------------------------
+
+
+def _usefulness_args(**overrides):
+    defaults = {"analytics_action": "usefulness", "limit": 100, "json": False}
+    defaults.update(overrides)
+    return cli_ns(**defaults)
+
+
+def _usefulness_db(samples, channels=()):
+    db = make_cli_db()
+    db.filter_repo.fetch_recent_post_samples = AsyncMock(return_value=samples)
+    db.get_channels = AsyncMock(return_value=list(channels))
+    return db
+
+
+def test_usefulness_empty(capsys):
+    db = _usefulness_db({})
+    with _init_patches(db)[0], _init_patches(db)[1]:
+        run(_usefulness_args())
+    out = capsys.readouterr().out
+    assert "No channels with collected posts" in out
+    db.filter_repo.fetch_recent_post_samples.assert_awaited_once()
+
+
+def test_usefulness_table_sorted_by_tier(capsys):
+    # Канал 1: вода (все посты со штампами), канал 2: не хватает выборки → no_data.
+    # Формат сэмпла — сырой ответ репозитория: [(text, is_forward), …].
+    water = [("В современном мире ИИ. " * 10, False)] * 40
+    samples = {(-100): water, (-200): [("мало", False)]}
+    channels = [
+        SimpleNamespace(channel_id=-100, title="WaterCh", username="water", filter_flags=""),
+        SimpleNamespace(channel_id=-200, title="TinyCh", username="tiny", filter_flags="auto_feed"),
+    ]
+    db = _usefulness_db(samples, channels)
+    with _init_patches(db)[0], _init_patches(db)[1]:
+        run(_usefulness_args())
+    out = capsys.readouterr().out
+    assert "WaterCh" in out and "water" in out
+    assert "TinyCh" in out and "no_data" in out
+    # Тир-сортировка: вода выше «нет данных».
+    assert out.index("WaterCh") < out.index("TinyCh")
+
+
+def test_usefulness_json(capsys):
+    water = [("В современном мире ИИ. " * 10, False)] * 40
+    channels = [SimpleNamespace(channel_id=-100, title="WaterCh", username="water", filter_flags="auto_feed")]
+    db = _usefulness_db({(-100): water}, channels)
+    with _init_patches(db)[0], _init_patches(db)[1]:
+        run(_usefulness_args(json=True))
+    rows = json.loads(capsys.readouterr().out)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["channel_id"] == -100
+    assert row["tier"] == "water"
+    assert row["flags"] == "auto_feed"
+    assert row["title"] == "WaterCh"
 
 
 # ---------------------------------------------------------------------------

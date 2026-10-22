@@ -17,6 +17,7 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING, Awaitable, Callable
 
+from tg_agent.filters.criteria import AUTHORSHIP_KEYS
 from tg_agent.models import ChannelGenre, ChannelRating, ChannelUsefulness
 from tg_agent.utils.json import safe_json_loads_dict
 
@@ -27,6 +28,11 @@ ProviderCallable = Callable[..., Awaitable[str]]
 
 USEFULNESS_VALUES: tuple[ChannelUsefulness, ...] = ("useful", "useless")
 GENRE_VALUES: tuple[ChannelGenre, ...] = ("ad", "infobiz", "aggregator", "copy", "original")
+
+# Оси калибровки «полезное vs вода» (22.10.26). Судья = только калибровочный
+# инструмент: его вердикты — ground truth для детерминированных эвристик
+# (filters/usefulness.py), в проде LLM не участвует. Словарь ключей оси —
+# канонический AUTHORSHIP_KEYS в criteria.py, общий с прод-эвристиками.
 
 # Upper bound on the judge's free-text `reason`. The prompt asks for "кратко",
 # but a buggy or hostile provider can echo a prompt-injection payload, paste an
@@ -42,7 +48,7 @@ _EMOJI_RE = re.compile(
     "\U0001fa00-\U0001fa6f\U0001fa70-\U0001faff\U00002600-\U000026ff]"
 )
 
-_JUDGE_PROMPT = """Ты оцениваешь Telegram-канал по нескольким его постам. Дай ДВЕ независимые оценки.
+_JUDGE_PROMPT = """Ты оцениваешь Telegram-канал по нескольким его постам. Дай независимые оценки.
 
 ОСЬ 1 — ПОЛЕЗНОСТЬ (есть ли ценность для читателя, НЕЗАВИСИМО от того, написал человек или AI):
 - useful: даёт читателю реальную пользу — конкретику, факты, разбор, рабочую информацию, экспертизу.
@@ -56,12 +62,51 @@ _JUDGE_PROMPT = """Ты оцениваешь Telegram-канал по неско
 - copy: канал льёт чужое 1-в-1 БЕЗ своей подачи — голый репост/копипаста, клон чужого канала.
 - original: канал производит СВОЙ авторский оригинальный контент — блог, авторские новости, обзоры.
 
+ОСЬ 3 — ВОДА (по Ильяхову «Пиши, сокращай»): water_score 0-100 — сколько процентов текста
+НЕ несёт смысла: штампы и канцелярит («в современном мире», «не секрет, что», «данный»),
+вводные обороты-балласт, пустые фразы ради объёма. Конкретика (факты, цифры, код, выводы)
+снижает оценку, пустословие — повышает.
+
+ОСЬ 4 — АВТОРСКОСТЬ: authorship — из чего состоит контент канала, три доли в процентах
+(сумма ≈ 100):
+- own: свой опыт/мнение/анализ — автор пишет от первого лица о том, что делал, проверял,
+  думал сам; личные наблюдения и выводы.
+- quality_retell: пересказ чужих новостей С добавленной ценностью — автор добавляет
+  контекст, анализ, сравнение, практические выводы «что это значит для меня».
+- rewrite: рерайтинг/копипаста чужого БЕЗ добавленной ценности — пересказ ради пересказа,
+  голые ссылки, безликие «стало известно» без своей мысли.
+
 Посты канала:
 {posts}
 
 Ответь СТРОГО в JSON:
 {{"useful": "useful|useless", "genre": "ad|infobiz|aggregator|copy|original",
+"water_score": 0-100, "authorship": {{"own": 0-100, "quality_retell": 0-100, "rewrite": 0-100}},
 "confidence": 0.0-1.0, "reason": "кратко"}}"""
+
+
+def _parse_score_0_100(value: object) -> float | None:
+    """Число 0-100 из ответа судьи; мусор/отсутствие → None (не поддельный ноль)."""
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        score = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return min(max(score, 0.0), 100.0)
+
+
+def _parse_authorship(value: object) -> dict[str, float] | None:
+    """{own, quality_retell, rewrite} из ответа судьи; мусор/неполнота → None."""
+    if not isinstance(value, dict):
+        return None
+    shares: dict[str, float] = {}
+    for key in AUTHORSHIP_KEYS:
+        share = _parse_score_0_100(value.get(key))
+        if share is None:
+            return None
+        shares[key] = share
+    return shares
 
 
 class ChannelAnalysisService:
@@ -101,7 +146,9 @@ class ChannelAnalysisService:
         posts = await self._sample_posts(channel_id, sample_size)
         title, username = await self._channel_meta(channel_id)
         prompt = self._build_prompt(posts)
-        raw = await provider_callable(prompt=prompt, max_tokens=256, temperature=0.0)
+        # Расширенная рубрика (water_score + authorship) требует больше токенов,
+        # чем старые две оси: JSON с вложенным объектом не влезает в 256.
+        raw = await provider_callable(prompt=prompt, max_tokens=384, temperature=0.0)
         verdict = self._parse_verdict(raw)
 
         rating = ChannelRating(
@@ -114,6 +161,8 @@ class ChannelAnalysisService:
             reason=verdict["reason"],
             emoji_trash_score=self._emoji_trash_score(title, posts),
             n_total=len(posts),
+            water_score=verdict["water_score"],
+            authorship=verdict["authorship"],
         )
         await self._db.repos.channel_ratings.upsert(rating)
         return rating
@@ -154,6 +203,10 @@ class ChannelAnalysisService:
             "genre": genre,
             "confidence": confidence,
             "reason": reason,
+            # Оси калибровки: None = судья их не вернул (старая модель/мусор) —
+            # честная «нет данных», не поддельный ноль.
+            "water_score": _parse_score_0_100(parsed.get("water_score")),
+            "authorship": _parse_authorship(parsed.get("authorship")),
         }
 
     @staticmethod
@@ -181,13 +234,10 @@ class ChannelAnalysisService:
         return channel.title, channel.username
 
     async def _sample_posts(self, channel_id: int, sample_size: int) -> list[str]:
-        rows = await self._db.execute_fetchall(
-            # message_kind IS NULL covers legacy posts collected before the column
-            # was added (the migration leaves old rows NULL) — review on #966.
-            "SELECT text FROM messages "
-            "WHERE channel_id = ? AND (message_kind = 'regular' OR message_kind IS NULL) "
-            "AND text IS NOT NULL "
-            "ORDER BY message_id DESC LIMIT ?",
-            (channel_id, sample_size),
+        # Единый сэмпл с прод-рейтингом (fetch_recent_post_samples): судья и
+        # эвристики должны оценивать ОДНУ популяцию постов, иначе калибровка
+        # порогов пойдёт не по тому распределению.
+        samples = await self._db.filter_repo.fetch_recent_post_samples(
+            channel_id, sample_size=sample_size
         )
-        return [r["text"] for r in rows if r["text"]]
+        return [text for text, _ in samples.get(channel_id, [])]

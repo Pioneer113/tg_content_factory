@@ -117,7 +117,12 @@ def test_agent_tools_reference_docs_cover_registry(mock_db):
 
 
 def test_deepagents_all_tools_smoke_with_minimal_contract_args(cli_db, monkeypatch):
-    monkeypatch.setenv("OPENAI_API_KEY", "offline-contract-key")
+    # No key in env, not even a fake one: the semantic-search tools build
+    # their embedding client straight from os.environ (bypassing the
+    # build_provider_service(env={}) patch below), so a fake key here becomes
+    # a live embeddings HTTPS call whose sockets surface as unraisable
+    # warnings at a later test's boundary.
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     external_provider = MagicMock(side_effect=AssertionError("Contract smoke must use the offline provider"))
     monkeypatch.setattr(provider_service.RuntimeProviderRegistry, "_make_openai_provider", external_provider)
     monkeypatch.setattr(

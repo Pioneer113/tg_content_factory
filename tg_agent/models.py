@@ -501,6 +501,13 @@ class ChannelRating(BaseModel):
     текстовым обоснованием `reason`. `emoji_trash_score` и `flag_count` —
     вспомогательные сигналы шума, `n_total` — размер выборки, на которой посчитан
     вердикт.
+
+    Оси калибровки «полезное vs вода» (22.10.26, сценарий 4): `water_score` —
+    плотность бессодержательного текста по Ильяхову (0-100), `authorship` —
+    из чего состоит контент {own, quality_retell, rewrite} в процентах. Заполняет
+    только LLM-судья (`channel-rate`), который в проде не участвует: его вердикты —
+    ground truth для калибровки детерминированных эвристик (`filters/usefulness.py`).
+    None = канал оценён старой рубрикой без этих осей.
     """
 
     channel_id: int
@@ -513,6 +520,8 @@ class ChannelRating(BaseModel):
     emoji_trash_score: float | None = None
     flag_count: int = 0
     n_total: int = 0
+    water_score: float | None = None
+    authorship: dict[str, float] | None = None
     updated_at: datetime | None = None
 
 

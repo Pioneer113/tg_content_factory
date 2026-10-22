@@ -32,6 +32,12 @@ SCHEMA_REPAIR_COLUMNS: Mapping[str, ColumnSpec] = {
         "flood_wait_until": "flood_wait_until TEXT",
         "is_premium": "is_premium INTEGER DEFAULT 0",
     },
+    # Оси калибровки «полезное vs вода» (22.10.26): water_score + authorship_json
+    # пишет только LLM-судья (channel-rate, calibration-only); NULL = старая рубрика.
+    "channel_ratings": {
+        "water_score": "water_score REAL",
+        "authorship_json": "authorship_json TEXT",
+    },
     "channels": {
         "channel_type": "channel_type TEXT",
         "username_state": "username_state TEXT NOT NULL DEFAULT 'known'",
