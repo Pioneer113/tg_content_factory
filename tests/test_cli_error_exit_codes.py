@@ -132,11 +132,12 @@ class TestMessagesLiveExitCodes:
         pool.get_native_client_by_phone = AsyncMock(return_value=(fake_client, PHONE))
 
         async def _raise_flood(coro, **_):
-            # Consume the unread generator before failing, or its GC shows up
-            # as an unraisable warning attributed to a later test.
-            aclose = getattr(coro, "aclose", None)
-            if aclose is not None:
-                await aclose()
+            # Consume the unread coroutine before failing, or its GC shows up
+            # as an unraisable warning attributed to a later test. The old
+            # aclose-only probe silently no-oped — coroutine objects have
+            # close(), not aclose() — so _read_messages leaked and flaked
+            # random later serial-lane tests (#1471 CI).
+            coro.close()
             raise HandledFloodWaitError(_flood_info())
 
         flood_patch = patch(
