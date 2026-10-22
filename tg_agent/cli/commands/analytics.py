@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 
 import typer
 
@@ -14,6 +15,8 @@ from tg_agent.cli.commands.common import (
     resolve_date_bounds,
     run_async,
 )
+from tg_agent.filters.criteria import USEFULNESS_SAMPLE_SIZE
+from tg_agent.filters.usefulness import TIER_ORDER, score_channel
 
 # --------------------------------------------------------------------------- #
 # Per-action impls (epic #959, Wave 4 — issue #1124)
@@ -449,6 +452,74 @@ async def channel_rate_impl(
         print(f"  confidence: {rating.confidence:.2f}")
         print(f"  reason:     {rating.reason or '-'}")
         print(f"  posts seen: {rating.n_total}")
+        # Оси калибровки «полезное vs вода» — могут отсутствовать (старая рубрика).
+        print(f"  water_score: {rating.water_score if rating.water_score is not None else '-'}")
+        if rating.authorship:
+            a = rating.authorship
+            print(
+                f"  authorship: own={a.get('own', 0):.0f}% "
+                f"quality_retell={a.get('quality_retell', 0):.0f}% "
+                f"rewrite={a.get('rewrite', 0):.0f}%"
+            )
+        else:
+            print("  authorship: -")
+    finally:
+        await db.close()
+
+
+async def usefulness_impl(config_path: str, *, limit: int, as_json: bool) -> None:
+    """Контент-рейтинг каналов «полезное vs вода» — детерминированный, без LLM.
+
+    Прод-путь сценария 4: эвристики по сэмплу последних постов (штампы/канцелярит
+    по Ильяхову + профиль авторскости own/quality_retell/rewrite). Read-only: каналы и
+    сообщения не пишутся, провайдер не вызывается. LLM-судья (`channel-rate`) —
+    отдельный калибровочный контур и сюда не входит.
+    """
+    _, db = await runtime.init_db(config_path)
+    try:
+        samples = await db.filter_repo.fetch_recent_post_samples(
+            sample_size=USEFULNESS_SAMPLE_SIZE
+        )
+        if not samples:
+            print("No channels with collected posts found.")
+            return
+        meta = {
+            ch.channel_id: ch
+            for ch in await db.get_channels(active_only=False, include_filtered=True)
+        }
+        rows: list[dict] = []
+        for channel_id, posts in samples.items():
+            score = score_channel(posts).to_dict()
+            channel = meta.get(channel_id)
+            rows.append(
+                {
+                    "channel_id": channel_id,
+                    "title": channel.title if channel else None,
+                    "username": channel.username if channel else None,
+                    "flags": channel.filter_flags if channel else "",
+                    **score,
+                }
+            )
+        rows.sort(key=lambda r: (TIER_ORDER[r["tier"]], -r["water_score"], -r["rewrite_share"]))
+        rows = rows[:limit]
+
+        if as_json:
+            print(json.dumps(rows, ensure_ascii=False, indent=2))
+            return
+        header = (
+            f"{'channel_id':<14} {'tier':<8} {'W%':>5} {'own%':>5} {'qret%':>5} "
+            f"{'rew%':>5} {'posts':>5}  title"
+        )
+        print(header)
+        print("-" * len(header))
+        for r in rows:
+            title = r["title"] or r["username"] or str(r["channel_id"])
+            print(
+                f"{r['channel_id']:<14} {r['tier']:<8} {r['water_score']:>5.1f} "
+                f"{r['own_share']:>5.1f} {r['quality_retell_share']:>5.1f} "
+                f"{r['rewrite_share']:>5.1f} "
+                f"{r['n_posts']:>5}  {title[:40]}"
+            )
     finally:
         await db.close()
 
@@ -456,7 +527,6 @@ async def channel_rate_impl(
 # --------------------------------------------------------------------------- #
 # argparse adapter — thin dispatch over the *_impl functions
 # --------------------------------------------------------------------------- #
-
 
 def run(args: argparse.Namespace) -> None:
     """Dispatch the parsed argparse Namespace to the matching ``*_impl``.
@@ -522,6 +592,12 @@ def run(args: argparse.Namespace) -> None:
             useful=getattr(args, "useful", None),
             genre=getattr(args, "genre", None),
             limit=getattr(args, "limit", 50),
+        )
+    elif action == "usefulness":
+        coro = usefulness_impl(
+            config_path,
+            limit=getattr(args, "limit", 100),
+            as_json=getattr(args, "json", False),
         )
     elif action == "channel-rate":
         coro = channel_rate_impl(
@@ -715,10 +791,25 @@ def analytics_channel_rate(
         40, "--sample-size", help="Number of recent posts to sample for the judge (default: 40)"
     ),
 ) -> None:
-    """Run the LLM judge on a channel and upsert its rating (usefulness × genre)."""
+    """CALIBRATION ONLY: run the LLM judge on one channel (provider spend).
+
+    Прод-рейтинг считается без LLM (`analytics usefulness`); вердикты судьи —
+    ground truth для калибровки его порогов (сценарий 4, 22.10.26).
+    """
     apply_startup(ctx)
     run_async(
         channel_rate_impl(
             ctx.obj.config, channel_id=channel_id, model=model, sample_size=sample_size
         )
     )
+
+
+@analytics_app.command("usefulness")
+def analytics_usefulness(
+    ctx: typer.Context,
+    limit: int = typer.Option(100, "--limit", help="Max rows (default: 100)"),
+    as_json: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Content-usefulness rating per channel (water vs useful) — no LLM."""
+    apply_startup(ctx)
+    run_async(usefulness_impl(ctx.obj.config, limit=limit, as_json=as_json))

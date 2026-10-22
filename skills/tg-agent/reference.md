@@ -256,7 +256,21 @@ analytics top | content-types | hourly | summary | daily | pipeline-stats
 analytics trending-topics | trending-channels | velocity | peak-hours | calendar
 analytics trending-emojis | channel
 analytics channel-rate <channel_id> | channel-rating
+analytics usefulness [--limit 100] [--json]
 ```
+
+`analytics usefulness` — content rating per channel, «полезное vs вода»
+(scenario 4): deterministic heuristics over each channel's last 200 posts —
+`water_score` (stamp/filler density, Ильяхов «Пиши, сокращай»), authorship
+profile `own/quality_retell/rewrite` shares (same keys as the judge's
+`authorship` axis), and a tier (`useful`/`mixed`/`water`/`no_data`;
+`no_data` = fewer than 30 posts in the sample). Read-only, never
+calls an LLM. Tiers are calibration-grade labels for curation, not collection
+blocks (no is_filtered effect).
+
+`analytics channel-rate <channel_id>` — LLM judge (water/authorship rubric +
+useful/genre). CALIBRATION ONLY: costs provider spend; its verdicts are the
+ground truth that calibrates `usefulness` thresholds, never a production path.
 
 ## accounts, notifications, settings, misc
 

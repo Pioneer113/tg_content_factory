@@ -101,7 +101,7 @@ python -m tg_agent.main photo-loader dialogs|refresh|send|schedule-send|batch-cr
 python -m tg_agent.main dialogs list|refresh|resolve|leave|join|topics|cache-clear|cache-status|send|forward|edit-message|delete-message|create-channel|create-group|pin-message|react|unpin-message|download-media|transcribe|participants|edit-admin|edit-permissions|kick|broadcast-stats|archive|unarchive|mark-read|queue|queue status|queue cancel|queue clear-pending
 python -m tg_agent.main dm drafts list|create|approve|reject|send
 python -m tg_agent.main agent threads|thread-create|thread-delete|chat|thread-rename|thread-stop|messages|context|test-escaping|test-tools
-python -m tg_agent.main analytics top|content-types|hourly|summary|daily|pipeline-stats|trending-topics|trending-channels|velocity|peak-hours|calendar|trending-emojis|channel
+python -m tg_agent.main analytics top|content-types|hourly|summary|daily|pipeline-stats|trending-topics|trending-channels|velocity|peak-hours|calendar|trending-emojis|channel|channel-rating|channel-rate|usefulness
 python -m tg_agent.main provider list|add|delete|probe|refresh|test-all
 python -m tg_agent.main export json|csv|rss
 python -m tg_agent.main translate stats|detect|run|message

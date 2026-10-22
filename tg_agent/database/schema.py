@@ -229,6 +229,8 @@ CREATE TABLE IF NOT EXISTS channel_ratings (
     emoji_trash_score REAL,
     flag_count INTEGER DEFAULT 0,
     n_total INTEGER DEFAULT 0,
+    water_score REAL,
+    authorship_json TEXT,
     updated_at TEXT DEFAULT (datetime('now'))
 );
 

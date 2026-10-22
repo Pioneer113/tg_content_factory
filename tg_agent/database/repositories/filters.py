@@ -507,6 +507,85 @@ class FilterRepository:
         rows = await cur.fetchall()
         return {row["channel_id"]: (row["total"], row["fwd"] or 0) for row in rows}
 
+    async def fetch_recent_post_samples(
+        self,
+        channel_id: int | None = None,
+        *,
+        sample_size: int,
+    ) -> dict[int, list[tuple[str, bool]]]:
+        """Карта `channel_id → [(text, is_forward), …]` — сэмпл последних постов.
+
+        Сырьё для контент-рейтинга «полезное vs вода» (filters/usefulness.py) И
+        для сэмпла LLM-судьи (channel_analysis_service._sample_posts — единая
+        популяция постов, иначе калибровка порогов пойдёт не по тому
+        распределению): тексты + флаг форварда, последние N на канал.
+
+        Перканальный цикл мелких запросов (index seek по
+        sqlite_autoindex_messages_1 (channel_id, message_id) + LIMIT —
+        стоимость ∝ каналы × N): ROW_NUMBER() OVER здесь запрещён замером
+        #1138 (~267s против ~5s, см. комментарий над _SQL_UNIQUENESS_SAMPLED),
+        а FROM-подзапрос в SQLite не коррелирует с внешним channels (опыт
+        22.10.26: «no such column: ch.channel_id»).
+
+        Срез-потом-фильтр, как у соседних _*_SAMPLED-шаблонов: LIMIT берёт
+        последние N СЫРЫХ строк (чистый index walk), текст/message_kind
+        фильтруются в Python. Фильтр внутри среза — неограниченный проход
+        назад через медиа/сервисные сообщения канала: замерено на боевой БД
+        22.10.26 — 2:39 на отчёт против секунд после выноса.
+
+        Каналы делятся между несколькими read-only соединениями (тот же приём,
+        что fetch_maps_parallel): 1722 перканальных запроса последовательным
+        циклом ≈ 2:49 на боевой БД, параллельно — вчетверо меньше. `:memory:`
+        идёт по прямому пути на соединении БД.
+        """
+        list_sql = "SELECT channel_id FROM channels"
+        params: tuple = ()
+        if channel_id is not None:
+            list_sql += " WHERE channel_id = ?"
+            params = (channel_id,)
+        cur = await self._db.execute(list_sql, params)
+        targets = [row["channel_id"] for row in await cur.fetchall()]
+
+        post_sql = (
+            "SELECT text, forward_from_channel_id, message_kind FROM messages m "
+            "WHERE m.channel_id = ? ORDER BY m.message_id DESC LIMIT ?"
+        )
+
+        async def sample_on(
+            conn: "ReadConnection | aiosqlite.Connection", cids: list[int]
+        ) -> dict:
+            out: dict[int, list[tuple[str, bool]]] = {}
+            for cid in cids:
+                cur = await conn.execute(post_sql, (cid, sample_size))
+                rows = await cur.fetchall()
+                texts = [
+                    (row["text"], row["forward_from_channel_id"] is not None)
+                    for row in rows
+                    if row["text"]
+                    and (row["message_kind"] == "regular" or row["message_kind"] is None)
+                ]
+                if texts:
+                    out[cid] = texts
+            return out
+
+        workers = min(4, len(targets))
+        if not (self._can_parallel() and workers > 1):
+            return await sample_on(self._db, targets)
+
+        conns = [await self._open_readonly_conn() for _ in range(workers)]
+        try:
+            chunks = [targets[i::workers] for i in range(workers)]
+            parts = await asyncio.gather(
+                *(sample_on(conns[i], chunks[i]) for i in range(workers))
+            )
+        finally:
+            for conn in conns:
+                await conn.close()
+        samples: dict[int, list[tuple[str, bool]]] = {}
+        for part in parts:
+            samples.update(part)
+        return samples
+
     async def fetch_volume_map(self, channel_id: int | None = None) -> dict[int, int]:
         """Карта `channel_id → сообщений за последние 24ч` (#1571, high_volume).
 

@@ -9,6 +9,7 @@ import aiosqlite
 
 from tg_agent.database.pool import ReadConnection
 from tg_agent.models import ChannelRating
+from tg_agent.utils.json import safe_json_dumps, safe_json_loads_dict
 
 if TYPE_CHECKING:
     from tg_agent.database.facade import Database
@@ -30,6 +31,14 @@ class ChannelRatingsRepository:
 
     @staticmethod
     def _to_rating(row: aiosqlite.Row) -> ChannelRating:
+        # authorship_json — колонка миграции 22.10.26: на строке, прочитанной до
+        # ALTER (или в тестовой схеме без миграции), её нет — safe .keys() check.
+        keys = row.keys()
+        authorship = None
+        if "authorship_json" in keys and row["authorship_json"]:
+            parsed = safe_json_loads_dict(row["authorship_json"])
+            if parsed:
+                authorship = parsed
         return ChannelRating(
             channel_id=row["channel_id"],
             title=row["title"],
@@ -41,6 +50,8 @@ class ChannelRatingsRepository:
             emoji_trash_score=row["emoji_trash_score"],
             flag_count=row["flag_count"] or 0,
             n_total=row["n_total"] or 0,
+            water_score=row["water_score"] if "water_score" in keys else None,
+            authorship=authorship,
             updated_at=(
                 datetime.fromisoformat(row["updated_at"])
                 if row["updated_at"]
@@ -61,8 +72,9 @@ class ChannelRatingsRepository:
         await self._database.execute_write(
             "INSERT INTO channel_ratings "
             "(channel_id, title, username, useful, genre, confidence, reason, "
-            " emoji_trash_score, flag_count, n_total, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            " emoji_trash_score, flag_count, n_total, water_score, authorship_json, "
+            " updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(channel_id) DO UPDATE SET "
             "  title=excluded.title, username=excluded.username, useful=excluded.useful, "
             "  genre=excluded.genre, confidence=excluded.confidence, reason=excluded.reason, "
@@ -71,7 +83,8 @@ class ChannelRatingsRepository:
             # re-classification (which builds the row with flag_count=0) reset it
             # (review on #966). A future manual-flag op uses a dedicated method.
             "  flag_count=channel_ratings.flag_count, "
-            "  n_total=excluded.n_total, updated_at=excluded.updated_at",
+            "  n_total=excluded.n_total, water_score=excluded.water_score, "
+            "  authorship_json=excluded.authorship_json, updated_at=excluded.updated_at",
             (
                 rating.channel_id,
                 rating.title,
@@ -83,6 +96,8 @@ class ChannelRatingsRepository:
                 rating.emoji_trash_score,
                 rating.flag_count,
                 rating.n_total,
+                rating.water_score,
+                safe_json_dumps(rating.authorship) if rating.authorship else None,
                 now,
             ),
         )

@@ -11,7 +11,49 @@ from tg_agent.services.channel_analysis_service import ChannelAnalysisService
 def test_parse_verdict_valid_json():
     raw = '{"useful": "useful", "genre": "original", "confidence": 0.82, "reason": "хорошо"}'
     v = ChannelAnalysisService._parse_verdict(raw)
-    assert v == {"useful": "useful", "genre": "original", "confidence": 0.82, "reason": "хорошо"}
+    assert v == {
+        "useful": "useful",
+        "genre": "original",
+        "confidence": 0.82,
+        "reason": "хорошо",
+        # Оси калибровки отсутствуют в старом формате ответа → честная «нет данных».
+        "water_score": None,
+        "authorship": None,
+    }
+
+
+def test_parse_verdict_calibration_axes_valid():
+    raw = (
+        '{"useful": "useful", "genre": "original", "water_score": 12, '
+        '"authorship": {"own": 60, "quality_retell": 30, "rewrite": 10}, '
+        '"confidence": 0.8, "reason": "авторский"}'
+    )
+    v = ChannelAnalysisService._parse_verdict(raw)
+    assert v["water_score"] == 12.0
+    assert v["authorship"] == {"own": 60.0, "quality_retell": 30.0, "rewrite": 10.0}
+
+
+def test_parse_verdict_calibration_axes_missing_or_garbage():
+    # Мусор в осях → None (не поддельный ноль) — рубрика судьи деградировала.
+    raw = (
+        '{"useful": "useless", "genre": "ad", "water_score": "много", '
+        '"authorship": {"own": 60}, "confidence": 0.5, "reason": "r"}'
+    )
+    v = ChannelAnalysisService._parse_verdict(raw)
+    assert v["water_score"] is None
+    assert v["authorship"] is None
+
+    # Неполный authorship (не все три доли) → None целиком, не частичный словарь.
+    raw = '{"useful": "useless", "genre": "ad", "authorship": {"own": 60, "rewrite": 40}}'
+    v = ChannelAnalysisService._parse_verdict(raw)
+    assert v["authorship"] is None
+
+
+def test_parse_verdict_water_score_clamped():
+    v = ChannelAnalysisService._parse_verdict(
+        '{"useful": "useful", "genre": "original", "water_score": 250}'
+    )
+    assert v["water_score"] == 100.0
 
 
 def test_parse_verdict_text_fallback():
@@ -65,6 +107,54 @@ async def test_repo_upsert_get_list(db):
     assert only_ads and all(r.genre == "ad" for r in only_ads)
     only_useless = await repo.list_ratings(useful="useless", genre="ad", limit=1000)
     assert any(r.channel_id == 999001 for r in only_useless)
+
+
+async def test_repo_upsert_roundtrips_calibration_axes(db):
+    """water_score + authorship живут в строке и читаются обратно (22.10.26)."""
+    repo = db.repos.channel_ratings
+    await repo.upsert(
+        ChannelRating(
+            channel_id=999004,
+            useful="useful",
+            genre="original",
+            water_score=7.5,
+            authorship={"own": 70.0, "quality_retell": 20.0, "rewrite": 10.0},
+        )
+    )
+    got = await repo.get(999004)
+    assert got is not None
+    assert got.water_score == 7.5
+    assert got.authorship == {"own": 70.0, "quality_retell": 20.0, "rewrite": 10.0}
+
+    # Переклассификация без осей (старая рубрика) затирает их на NULL — последнее
+    # суждение судьи и есть актуальное.
+    await repo.upsert(
+        ChannelRating(channel_id=999004, useful="useless", genre="ad")
+    )
+    got = await repo.get(999004)
+    assert got is not None and got.water_score is None and got.authorship is None
+
+
+async def test_classify_channel_persists_calibration_axes(db):
+    """Расширенная рубрика доезжает до БД целиком (судья = калибровка, 22.10.26)."""
+
+    async def fake_provider(*, prompt, max_tokens=256, temperature=0.0, **kw):
+        assert "water_score" in prompt  # рубрика просит новые оси
+        return (
+            '{"useful": "useful", "genre": "original", "water_score": 8, '
+            '"authorship": {"own": 80, "quality_retell": 15, "rewrite": 5}, '
+            '"confidence": 0.9, "reason": "свой опыт"}'
+        )
+
+    svc = ChannelAnalysisService(db)
+    rating = await svc.classify_channel(999005, provider_callable=fake_provider, sample_size=5)
+    assert rating.water_score == 8.0
+    assert rating.authorship is not None and rating.authorship["own"] == 80.0
+
+    stored = await svc.get_rating(999005)
+    assert stored is not None
+    assert stored.water_score == 8.0
+    assert stored.authorship is not None and stored.authorship["rewrite"] == 5.0
 
 
 async def test_classify_channel_with_fake_provider(db):
@@ -240,7 +330,9 @@ async def test_classify_trusts_judge_but_emoji_score_is_independent(db):
     channel — this disagreement is exactly what a human reviewer triages
     (feedback_minimize_user_work). Without a second signal the false 'useful'
     would pass invisibly."""
-    # Seed an emoji-spam channel: long emoji-dense posts.
+    # Seed an emoji-spam channel: long emoji-dense posts. Сэмпл сэмплится
+    # channels-driven — нужен row в channels, иначе сообщения не видны.
+    await db.execute_write("INSERT OR IGNORE INTO channels (channel_id) VALUES (990601)")
     spam_post = "🔥🚀💰" * 60 + " купи срочно успей "
     for mid in range(1, 8):
         await db.execute_write(

@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 from tg_agent.filters.criteria import (
     AUTO_FEED_MIN_MESSAGES,
+    AUTO_FEED_SHORT_TEXT,
     AUTO_FEED_THRESHOLD,
     CHAT_NOISE_THRESHOLD,
     FORWARD_SHARE_MIN_MESSAGES,
@@ -39,7 +40,6 @@ MIN_SAMPLE = AUTO_FEED_MIN_MESSAGES
 UNIQUENESS_PREFIX = 100
 #: «Короткий пост» для chat_noise — тот же литерал, что в SQL-метрике.
 CHAT_NOISE_SHORT_TEXT = 10
-AUTO_FEED_SHORT_TEXT = 200
 
 
 @dataclass
