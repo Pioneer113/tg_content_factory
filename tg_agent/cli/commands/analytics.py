@@ -501,6 +501,10 @@ async def usefulness_impl(config_path: str, *, limit: int, as_json: bool) -> Non
                 }
             )
         rows.sort(key=lambda r: (TIER_ORDER[r["tier"]], -r["water_score"], -r["rewrite_share"]))
+        # Clamp like the sibling impls (top_impl, channel_rating_impl): a
+        # negative --limit must not become a negative slice index —
+        # rows[:-n] silently drops the tail of the report.
+        limit = max(1, min(limit, len(rows)))
         rows = rows[:limit]
 
         if as_json:
