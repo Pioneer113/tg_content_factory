@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import struct
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -610,6 +611,135 @@ async def test_collect_all_channels_unknown_tl_type_warns_not_error(db, caplog):
         for r in caplog.records
     )
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+# --- Schema-drift account rotation (#1471) ---
+
+
+@pytest.mark.parametrize(
+    "constructor_id",
+    [0x1C32B11C, 0x31774388, 0x48A30254, 0x263D7C26],
+)
+def test_unknown_tl_constructor_fails_parse_and_tail_is_unsalvageable(constructor_id):
+    """#1471 failure mode pinned at the deserialization layer.
+
+    A constructor the installed Telethon schema does not know aborts
+    ``tgread_object`` for the WHOLE response. The exception carries the unread
+    tail, but TL payloads are not self-delimiting: without the schema there is
+    no sound way to know where the unknown object ends, so the tail cannot be
+    recovered by position alone — tolerance has to happen at the request layer.
+    """
+    from telethon.extensions import BinaryReader
+    from telethon.tl.alltlobjects import tlobjects
+
+    payload = struct.pack("<I", constructor_id) + b"\xde\xad\xbe\xef"
+    assert constructor_id not in tlobjects
+
+    with pytest.raises(TypeNotFoundError) as exc_info:
+        BinaryReader(payload).tgread_object()
+
+    assert exc_info.value.invalid_constructor_id == constructor_id
+    assert exc_info.value.remaining == payload
+
+
+@pytest.mark.anyio
+async def test_collect_channel_rotates_accounts_on_resolve_schema_drift(db):
+    """#1471: a getChannels-shaped response with an unknown TL constructor fails
+    only on the frontend servers that already rolled the new schema out. The
+    collector must rotate the channel to another account instead of losing the
+    whole pass."""
+    ch = Channel(channel_id=-100175, title="DriftRotate", username="driftrotate", last_collected_id=5)
+    ch_id = await db.add_channel(ch)
+    await db.update_channel_last_id(ch.channel_id, 5)
+    stored = await db.get_channel_by_pk(ch_id)
+    assert stored is not None
+
+    client1 = FakeTelethonClient(
+        input_entity_resolver=lambda _arg: TypeNotFoundError(0x1C32B11C, b"\x1c\xb12\x1c")
+    )
+    client2 = FakeTelethonClient(
+        entity_resolver=lambda _arg: SimpleNamespace(),
+        iter_messages_factory=lambda *a, **kw: _AsyncIterMessages(
+            [_make_mock_message(101, text="msg 101")]
+        ),
+    )
+    pool = make_mock_pool(
+        get_available_client=AsyncMock(side_effect=[(client1, "+70001"), (client2, "+70002")])
+    )
+    collector = Collector(pool, db, SchedulerConfig(delay_between_requests_sec=0))
+
+    count = await collector._collect_channel(stored)
+
+    assert count == 1
+    assert pool.get_available_client.await_count == 2
+    # The drifted phone must be excluded from the rotation target.
+    assert pool.get_available_client.await_args_list[1].kwargs["exclude_phones"] == {"+70001"}
+    updated = await db.get_channel_by_channel_id(stored.channel_id)
+    assert updated is not None
+    assert updated.last_collected_id == 101
+
+
+@pytest.mark.anyio
+async def test_collect_channel_rotates_accounts_on_mid_stream_schema_drift(db):
+    """#1471: a message batch whose chats vector embeds an unknown TL constructor
+    kills that batch mid-stream. Messages flushed before the failure stay
+    persisted; the collector rotates and keeps collecting from another account."""
+    ch = Channel(channel_id=-100176, title="StreamDrift", username="streamdrift", last_collected_id=5)
+    ch_id = await db.add_channel(ch)
+    await db.update_channel_last_id(ch.channel_id, 5)
+    stored = await db.get_channel_by_pk(ch_id)
+    assert stored is not None
+
+    async def _drift_generator():
+        yield _make_mock_message(6, text="msg 6")
+        raise TypeNotFoundError(0x1C32B11C, b"\x1c\xb12\x1c")
+
+    client1 = FakeTelethonClient(entity_resolver=lambda _arg: SimpleNamespace())
+    client1.iter_messages = MagicMock(return_value=_drift_generator())
+    client2 = FakeTelethonClient(entity_resolver=lambda _arg: SimpleNamespace())
+    client2.iter_messages = MagicMock(
+        return_value=_AsyncIterMessages([_make_mock_message(7, text="msg 7")])
+    )
+    pool = make_mock_pool(
+        get_available_client=AsyncMock(side_effect=[(client1, "+70001"), (client2, "+70002")])
+    )
+    collector = Collector(pool, db, SchedulerConfig(delay_between_requests_sec=0))
+
+    count = await collector._collect_channel(stored)
+
+    assert count == 2
+    updated = await db.get_channel_by_channel_id(stored.channel_id)
+    assert updated is not None
+    assert updated.last_collected_id == 7
+
+
+@pytest.mark.anyio
+async def test_collect_channel_raises_when_all_accounts_hit_schema_drift(db):
+    """#1471: rotation is bounded — once every account failed with schema drift
+    the original TypeNotFoundError propagates and the existing drift handling
+    (warning note, queue retry pass) takes over unchanged."""
+    ch = Channel(channel_id=-100177, title="DriftExhausted", username="driftexhausted", last_collected_id=5)
+    ch_id = await db.add_channel(ch)
+    await db.update_channel_last_id(ch.channel_id, 5)
+    stored = await db.get_channel_by_pk(ch_id)
+    assert stored is not None
+
+    client1 = FakeTelethonClient(
+        input_entity_resolver=lambda _arg: TypeNotFoundError(0x1C32B11C, b"\x1c\xb12\x1c")
+    )
+    client2 = FakeTelethonClient(
+        input_entity_resolver=lambda _arg: TypeNotFoundError(0x31774388, b"\x88Cw1+@")
+    )
+    pool = make_mock_pool(
+        get_available_client=AsyncMock(side_effect=[(client1, "+70001"), (client2, "+70002")]),
+        has_rotatable_resolve_phone=AsyncMock(side_effect=[True, False]),
+    )
+    collector = Collector(pool, db, SchedulerConfig(delay_between_requests_sec=0))
+
+    with pytest.raises(TypeNotFoundError):
+        await collector._collect_channel(stored)
+
+    assert pool.get_available_client.await_count == 2
 
 
 @pytest.mark.anyio
