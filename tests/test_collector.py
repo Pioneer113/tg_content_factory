@@ -745,6 +745,50 @@ async def test_collect_channel_raises_when_all_accounts_hit_schema_drift(db):
 
 
 @pytest.mark.anyio
+async def test_collect_channel_no_username_drift_on_preferred_phone_terminates(db):
+    """#1471 review: a no-username channel ignores the rotation exclusion —
+    _acquire_collection_client keeps handing back the preferred phone, so the
+    already-drifted guard is the only loop terminator. Pin the contract: the
+    pass repeats on the preferred phone exactly once, then the original
+    TypeNotFoundError propagates instead of looping while a second account
+    stays free."""
+    ch = Channel(
+        channel_id=-100178,
+        title="NoUsernameDrift",
+        preferred_phone="+70001",
+        last_collected_id=5,
+    )
+    ch_id = await db.add_channel(ch)
+    # add_channel's UPSERT does not persist preferred_phone — set it explicitly.
+    await db.update_channel_preferred_phone(ch.channel_id, "+70001")
+    await db.update_channel_last_id(ch.channel_id, 5)
+    stored = await db.get_channel_by_pk(ch_id)
+    assert stored is not None
+
+    async def _drift_iter():
+        raise TypeNotFoundError(0x1C32B11C, b"\x1c\xb12\x1c")
+        yield  # pragma: no cover
+
+    client1 = FakeTelethonClient()
+    client1.iter_messages = MagicMock(side_effect=lambda *a, **kw: _drift_iter())
+    pool = make_mock_pool(
+        clients={"+70001": object(), "+70002": object()},
+        get_client_by_phone=AsyncMock(return_value=(client1, "+70001")),
+        get_available_client=AsyncMock(return_value=(client1, "+70001")),
+        has_rotatable_resolve_phone=AsyncMock(return_value=True),
+    )
+    collector = Collector(pool, db, SchedulerConfig(delay_between_requests_sec=0))
+
+    with pytest.raises(TypeNotFoundError):
+        await collector._collect_channel(stored)
+
+    # One repeat on the same preferred phone, no fall-through to the pool's
+    # free second account, then the guard re-raises.
+    assert pool.get_client_by_phone.await_count == 2
+    pool.get_available_client.assert_not_awaited()
+
+
+@pytest.mark.anyio
 async def test_collect_all_channels_continues_after_mid_run_resolve_flood(db):
     """#552/#790: when the FIRST channel of a run triggers a long resolve flood
     mid-run, the run must NOT abort. The backoff applies only to the flooded
