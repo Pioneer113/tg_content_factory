@@ -664,7 +664,8 @@ async def test_collect_channel_rotates_accounts_on_resolve_schema_drift(db):
         ),
     )
     pool = make_mock_pool(
-        get_available_client=AsyncMock(side_effect=[(client1, "+70001"), (client2, "+70002")])
+        get_available_client=AsyncMock(side_effect=[(client1, "+70001"), (client2, "+70002")]),
+        has_rotatable_resolve_phone=AsyncMock(return_value=True),
     )
     collector = Collector(pool, db, SchedulerConfig(delay_between_requests_sec=0))
 
@@ -701,7 +702,8 @@ async def test_collect_channel_rotates_accounts_on_mid_stream_schema_drift(db):
         return_value=_AsyncIterMessages([_make_mock_message(7, text="msg 7")])
     )
     pool = make_mock_pool(
-        get_available_client=AsyncMock(side_effect=[(client1, "+70001"), (client2, "+70002")])
+        get_available_client=AsyncMock(side_effect=[(client1, "+70001"), (client2, "+70002")]),
+        has_rotatable_resolve_phone=AsyncMock(return_value=True),
     )
     collector = Collector(pool, db, SchedulerConfig(delay_between_requests_sec=0))
 
