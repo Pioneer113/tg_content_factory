@@ -394,7 +394,10 @@ async def channel_rating_impl(
 async def channel_rate_impl(
     config_path: str, *, channel_id: int, model: str | None, sample_size: int
 ) -> None:
-    """Run the LLM judge on a channel and upsert its rating (usefulness × genre)."""
+    """Run the LLM judge on one channel and upsert its rating (usefulness × genre).
+
+    Calibration-only: the production usefulness report never calls the LLM.
+    """
     config, db = await runtime.init_db(config_path)
     try:
         # Write path (#994): run the LLM judge for one channel and upsert
