@@ -10,7 +10,12 @@ from datetime import datetime, timedelta, timezone
 from inspect import isawaitable
 from typing import TYPE_CHECKING, cast
 
-from telethon.errors import FloodWaitError, UsernameInvalidError, UsernameNotOccupiedError
+from telethon.errors import (
+    FloodWaitError,
+    TypeNotFoundError,
+    UsernameInvalidError,
+    UsernameNotOccupiedError,
+)
 from telethon.tl.types import PeerChannel
 from telethon_floodgate import (
     GLOBAL_RESOLVE_BACKOFF_THRESHOLD_SEC,
@@ -741,6 +746,9 @@ class CollectionMixin:
         # the channel to a different account instead of deferring it while a
         # free account exists (#790).
         attempted_resolve_phones: set[str] = set()
+        # Phones that already hit a TL schema-drift parse failure for this
+        # channel in this pass (#1471) — bounds the account rotation below.
+        schema_drift_phones: set[str] = set()
 
         while True:
             if self._is_collection_cancelled(cancel_event):
@@ -764,6 +772,7 @@ class CollectionMixin:
             persisted_max_msg_id = min_id
             flood_wait_sec: int | None = None
             flood_wait_operation: str | None = None
+            schema_drift_exc: TypeNotFoundError | None = None
             stop_due_to_persistence_error = False
             stream_idle_timeout = False
             stream_outcome = _StreamOutcome()
@@ -924,6 +933,30 @@ class CollectionMixin:
                 if channel.id:
                     await self._db.set_channel_active(channel.id, False)
                 raise
+            except TypeNotFoundError as exc:
+                # #1471: the server serialized a TL object this Telethon schema
+                # cannot parse (SchemaDriftError after the #1549 translation).
+                # The response bytes are not self-delimiting, so nothing local
+                # can salvage that request — but Telegram rolls the new types
+                # out unevenly across its frontend servers, so the same channel
+                # usually parses on another account. Rotate once per account;
+                # when none is left, re-raise so the existing drift handling
+                # (warning note, queue retry pass) takes over unchanged.
+                if phone in schema_drift_phones:
+                    raise
+                schema_drift_phones.add(phone)
+                attempted_resolve_phones.add(phone)
+                if not await self._can_rotate_resolve(attempted_resolve_phones):
+                    raise
+                schema_drift_exc = exc
+                logger.warning(
+                    "Channel %d (%s): Telegram schema newer than Telethon on %s (%s) "
+                    "— rotating to another account",
+                    channel_id,
+                    channel_log_name,
+                    mask_phone(phone),
+                    unknown_tl_type_note(exc) or "unknown TL type",
+                )
             except HandledFloodWaitError as exc:
                 flood_wait_sec = exc.info.wait_seconds
                 flood_wait_operation = flood_wait_operation or exc.info.operation
@@ -962,6 +995,18 @@ class CollectionMixin:
                 # Idle timeout and persistence errors both stop this pass;
                 # message data is never lost (the finally flushed + advanced).
                 return total_collected + collected_count
+
+            if schema_drift_exc is not None:
+                # Rotate AFTER the finally: the leftover flush just advanced
+                # last_collected_id past everything persisted this pass, so
+                # re-reading the channel keeps the retry min_id exact (same
+                # pattern as the FloodWait rotation below).
+                total_collected += collected_count
+                drifted = await self._db.get_channel_by_channel_id(channel_id)
+                if drifted is None:
+                    raise schema_drift_exc
+                channel = drifted
+                continue
 
             # Handle FloodWait AFTER finally has flushed progress.
             # Rotate regular collection FloodWaits to another account
