@@ -1,0 +1,26 @@
+{
+  "tag": "v0.2.4.2",
+  "title": "Analyzer in Seconds, DM Cycle & Content Curation",
+  "highlights": [
+    {
+      "title": "Channel filtering: fast analyzer, spam waves closed",
+      "description": "An incremental text-stats cache makes a full `filter analyze` run in seconds instead of five 27GB table scans (#1679, #1680); the P95 `high_volume` flag now blocks collection and simultaneous cross-channel copies count as dupes (#1571, #1677); `low_engagement` flags dead channels (views <10% of subscribers) (#1550); the «авторский контент» whitelist mode and a sticky manual flag give humans the final word (#1490, #1499); `channel probe` shows a live quality card before adding a channel (#1622); the approval queue gates new channels (provenance 5.1, #1654); human-approved channels are invisible to the analyzer (#1312); and `analytics usefulness` rates «полезное vs вода» with an optional LLM-judge calibration axis (#1658, #1663)."
+    },
+    {
+      "title": "Search and digests",
+      "description": "Batch search runs several keywords in one call (#1668); date windows plus json/csv output anchor the structured weekly-digest workflow (#1584); date bounds are validated and normalized to UTC with length bounds included (#1593, #1666, #1673); forum messages carry `topic_title` next to `topic_id` (#1552); CSV keeps the full message text (#1617)."
+    },
+    {
+      "title": "DM cycle and dormant-contact pings",
+      "description": "The full incoming-DM flow lands: a readability journal (#1579), reply drafts with an atomic claim against double-send (#1429), catch-up settings with a live `dm status` (#1581), and agent tools for journal/drafts/approve/archive (#1580); friendly pings re-engage dormant 1:1 dialogs on a decaying schedule (#1415); and voice/video notes transcribe via groq/telegram/openai/local whisper (#1561)."
+    },
+    {
+      "title": "Security and resilience",
+      "description": "An anti-prompt-injection sanitizer guards LLM prompts from Telegram content (#1546); a cross-process session lock prevents AuthKeyDuplicatedError (#1548); accounts rotate on TL schema-drift parse failures instead of failing the pass (#1471); the embeddings API key is encrypted at rest and secrets are masked in CLI output, including `tg_api_hash` (#1597, #1664); stranded interop claims recover via lease/TTL (#1468); confirmation prompts survive EOF/Ctrl-C (#1590); and the errors-exit-non-zero contract is enforced repo-wide (#1655, #1610)."
+    },
+    {
+      "title": "Ops, packaging and CI",
+      "description": "Scheduler `trigger`/`task-cancel`/`clear-pending` become live RPC against the running worker (#1568), `queue-status` reports measured ETA (#1562); the tg-shared package scaffold lands with a storage Protocol boundary (#1420); the wheel ships the `tg_agent` package and `tg-agent --version` reports the right name (#1448); a detector fails fast on stale editable installs (#1649); CI test shards get a measured 10-minute budget (#1670); and the full pytest run gets faster with isolation fixed (#1647) — plus ~40 targeted fixes across CLI, pipelines, analytics and filters."
+    }
+  ]
+}
