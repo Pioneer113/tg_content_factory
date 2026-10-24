@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from dataclasses import dataclass
@@ -138,6 +139,44 @@ class ChannelAnalyzer:
         skip_cross_dupe: bool = False,
         sample_size: int | None = None,
     ) -> tuple:
+        if not skip_cross_dupe and sample_size is None and await self._repo.stats_populated():
+            # Быстрый путь (#1679): четыре текст-метрики из накопительного
+            # справочника, cross-dupe и окна — живым SQL параллельно (gather),
+            # как в полной версии. Cross-dupe намеренно не из справочника:
+            # его вариант упирается в три сортировки 22M префиксов и на живой
+            # БД медленнее оригинала (замер 24.10: >40 мин против 944s);
+            # секундный cross-dupe — тир-2, отдельный PR.
+            logger.info("filter/analyze: text maps from stats cache (#1679)")
+            (
+                uniqueness_map,
+                short_map,
+                cyrillic_map,
+                auto_feed_map,
+            ) = await self._repo.fetch_text_stats_maps_fast(channel_id)
+            (
+                cross_dupe_map,
+                engagement_map,
+                forward_map,
+                volume_map,
+                subscriber_map,
+            ) = await asyncio.gather(
+                self._repo.fetch_cross_dupe_map(channel_id),
+                self._repo.fetch_engagement_map(channel_id),
+                self._repo.fetch_forward_share_map(channel_id),
+                self._repo.fetch_volume_map(channel_id),
+                self._repo.fetch_subscriber_map(channel_id),
+            )
+            return (
+                uniqueness_map,
+                subscriber_map,
+                short_map,
+                cross_dupe_map,
+                cyrillic_map,
+                auto_feed_map,
+                engagement_map,
+                forward_map,
+                volume_map,
+            )
         if self._repo._can_parallel():
             logger.info(
                 "filter/analyze: all maps — started (parallel%s)",
