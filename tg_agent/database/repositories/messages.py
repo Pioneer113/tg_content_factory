@@ -1230,7 +1230,9 @@ class MessagesRepository:
         fts_query, extra_conds, extra_params = self._build_sq_parts(sq)
         where_parts = [
             self._BASE_FILTER,
-            "m.date >= datetime('now', ?)",
+            # ISO-'T' boundary to match the stored dates (#1665); datetime('now')
+            # emits a space separator and wrongly includes boundary-date rows.
+            "m.date >= strftime('%Y-%m-%dT%H:%M:%f+00:00', 'now', ?)",
             *extra_conds,
         ]
         where_clause = " AND ".join(where_parts)
@@ -1275,7 +1277,8 @@ class MessagesRepository:
                 extra_conds, extra_params = self._build_extra_conditions(sq)
                 where_parts = [
                     "(c.is_filtered IS NULL OR c.is_filtered = 0)",
-                    "m.date >= datetime('now', ?)",
+                    # ISO-'T' boundary to match the stored dates (#1665).
+                    "m.date >= strftime('%Y-%m-%dT%H:%M:%f+00:00', 'now', ?)",
                 ]
                 where_parts.extend(extra_conds)
                 where_clause = " AND ".join(where_parts)
@@ -1819,7 +1822,10 @@ class MessagesRepository:
         if days is not None:
             cur = await self._db.execute(
                 "SELECT COUNT(*) AS cnt FROM messages "
-                "WHERE channel_id = ? AND date >= datetime('now', ?)",
+                # strftime with the same ISO-'T' format as the stored dates;
+                # datetime('now') emits a space separator, so lexicographic
+                # comparison wrongly included boundary-date messages (#1665).
+                "WHERE channel_id = ? AND date >= strftime('%Y-%m-%dT%H:%M:%f+00:00', 'now', ?)",
                 (channel_id, f"-{days} days"),
             )
         else:
