@@ -149,3 +149,57 @@ def test_dialogs_queue_status_still_works_next_to_the_daemon(cli_env, daemon_liv
     assert "Total: 0" in capsys.readouterr().out
     auth_cls.assert_not_called()
     pool_cls.assert_not_called()
+
+
+_REFUSAL_RUNNER = """
+import sys
+from tg_agent.cli import worker_handoff
+worker_handoff.serve_is_running = lambda _config: True
+worker_handoff.running_daemon_pid = lambda _config: 4242
+sys.argv = ["tg-agent", "--config", sys.argv[1], *sys.argv[2:]]
+from tg_agent.cli.main import main
+main()
+"""
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["dialogs", "list"],
+        ["notification", "status"],
+        ["search", "query", "--mode", "telegram"],
+        ["collect", "sample", "--channel-id", "1"],
+        ["photo-loader", "dialogs", "--phone", "+10000000001"],
+    ],
+    ids=["dialogs-list", "notification-status", "search-telegram", "collect-sample", "photo-loader"],
+)
+def test_refused_command_process_exits(argv, tmp_path):
+    """A refused command must close its DB and exit, not hang (#1662 review).
+
+    aiosqlite runs each connection on a non-daemon thread: a ``Database`` left
+    open when ``init_pool`` raises keeps the interpreter alive after ``main()``
+    returns. Only a real subprocess shows that, so this runs one per command.
+    """
+    import os
+    import subprocess
+    import sys
+
+    config = tmp_path / "config.yaml"
+    config.write_text(f"database:\n  path: {tmp_path / 'cli.db'}\n", encoding="utf-8")
+    env = {**os.environ, "TG_AGENT_DATA_DIR": str(tmp_path / "data")}
+    env.pop(worker_handoff.DIRECT_ENV_VAR, None)
+
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-c", _REFUSAL_RUNNER, str(config), *argv],
+            cwd=tmp_path,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired as exc:
+        pytest.fail(f"{argv} did not exit after the refusal (open DB keeps the process alive): {exc}")
+
+    assert proc.returncode == 1, proc.stderr
+    assert "owns the Telegram sessions" in proc.stderr
