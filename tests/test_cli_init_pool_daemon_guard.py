@@ -168,7 +168,7 @@ main()
         ["dialogs", "list"],
         ["notification", "status"],
         ["search", "query", "--mode", "telegram"],
-        ["collect", "sample", "--channel-id", "1"],
+        ["collect", "sample", "1"],
         ["photo-loader", "dialogs", "--phone", "+10000000001"],
     ],
     ids=["dialogs-list", "notification-status", "search-telegram", "collect-sample", "photo-loader"],

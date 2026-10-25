@@ -163,7 +163,13 @@ async def collect_sample_impl(config_path: str, *, channel_id: int, limit: int =
     points). Driven through ``run_async`` by its callers.
     """
     config, db = await runtime.init_db(config_path)
-    _, pool = await runtime.init_pool(config, db)
+    try:
+        _, pool = await runtime.init_pool(config, db)
+    except BaseException:
+        # A refusal (#1521) must still close the DB: aiosqlite's non-daemon
+        # thread would keep the process alive.
+        await db.close()
+        raise
     try:
         if not pool.clients:
             logging.error("No connected accounts. Run 'serve' and add accounts via web UI.")

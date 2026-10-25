@@ -1324,9 +1324,15 @@ async def _dispatch(
                 await db.close()
             return
 
-    _, pool = await runtime_mod.init_pool(
-        config, db, allow_live_daemon=bool(getattr(args, "direct", False))
-    )
+    try:
+        _, pool = await runtime_mod.init_pool(
+            config, db, allow_live_daemon=bool(getattr(args, "direct", False))
+        )
+    except BaseException:
+        # A refusal (#1521) must still close the DB: aiosqlite's non-daemon
+        # thread would keep the process alive.
+        await db.close()
+        raise
     try:
         entry = _DIALOGS_HANDLERS.get(args.dialogs_action)
         if entry is not None:

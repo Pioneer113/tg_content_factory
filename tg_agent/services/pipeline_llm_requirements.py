@@ -20,6 +20,28 @@ _PUBLISH_NODE_TYPES: frozenset[PipelineNodeType] = frozenset(
     {PipelineNodeType.PUBLISH, PipelineNodeType.LLM_GENERATE}
 )
 
+# Nodes whose handlers act on Telegram live and raise ``no_client_pool``
+# without a pool (pipeline_nodes/handlers.py), failing the whole run.
+_TELEGRAM_ACTION_NODE_TYPES: frozenset[PipelineNodeType] = frozenset(
+    {
+        PipelineNodeType.REACT,
+        PipelineNodeType.FORWARD,
+        PipelineNodeType.DELETE_MESSAGE,
+        PipelineNodeType.EDIT_MESSAGE,
+    }
+)
+
+
+def pipeline_telegram_action_nodes(pipeline: ContentPipeline) -> list[PipelineNodeType]:
+    """Telegram-action node types in ``pipeline``'s DAG that need a live client pool.
+
+    Empty for legacy (non-DAG) pipelines: their generation never touches Telegram.
+    """
+    if pipeline.pipeline_json is None:
+        return []
+    found = {node.type for node in pipeline.pipeline_json.nodes} & _TELEGRAM_ACTION_NODE_TYPES
+    return sorted(found)
+
 
 def pipeline_needs_llm(pipeline: ContentPipeline) -> bool:
     """Return True if running ``pipeline`` requires a registered LLM provider.

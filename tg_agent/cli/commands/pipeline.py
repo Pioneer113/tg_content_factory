@@ -24,7 +24,10 @@ from tg_agent.models import PipelineNode, PipelineNodeType
 from tg_agent.search.engine import SearchEngine
 from tg_agent.services.content_generation_service import ContentGenerationService
 from tg_agent.services.pipeline_filters import normalize_filter_config
-from tg_agent.services.pipeline_llm_requirements import pipeline_needs_llm
+from tg_agent.services.pipeline_llm_requirements import (
+    pipeline_needs_llm,
+    pipeline_telegram_action_nodes,
+)
 from tg_agent.services.pipeline_refs import parse_pipeline_target_refs
 from tg_agent.services.pipeline_result import result_kind_label
 from tg_agent.services.pipeline_service import (
@@ -508,22 +511,33 @@ async def _pipeline_delete(args: argparse.Namespace, db, config, svc: PipelineSe
 
 
 
-async def _generation_pool(config, db) -> ClientPool | None:
+async def _generation_pool(config, db, pipeline) -> ClientPool | None:
     """Telegram pool for generation, or ``None`` while a daemon owns the sessions.
 
-    Generation needs Telegram only for Telegram-side nodes, which already skip
-    without a pool, so next to a live daemon it runs pool-less instead of being
-    refused by ``init_pool`` (#1521).
+    Next to a live daemon (#1521) a pipeline without Telegram-action nodes runs
+    pool-less: its generation reads only the DB and the LLM. A pipeline with
+    react / forward / delete_message / edit_message nodes is refused up front
+    instead: those handlers raise ``no_client_pool`` without a pool, so the run
+    would fail after spending the LLM call.
     """
-    if not worker_handoff.direct_requested() and worker_handoff.serve_is_running(config):
-        print(
-            "A running tg-agent daemon owns the Telegram sessions: generating without "
-            "Telegram access (Telegram-side nodes are skipped).",
-            file=sys.stderr,
+    if worker_handoff.direct_requested() or not worker_handoff.serve_is_running(config):
+        _, pool = await runtime.init_pool(config, db)
+        return pool
+    action_nodes = pipeline_telegram_action_nodes(pipeline)
+    if action_nodes:
+        raise runtime.daemon_owns_sessions_error(
+            config,
+            why=(
+                f"this pipeline has Telegram-action nodes ({', '.join(action_nodes)}) "
+                "that need their own connection"
+            ),
         )
-        return None
-    _, pool = await runtime.init_pool(config, db)
-    return pool
+    print(
+        "A running tg-agent daemon owns the Telegram sessions: generating without "
+        "Telegram access (this pipeline has no Telegram-action nodes).",
+        file=sys.stderr,
+    )
+    return None
 
 
 async def _pipeline_run(args: argparse.Namespace, db, config, svc: PipelineService) -> ClientPool | None:
@@ -546,7 +560,7 @@ async def _pipeline_run(args: argparse.Namespace, db, config, svc: PipelineServi
         )
         return None
 
-    pool = await _generation_pool(config, db)
+    pool = await _generation_pool(config, db, pipeline)
     client_pool = pool
     gen_svc = ContentGenerationService(
         db,
@@ -610,7 +624,7 @@ async def _pipeline_generate(args: argparse.Namespace, db, config, svc: Pipeline
             "env var (e.g. OPENAI_API_KEY). Non-LLM pipelines run without a provider."
         )
         return None
-    pool = await _generation_pool(config, db)
+    pool = await _generation_pool(config, db, pipeline)
     client_pool = pool
     agent_manager = None
     if getattr(pipeline.generation_backend, "value", pipeline.generation_backend) == "deep_agents":

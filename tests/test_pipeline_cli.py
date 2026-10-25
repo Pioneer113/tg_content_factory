@@ -762,9 +762,9 @@ def test_pipeline_run_next_to_live_daemon_generates_without_a_pool(
 ):
     """With a live daemon, ``pipeline run`` generates pool-less instead of competing (#1521).
 
-    The daemon owns the Telegram sessions; generation needs them only for
-    Telegram-side nodes (which skip without a pool), so no ``ClientPool`` may be
-    built and the run must still complete.
+    The daemon owns the Telegram sessions; a pipeline without Telegram-action
+    nodes needs none of them, so no ``ClientPool`` may be built and the run must
+    still complete.
     """
     db_path = str(tmp_path / "cli_pipeline_run_daemon.db")
     db = Database(db_path, session_encryption_secret="test-session-encryption-key")
@@ -826,6 +826,78 @@ def test_pipeline_run_next_to_live_daemon_generates_without_a_pool(
     captured = capsys.readouterr()
     assert "Generation completed" in captured.out
     assert "owns the Telegram sessions" in captured.err
+
+
+@pytest.mark.parametrize("action", ["run", "generate"])
+def test_pipeline_with_telegram_action_nodes_is_refused_next_to_live_daemon(
+    tmp_path, cli_init_patch, monkeypatch, action
+):
+    """React/forward/delete/edit nodes raise ``no_client_pool`` without a pool (#1662 review).
+
+    Running such a pipeline pool-less would fail after spending the LLM call, so
+    next to a live daemon it is refused up front: no pool, no generation.
+    """
+    from tg_agent.cli import runtime
+
+    db_path = str(tmp_path / f"cli_pipeline_{action}_daemon_react.db")
+    db = Database(db_path, session_encryption_secret="test-session-encryption-key")
+    asyncio.run(db.initialize())
+    _add_pipeline_prereqs(db)
+    pipeline_id = asyncio.run(
+        db.repos.content_pipelines.add(
+            pipeline=ContentPipeline(
+                name="Reaction Pipeline",
+                prompt_template=".",
+                pipeline_json=PipelineGraph(
+                    nodes=[
+                        PipelineNode(id="react", type=PipelineNodeType.REACT, name="React", config={}),
+                        PipelineNode(
+                            id="fwd", type=PipelineNodeType.FORWARD, name="Forward", config={}
+                        ),
+                    ],
+                    edges=[],
+                ),
+                publish_mode=PipelinePublishMode.MODERATED,
+            ),
+            source_channel_ids=[1001],
+            targets=[],
+        )
+    )
+    run_generation = AsyncMock()
+
+    monkeypatch.setattr("tg_agent.cli.worker_handoff.serve_is_running", lambda _config: True)
+    monkeypatch.setattr("tg_agent.cli.worker_handoff.running_daemon_pid", lambda _config: 4242)
+    monkeypatch.delenv("TGCF_CLI_DIRECT", raising=False)
+    with (
+        cli_init_patch(db, *_PIPELINE_INIT_DB_TARGETS),
+        patch(
+            "tg_agent.services.content_generation_service.ContentGenerationService._run_generation",
+            run_generation,
+        ),
+        patch("tg_agent.services.provider_service.RuntimeProviderRegistry.has_providers", return_value=True),
+        patch("tg_agent.cli.runtime.ClientPool") as pool_cls,
+    ):
+        from tg_agent.cli.commands.pipeline import run
+
+        with pytest.raises(runtime.DaemonOwnsSessionsError) as excinfo:
+            run(
+                _ns(
+                    pipeline_action=action,
+                    id=pipeline_id,
+                    limit=10,
+                    max_tokens=256,
+                    temperature=0.7,
+                    model=None,
+                    preview=False,
+                    publish=False,
+                )
+            )
+
+    message = excinfo.value.format_message()
+    assert "PID 4242" in message
+    assert "forward, react" in message
+    pool_cls.assert_not_called()
+    run_generation.assert_not_called()
 
 
 def test_pipeline_run_not_found(tmp_path, cli_init_patch, capsys):

@@ -99,9 +99,10 @@ queue equivalent (`messages read --live`, `dialogs read`, `dialogs download-medi
 (PID N) owns the Telegram sessions …`) — no Telegram connection is attempted: Telegram
 kills sessions seen from two connections at once. Stop the daemon (`tg-agent stop`) for
 those, then `tg-agent restart`. `pipeline run`/`generate` keep working next to the daemon
-but without Telegram access (Telegram-side nodes are skipped); `dialogs queue …` and
-`dialogs cache-status` are DB-only and always work. Details: [reference.md](reference.md) → "Session lock" and
-"scheduling & background".
+without Telegram access, unless the pipeline has `react`/`forward`/`delete_message`/
+`edit_message` nodes: those need a live client, so such a pipeline is refused up front
+(before any LLM call). `dialogs queue …` and `dialogs cache-status` are DB-only and always
+work. Details: [reference.md](reference.md) → "Session lock" and "scheduling & background".
 
 ## Legacy surfaces — do not use for integration
 

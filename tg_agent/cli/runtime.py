@@ -142,12 +142,20 @@ def _refuse_if_daemon_owns_sessions(config, *, allow_live_daemon: bool) -> None:
         return
     if not worker_handoff.serve_is_running(config):
         return
+    raise daemon_owns_sessions_error(config)
+
+
+def daemon_owns_sessions_error(
+    config,
+    *,
+    why: str = "this command needs its own connection (it has no worker hand-off)",
+) -> DaemonOwnsSessionsError:
+    """The refusal raised while a daemon owns the sessions; ``why`` names the need."""
     pid = worker_handoff.running_daemon_pid(config)
     holder = f"PID {pid}" if pid is not None else "the PID file"
-    raise DaemonOwnsSessionsError(
-        f"A running tg-agent daemon ({holder}) owns the Telegram sessions, and this "
-        "command needs its own connection (it has no worker hand-off). Stop the "
-        "daemon first (`tg-agent stop`), run the command, then `tg-agent restart`."
+    return DaemonOwnsSessionsError(
+        f"A running tg-agent daemon ({holder}) owns the Telegram sessions, and {why}. "
+        "Stop the daemon first (`tg-agent stop`), run the command, then `tg-agent restart`."
     )
 
 

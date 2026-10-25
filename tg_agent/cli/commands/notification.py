@@ -57,7 +57,13 @@ def _print_target_status(status) -> None:
 async def _build(config_path: str):
     """Build (config, db, pool, target_svc, svc) for a notification command."""
     config, db = await runtime.init_db(config_path)
-    _, pool = await runtime.init_pool(config, db)
+    try:
+        _, pool = await runtime.init_pool(config, db)
+    except BaseException:
+        # A refusal (#1521) must still close the DB: aiosqlite's non-daemon
+        # thread would keep the process alive.
+        await db.close()
+        raise
     target_svc = NotificationTargetService(db, pool)
     svc = NotificationService(
         db,

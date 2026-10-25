@@ -31,7 +31,8 @@ HANDS_OFF = {
     ("collect.py", "collect_impl"),
     ("dialogs.py", "_dispatch"),
     # pipeline run / generate (#1521): next to a live daemon generation runs
-    # without a pool — Telegram-side nodes already skip when it is None.
+    # without a pool, or refuses up front when the graph has Telegram-action
+    # nodes (react/forward/delete_message/edit_message raise no_client_pool).
     ("pipeline.py", "_generation_pool"),
     # ping run-due (#1415): the worker already runs ping_due hourly; a parallel
     # local run would pass the same threshold rule and double-send the nudge —

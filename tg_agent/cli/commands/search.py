@@ -143,7 +143,13 @@ async def search_impl(
 
     pool = None
     if mode in TELEGRAM_SEARCH_MODES:
-        _, pool = await runtime.init_pool(config, db)
+        try:
+            _, pool = await runtime.init_pool(config, db)
+        except BaseException:
+            # A refusal (#1521) must still close the DB: aiosqlite's non-daemon
+            # thread would keep the process alive.
+            await db.close()
+            raise
         if not pool.clients:
             logging.error("No connected accounts. Run 'serve' and add accounts via web UI.")
             await db.close()

@@ -60,7 +60,13 @@ async def _run_with_services(config_path: str, body: Callable[[_Services], Await
     behaviour, not a raw traceback.
     """
     config, db = await runtime.init_db(config_path)
-    _, pool = await runtime.init_pool(config, db)
+    try:
+        _, pool = await runtime.init_pool(config, db)
+    except BaseException:
+        # A refusal (#1521) must still close the DB: aiosqlite's non-daemon
+        # thread would keep the process alive.
+        await db.close()
+        raise
     bundle = PhotoLoaderBundle.from_database(db)
     publish = PhotoPublishService(pool)
     tasks = PhotoTaskService(bundle, publish)
