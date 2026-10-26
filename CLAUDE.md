@@ -29,6 +29,13 @@ nobody looks at screens; every consumer is a program.
 # Install dev dependencies
 pip install -e ".[dev]"
 
+# Install the monorepo shared package — the factory imports tg_shared at
+# runtime (#1421 wave A), so without this step the CLI/daemon dies with
+# ModuleNotFoundError: tg_shared (pytest alone is covered by the root
+# conftest.py sys.path shim). A declared pyproject dependency lands when
+# tg-shared is published (#1424 wave).
+pip install -e packages/tg_shared
+
 # Verify that the project is installed (required by isolated tooling such as
 # mutmut; the distribution name is tg-agent, not the repository name).
 python -m pip show tg-agent
@@ -57,8 +64,9 @@ ruff check tg_agent/ tests/ conftest.py
 ruff check --fix tg_agent/ tests/ conftest.py
 
 # Run parallel-safe tests (-n auto is capped at 4 workers by root conftest.py;
-# override via TGCF_PYTEST_XDIST_WORKERS; single-test runs with :: force 1 worker)
-pytest tests/ -v -m "not aiosqlite_serial" -n auto
+# override via TGCF_PYTEST_XDIST_WORKERS; single-test runs with :: force 1 worker).
+# The tg_shared package tests (#1421 wave A) live outside tests/ — include both roots.
+pytest tests/ packages/tg_shared/tests -v -m "not aiosqlite_serial" -n auto
 
 # Run aiosqlite-backed tests sequentially within each file, with independent files in parallel
 pytest tests/ -q -m aiosqlite_serial -n auto --dist=loadfile
