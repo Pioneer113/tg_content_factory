@@ -3,11 +3,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import sys
 from typing import TYPE_CHECKING, Callable, cast
 
 import typer
 
-from tg_agent.cli import runtime
+from tg_agent.cli import runtime, worker_handoff
 from tg_agent.cli.commands.common import (
     GenerationBackend,
     PublishMode,
@@ -507,6 +508,28 @@ async def _pipeline_delete(args: argparse.Namespace, db, config, svc: PipelineSe
 
 
 
+async def _generation_pool(config, db) -> ClientPool | None:
+    """Telegram pool for generation, or ``None`` while a daemon owns the sessions.
+
+    Generation itself needs no Telegram; Telegram-side nodes (react/forward/
+    delete-message/edit-message) fail loudly without a pool, so a pipeline
+    containing them must run with the daemon stopped. Pipelines without them
+    run pool-less next to a live daemon instead of being refused by
+    ``init_pool`` (#1521).
+    """
+    if not worker_handoff.direct_requested() and worker_handoff.serve_is_running(config):
+        print(
+            "A running tg-agent daemon owns the Telegram sessions: generating without "
+            "Telegram access. Telegram-side nodes (react/forward/delete-message/"
+            "edit-message) will fail — stop the daemon (`tg-agent stop`) to run "
+            "pipelines containing them.",
+            file=sys.stderr,
+        )
+        return None
+    _, pool = await runtime.init_pool(config, db)
+    return pool
+
+
 async def _pipeline_run(args: argparse.Namespace, db, config, svc: PipelineService) -> ClientPool | None:
     pipeline = await svc.get(args.id)
     if pipeline is None:
@@ -527,7 +550,7 @@ async def _pipeline_run(args: argparse.Namespace, db, config, svc: PipelineServi
         )
         return None
 
-    _, pool = await runtime.init_pool(config, db)
+    pool = await _generation_pool(config, db)
     client_pool = pool
     gen_svc = ContentGenerationService(
         db,
@@ -591,7 +614,7 @@ async def _pipeline_generate(args: argparse.Namespace, db, config, svc: Pipeline
             "env var (e.g. OPENAI_API_KEY). Non-LLM pipelines run without a provider."
         )
         return None
-    _, pool = await runtime.init_pool(config, db)
+    pool = await _generation_pool(config, db)
     client_pool = pool
     agent_manager = None
     if getattr(pipeline.generation_backend, "value", pipeline.generation_backend) == "deep_agents":
